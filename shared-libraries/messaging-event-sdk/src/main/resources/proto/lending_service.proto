@@ -1,0 +1,218 @@
+syntax = "proto3";
+
+package com.ksa.islamic.grpc.lending;
+
+option java_package = "com.ksa.islamic.grpc.lending";
+option java_outer_classname = "LendingServiceProto";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+
+// Lending Service API
+service LendingService {
+  // Apply for a loan
+  rpc ApplyForLoan(LoanApplicationRequest) returns (LoanApplicationResponse);
+
+  // Get loan application status
+  rpc GetApplicationStatus(GetApplicationStatusRequest) returns (ApplicationStatus);
+
+  // Approve loan application
+  rpc ApproveLoan(ApproveLoanRequest) returns (ApproveLoanResponse);
+
+  // Disburse loan
+  rpc DisburseLoan(DisburseLoanRequest) returns (DisburseLoanResponse);
+
+  // Get loan details
+  rpc GetLoan(GetLoanRequest) returns (Loan);
+
+  // List loans for customer
+  rpc ListLoans(ListLoansRequest) returns (ListLoansResponse);
+
+  // Calculate affordability
+  rpc CalculateAffordability(AffordabilityRequest) returns (AffordabilityResponse);
+
+  // Get payment schedule
+  rpc GetPaymentSchedule(GetPaymentScheduleRequest) returns (PaymentSchedule);
+}
+
+// Loan application request
+message LoanApplicationRequest {
+  com.ksa.islamic.grpc.RequestMetadata metadata = 1;
+  string customer_id = 2;
+  string product_code = 3;
+  com.ksa.islamic.grpc.Money requested_amount = 4;
+  int32 tenure_months = 5;
+  string purpose = 6;
+  IncomeDetails income = 7;
+  repeated Obligation obligations = 8;
+  map<string, string> additional_data = 9;
+}
+
+// Income details
+message IncomeDetails {
+  com.ksa.islamic.grpc.Money monthly_income = 1;
+  string income_source = 2;
+  string employer = 3;
+  int32 employment_duration_months = 4;
+  repeated com.ksa.islamic.grpc.Money other_income = 5;
+}
+
+// Existing obligations
+message Obligation {
+  string type = 1; // LOAN, CREDIT_CARD, etc.
+  string institution = 2;
+  com.ksa.islamic.grpc.Money monthly_payment = 3;
+  com.ksa.islamic.grpc.Money outstanding_balance = 4;
+}
+
+// Loan application response
+message LoanApplicationResponse {
+  string application_id = 1;
+  string status = 2;
+  string message = 3;
+  google.protobuf.Timestamp submitted_at = 4;
+}
+
+// Get application status request
+message GetApplicationStatusRequest {
+  string application_id = 1;
+}
+
+// Application status
+message ApplicationStatus {
+  string application_id = 1;
+  string status = 2; // SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, etc.
+  string stage = 3; // KYC, CREDIT_CHECK, UNDERWRITING, etc.
+  google.protobuf.Timestamp last_updated = 4;
+  string message = 5;
+  map<string, string> details = 6;
+}
+
+// Approve loan request
+message ApproveLoanRequest {
+  string application_id = 1;
+  string approved_by = 2;
+  com.ksa.islamic.grpc.Money approved_amount = 3;
+  double profit_rate = 4;
+  int32 tenure_months = 5;
+  com.ksa.islamic.grpc.ShariaCompliance sharia_compliance = 6;
+  map<string, string> conditions = 7;
+}
+
+// Approve loan response
+message ApproveLoanResponse {
+  string loan_id = 1;
+  string status = 2;
+  string message = 3;
+  google.protobuf.Timestamp approved_at = 4;
+}
+
+// Disburse loan request
+message DisburseLoanRequest {
+  string loan_id = 1;
+  string account_number = 2;
+  string bank_code = 3;
+  google.protobuf.Timestamp disbursement_date = 4;
+  map<string, string> instructions = 5;
+}
+
+// Disburse loan response
+message DisburseLoanResponse {
+  string disbursement_id = 1;
+  string transaction_reference = 2;
+  string status = 3;
+  google.protobuf.Timestamp disbursed_at = 4;
+}
+
+// Get loan request
+message GetLoanRequest {
+  string loan_id = 1;
+}
+
+// Loan entity
+message Loan {
+  string loan_id = 1;
+  string customer_id = 2;
+  string application_id = 3;
+  string product_code = 4;
+  com.ksa.islamic.grpc.Money principal_amount = 5;
+  com.ksa.islamic.grpc.Money total_amount = 6;
+  double profit_rate = 7;
+  int32 tenure_months = 8;
+  string status = 9; // ACTIVE, CLOSED, DEFAULTED, etc.
+  google.protobuf.Timestamp disbursement_date = 10;
+  google.protobuf.Timestamp maturity_date = 11;
+  com.ksa.islamic.grpc.Money outstanding_balance = 12;
+  com.ksa.islamic.grpc.ShariaCompliance sharia_compliance = 13;
+  repeated Payment payments = 14;
+  map<string, string> metadata = 15;
+}
+
+// Payment record
+message Payment {
+  string payment_id = 1;
+  int32 installment_number = 2;
+  com.ksa.islamic.grpc.Money amount = 3;
+  google.protobuf.Timestamp due_date = 4;
+  google.protobuf.Timestamp paid_date = 5;
+  string status = 6; // PENDING, PAID, OVERDUE, etc.
+}
+
+// List loans request
+message ListLoansRequest {
+  string customer_id = 1;
+  string status = 2;
+  com.ksa.islamic.grpc.DateRange date_range = 3;
+  com.ksa.islamic.grpc.PageRequest page = 4;
+}
+
+// List loans response
+message ListLoansResponse {
+  repeated Loan loans = 1;
+  com.ksa.islamic.grpc.PageResponse page = 2;
+}
+
+// Affordability request
+message AffordabilityRequest {
+  string customer_id = 1;
+  com.ksa.islamic.grpc.Money requested_amount = 2;
+  int32 tenure_months = 3;
+  double profit_rate = 4;
+  IncomeDetails income = 5;
+  repeated Obligation obligations = 6;
+}
+
+// Affordability response
+message AffordabilityResponse {
+  bool is_affordable = 1;
+  double debt_burden_ratio = 2;
+  com.ksa.islamic.grpc.Money max_eligible_amount = 3;
+  com.ksa.islamic.grpc.Money monthly_installment = 4;
+  string recommendation = 5;
+  map<string, string> calculations = 6;
+}
+
+// Get payment schedule request
+message GetPaymentScheduleRequest {
+  string loan_id = 1;
+}
+
+// Payment schedule
+message PaymentSchedule {
+  string loan_id = 1;
+  repeated ScheduledPayment payments = 2;
+  com.ksa.islamic.grpc.Money total_principal = 3;
+  com.ksa.islamic.grpc.Money total_profit = 4;
+  com.ksa.islamic.grpc.Money total_amount = 5;
+}
+
+// Scheduled payment
+message ScheduledPayment {
+  int32 installment_number = 1;
+  google.protobuf.Timestamp due_date = 2;
+  com.ksa.islamic.grpc.Money principal = 3;
+  com.ksa.islamic.grpc.Money profit = 4;
+  com.ksa.islamic.grpc.Money total = 5;
+  com.ksa.islamic.grpc.Money outstanding_balance = 6;
+}

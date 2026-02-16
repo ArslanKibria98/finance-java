@@ -1,0 +1,76 @@
+# LMS Adapter SDK Configuration
+
+# Fineract Configuration
+fineract:
+  baseUrl: ${FINERACT_BASE_URL:https://localhost:8443/fineract-provider/api/v1}
+  username: ${FINERACT_USERNAME:mifos}
+  password: ${FINERACT_PASSWORD:password}
+  tenantId: ${FINERACT_TENANT:default}
+  connectTimeoutMs: 5000
+  readTimeoutMs: 30000
+  maxRetries: 3
+  retryDelayMs: 1000
+  sslValidation: ${FINERACT_SSL_VALIDATION:false}
+  maxConnections: 100
+  maxConnectionsPerRoute: 20
+  circuitBreaker:
+    enabled: true
+    failureThreshold: 5
+    requestVolumeThreshold: 20
+    sleepWindowMs: 60000
+    timeoutMs: 10000
+
+# Redis Configuration for Idempotency
+spring:
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+# Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000  # 5 minutes
+      cache-null-values: false
+
+# Resilience4j Configuration
+resilience4j:
+  retry:
+    instances:
+      fineract-api:
+        maxAttempts: 3
+        waitDuration: 1000ms
+        retryExceptions:
+          - java.io.IOException
+          - java.net.ConnectException
+          - org.springframework.web.client.ResourceAccessException
+        ignoreExceptions:
+          - com.ksa.financing.lms.exception.FineractValidationException
+
+  circuitbreaker:
+    instances:
+      fineract-api:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 60s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+
+# Logging Configuration
+logging:
+  level:
+    com.ksa.financing.lms: DEBUG
+    org.springframework.web.client: DEBUG
+    io.github.resilience4j: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

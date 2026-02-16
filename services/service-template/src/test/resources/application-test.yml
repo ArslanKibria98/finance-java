@@ -1,0 +1,38 @@
+spring:
+  profiles:
+    active: test
+
+  # Test database (H2 in-memory or Testcontainers)
+  datasource:
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    url: jdbc:tc:postgresql:16:///testdb
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  # Disable Flyway in tests (using create-drop)
+  flyway:
+    enabled: false
+
+  # Test Kafka configuration
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
+
+  # Disable security in tests (unless testing security)
+  security:
+    enabled: false
+
+# Disable Temporal in tests
+temporal:
+  worker:
+    enabled: false
+
+# Test logging
+logging:
+  level:
+    root: WARN
+    com.ksa.financing: DEBUG
+    org.springframework: INFO
+    org.hibernate: DEBUG

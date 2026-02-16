@@ -1,0 +1,455 @@
+{
+  "info": {
+    "_postman_id": "fineract-ksa-2026",
+    "name": "Fineract API - KSA Islamic Financing",
+    "description": "Complete Fineract API collection for KSA Islamic Financing Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{username}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{password}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Offices",
+      "item": [
+        {
+          "name": "Get All Offices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/offices",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "offices"]
+            }
+          }
+        },
+        {
+          "name": "Get Office by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/offices/:officeId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "offices", ":officeId"],
+              "variable": [
+                {
+                  "key": "officeId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "item": [
+        {
+          "name": "Get All Clients",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients"]
+            }
+          }
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"officeId\": 1,\n  \"firstname\": \"Ahmad\",\n  \"lastname\": \"Abdullah\",\n  \"externalId\": \"CLI-001\",\n  \"dateFormat\": \"dd MMMM yyyy\",\n  \"locale\": \"en\",\n  \"active\": true,\n  \"activationDate\": \"11 February 2026\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients"]
+            }
+          }
+        },
+        {
+          "name": "Get Client by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/:clientId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", ":clientId"],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loans",
+      "item": [
+        {
+          "name": "Get All Loans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/loans",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "loans"]
+            }
+          }
+        },
+        {
+          "name": "Get Loan by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/loans/:loanId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "loans", ":loanId"],
+              "variable": [
+                {
+                  "key": "loanId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loan Products",
+      "item": [
+        {
+          "name": "Get All Loan Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/loanproducts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "loanproducts"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Savings Accounts",
+      "item": [
+        {
+          "name": "Get All Savings Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/savingsaccounts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "savingsaccounts"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Savings Products",
+      "item": [
+        {
+          "name": "Get All Savings Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/savingsproducts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "savingsproducts"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Staff",
+      "item": [
+        {
+          "name": "Get All Staff",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/staff",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "staff"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Groups",
+      "item": [
+        {
+          "name": "Get All Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accounting",
+      "item": [
+        {
+          "name": "Get All GL Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/glaccounts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "glaccounts"]
+            }
+          }
+        },
+        {
+          "name": "Get All Journal Entries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/journalentries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "journalentries"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configuration",
+      "item": [
+        {
+          "name": "Get All Codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/codes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "codes"]
+            }
+          }
+        },
+        {
+          "name": "Get All Data Tables",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Fineract-Platform-TenantId",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/datatables",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "datatables"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://46.62.226.94:8443/fineract-provider",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "mifos",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "password",
+      "type": "string"
+    },
+    {
+      "key": "tenantId",
+      "value": "default",
+      "type": "string"
+    }
+  ]
+}

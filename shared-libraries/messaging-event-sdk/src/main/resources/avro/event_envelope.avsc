@@ -1,0 +1,78 @@
+{
+  "namespace": "com.ksa.islamic.messaging.avro",
+  "type": "record",
+  "name": "EventEnvelope",
+  "doc": "Standard wrapper for all domain events with metadata",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "string",
+      "doc": "Unique identifier for the event"
+    },
+    {
+      "name": "eventType",
+      "type": "string",
+      "doc": "Type/name of the event"
+    },
+    {
+      "name": "eventVersion",
+      "type": "string",
+      "doc": "Version of the event schema for evolution",
+      "default": "1.0"
+    },
+    {
+      "name": "tenantId",
+      "type": "string",
+      "doc": "Tenant identifier for multi-tenancy"
+    },
+    {
+      "name": "correlationId",
+      "type": "string",
+      "doc": "Correlation ID for distributed tracing"
+    },
+    {
+      "name": "causationId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "ID of the event that caused this event"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event creation timestamp"
+    },
+    {
+      "name": "source",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Source service or system that generated the event"
+    },
+    {
+      "name": "userId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "User who triggered the event"
+    },
+    {
+      "name": "payload",
+      "type": "string",
+      "doc": "Serialized event payload (JSON)"
+    },
+    {
+      "name": "metadata",
+      "type": ["null", {
+        "type": "map",
+        "values": "string"
+      }],
+      "default": null,
+      "doc": "Additional metadata as key-value pairs"
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "default": 1,
+      "doc": "Schema version for evolution support"
+    }
+  ]
+}

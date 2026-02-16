@@ -1,0 +1,37 @@
+# Git files
+.git
+.gitignore
+
+# IDE files
+.idea
+*.iml
+.vscode
+.settings
+.classpath
+.project
+
+# Build files
+target/
+*.class
+*.jar
+*.war
+
+# Test files
+src/test/
+
+# Documentation
+*.md
+docs/
+
+# Kubernetes files
+k8s/
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

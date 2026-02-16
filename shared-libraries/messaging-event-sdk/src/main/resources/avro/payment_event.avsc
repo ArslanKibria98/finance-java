@@ -1,0 +1,258 @@
+{
+  "namespace": "com.ksa.islamic.messaging.avro.payment",
+  "type": "record",
+  "name": "PaymentEvent",
+  "doc": "Events related to payment processing",
+  "fields": [
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "PaymentEventType",
+        "symbols": [
+          "PAYMENT_INITIATED",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_CAPTURED",
+          "PAYMENT_COMPLETED",
+          "PAYMENT_FAILED",
+          "PAYMENT_REVERSED",
+          "PAYMENT_REFUNDED",
+          "PAYMENT_SCHEDULED",
+          "PAYMENT_CANCELLED"
+        ]
+      },
+      "doc": "Type of payment event"
+    },
+    {
+      "name": "paymentId",
+      "type": "string",
+      "doc": "Unique payment identifier"
+    },
+    {
+      "name": "loanId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Associated loan identifier"
+    },
+    {
+      "name": "customerId",
+      "type": "string",
+      "doc": "Customer identifier"
+    },
+    {
+      "name": "paymentMethod",
+      "type": {
+        "type": "enum",
+        "name": "PaymentMethod",
+        "symbols": [
+          "SADAD",
+          "BANK_TRANSFER",
+          "DIRECT_DEBIT",
+          "CREDIT_CARD",
+          "DEBIT_CARD",
+          "MADA",
+          "APPLE_PAY",
+          "STC_PAY",
+          "CASH"
+        ]
+      },
+      "doc": "Payment method used"
+    },
+    {
+      "name": "amount",
+      "type": {
+        "type": "record",
+        "name": "PaymentAmount",
+        "fields": [
+          {
+            "name": "principal",
+            "type": "double",
+            "doc": "Principal amount"
+          },
+          {
+            "name": "profit",
+            "type": "double",
+            "doc": "Profit amount"
+          },
+          {
+            "name": "fees",
+            "type": "double",
+            "default": 0.0,
+            "doc": "Additional fees"
+          },
+          {
+            "name": "total",
+            "type": "double",
+            "doc": "Total payment amount"
+          },
+          {
+            "name": "currency",
+            "type": "string",
+            "default": "SAR",
+            "doc": "Currency code"
+          }
+        ]
+      },
+      "doc": "Payment amount breakdown"
+    },
+    {
+      "name": "paymentDetails",
+      "type": {
+        "type": "record",
+        "name": "PaymentDetails",
+        "fields": [
+          {
+            "name": "referenceNumber",
+            "type": "string",
+            "doc": "Payment reference number"
+          },
+          {
+            "name": "transactionId",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "External transaction ID"
+          },
+          {
+            "name": "billNumber",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "SADAD bill number if applicable"
+          },
+          {
+            "name": "sourceAccount",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Source account number"
+          },
+          {
+            "name": "destinationAccount",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Destination account number"
+          },
+          {
+            "name": "bankCode",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Bank code"
+          }
+        ]
+      },
+      "doc": "Payment transaction details"
+    },
+    {
+      "name": "paymentDate",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Payment date and time"
+    },
+    {
+      "name": "dueDate",
+      "type": ["null", "long"],
+      "logicalType": "date",
+      "default": null,
+      "doc": "Payment due date if applicable"
+    },
+    {
+      "name": "installmentNumber",
+      "type": ["null", "int"],
+      "default": null,
+      "doc": "Installment number if applicable"
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "PaymentStatus",
+        "symbols": [
+          "PENDING",
+          "PROCESSING",
+          "COMPLETED",
+          "FAILED",
+          "REVERSED",
+          "REFUNDED",
+          "CANCELLED"
+        ]
+      },
+      "doc": "Current payment status"
+    },
+    {
+      "name": "failureReason",
+      "type": ["null", {
+        "type": "record",
+        "name": "FailureReason",
+        "fields": [
+          {
+            "name": "code",
+            "type": "string",
+            "doc": "Failure code"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "doc": "Failure message"
+          },
+          {
+            "name": "provider",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Payment provider that reported the failure"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "Failure details if payment failed"
+    },
+    {
+      "name": "reconciliation",
+      "type": ["null", {
+        "type": "record",
+        "name": "ReconciliationInfo",
+        "fields": [
+          {
+            "name": "reconciled",
+            "type": "boolean",
+            "default": false,
+            "doc": "Whether payment has been reconciled"
+          },
+          {
+            "name": "reconciliationDate",
+            "type": ["null", "long"],
+            "logicalType": "timestamp-millis",
+            "default": null,
+            "doc": "Reconciliation date"
+          },
+          {
+            "name": "batchId",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Reconciliation batch ID"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "Reconciliation information"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event timestamp"
+    },
+    {
+      "name": "metadata",
+      "type": ["null", {
+        "type": "map",
+        "values": "string"
+      }],
+      "default": null,
+      "doc": "Additional event metadata"
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "default": 1,
+      "doc": "Schema version for evolution"
+    }
+  ]
+}

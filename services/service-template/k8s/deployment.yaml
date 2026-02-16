@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-template
+  namespace: islamic-financing
+  labels:
+    app: service-template
+    version: v1
+    tier: backend
+    component: microservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: service-template
+  template:
+    metadata:
+      labels:
+        app: service-template
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: service-template
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+      - name: service-template
+        image: ksa-financing/service-template:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: SERVER_PORT
+          value: "8080"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: db.host
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: db.port
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: db.name
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: service-template-secret
+              key: db.username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-template-secret
+              key: db.password
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: kafka.bootstrap.servers
+        - name: KEYCLOAK_ISSUER_URI
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: keycloak.issuer.uri
+        - name: KEYCLOAK_JWK_SET_URI
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: keycloak.jwk.set.uri
+        - name: TEMPORAL_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: temporal.address
+        - name: TEMPORAL_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: service-template-config
+              key: temporal.namespace
+        - name: JAVA_OPTS
+          value: "-Xmx512m -Xms256m -XX:MaxRAMPercentage=75.0"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: app-logs
+          mountPath: /app/logs
+      volumes:
+      - name: app-logs
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - service-template
+              topologyKey: kubernetes.io/hostname

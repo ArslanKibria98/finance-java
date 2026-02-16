@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.ksa.financing</groupId>
+        <artifactId>ksa-financing-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>services</artifactId>
+    <packaging>pom</packaging>
+    <name>KSA Financing Services</name>
+    <description>Microservices for KSA Islamic Financing Platform</description>
+
+    <modules>
+        <module>service-template</module>
+        <!-- Future services will be added here:
+        <module>global-profile-index</module>
+        <module>pii-vault</module>
+        <module>origination-service</module>
+        <module>lending-service</module>
+        <module>customer-management</module>
+        <module>product-catalog</module>
+        <module>sharia-compliance</module>
+        <module>ledger-service</module>
+        <module>payment-service</module>
+        <module>notification-service</module>
+        <module>reporting-service</module>
+        <module>collection-service</module>
+        <module>risk-assessment</module>
+        <module>document-management</module>
+        <module>audit-service</module>
+        <module>integration-gateway</module>
+        <module>workflow-engine</module>
+        <module>commodity-exchange</module>
+        <module>analytics-service</module>
+        <module>monitoring-service</module>
+        -->
+    </modules>
+</project>

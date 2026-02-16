@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: logging
+  labels:
+    app: logstash
+    component: logstash
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    path.config: /usr/share/logstash/pipeline
+    xpack.monitoring.enabled: false
+
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+    }
+
+    filter {
+      # Parse JSON logs
+      json {
+        source => "message"
+        skip_on_invalid_json => true
+      }
+
+      # Add Kubernetes metadata
+      if [kubernetes] {
+        mutate {
+          add_field => {
+            "service_name" => "%{[kubernetes][labels][app]}"
+            "namespace" => "%{[kubernetes][namespace]}"
+            "pod_name" => "%{[kubernetes][pod][name]}"
+          }
+        }
+      }
+
+      # Extract tenant ID from logs
+      if [tenant_id] {
+        mutate {
+          add_field => { "[@metadata][target_index]" => "ksa-financing-tenant-%{tenant_id}-%{+YYYY.MM.dd}" }
+        }
+      } else {
+        mutate {
+          add_field => { "[@metadata][target_index]" => "ksa-financing-%{+YYYY.MM.dd}" }
+        }
+      }
+
+      # Add timestamp
+      date {
+        match => [ "timestamp", "ISO8601" ]
+        target => "@timestamp"
+      }
+
+      # Parse log level
+      if [level] {
+        mutate {
+          uppercase => [ "level" ]
+        }
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["elasticsearch-client:9200"]
+        index => "%{[@metadata][target_index]}"
+        manage_template => true
+        template_name => "ksa-financing"
+        template_pattern => "ksa-financing-*"
+      }
+
+      # Debug output (optional - remove in production)
+      stdout {
+        codec => rubydebug
+      }
+    }

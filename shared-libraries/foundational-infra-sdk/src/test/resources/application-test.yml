@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: foundational-infra-sdk-test
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    com.ksa.financing: DEBUG
+    org.springframework: WARN

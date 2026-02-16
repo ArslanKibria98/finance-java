@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Parent POM for KSA Islamic Financing Platform -->
+    <groupId>com.ksa.financing</groupId>
+    <artifactId>ksa-financing-platform</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>KSA Islamic Financing Platform</name>
+    <description>Enterprise-grade Islamic Financing Platform for Kingdom of Saudi Arabia</description>
+
+    <properties>
+        <!-- Java Version -->
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Core Framework Versions -->
+        <spring-boot.version>3.2.2</spring-boot.version>
+        <spring-cloud.version>2023.0.0</spring-cloud.version>
+
+        <!-- Workflow & Messaging -->
+        <temporal.version>1.32.1</temporal.version>
+        <kafka.version>3.9.1</kafka.version>
+        <avro.version>1.12.0</avro.version>
+        <grpc.version>1.68.1</grpc.version>
+
+        <!-- Security & Identity -->
+        <keycloak.version>26.5.2</keycloak.version>
+        <spring-security.version>7.0.0</spring-security.version>
+
+        <!-- Database & Cache -->
+        <postgresql.version>42.7.3</postgresql.version>
+        <flyway.version>10.4.1</flyway.version>
+        <redis-client.version>3.3.0</redis-client.version>
+        <hikaricp.version>5.1.0</hikaricp.version>
+
+        <!-- Logging Stack (ELK 9.3.0) -->
+        <logback.version>1.5.28</logback.version>
+        <logstash-encoder.version>9.0</logstash-encoder.version>
+        <slf4j.version>2.0.16</slf4j.version>
+
+        <!-- Observability -->
+        <opentelemetry.version>1.44.1</opentelemetry.version>
+        <opentelemetry-instrumentation.version>2.11.0</opentelemetry-instrumentation.version>
+        <micrometer.version>1.15.0</micrometer.version>
+
+        <!-- Resilience & Circuit Breaking -->
+        <resilience4j.version>2.3.0</resilience4j.version>
+
+        <!-- Core Banking Integration -->
+        <fineract.version>1.13.0</fineract.version>
+
+        <!-- Serialization & Validation -->
+        <jackson.version>3.0.0</jackson.version>
+        <jakarta.validation.version>3.1.0</jakarta.validation.version>
+
+        <!-- Testing -->
+        <junit.version>5.11.4</junit.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
+        <mockito.version>5.15.2</mockito.version>
+        <assertj.version>3.27.3</assertj.version>
+
+        <!-- Build Plugins -->
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.5.2</maven-failsafe-plugin.version>
+        <graalvm-buildtools.version>0.10.4</graalvm-buildtools.version>
+        <jib-maven-plugin.version>3.4.4</jib-maven-plugin.version>
+
+        <!-- Utilities -->
+        <lombok.version>1.18.36</lombok.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
+        <commons-lang3.version>3.17.0</commons-lang3.version>
+        <guava.version>33.3.1-jre</guava.version>
+    </properties>
+
+    <modules>
+        <!-- Bill of Materials -->
+        <!--<module>ksa-financing-bom</module>-->
+
+        <!-- Shared Libraries (SDKs) -->
+        <module>shared-libraries/foundational-infra-sdk</module>
+        <module>shared-libraries/domain-core-sdk</module>
+        <module>shared-libraries/messaging-event-sdk</module>
+        <module>shared-libraries/workflow-orchestration-sdk</module>
+        <module>shared-libraries/lms-adapter-sdk</module>
+        <!--<module>shared-libraries/compliance-localization-sdk</module>-->
+        <module>shared-libraries/reporting-projection-sdk</module>
+        <!--<module>shared-libraries/test-harness-sdk</module>-->
+
+        <!-- Microservices - commented out until created -->
+        <!--
+        <module>services/service-template</module>
+        <module>services/global-profile-index</module>
+        <module>services/pii-vault</module>
+        <module>services/kyc-orchestrator</module>
+        <module>services/identity-federation</module>
+        <module>services/lending-service</module>
+        <module>services/sharia-compliance</module>
+        <module>services/ledger-service</module>
+        <module>services/customer-service</module>
+        <module>services/product-service</module>
+        <module>services/wallet-service</module>
+        <module>services/risk-service</module>
+        <module>services/credit-decisioning</module>
+        <module>services/collections-service</module>
+        <module>services/document-service</module>
+        <module>services/partner-service</module>
+        <module>services/notification-service</module>
+        <module>services/audit-service</module>
+        <module>services/kyc-adapter</module>
+        <module>services/core-banking-adapter</module>
+        <module>services/payment-adapter</module>
+        -->
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Boot BOM -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Spring Cloud BOM -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Temporal SDK -->
+            <dependency>
+                <groupId>io.temporal</groupId>
+                <artifactId>temporal-sdk</artifactId>
+                <version>${temporal.version}</version>
+            </dependency>
+
+            <!-- Keycloak -->
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-spring-boot-starter</artifactId>
+                <version>${keycloak.version}</version>
+            </dependency>
+
+            <!-- PostgreSQL Driver -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+
+            <!-- Kafka Clients -->
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka.version}</version>
+            </dependency>
+
+            <!-- Logging -->
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash-encoder.version}</version>
+            </dependency>
+
+            <!-- Resilience4j BOM -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- OpenTelemetry BOM -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Testcontainers BOM -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Lombok -->
+            <dependency>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+            </dependency>
+
+            <!-- MapStruct -->
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Maven Compiler Plugin (Java 21) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                    <configuration>
+                        <source>${java.version}</source>
+                        <target>${java.version}</target>
+                        <release>${java.version}</release>
+                        <compilerArgs>
+                            <arg>--enable-preview</arg>
+                        </compilerArgs>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+
+                <!-- Spring Boot Maven Plugin -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <!-- Surefire Plugin (Unit Tests) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <argLine>--enable-preview</argLine>
+                    </configuration>
+                </plugin>
+
+                <!-- Failsafe Plugin (Integration Tests) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-failsafe-plugin.version}</version>
+                    <configuration>
+                        <argLine>--enable-preview</argLine>
+                    </configuration>
+                </plugin>
+
+                <!-- GraalVM Native Image Plugin -->
+                <plugin>
+                    <groupId>org.graalvm.buildtools</groupId>
+                    <artifactId>native-maven-plugin</artifactId>
+                    <version>${graalvm-buildtools.version}</version>
+                    <configuration>
+                        <imageName>${project.artifactId}</imageName>
+                        <buildArgs>
+                            <buildArg>--enable-preview</buildArg>
+                            <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                        </buildArgs>
+                    </configuration>
+                </plugin>
+
+                <!-- Jib Plugin (Docker Image Build) -->
+                <plugin>
+                    <groupId>com.google.cloud.tools</groupId>
+                    <artifactId>jib-maven-plugin</artifactId>
+                    <version>${jib-maven-plugin.version}</version>
+                    <configuration>
+                        <from>
+                            <image>eclipse-temurin:21-jre</image>
+                        </from>
+                        <to>
+                            <image>registry.hub.docker.com/ksa-financing/${project.artifactId}:${project.version}</image>
+                        </to>
+                        <container>
+                            <jvmFlags>
+                                <jvmFlag>--enable-preview</jvmFlag>
+                                <jvmFlag>-XX:+UseZGC</jvmFlag>
+                                <jvmFlag>-XX:+ZGenerational</jvmFlag>
+                            </jvmFlags>
+                            <environment>
+                                <SPRING_THREADS_VIRTUAL_ENABLED>true</SPRING_THREADS_VIRTUAL_ENABLED>
+                            </environment>
+                        </container>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </repository>
+    </repositories>
+
+</project>

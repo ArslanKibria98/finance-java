@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: reporting-projection-sdk-test
+
+  # Main datasource
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+
+  # Read model datasource
+  datasource.read-model:
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+  # Kafka configuration for tests
+  kafka:
+    consumer:
+      group-id: test-projection-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.ksa.islamic.reporting.event"
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Projection configuration
+projection:
+  enabled: true
+  processing-threads: 2
+  batch-size: 10
+  max-retries: 2
+  retry-delay: PT1S
+
+  checkpoint-cleanup:
+    enabled: false # Disable for tests
+
+  materialized-views:
+    auto-refresh: false # Disable for tests
+    refresh-mode: INCREMENTAL
+    concurrent-refresh: false
+
+  performance:
+    track-queries: true
+    slow-query-threshold: PT0.05S # 50ms for tests
+    enable-cache: true
+    cache-ttl: PT1M
+    max-cache-size: 1000
+
+# Logging
+logging:
+  level:
+    com.ksa.islamic.reporting: DEBUG
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

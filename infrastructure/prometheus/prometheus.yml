@@ -1,0 +1,77 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ksa-financing-local'
+    environment: 'local'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Spring Boot microservices
+  - job_name: 'spring-boot-services'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+        - 'lending-service:8080'
+        - 'customer-service:8080'
+        - 'account-service:8080'
+        - 'payment-service:8080'
+        - 'notification-service:8080'
+        - 'document-service:8080'
+        - 'reporting-service:8080'
+        - 'risk-service:8080'
+        - 'compliance-service:8080'
+        - 'api-gateway:8080'
+        labels:
+          environment: 'local'
+
+  # PostgreSQL metrics (if postgres_exporter is used)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+        labels:
+          environment: 'local'
+
+  # Redis metrics (if redis_exporter is used)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          environment: 'local'
+
+  # Kafka metrics
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9092']
+        labels:
+          environment: 'local'
+
+  # Temporal metrics
+  - job_name: 'temporal'
+    static_configs:
+      - targets: ['temporal:8233']
+        labels:
+          environment: 'local'
+
+  # Elasticsearch metrics
+  - job_name: 'elasticsearch'
+    metrics_path: '/_prometheus/metrics'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+        labels:
+          environment: 'local'

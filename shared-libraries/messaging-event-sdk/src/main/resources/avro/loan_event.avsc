@@ -1,0 +1,171 @@
+{
+  "namespace": "com.ksa.islamic.messaging.avro.loan",
+  "type": "record",
+  "name": "LoanEvent",
+  "doc": "Events related to loan lifecycle",
+  "fields": [
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "LoanEventType",
+        "symbols": [
+          "APPLICATION_SUBMITTED",
+          "APPLICATION_APPROVED",
+          "APPLICATION_REJECTED",
+          "LOAN_DISBURSED",
+          "PAYMENT_RECEIVED",
+          "LOAN_CLOSED",
+          "LOAN_DEFAULTED",
+          "LOAN_RESTRUCTURED"
+        ]
+      },
+      "doc": "Type of loan event"
+    },
+    {
+      "name": "loanId",
+      "type": "string",
+      "doc": "Unique identifier for the loan"
+    },
+    {
+      "name": "customerId",
+      "type": "string",
+      "doc": "Customer identifier"
+    },
+    {
+      "name": "applicationId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Loan application identifier"
+    },
+    {
+      "name": "productCode",
+      "type": "string",
+      "doc": "Product code for the loan"
+    },
+    {
+      "name": "amount",
+      "type": {
+        "type": "record",
+        "name": "Money",
+        "fields": [
+          {
+            "name": "value",
+            "type": "double",
+            "doc": "Monetary value"
+          },
+          {
+            "name": "currency",
+            "type": "string",
+            "default": "SAR",
+            "doc": "Currency code"
+          }
+        ]
+      },
+      "doc": "Loan amount"
+    },
+    {
+      "name": "tenure",
+      "type": ["null", "int"],
+      "default": null,
+      "doc": "Loan tenure in months"
+    },
+    {
+      "name": "profitRate",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Profit rate percentage"
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "doc": "Current status of the loan"
+    },
+    {
+      "name": "shariaCompliance",
+      "type": {
+        "type": "record",
+        "name": "ShariaCompliance",
+        "fields": [
+          {
+            "name": "isCompliant",
+            "type": "boolean",
+            "doc": "Whether the loan is Sharia compliant"
+          },
+          {
+            "name": "contractType",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Type of Islamic contract (Murabaha, Tawarruq, etc.)"
+          },
+          {
+            "name": "certificateId",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Sharia compliance certificate ID"
+          }
+        ]
+      },
+      "doc": "Sharia compliance information"
+    },
+    {
+      "name": "disbursementDetails",
+      "type": ["null", {
+        "type": "record",
+        "name": "DisbursementDetails",
+        "fields": [
+          {
+            "name": "disbursementDate",
+            "type": "long",
+            "logicalType": "timestamp-millis",
+            "doc": "Date of disbursement"
+          },
+          {
+            "name": "accountNumber",
+            "type": "string",
+            "doc": "Account number for disbursement"
+          },
+          {
+            "name": "bankCode",
+            "type": "string",
+            "doc": "Bank code for disbursement"
+          },
+          {
+            "name": "transactionId",
+            "type": "string",
+            "doc": "Transaction reference ID"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "Disbursement details if applicable"
+    },
+    {
+      "name": "rejectionReason",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Reason for rejection if applicable"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event timestamp"
+    },
+    {
+      "name": "metadata",
+      "type": ["null", {
+        "type": "map",
+        "values": "string"
+      }],
+      "default": null,
+      "doc": "Additional event metadata"
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "default": 1,
+      "doc": "Schema version for evolution"
+    }
+  ]
+}

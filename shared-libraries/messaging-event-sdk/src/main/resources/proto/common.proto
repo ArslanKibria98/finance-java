@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package com.ksa.islamic.grpc;
+
+option java_package = "com.ksa.islamic.grpc.common";
+option java_outer_classname = "CommonProto";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+
+// Money representation
+message Money {
+  double amount = 1;
+  string currency = 2; // ISO 4217 currency code (e.g., "SAR")
+  int32 precision = 3; // Number of decimal places
+}
+
+// Error response for all services
+message ErrorResponse {
+  string code = 1; // Error code (e.g., "LOAN_001")
+  string message = 2; // Human-readable error message
+  map<string, string> details = 3; // Additional error details
+  google.protobuf.Timestamp timestamp = 4;
+  string trace_id = 5; // For distributed tracing
+}
+
+// Pagination request
+message PageRequest {
+  int32 page = 1; // Page number (0-based)
+  int32 size = 2; // Page size
+  repeated string sort = 3; // Sort fields (e.g., "createdAt,desc")
+}
+
+// Pagination response
+message PageResponse {
+  int32 page = 1;
+  int32 size = 2;
+  int64 total_elements = 3;
+  int32 total_pages = 4;
+  bool first = 5;
+  bool last = 6;
+}
+
+// Tenant context for multi-tenancy
+message TenantContext {
+  string tenant_id = 1;
+  string tenant_name = 2;
+  map<string, string> attributes = 3;
+}
+
+// Request metadata
+message RequestMetadata {
+  string correlation_id = 1;
+  string user_id = 2;
+  string session_id = 3;
+  TenantContext tenant = 4;
+  map<string, string> headers = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// Address
+message Address {
+  string street = 1;
+  string city = 2;
+  string state = 3;
+  string postal_code = 4;
+  string country = 5;
+}
+
+// Contact information
+message ContactInfo {
+  string email = 1;
+  string phone = 2;
+  string mobile = 3;
+}
+
+// Date range for filtering
+message DateRange {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+// Status response for async operations
+message OperationStatus {
+  string operation_id = 1;
+  enum Status {
+    PENDING = 0;
+    IN_PROGRESS = 1;
+    COMPLETED = 2;
+    FAILED = 3;
+    CANCELLED = 4;
+  }
+  Status status = 2;
+  string message = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  map<string, string> metadata = 6;
+}
+
+// Sharia compliance information
+message ShariaCompliance {
+  bool is_compliant = 1;
+  string contract_type = 2; // Murabaha, Tawarruq, Ijara, etc.
+  string certificate_id = 3;
+  google.protobuf.Timestamp certification_date = 4;
+  string certifying_authority = 5;
+}

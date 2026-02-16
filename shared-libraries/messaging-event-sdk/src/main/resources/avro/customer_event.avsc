@@ -1,0 +1,250 @@
+{
+  "namespace": "com.ksa.islamic.messaging.avro.customer",
+  "type": "record",
+  "name": "CustomerEvent",
+  "doc": "Events related to customer lifecycle",
+  "fields": [
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "CustomerEventType",
+        "symbols": [
+          "CUSTOMER_REGISTERED",
+          "CUSTOMER_VERIFIED",
+          "KYC_COMPLETED",
+          "KYC_UPDATED",
+          "PROFILE_UPDATED",
+          "CUSTOMER_ACTIVATED",
+          "CUSTOMER_DEACTIVATED",
+          "CUSTOMER_BLACKLISTED",
+          "CONSENT_GRANTED",
+          "CONSENT_REVOKED"
+        ]
+      },
+      "doc": "Type of customer event"
+    },
+    {
+      "name": "customerId",
+      "type": "string",
+      "doc": "Unique customer identifier"
+    },
+    {
+      "name": "cifNumber",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Customer Information File number"
+    },
+    {
+      "name": "nationalId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "National ID or Iqama number"
+    },
+    {
+      "name": "customerType",
+      "type": {
+        "type": "enum",
+        "name": "CustomerType",
+        "symbols": ["INDIVIDUAL", "CORPORATE", "SME"]
+      },
+      "doc": "Type of customer"
+    },
+    {
+      "name": "personalInfo",
+      "type": ["null", {
+        "type": "record",
+        "name": "PersonalInfo",
+        "fields": [
+          {
+            "name": "firstName",
+            "type": "string",
+            "doc": "Customer first name"
+          },
+          {
+            "name": "lastName",
+            "type": "string",
+            "doc": "Customer last name"
+          },
+          {
+            "name": "email",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Email address"
+          },
+          {
+            "name": "mobileNumber",
+            "type": "string",
+            "doc": "Mobile phone number"
+          },
+          {
+            "name": "dateOfBirth",
+            "type": ["null", "long"],
+            "logicalType": "date",
+            "default": null,
+            "doc": "Date of birth"
+          },
+          {
+            "name": "nationality",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Nationality code"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "Personal information"
+    },
+    {
+      "name": "kycStatus",
+      "type": ["null", {
+        "type": "record",
+        "name": "KYCStatus",
+        "fields": [
+          {
+            "name": "level",
+            "type": {
+              "type": "enum",
+              "name": "KYCLevel",
+              "symbols": ["BASIC", "ENHANCED", "FULL"]
+            },
+            "doc": "KYC verification level"
+          },
+          {
+            "name": "status",
+            "type": {
+              "type": "enum",
+              "name": "VerificationStatus",
+              "symbols": ["PENDING", "IN_PROGRESS", "VERIFIED", "REJECTED", "EXPIRED"]
+            },
+            "doc": "Current KYC status"
+          },
+          {
+            "name": "verificationDate",
+            "type": ["null", "long"],
+            "logicalType": "timestamp-millis",
+            "default": null,
+            "doc": "Date of KYC verification"
+          },
+          {
+            "name": "expiryDate",
+            "type": ["null", "long"],
+            "logicalType": "date",
+            "default": null,
+            "doc": "KYC expiry date"
+          },
+          {
+            "name": "nafathVerified",
+            "type": "boolean",
+            "default": false,
+            "doc": "Whether verified via Nafath"
+          },
+          {
+            "name": "simahScore",
+            "type": ["null", "int"],
+            "default": null,
+            "doc": "SIMAH credit score"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "KYC verification status"
+    },
+    {
+      "name": "riskProfile",
+      "type": ["null", {
+        "type": "record",
+        "name": "RiskProfile",
+        "fields": [
+          {
+            "name": "riskLevel",
+            "type": {
+              "type": "enum",
+              "name": "RiskLevel",
+              "symbols": ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"]
+            },
+            "doc": "Customer risk level"
+          },
+          {
+            "name": "pepStatus",
+            "type": "boolean",
+            "default": false,
+            "doc": "Politically Exposed Person status"
+          },
+          {
+            "name": "sanctionStatus",
+            "type": "boolean",
+            "default": false,
+            "doc": "Sanctions list status"
+          },
+          {
+            "name": "amlStatus",
+            "type": {
+              "type": "enum",
+              "name": "AMLStatus",
+              "symbols": ["CLEAR", "UNDER_REVIEW", "FLAGGED", "BLOCKED"]
+            },
+            "doc": "Anti-Money Laundering status"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "Customer risk profile"
+    },
+    {
+      "name": "consentDetails",
+      "type": ["null", {
+        "type": "record",
+        "name": "ConsentDetails",
+        "fields": [
+          {
+            "name": "consentType",
+            "type": "string",
+            "doc": "Type of consent"
+          },
+          {
+            "name": "granted",
+            "type": "boolean",
+            "doc": "Whether consent was granted"
+          },
+          {
+            "name": "timestamp",
+            "type": "long",
+            "logicalType": "timestamp-millis",
+            "doc": "Consent timestamp"
+          },
+          {
+            "name": "expiryDate",
+            "type": ["null", "long"],
+            "logicalType": "date",
+            "default": null,
+            "doc": "Consent expiry date"
+          }
+        ]
+      }],
+      "default": null,
+      "doc": "Consent details if applicable"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event timestamp"
+    },
+    {
+      "name": "metadata",
+      "type": ["null", {
+        "type": "map",
+        "values": "string"
+      }],
+      "default": null,
+      "doc": "Additional event metadata"
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "default": 1,
+      "doc": "Schema version for evolution"
+    }
+  ]
+}

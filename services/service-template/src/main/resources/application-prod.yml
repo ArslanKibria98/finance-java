@@ -1,0 +1,70 @@
+# Production Profile Configuration
+spring:
+  profiles: prod
+
+  # Production database (from environment)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Never auto-update in prod
+    show-sql: false
+
+  # Production Kafka
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      compression-type: snappy
+      acks: all
+      retries: 3
+
+  # Production security
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+
+# Production server
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+
+# Production logging (JSON structured)
+logging:
+  level:
+    root: WARN
+    com.ksa.financing: INFO
+    org.springframework: WARN
+  pattern:
+    console: '{"timestamp":"%d{ISO8601}","level":"%level","thread":"%thread","logger":"%logger","message":"%msg","correlation_id":"%X{correlationId}"}%n'
+
+# Swagger disabled in prod
+springdoc:
+  swagger-ui:
+    enabled: false
+
+# Production Temporal
+temporal:
+  service-address: ${TEMPORAL_ADDRESS}
+  namespace: ${TEMPORAL_NAMESPACE}
+
+# Production-specific features
+app:
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  development:
+    mock-external-services: false
+    detailed-error-messages: false
+    sql-logging: false

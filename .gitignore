@@ -1,0 +1,168 @@
+# =========================
+# Maven
+# =========================
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# =========================
+# Java Build Artifacts
+# =========================
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# =========================
+# GraalVM Native Image
+# =========================
+*.so
+*.dylib
+*.dll
+
+# =========================
+# IDE - IntelliJ IDEA
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# =========================
+# IDE - Eclipse
+# =========================
+.classpath
+.project
+.settings/
+bin/
+
+# =========================
+# IDE - VS Code
+# =========================
+.vscode/
+*.code-workspace
+
+# =========================
+# IDE - NetBeans
+# =========================
+nbproject/
+nbbuild/
+nbdist/
+nb-configuration.xml
+
+# =========================
+# OS Generated
+# =========================
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+._*
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+spring.log
+
+# =========================
+# Temporary Files
+# =========================
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*~
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.local
+.env.*.local
+application-local.yml
+application-local.properties
+secrets/
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*.truststore
+
+# =========================
+# Spring Boot
+# =========================
+HELP.md
+.gradle/
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+.docker/
+
+# =========================
+# Kubernetes Secrets
+# =========================
+*-secret.yaml
+!infrastructure/kubernetes/**/*-secret.yaml.example
+
+# =========================
+# Terraform / IaC
+# =========================
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+
+# =========================
+# Test & Profiling
+# =========================
+*.jfr
+hs_err_pid*
+replay_pid*
+*.hprof
+surefire-reports/
+failsafe-reports/
+
+# =========================
+# Coverage Reports
+# =========================
+jacoco.exec
+*.exec
+coverage/
+htmlReport/
+
+# =========================
+# Redis
+# =========================
+dump.rdb
+
+# =========================
+# Kafka
+# =========================
+kafka-logs/
+
+# =========================
+# Elasticsearch
+# =========================
+data/
+
+# =========================
+# Claude Code
+# =========================
+.claude/settings.local.json
