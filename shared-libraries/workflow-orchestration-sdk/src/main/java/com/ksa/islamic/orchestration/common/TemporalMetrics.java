@@ -236,7 +236,7 @@ public class TemporalMetrics {
             metricTags[i / 2] = io.micrometer.core.instrument.Tag.of(tags[i], tags[i + 1]);
         }
 
-        meterRegistry.counter("temporal.business." + name, metricTags).increment(value);
+        meterRegistry.counter("temporal.business." + name, java.util.Arrays.asList(metricTags)).increment(value);
     }
 
     /**
@@ -253,7 +253,7 @@ public class TemporalMetrics {
         }
 
         Timer.builder("temporal.timing." + name)
-                .tags(metricTags)
+                .tags(java.util.Arrays.asList(metricTags))
                 .register(meterRegistry)
                 .record(duration, unit);
     }

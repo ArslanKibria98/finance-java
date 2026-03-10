@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: onboarding-workflow-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/islamic-financing}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/islamic-financing/protocol/openid-connect/certs}
+
+server:
+  port: ${SERVER_PORT:8096}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.ksa.financing: ${APP_LOG_LEVEL:DEBUG}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    config-url: ../v3/api-docs/swagger-config
+    url: ../v3/api-docs
+    tags-sorter: alpha
+    doc-expansion: list
+  packages-to-scan: com.ksa.financing.onboarding.adapter.rest.controller
+
+temporal:
+  server:
+    host: ${TEMPORAL_HOST:localhost}
+    port: ${TEMPORAL_PORT:7233}
+  namespace: ${TEMPORAL_NAMESPACE:default}
+  worker:
+    max-concurrent-activities: ${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:100}
+    max-concurrent-workflows: ${TEMPORAL_MAX_CONCURRENT_WORKFLOWS:50}
+
+app:
+  services:
+    customer-service-url: ${CUSTOMER_SERVICE_URL:http://localhost:8084}
+    risk-service-url: ${RISK_SERVICE_URL:http://localhost:8090}
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+ksa:
+  authorization:
+    enabled: true
+    cache-key-prefix: casbin:policies

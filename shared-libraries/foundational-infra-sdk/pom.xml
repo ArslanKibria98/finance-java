@@ -48,11 +48,8 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Keycloak -->
-        <dependency>
-            <groupId>org.keycloak</groupId>
-            <artifactId>keycloak-spring-boot-starter</artifactId>
-        </dependency>
+        <!-- Keycloak: keycloak-spring-boot-starter was removed in Keycloak 20+.
+             Spring Boot 3.x uses standard spring-boot-starter-oauth2-resource-server (above). -->
 
         <!-- Logging -->
         <dependency>

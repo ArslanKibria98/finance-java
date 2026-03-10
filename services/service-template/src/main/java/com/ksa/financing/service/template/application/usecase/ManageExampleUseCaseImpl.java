@@ -1,5 +1,8 @@
 package com.ksa.financing.service.template.application.usecase;
 
+import com.ksa.financing.infra.exception.BusinessException;
+import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,11 +63,13 @@ public class ManageExampleUseCaseImpl implements ManageExampleUseCase {
 
         // Load aggregate
         var aggregate = repository.findById(command.tenantId(), command.aggregateId())
-                .orElseThrow(() -> new AggregateNotFoundException(command.aggregateId()));
+                .orElseThrow(() -> NotFoundException.forEntity("ExampleAggregate", command.aggregateId().toString()));
 
         // Check business rules via domain service
         if (!domainService.canActivate(aggregate)) {
-            throw new BusinessRuleViolationException("Cannot activate aggregate");
+            throw new BusinessException(
+                    ErrorCodes.CONFLICT,
+                    "Cannot activate aggregate: " + command.aggregateId());
         }
 
         // Perform domain operation
@@ -86,7 +91,7 @@ public class ManageExampleUseCaseImpl implements ManageExampleUseCase {
 
         // Load aggregate
         var aggregate = repository.findById(command.tenantId(), command.aggregateId())
-                .orElseThrow(() -> new AggregateNotFoundException(command.aggregateId()));
+                .orElseThrow(() -> NotFoundException.forEntity("ExampleAggregate", command.aggregateId().toString()));
 
         // Perform domain operation
         aggregate.addEntity(
@@ -111,16 +116,16 @@ public class ManageExampleUseCaseImpl implements ManageExampleUseCase {
 
         // Load aggregate
         var aggregate = repository.findById(command.tenantId(), command.aggregateId())
-                .orElseThrow(() -> new AggregateNotFoundException(command.aggregateId()));
+                .orElseThrow(() -> NotFoundException.forEntity("ExampleAggregate", command.aggregateId().toString()));
 
         // Calculate completion score before completing
         double score = domainService.calculateCompletionScore(aggregate);
         log.debug("Completion score: {}", score);
 
         if (score < 70.0) {
-            throw new BusinessRuleViolationException(
-                "Aggregate not ready for completion. Score: " + score
-            );
+            throw new BusinessException(
+                    ErrorCodes.VALIDATION_FAILED,
+                    "Aggregate not ready for completion. Score: " + score);
         }
 
         // Perform domain operation
@@ -142,19 +147,7 @@ public class ManageExampleUseCaseImpl implements ManageExampleUseCase {
         log.debug("Getting example aggregate: {}", query.aggregateId());
 
         return repository.findById(query.tenantId(), query.aggregateId())
-                .orElseThrow(() -> new AggregateNotFoundException(query.aggregateId()));
+                .orElseThrow(() -> NotFoundException.forEntity("ExampleAggregate", query.aggregateId().toString()));
     }
 
-    // Custom exceptions for the application layer
-    public static class AggregateNotFoundException extends RuntimeException {
-        public AggregateNotFoundException(Object id) {
-            super("Aggregate not found: " + id);
-        }
-    }
-
-    public static class BusinessRuleViolationException extends RuntimeException {
-        public BusinessRuleViolationException(String message) {
-            super(message);
-        }
-    }
 }

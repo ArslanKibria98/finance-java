@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 
 import com.ksa.financing.domain.model.TenantId;
 import com.ksa.financing.domain.model.UserId;
+import com.ksa.financing.infra.exception.BusinessException;
+import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.service.template.adapter.rest.request.CreateExampleRequest;
 import com.ksa.financing.service.template.adapter.rest.request.AddEntityRequest;
 import com.ksa.financing.service.template.adapter.rest.response.ExampleResponse;
@@ -48,6 +50,7 @@ import java.util.stream.Collectors;
 public class ExampleController {
 
     private final ManageExampleUseCase useCase;
+    // TODO: Refactor to use use case instead of direct repository access (hexagonal violation)
     private final ExampleRepository repository;
     private final ExampleAggregateMapper mapper;
 
@@ -261,7 +264,9 @@ public class ExampleController {
     private TenantId extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");
         if (tenantClaim == null) {
-            throw new IllegalStateException("No tenant_id in JWT");
+            throw new BusinessException(
+                    ErrorCodes.INVALID_CREDENTIALS,
+                    "No tenant_id claim found in JWT token");
         }
         return new TenantId(tenantClaim);
     }
@@ -272,7 +277,9 @@ public class ExampleController {
     private UserId extractUserId(Jwt jwt) {
         var subject = jwt.getSubject();
         if (subject == null) {
-            throw new IllegalStateException("No subject in JWT");
+            throw new BusinessException(
+                    ErrorCodes.INVALID_CREDENTIALS,
+                    "No subject claim found in JWT token");
         }
         return new UserId(subject);
     }

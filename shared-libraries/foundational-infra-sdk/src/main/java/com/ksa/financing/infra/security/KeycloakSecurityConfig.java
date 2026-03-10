@@ -9,7 +9,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -19,6 +21,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class KeycloakSecurityConfig {
 
     private final TenantContextFilter tenantContextFilter;
+    private final AuthenticationEntryPoint authenticationEntryPoint;
+    private final AccessDeniedHandler accessDeniedHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -31,7 +35,12 @@ public class KeycloakSecurityConfig {
                 .requestMatchers("/actuator/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/public/**").permitAll()
                 .anyRequest().authenticated())
+            .exceptionHandling(eh -> eh
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler))
             .oauth2ResourceServer(oauth2 -> oauth2
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler)
                 .jwt(jwt -> jwt
                     .jwtAuthenticationConverter(jwtAuthenticationConverter())))
             .addFilterBefore(tenantContextFilter, UsernamePasswordAuthenticationFilter.class)

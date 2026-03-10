@@ -1,0 +1,212 @@
+_format_version: "3.0"
+_transform: true
+
+# URL pattern: {{kongUrl}}/{service-name}/api/v1/...
+# Kong strips the /{service-name} prefix before forwarding to the backend.
+# Example: GET http://kong:8000/identity-service/api/v1/auth/policies
+#        -> GET http://identity-service:8083/api/v1/auth/policies
+
+services:
+  # Identity Service - SSO endpoints (stricter rate limit)
+  - name: identity-service-sso
+    url: http://identity-service:8083
+    routes:
+      - name: sso-routes
+        paths:
+          - /identity-service/api/v1/auth/sso
+        strip_path: true
+        protocols:
+          - http
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 10
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  # Identity Service - Registration, OTP, Login
+  - name: identity-service
+    url: http://identity-service:8083
+    routes:
+      - name: identity-routes
+        paths:
+          - /identity-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Customer Service - CIF, Employment, Bank Accounts
+  - name: customer-service
+    url: http://customer-service:8084
+    routes:
+      - name: customer-routes
+        paths:
+          - /customer-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Global Profile Service - Global UID, Regional Profiles
+  - name: global-profile-service
+    url: http://global-profile-service:8085
+    routes:
+      - name: profile-routes
+        paths:
+          - /global-profile-service
+        strip_path: true
+        protocols:
+          - http
+
+  # PII Vault Service - Encrypted PII Storage (internal only via Kong)
+  - name: pii-vault-service
+    url: http://pii-vault-service:8086
+    routes:
+      - name: pii-routes
+        paths:
+          - /pii-vault-service
+        strip_path: true
+        protocols:
+          - http
+
+  # KYC Adapter Service - Nafath, Yakeen, Tahakuk, GOSI, OTP stubs
+  - name: kyc-adapter-service
+    url: http://kyc-adapter-service:8087
+    routes:
+      - name: kyc-routes
+        paths:
+          - /kyc-adapter-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Wallet Service - Balance, Top-up
+  - name: wallet-service
+    url: http://wallet-service:8088
+    routes:
+      - name: wallet-routes
+        paths:
+          - /wallet-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Onboarding Workflow Service - Temporal orchestration
+  - name: onboarding-workflow-service
+    url: http://onboarding-workflow-service:8089
+    routes:
+      - name: onboarding-routes
+        paths:
+          - /onboarding-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Product Service - Islamic financing product catalog management
+  - name: product-service
+    url: http://product-service:8091
+    routes:
+      - name: product-routes
+        paths:
+          - /product-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Risk Service - Fraud, AML, Sanctions (Phase 1 Internal Checks)
+  - name: risk-service
+    url: http://risk-service:8090
+    routes:
+      - name: risk-routes
+        paths:
+          - /risk-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Middleware Third Party - Centralized third-party API management
+  - name: middleware-third-party
+    url: http://middleware-third-party:8093
+    routes:
+      - name: middleware-routes
+        paths:
+          - /middleware-third-party
+        strip_path: true
+        protocols:
+          - http
+
+  # Keycloak Authentication
+  - name: keycloak-service
+    url: http://keycloak:8080
+    routes:
+      - name: keycloak-routes
+        paths:
+          - /keycloak
+        strip_path: true
+        protocols:
+          - http
+
+  # Fineract Core Banking
+  - name: fineract-service
+    url: https://fineract:8443
+    routes:
+      - name: fineract-routes
+        paths:
+          - /fineract-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Swagger UI Aggregator - Unified API documentation
+  - name: swagger-ui
+    url: http://swagger-ui:8080
+    routes:
+      - name: swagger-routes
+        paths:
+          - /docs
+        strip_path: true
+        protocols:
+          - http
+
+plugins:
+  # Global CORS
+  - name: cors
+    config:
+      origins:
+        - "http://localhost:3000"
+        - "http://localhost:3001"
+        - "http://localhost:4200"
+        - "http://46.62.226.94:3000"
+        - "http://46.62.226.94:4200"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Content-Type
+        - Authorization
+        - X-Tenant-ID
+        - X-Correlation-ID
+        - X-Idempotency-Key
+        - X-Device-Id
+        - X-Device-Fingerprint
+        - X-Client-Ip
+        - X-Session-Id
+        - X-Latitude
+        - X-Longitude
+        - X-User-Agent
+      exposed_headers:
+        - X-Correlation-ID
+      credentials: true
+      max_age: 3600
+
+  # Global rate limiting
+  - name: rate-limiting
+    config:
+      minute: 100
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false

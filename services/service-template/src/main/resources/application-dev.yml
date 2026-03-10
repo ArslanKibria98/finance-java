@@ -1,56 +1,50 @@
 # Development Profile Configuration
 spring:
-  profiles: dev
+  config:
+    activate:
+      on-profile: dev
 
-  # Development database
   datasource:
-    url: jdbc:postgresql://localhost:5432/service_template_dev
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:service_template_dev}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
 
   jpa:
     hibernate:
-      ddl-auto: update  # Auto-update schema in dev
+      ddl-auto: validate
     show-sql: true
 
-  # Development Kafka
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
-  # Development security (more lenient)
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/realms/islamic-financing
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/islamic-financing}
 
-# Development server
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
 
-# Enhanced logging for development
 logging:
   level:
-    root: INFO
-    com.ksa.financing: DEBUG
+    root: ${LOG_LEVEL:INFO}
+    com.ksa.financing: ${APP_LOG_LEVEL:DEBUG}
     org.springframework: DEBUG
     org.hibernate: DEBUG
     org.apache.kafka: DEBUG
   pattern:
     console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
 
-# Swagger enabled in dev
 springdoc:
   swagger-ui:
     enabled: true
     try-it-out-enabled: true
 
-# Development Temporal
 temporal:
-  service-address: localhost:7233
-  namespace: default
+  service-address: ${TEMPORAL_ADDRESS:localhost:7233}
+  namespace: ${TEMPORAL_NAMESPACE:default}
 
-# Development-specific features
 app:
   development:
     mock-external-services: true

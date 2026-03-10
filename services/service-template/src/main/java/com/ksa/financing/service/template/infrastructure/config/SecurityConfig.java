@@ -9,15 +9,20 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Security configuration for OAuth2/OIDC with Keycloak.
@@ -40,7 +45,9 @@ public class SecurityConfig {
     private String allowedOrigins;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   AuthenticationEntryPoint authenticationEntryPoint,
+                                                   AccessDeniedHandler accessDeniedHandler) throws Exception {
         return http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
@@ -60,7 +67,12 @@ public class SecurityConfig {
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
             )
+            .exceptionHandling(eh -> eh
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler))
             .oauth2ResourceServer(oauth2 -> oauth2
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler)
                 .jwt(jwt -> jwt
                     .decoder(jwtDecoder())
                     .jwtAuthenticationConverter(jwtAuthenticationConverter())
@@ -76,13 +88,19 @@ public class SecurityConfig {
 
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        // Extract roles from realm_access.roles claim
-        authoritiesConverter.setAuthoritiesClaimName("realm_access.roles");
-        authoritiesConverter.setAuthorityPrefix("ROLE_");
-
+        Converter<Jwt, Collection<GrantedAuthority>> keycloakAuthoritiesConverter = jwt -> {
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess == null || !realmAccess.containsKey("roles")) {
+                return Collections.emptyList();
+            }
+            @SuppressWarnings("unchecked")
+            Collection<String> roles = (Collection<String>) realmAccess.get("roles");
+            return roles.stream()
+                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                    .collect(Collectors.toList());
+        };
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        converter.setJwtGrantedAuthoritiesConverter(keycloakAuthoritiesConverter);
         return converter;
     }
 

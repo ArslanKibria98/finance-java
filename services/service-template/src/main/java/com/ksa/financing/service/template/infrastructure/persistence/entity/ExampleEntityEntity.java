@@ -15,7 +15,8 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(of = {"id"})
-public class ExampleEntityEntity {
+// NOTE: Filename should be ExampleEntityJpaEntity.java - renamed class per naming conventions
+public class ExampleEntityJpaEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "example_entity_seq")
@@ -33,5 +34,5 @@ public class ExampleEntityEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "aggregate_id", nullable = false)
-    private ExampleAggregateEntity aggregate;
+    private ExampleAggregateJpaEntity aggregate;
 }

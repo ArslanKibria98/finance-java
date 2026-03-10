@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ksa_financing
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -27,7 +27,7 @@ services:
     image: redis:8.0.2
     container_name: ksa-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -57,7 +57,10 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -100,17 +103,32 @@ services:
       - "7233:7233"
       - "8233:8233"
     environment:
-      - DB=postgresql
+      - DB=postgres12
       - DB_PORT=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PWD=postgres
       - POSTGRES_SEEDS=postgres
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
     healthcheck:
-      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      test: ["CMD-SHELL", "nc -z $(hostname -i) 7233 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 30s
+    networks:
+      - ksa-network
+
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: ksa-temporal-ui
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "8234:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
     networks:
       - ksa-network
 
@@ -298,6 +316,453 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    networks:
+      - ksa-network
+
+  # ============================================================================
+  # KONG API GATEWAY
+  # ============================================================================
+  kong:
+    image: kong:3.9
+    container_name: ksa-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ./infrastructure/kong/kong.yml:/etc/kong/kong.yml:ro
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # ============================================================================
+  # APPLICATION SERVICES
+  # ============================================================================
+
+  # Identity Service - Registration, Auth, JWT
+  identity-service:
+    build:
+      context: ./services/identity-service
+      dockerfile: Dockerfile
+    container_name: ksa-identity-service
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/identity_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      KEYCLOAK_AUTH_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      KEYCLOAK_ADMIN_CLIENT_ID: admin-dashboard
+      KEYCLOAK_ADMIN_CLIENT_SECRET: admin-dashboard-secret
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      APP_KONG_BASE_URL: http://46.62.226.94:8000
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_BASE_URL: http://46.62.226.94:8080
+      KEYCLOAK_SSO_CLIENT_ID: react-frontend
+      KEYCLOAK_SSO_REDIRECT_URI: http://localhost:3000/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Customer Service - CIF, Employment, Bank Accounts
+  customer-service:
+    build:
+      context: ./services/customer-service
+      dockerfile: Dockerfile
+    container_name: ksa-customer-service
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/customer_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      SERVICES_GLOBAL_PROFILE_URL: http://global-profile-service:8085
+      PII_VAULT_URL: http://pii-vault-service:8086
+      PII_VAULT_MOCK: "false"
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8084/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Global Profile Service - Zero-PII Global Index
+  global-profile-service:
+    build:
+      context: ./services/global-profile-service
+      dockerfile: Dockerfile
+    container_name: ksa-global-profile-service
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/global_profile_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TEMPORAL_HOST: temporal
+      TEMPORAL_PORT: 7233
+      TEMPORAL_NAMESPACE: default
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8085/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # PII Vault Service - Encrypted PII Storage (internal only)
+  pii-vault-service:
+    build:
+      context: ./services/pii-vault-service
+      dockerfile: Dockerfile
+    container_name: ksa-pii-vault-service
+    ports:
+      - "8086:8086"
+    environment:
+      SERVER_PORT: 8086
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pii_vault_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      TEMPORAL_HOST: temporal
+      TEMPORAL_PORT: 7233
+      TEMPORAL_NAMESPACE: default
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      PII_VAULT_MASTER_KEY: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8086/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # KYC Adapter Service - Nafath, Yakeen, Tahakuk, GOSI stubs
+  kyc-adapter-service:
+    build:
+      context: ./services/kyc-adapter-service
+      dockerfile: Dockerfile
+    container_name: ksa-kyc-adapter-service
+    ports:
+      - "8087:8087"
+    environment:
+      SERVER_PORT: 8087
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kyc_adapter_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8087/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Wallet Service - Balance, Top-up, Kafka consumer
+  wallet-service:
+    build:
+      context: ./services/wallet-service
+      dockerfile: Dockerfile
+    container_name: ksa-wallet-service
+    ports:
+      - "8088:8088"
+    environment:
+      SERVER_PORT: 8088
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/wallet_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      FINERACT_ENABLED: "true"
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      FINERACT_TENANT_ID: default
+      FINERACT_SAVINGS_PRODUCT_ID: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Onboarding Workflow Service - Temporal orchestration (stateless, no DB)
+  onboarding-workflow-service:
+    build:
+      context: ./services/onboarding-workflow-service
+      dockerfile: Dockerfile
+    container_name: ksa-onboarding-workflow-service
+    ports:
+      - "8089:8089"
+    environment:
+      SERVER_PORT: 8089
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      TEMPORAL_NAMESPACE: default
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      IDENTITY_SERVICE_URL: http://identity-service:8083
+      CUSTOMER_SERVICE_URL: http://customer-service:8084
+      GLOBAL_PROFILE_SERVICE_URL: http://global-profile-service:8085
+      PII_VAULT_SERVICE_URL: http://pii-vault-service:8086
+      KYC_ADAPTER_SERVICE_URL: http://kyc-adapter-service:8087
+      WALLET_SERVICE_URL: http://wallet-service:8088
+      APP_SERVICES_KYC_ADAPTER_URL: http://kyc-adapter-service:8087
+      APP_SERVICES_IDENTITY_URL: http://identity-service:8083
+      APP_SERVICES_GLOBAL_PROFILE_URL: http://global-profile-service:8085
+      RISK_SERVICE_URL: http://risk-service:8090
+    depends_on:
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8089/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Risk Service - Fraud, AML, Sanctions (Phase 1 Internal Checks)
+  risk-service:
+    build:
+      context: ./services/risk-service
+      dockerfile: Dockerfile
+    container_name: ksa-risk-service
+    ports:
+      - "8090:8090"
+    environment:
+      SERVER_PORT: 8090
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/risk_service?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8090/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Product Service - Islamic financing product catalog management
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    container_name: ksa-product-service
+    ports:
+      - "8091:8091"
+    environment:
+      SERVER_PORT: 8091
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: product_service_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8091/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Lending Service - Loan origination, disbursement, lifecycle
+  lending-service:
+    build:
+      context: .
+      dockerfile: services/lending-service/Dockerfile
+    container_name: ksa-lending-service
+    ports:
+      - "8097:8097"
+    environment:
+      SERVER_PORT: 8097
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: lending_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8097/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Middleware Third Party Service - Third-party API middleware/proxy
+  middleware-third-party:
+    build:
+      context: .
+      dockerfile: services/middleware-third-party/Dockerfile
+    container_name: ksa-middleware-third-party
+    ports:
+      - "8093:8093"
+    environment:
+      SERVER_PORT: 8093
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: middleware_third_party_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:4200
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8093/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Unified Swagger UI - Single page, all APIs through Kong
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.18.2
+    container_name: ksa-swagger-ui
+    environment:
+      SWAGGER_JSON: /openapi/openapi.yml
+      VALIDATOR_URL: "null"
+      DEEP_LINKING: "true"
+      DISPLAY_REQUEST_DURATION: "true"
+      FILTER: "true"
+      SHOW_EXTENSIONS: "true"
+      SHOW_COMMON_EXTENSIONS: "true"
+      TRY_IT_OUT_ENABLED: "true"
+    volumes:
+      - ./infrastructure/swagger/openapi.yml:/openapi/openapi.yml:ro
+    ports:
+      - "8888:8080"
+    depends_on:
+      kong:
+        condition: service_healthy
     networks:
       - ksa-network
 

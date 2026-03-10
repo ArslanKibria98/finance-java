@@ -105,11 +105,11 @@ management:
 # Logging Configuration
 logging:
   level:
-    root: INFO
-    com.ksa.financing: DEBUG
-    org.springframework.web: INFO
-    org.springframework.security: INFO
-    org.hibernate.SQL: DEBUG
+    root: ${LOG_LEVEL:INFO}
+    com.ksa.financing: ${APP_LOG_LEVEL:DEBUG}
+    org.springframework.web: ${SPRING_LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:INFO}
+    org.hibernate.SQL: ${HIBERNATE_SQL_LOG_LEVEL:DEBUG}
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

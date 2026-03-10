@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.chrono.HijrahChronology;
 import java.time.chrono.HijrahDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
@@ -89,7 +90,7 @@ public final class HijriDate {
      * @return the year in the Hijri calendar
      */
     public int getYear() {
-        return date.get(HIJRI_CHRONOLOGY.prolepticYear());
+        return date.get(ChronoField.YEAR);
     }
 
     /**
@@ -98,7 +99,7 @@ public final class HijriDate {
      * @return the month number
      */
     public int getMonth() {
-        return date.getMonthValue();
+        return date.get(ChronoField.MONTH_OF_YEAR);
     }
 
     /**
@@ -107,7 +108,7 @@ public final class HijriDate {
      * @return the day of month
      */
     public int getDayOfMonth() {
-        return date.getDayOfMonth();
+        return date.get(ChronoField.DAY_OF_MONTH);
     }
 
     /**

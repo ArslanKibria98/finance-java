@@ -1,7 +1,6 @@
 package com.ksa.financing.service.template.domain.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import com.ksa.financing.service.template.domain.model.ExampleAggregate;
 import com.ksa.financing.service.template.domain.model.ExampleStatus;
 
@@ -12,7 +11,6 @@ import java.util.List;
  * Domain services orchestrate operations across multiple aggregates or contain complex calculations.
  */
 @Slf4j
-@Service
 public class ExampleDomainService {
 
     /**

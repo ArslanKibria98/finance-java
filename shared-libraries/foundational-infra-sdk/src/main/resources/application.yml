@@ -21,7 +21,7 @@ spring:
 # Keycloak Configuration
 keycloak:
   auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
-  realm: ${KEYCLOAK_REALM:ksa-financing}
+  realm: ${KEYCLOAK_REALM:islamic-financing}
   resource: ${SERVICE_NAME:ksa-financing-service}
   bearer-only: true
 
@@ -30,7 +30,7 @@ opentelemetry:
   jaeger:
     endpoint: ${JAEGER_ENDPOINT:http://localhost:14250}
 
-# Resilience4j Configuration
+# Resilience4j Configuration (per docs/standards/RESILIENCE_STANDARDS.md)
 resilience4j:
   circuitbreaker:
     configs:
@@ -40,9 +40,27 @@ resilience4j:
         minimumNumberOfCalls: 5
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
-        waitDurationInOpenState: 10s
+        waitDurationInOpenState: 30s
         failureRateThreshold: 50
         eventConsumerBufferSize: 10
+    instances:
+      internal-rest:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        slidingWindowSize: 10
+      keycloak:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        slidingWindowSize: 10
+      government-api:
+        baseConfig: default
+        failureRateThreshold: 40
+        waitDurationInOpenState: 120s
+        slidingWindowSize: 5
+        slowCallDurationThreshold: 10s
+        slowCallRateThreshold: 80
 
   retry:
     configs:
@@ -51,12 +69,59 @@ resilience4j:
         waitDuration: 500ms
         enableExponentialBackoff: true
         exponentialBackoffMultiplier: 2
+    instances:
+      internal-rest:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.net.ConnectException
+          - org.springframework.web.client.ResourceAccessException
+        ignoreExceptions:
+          - com.ksa.financing.infra.exception.BusinessException
+          - com.ksa.financing.infra.exception.NotFoundException
+      keycloak:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.net.ConnectException
+          - org.springframework.web.client.ResourceAccessException
+        ignoreExceptions:
+          - com.ksa.financing.infra.exception.BusinessException
+      government-api:
+        maxAttempts: 3
+        waitDuration: 2000ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        maxWaitDuration: 30s
+        retryExceptions:
+          - java.io.IOException
+          - java.net.ConnectException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignoreExceptions:
+          - com.ksa.financing.infra.exception.BusinessException
 
   bulkhead:
     configs:
       default:
         maxConcurrentCalls: 25
         maxWaitDuration: 0
+    instances:
+      internal-rest:
+        maxConcurrentCalls: 25
+        maxWaitDuration: 0
+      keycloak:
+        maxConcurrentCalls: 25
+        maxWaitDuration: 0
+      government-api:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 1000
 
 # Logging Configuration
 logging:

@@ -20,27 +20,15 @@
 
     <modules>
         <module>service-template</module>
-        <!-- Future services will be added here:
-        <module>global-profile-index</module>
-        <module>pii-vault</module>
-        <module>origination-service</module>
+        <module>identity-service</module>
+        <module>customer-service</module>
+        <module>global-profile-service</module>
+        <module>pii-vault-service</module>
+        <module>kyc-adapter-service</module>
+        <module>wallet-service</module>
+        <module>onboarding-workflow-service</module>
+        <module>product-service</module>
         <module>lending-service</module>
-        <module>customer-management</module>
-        <module>product-catalog</module>
-        <module>sharia-compliance</module>
-        <module>ledger-service</module>
-        <module>payment-service</module>
-        <module>notification-service</module>
-        <module>reporting-service</module>
-        <module>collection-service</module>
-        <module>risk-assessment</module>
-        <module>document-management</module>
-        <module>audit-service</module>
-        <module>integration-gateway</module>
-        <module>workflow-engine</module>
-        <module>commodity-exchange</module>
-        <module>analytics-service</module>
-        <module>monitoring-service</module>
-        -->
+        <module>middleware-third-party</module>
     </modules>
 </project>

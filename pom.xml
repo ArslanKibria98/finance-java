@@ -42,7 +42,7 @@
         <hikaricp.version>5.1.0</hikaricp.version>
 
         <!-- Logging Stack (ELK 9.3.0) -->
-        <logback.version>1.5.28</logback.version>
+        <logback.version>1.4.14</logback.version>
         <logstash-encoder.version>9.0</logstash-encoder.version>
         <slf4j.version>2.0.16</slf4j.version>
 
@@ -95,6 +95,18 @@
         <module>shared-libraries/reporting-projection-sdk</module>
         <!--<module>shared-libraries/test-harness-sdk</module>-->
 
+        <!-- Shared Activity API Modules -->
+        <module>shared-libraries/kyc-activity-api</module>
+        <module>shared-libraries/customer-activity-api</module>
+        <module>shared-libraries/wallet-activity-api</module>
+        <module>shared-libraries/identity-activity-api</module>
+        <module>shared-libraries/notification-activity-api</module>
+        <module>shared-libraries/risk-activity-api</module>
+
+        <!-- Active Microservices -->
+        <module>services/risk-service</module>
+        <module>services/product-service</module>
+
         <!-- Microservices - commented out until created -->
         <!--
         <module>services/service-template</module>
@@ -106,9 +118,7 @@
         <module>services/sharia-compliance</module>
         <module>services/ledger-service</module>
         <module>services/customer-service</module>
-        <module>services/product-service</module>
         <module>services/wallet-service</module>
-        <module>services/risk-service</module>
         <module>services/credit-decisioning</module>
         <module>services/collections-service</module>
         <module>services/document-service</module>

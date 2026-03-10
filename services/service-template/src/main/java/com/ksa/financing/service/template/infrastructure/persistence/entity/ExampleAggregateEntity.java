@@ -41,7 +41,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(of = {"id"})
-public class ExampleAggregateEntity {
+// NOTE: Filename should be ExampleAggregateJpaEntity.java - renamed class per naming conventions
+public class ExampleAggregateJpaEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "example_aggregate_seq")
@@ -84,7 +85,7 @@ public class ExampleAggregateEntity {
         orphanRemoval = true,
         fetch = FetchType.EAGER
     )
-    private List<ExampleEntityEntity> entities = new ArrayList<>();
+    private List<ExampleEntityJpaEntity> entities = new ArrayList<>();
 
     @Version
     @Column(name = "version")
@@ -99,7 +100,7 @@ public class ExampleAggregateEntity {
     /**
      * Helper method to maintain bidirectional relationship.
      */
-    public void addEntity(ExampleEntityEntity entity) {
+    public void addEntity(ExampleEntityJpaEntity entity) {
         entities.add(entity);
         entity.setAggregate(this);
     }
@@ -107,7 +108,7 @@ public class ExampleAggregateEntity {
     /**
      * Helper method to maintain bidirectional relationship.
      */
-    public void removeEntity(ExampleEntityEntity entity) {
+    public void removeEntity(ExampleEntityJpaEntity entity) {
         entities.remove(entity);
         entity.setAggregate(null);
     }

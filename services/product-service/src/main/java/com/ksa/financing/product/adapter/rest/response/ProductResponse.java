@@ -1,0 +1,71 @@
+package com.ksa.financing.product.adapter.rest.response;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+public record ProductResponse(
+    UUID id,
+    UUID tenantId,
+    String productCode,
+    String nameEn,
+    String nameAr,
+    String descriptionEn,
+    String descriptionAr,
+    String shortDescriptionEn,
+    String shortDescriptionAr,
+    String logoUrl,
+    String productType,
+    String targetSegment,
+    UUID masterCategoryId,
+    UUID subCategoryId,
+    UUID templateId,
+    String notificationEmail,
+    List<String> customerTypes,
+    boolean involvesCommodity,
+    String setupMethod,
+    int wizardStep,
+    boolean wizardCompleted,
+    String shariaStructure,
+    boolean commodityRequired,
+    String status,
+    LocalDate startDate,
+    LocalDate endDate,
+    boolean visibleToCustomers,
+    boolean visibleToPartners,
+    BigDecimal minAmount,
+    BigDecimal maxAmount,
+    int minTenureMonths,
+    int maxTenureMonths,
+    List<Integer> allowedTenures,
+    BigDecimal baseProfitRate,
+    String rateType,
+    String repaymentFrequency,
+    int gracePeriodDays,
+    boolean earlySettlementAllowed,
+    boolean waiveUnearnedProfit,
+    Integer minTenureBeforeSettlement,
+    String currency,
+    List<AdminFeeSlabResponse> adminFeeSlabs,
+    Instant createdAt,
+    Instant updatedAt,
+    UUID createdBy,
+    UUID updatedBy,
+    int versionNumber
+) {
+    public record AdminFeeSlabResponse(
+        UUID id,
+        BigDecimal minAmount,
+        BigDecimal maxAmount,
+        BigDecimal profitPercentage,
+        BigDecimal processingFee,
+        BigDecimal adminFee,
+        String partnerScope,
+        String status,
+        int sortOrder,
+        Integer minTenure,
+        Integer maxTenure
+    ) {}
+}

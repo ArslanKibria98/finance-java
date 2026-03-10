@@ -1,0 +1,32 @@
+p, super_admin, /api/v1/**, *
+
+p, admin, /api/v1/workflows/**, GET
+p, admin, /api/v1/workflows/**, POST
+p, admin, /api/v1/workflows/**, DELETE
+p, admin, /api/v1/admin/**, GET
+p, admin, /api/v1/admin/**, POST
+p, admin, /api/v1/profiles/**, *
+p, admin, /api/v1/policies/**, GET
+p, admin, /api/v1/authorize, POST
+p, admin, /api/v1/token-info, GET
+
+p, product_admin, /api/v1/workflows/**, GET
+p, product_admin, /api/v1/workflows/start, POST
+p, product_admin, /api/v1/admin/reports/**, GET
+p, product_admin, /api/v1/profiles/**, GET
+p, product_admin, /api/v1/authorize, POST
+p, product_admin, /api/v1/token-info, GET
+
+p, partner_admin, /api/v1/workflows/**, GET
+p, partner_admin, /api/v1/workflows/start, POST
+p, partner_admin, /api/v1/admin/reports/**, GET
+p, partner_admin, /api/v1/profiles/**, GET
+p, partner_admin, /api/v1/authorize, POST
+p, partner_admin, /api/v1/token-info, GET
+
+p, customer, /api/v1/workflows/*/status, GET
+p, customer, /api/v1/workflows/start, POST
+p, customer, /api/v1/profiles/me, GET
+p, customer, /api/v1/profiles/me, PUT
+p, customer, /api/v1/authorize, POST
+p, customer, /api/v1/token-info, GET

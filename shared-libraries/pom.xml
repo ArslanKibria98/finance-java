@@ -35,6 +35,13 @@
         <module>reporting-projection-sdk</module>
         <module>test-harness-sdk</module>
         <module>messaging-event-sdk</module>
+        <module>kyc-activity-api</module>
+        <module>customer-activity-api</module>
+        <module>wallet-activity-api</module>
+        <module>identity-activity-api</module>
+        <module>notification-activity-api</module>
+        <module>risk-activity-api</module>
+        <module>lending-activity-api</module>
     </modules>
 
     <dependencyManagement>
@@ -87,6 +94,36 @@
             <dependency>
                 <groupId>com.ksa.islamic.finance</groupId>
                 <artifactId>messaging-event-sdk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>kyc-activity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>customer-activity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>wallet-activity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>identity-activity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>notification-activity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>risk-activity-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

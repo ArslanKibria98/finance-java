@@ -5,8 +5,8 @@ import org.springframework.stereotype.Component;
 import com.ksa.financing.domain.model.TenantId;
 import com.ksa.financing.domain.model.UserId;
 import com.ksa.financing.service.template.domain.model.*;
-import com.ksa.financing.service.template.infrastructure.persistence.entity.ExampleAggregateEntity;
-import com.ksa.financing.service.template.infrastructure.persistence.entity.ExampleEntityEntity;
+import com.ksa.financing.service.template.infrastructure.persistence.entity.ExampleAggregateJpaEntity;
+import com.ksa.financing.service.template.infrastructure.persistence.entity.ExampleEntityJpaEntity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,8 +22,8 @@ public class ExamplePersistenceMapper {
     /**
      * Convert domain aggregate to JPA entity.
      */
-    public ExampleAggregateEntity toEntity(ExampleAggregate aggregate) {
-        var entity = new ExampleAggregateEntity();
+    public ExampleAggregateJpaEntity toEntity(ExampleAggregate aggregate) {
+        var entity = new ExampleAggregateJpaEntity();
 
         // Map basic fields
         entity.setAggregateId(aggregate.getId().getValue());
@@ -54,7 +54,7 @@ public class ExamplePersistenceMapper {
     /**
      * Convert JPA entity to domain aggregate.
      */
-    public ExampleAggregate toDomain(ExampleAggregateEntity entity) {
+    public ExampleAggregate toDomain(ExampleAggregateJpaEntity entity) {
         // Map child entities first
         List<ExampleEntity> domainEntities = entity.getEntities().stream()
                 .map(this::toDomain)
@@ -80,8 +80,8 @@ public class ExamplePersistenceMapper {
     /**
      * Convert domain entity to JPA entity.
      */
-    private ExampleEntityEntity toEntity(ExampleEntity domainEntity) {
-        var entity = new ExampleEntityEntity();
+    private ExampleEntityJpaEntity toEntity(ExampleEntity domainEntity) {
+        var entity = new ExampleEntityJpaEntity();
         entity.setEntityId(domainEntity.getId());
         entity.setName(domainEntity.getName());
         entity.setValue(domainEntity.getValue());
@@ -91,7 +91,7 @@ public class ExamplePersistenceMapper {
     /**
      * Convert JPA entity to domain entity.
      */
-    private ExampleEntity toDomain(ExampleEntityEntity entity) {
+    private ExampleEntity toDomain(ExampleEntityJpaEntity entity) {
         return new ExampleEntity(
                 entity.getEntityId(),
                 entity.getName(),

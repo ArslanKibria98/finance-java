@@ -6,9 +6,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.ksa.financing</groupId>
+        <groupId>com.ksa.islamic.finance</groupId>
         <artifactId>shared-libraries</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>domain-core-sdk</artifactId>
@@ -25,7 +26,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Dependency versions -->
-        <moneta.version>1.4.4</moneta.version>
+        <moneta.version>1.4.2</moneta.version>
         <jakarta.validation.version>3.0.2</jakarta.validation.version>
         <hibernate.validator.version>8.0.1.Final</hibernate.validator.version>
         <junit.version>5.10.2</junit.version>
@@ -40,6 +41,7 @@
             <groupId>org.javamoney</groupId>
             <artifactId>moneta</artifactId>
             <version>${moneta.version}</version>
+            <type>pom</type>
         </dependency>
 
         <!-- Jakarta Validation API -->

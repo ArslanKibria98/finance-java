@@ -16,6 +16,9 @@ public final class TaskQueue {
     public static final String COLLECTION_QUEUE = "collection-task-queue";
     public static final String NOTIFICATION_QUEUE = "notification-task-queue";
     public static final String IDENTITY_QUEUE = "identity-task-queue";
+    public static final String RISK_ASSESSMENT_QUEUE = "risk-assessment-queue";
+    public static final String KYC_QUEUE = "kyc-task-queue";
+    public static final String ONBOARDING_QUEUE = "onboarding-task-queue";
 
     // Specialized task queues
     public static final String WALLET_QUEUE = "wallet-task-queue";

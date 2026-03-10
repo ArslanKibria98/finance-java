@@ -23,7 +23,7 @@ public class KeycloakRoleConverter implements Converter<Jwt, Collection<GrantedA
             @SuppressWarnings("unchecked")
             List<String> realmRoles = (List<String>) realmAccess.get("roles");
             authorities.addAll(realmRoles.stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                 .collect(Collectors.toList()));
         }
 
@@ -37,7 +37,7 @@ public class KeycloakRoleConverter implements Converter<Jwt, Collection<GrantedA
                     @SuppressWarnings("unchecked")
                     List<String> resourceRoles = (List<String>) resourceMap.get("roles");
                     authorities.addAll(resourceRoles.stream()
-                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                         .collect(Collectors.toList()));
                 }
             });

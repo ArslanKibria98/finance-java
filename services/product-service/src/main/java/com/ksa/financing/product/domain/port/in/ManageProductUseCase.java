@@ -1,0 +1,63 @@
+package com.ksa.financing.product.domain.port.in;
+
+import com.ksa.financing.product.domain.model.Product;
+import com.ksa.financing.product.domain.model.ProductType;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+
+public interface ManageProductUseCase {
+    Product create(CreateProductCommand command);
+    Product getById(UUID tenantId, UUID productId);
+    List<Product> listByTenant(UUID tenantId);
+    Product updateBasicInfo(UUID tenantId, UUID productId, UpdateBasicInfoCommand command);
+    void activate(UUID tenantId, UUID productId);
+    void deactivate(UUID tenantId, UUID productId);
+    void softDelete(UUID tenantId, UUID productId);
+
+    record CreateProductCommand(
+        UUID tenantId,
+        String productCode,
+        String nameEn,
+        String nameAr,
+        String descriptionEn,
+        String descriptionAr,
+        String shortDescriptionEn,
+        String shortDescriptionAr,
+        ProductType productType,
+        String targetSegment,
+        UUID masterCategoryId,
+        UUID subCategoryId,
+        UUID templateId,
+        String notificationEmail,
+        List<String> customerTypes,
+        boolean involvesCommodity,
+        String setupMethod,
+        String shariaStructure,
+        BigDecimal minAmount,
+        BigDecimal maxAmount,
+        Integer minTenureMonths,
+        Integer maxTenureMonths,
+        List<Integer> allowedTenures,
+        BigDecimal baseProfitRate,
+        String rateType,
+        String repaymentFrequency,
+        int gracePeriodDays,
+        boolean earlySettlementAllowed,
+        UUID createdBy
+    ) {}
+
+    record UpdateBasicInfoCommand(
+        String nameEn,
+        String nameAr,
+        String descriptionEn,
+        String descriptionAr,
+        String shortDescriptionEn,
+        String shortDescriptionAr,
+        String notificationEmail,
+        List<String> customerTypes,
+        boolean involvesCommodity,
+        String logoUrl,
+        UUID updatedBy
+    ) {}
+}

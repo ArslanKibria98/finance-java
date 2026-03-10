@@ -6,9 +6,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.demo.islamic</groupId>
+        <groupId>com.ksa.islamic.finance</groupId>
         <artifactId>shared-libraries</artifactId>
         <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>compliance-localization-sdk</artifactId>
@@ -50,6 +51,7 @@
         <dependency>
             <groupId>org.apache.fineract</groupId>
             <artifactId>fineract-client</artifactId>
+            <version>1.9.0</version>
         </dependency>
 
         <!-- XML Processing for ZATCA -->

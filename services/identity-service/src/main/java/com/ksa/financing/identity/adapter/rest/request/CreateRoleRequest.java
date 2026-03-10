@@ -1,0 +1,17 @@
+package com.ksa.financing.identity.adapter.rest.request;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record CreateRoleRequest(
+    @NotBlank(message = "Role code is required")
+    @Size(max = 50, message = "Role code must not exceed 50 characters")
+    String roleCode,
+
+    @NotBlank(message = "Role name is required")
+    @Size(max = 255, message = "Role name must not exceed 255 characters")
+    String roleName,
+
+    String roleNameAr,
+    String description
+) {}
