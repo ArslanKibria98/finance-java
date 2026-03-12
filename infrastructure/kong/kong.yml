@@ -7,25 +7,7 @@ _transform: true
 #        -> GET http://identity-service:8083/api/v1/auth/policies
 
 services:
-  # Identity Service - SSO endpoints (stricter rate limit)
-  - name: identity-service-sso
-    url: http://identity-service:8083
-    routes:
-      - name: sso-routes
-        paths:
-          - /identity-service/api/v1/auth/sso
-        strip_path: true
-        protocols:
-          - http
-    plugins:
-      - name: rate-limiting
-        config:
-          minute: 10
-          policy: local
-          fault_tolerant: true
-          hide_client_headers: false
-
-  # Identity Service - Registration, OTP, Login
+  # Identity Service - Registration, OTP, Login, SSO
   - name: identity-service
     url: http://identity-service:8083
     routes:
@@ -35,6 +17,13 @@ services:
         strip_path: true
         protocols:
           - http
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
 
   # Customer Service - CIF, Employment, Bank Accounts
   - name: customer-service
@@ -113,7 +102,18 @@ services:
         protocols:
           - http
 
-  # Risk Service - Fraud, AML, Sanctions (Phase 1 Internal Checks)
+  # Fraud Service - Fraud detection, rule engine, alerts and case management
+  - name: fraud-service
+    url: http://fraud-service:8092
+    routes:
+      - name: fraud-routes
+        paths:
+          - /fraud-service
+        strip_path: true
+        protocols:
+          - http
+
+  # Risk Service - AML, Credit Scoring, Sanctions, Internal Checks
   - name: risk-service
     url: http://risk-service:8090
     routes:
@@ -131,6 +131,17 @@ services:
       - name: middleware-routes
         paths:
           - /middleware-third-party
+        strip_path: true
+        protocols:
+          - http
+
+  # Lending Service - Loan origination, disbursement, repayment
+  - name: lending-service
+    url: http://lending-service:8097
+    routes:
+      - name: lending-routes
+        paths:
+          - /lending-service
         strip_path: true
         protocols:
           - http

@@ -420,10 +420,14 @@ services:
       PII_VAULT_MOCK: "false"
       TEMPORAL_SERVER_HOST: temporal
       TEMPORAL_SERVER_PORT: 7233
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8084/actuator/health/liveness || exit 1"]
@@ -454,10 +458,14 @@ services:
       TEMPORAL_NAMESPACE: default
       KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8085/actuator/health/liveness || exit 1"]
@@ -488,10 +496,14 @@ services:
       KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       PII_VAULT_MASTER_KEY: ""
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8086/actuator/health/liveness || exit 1"]
@@ -520,10 +532,14 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       TEMPORAL_SERVER_HOST: temporal
       TEMPORAL_SERVER_PORT: 7233
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8087/actuator/health/liveness || exit 1"]
@@ -554,6 +570,8 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       TEMPORAL_SERVER_HOST: temporal
       TEMPORAL_SERVER_PORT: 7233
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       FINERACT_ENABLED: "true"
       FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
       FINERACT_USERNAME: mifos
@@ -564,6 +582,8 @@ services:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8088/actuator/health/liveness || exit 1"]
@@ -599,8 +619,12 @@ services:
       APP_SERVICES_IDENTITY_URL: http://identity-service:8083
       APP_SERVICES_GLOBAL_PROFILE_URL: http://global-profile-service:8085
       RISK_SERVICE_URL: http://risk-service:8090
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8089/api/health || exit 1"]
@@ -628,6 +652,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      FRAUD_SERVICE_URL: http://fraud-service:8092
     depends_on:
       postgres:
         condition: service_healthy
@@ -637,6 +662,39 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8090/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Fraud Service - Fraud detection, rule engine, alerts and case management
+  fraud-service:
+    build:
+      context: ./services/fraud-service
+      dockerfile: Dockerfile
+    container_name: ksa-fraud-service
+    ports:
+      - "8092:8092"
+    environment:
+      SERVER_PORT: 8092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fraud_service_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8092/actuator/health/liveness || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -665,10 +723,18 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      FINERACT_TENANT_ID: default
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      temporal:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8091/actuator/health/liveness || exit 1"]
@@ -700,11 +766,24 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PRODUCT_SERVICE_URL: http://product-service:8091
+      CUSTOMER_SERVICE_URL: http://customer-service:8084
+      RISK_SERVICE_URL: http://risk-service:8090
+      MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
+      NOTIFICATION_SERVICE_URL: http://notification-service:8095
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      FINERACT_TENANT_ID: default
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8097/actuator/health/liveness || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8097/actuator/health/liveness || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -731,8 +810,12 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: CompanyRealm
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:4200
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8093/actuator/health/liveness || exit 1"]

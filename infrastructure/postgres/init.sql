@@ -19,3 +19,4 @@ CREATE DATABASE wallet_db;
 CREATE DATABASE product_service_db;
 CREATE DATABASE lending_db;
 CREATE DATABASE middleware_third_party_db;
+CREATE DATABASE fraud_service_db;

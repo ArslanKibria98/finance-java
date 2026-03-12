@@ -105,6 +105,7 @@
 
         <!-- Active Microservices -->
         <module>services/risk-service</module>
+        <module>services/fraud-service</module>
         <module>services/product-service</module>
 
         <!-- Microservices - commented out until created -->

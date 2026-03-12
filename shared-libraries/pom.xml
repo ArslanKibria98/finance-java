@@ -42,6 +42,7 @@
         <module>notification-activity-api</module>
         <module>risk-activity-api</module>
         <module>lending-activity-api</module>
+        <module>product-activity-api</module>
     </modules>
 
     <dependencyManagement>
@@ -124,6 +125,11 @@
             <dependency>
                 <groupId>com.ksa.islamic.finance</groupId>
                 <artifactId>risk-activity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ksa.islamic.finance</groupId>
+                <artifactId>product-activity-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

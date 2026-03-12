@@ -41,10 +41,6 @@
                     <groupId>io.opentelemetry.instrumentation</groupId>
                     <artifactId>opentelemetry-spring-boot-starter</artifactId>
                 </exclusion>
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-starter-data-redis</artifactId>
-                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
