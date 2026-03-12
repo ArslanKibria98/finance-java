@@ -18,29 +18,95 @@ public class LoanApplicationMapper {
                 agg.getTenantId().toString(),
                 agg.getApplicationNumber(),
                 agg.getCustomerId().toString(),
-                agg.getProductId().toString(),
+                agg.getNationalId(),
+                agg.getStatus().name(),
+                agg.getStatus().getStepperIndex(),
+                agg.getStatus().getStepperLabel(),
+                agg.getWorkflowId(),
+
+                // Pre-qualification
+                agg.getMonthlyIncome(),
+                agg.getTotalExpenses(),
+                agg.getExistingLiabilities(),
+                agg.getAdultDependents(),
+                agg.getChildDependents(),
+
+                // Individual expense categories
+                agg.getFoodGroceries(),
+                agg.getUtilities(),
+                agg.getHealthcare(),
+                agg.getCommunication(),
+                agg.getHousingRent(),
+                agg.getClothingEssentials(),
+                agg.getEducation(),
+                agg.getTransportation(),
+
+                // Step 1: Basic Info
+                agg.getProductId() != null ? agg.getProductId().toString() : null,
                 agg.getProductCode(),
-                agg.getShariaStructure().name(),
+                agg.getProductName(),
+                agg.getShariaStructure() != null ? agg.getShariaStructure().name() : null,
                 agg.getRequestedAmount(),
                 agg.getRequestedTenureMonths(),
-                agg.getPartnerId() != null ? agg.getPartnerId().toString() : null,
-                agg.getLeadId() != null ? agg.getLeadId().toString() : null,
-                agg.getApprovedAmount(),
-                agg.getApprovedTenureMonths(),
-                agg.getApprovedProfitRate(),
-                agg.getTotalProfit(),
-                agg.getTotalRepayment(),
-                agg.getMonthlyInstallment(),
-                agg.getDbrBefore(),
-                agg.getDbrAfter(),
-                agg.getStatus().name(),
-                agg.getWorkflowId(),
-                agg.getCurrentStage(),
-                agg.getSubmittedAt(),
-                agg.getExpiresAt(),
-                agg.getCreatedBy() != null ? agg.getCreatedBy().toString() : null,
+                agg.getPurposeOfFinance() != null ? agg.getPurposeOfFinance().name() : null,
+                agg.getPurposeOfFinanceOther(),
+                agg.getProfitRate(),
+                agg.getApr(),
+
+                // SafeWatch AML
+                agg.getSafeWatchSessionId(),
+                agg.getSafeWatchStatus(),
+
+                // Masdar Employment
+                agg.getEmployerName(),
+                agg.getEmploymentSector(),
+                agg.getEmploymentStatus(),
+                agg.getBasicSalary(),
+                agg.getTotalSalary(),
+                agg.getEmploymentStartDate(),
+
+                // AML Declaration
+                agg.isAmlDeclarationCompleted(),
+                agg.getAmlDeclarationAt(),
+
+                // Step 2: Bank Account
+                agg.getDisbursementBankCode(),
+                agg.getDisbursementBankName(),
+                agg.getDisbursementIban(),
+                agg.getDisbursementAccountHolder(),
+                agg.isIbanVerified(),
+
+                // Step 3: Eligibility
+                agg.isSimahConsent(),
+                agg.getSimahConsentAt(),
+                agg.getCreditScore(),
+                agg.getSimahReferenceId(),
+                agg.getVerifiedSalary(),
+                agg.getMaxEligibleAmount(),
+
+                // Step 4: Offer
+                agg.getOfferedAmount(),
+                agg.getOfferedMonthlyInstallment(),
+                agg.getOfferedTotalProfit(),
+                agg.getOfferedTotalPayable(),
+                agg.getProcessingFee(),
+                agg.getAdminFee(),
+                agg.getAcceptedAmount(),
+
+                // Step 5: Contract
+                agg.getContractExpiresAt(),
+                agg.isOtpVerified(),
+                agg.getOtpAttempts(),
+                agg.isIvrVerified(),
+                agg.getIvrAttempts(),
+
+                // NABA + PaymentGuard
+                agg.isNabaNotificationSent(),
+                agg.getPaymentGuardSessionId(),
+                agg.getPaymentGuardStatus(),
+
+                // Audit
                 agg.getCreatedAt(),
-                agg.getUpdatedBy() != null ? agg.getUpdatedBy().toString() : null,
                 agg.getUpdatedAt(),
                 agg.getVersion()
         );

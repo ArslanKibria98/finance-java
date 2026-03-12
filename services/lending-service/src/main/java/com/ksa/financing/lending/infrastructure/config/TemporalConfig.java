@@ -1,14 +1,12 @@
 package com.ksa.financing.lending.infrastructure.config;
 
-import com.ksa.financing.lending.adapter.temporal.activity.LoanApplicationActivityImpl;
+import com.ksa.financing.lending.adapter.temporal.activity.*;
 import com.ksa.financing.lending.adapter.temporal.workflow.LoanApplicationWorkflowImpl;
-import com.ksa.islamic.orchestration.activity.lending.LoanApplicationWorkflow;
 import io.temporal.client.WorkflowClient;
 import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +21,23 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "temporal.worker.enabled", havingValue = "true", matchIfMissing = true)
 public class TemporalConfig {
 
-    @Value("${temporal.service-address}")
+    @Value("${temporal.service-address:${TEMPORAL_ADDRESS:localhost:7233}}")
     private String temporalAddress;
 
-    @Value("${temporal.namespace}")
+    @Value("${temporal.namespace:${TEMPORAL_NAMESPACE:default}}")
     private String namespace;
 
-    @Value("${temporal.task-queue}")
+    @Value("${temporal.task-queue:loan-application-queue}")
     private String taskQueue;
 
+    // ══════════ Activity Implementations (Spring-managed beans) ══════════
     private final LoanApplicationActivityImpl loanApplicationActivity;
+    private final ProductValidationActivityImpl productValidationActivity;
+    private final CustomerValidationActivityImpl customerValidationActivity;
+    private final CreditCheckActivityImpl creditCheckActivity;
+    private final ThirdPartyActivityImpl thirdPartyActivity;
+    private final ContractActivityImpl contractActivity;
+    private final DisbursementActivityImpl disbursementActivity;
 
     private WorkerFactory workerFactory;
 
@@ -59,19 +64,25 @@ public class TemporalConfig {
         // Register workflow implementations
         worker.registerWorkflowImplementationTypes(LoanApplicationWorkflowImpl.class);
 
-        // Register activity implementations (Spring beans)
-        worker.registerActivitiesImplementations(loanApplicationActivity);
+        // Register ALL activity implementations on the same task queue for MVP.
+        // In production, external activities (product-service, customer-service, risk-service)
+        // would run on their own task queues in their respective services.
+        worker.registerActivitiesImplementations(
+                loanApplicationActivity,       // Lending-service internal CRUD
+                productValidationActivity,     // Calls product-service REST
+                customerValidationActivity,    // Calls customer-service REST
+                creditCheckActivity,           // Calls risk-service REST (→ SIMAH via middleware)
+                thirdPartyActivity,            // Calls middleware-third-party (IBAN, commodity, IVR, e-promissory)
+                contractActivity,              // Calls middleware-third-party (contract gen, OTP)
+                disbursementActivity           // Calls Fineract + middleware (payment gateway)
+        );
 
-        log.info("Temporal worker configured for queue: {}", taskQueue);
+        log.info("Temporal worker configured for queue: {} with 7 activity implementations", taskQueue);
+
+        workerFactory.start();
+        log.info("Temporal worker started on queue: {}", taskQueue);
+
         return workerFactory;
-    }
-
-    @PostConstruct
-    public void startWorker() {
-        if (workerFactory != null) {
-            workerFactory.start();
-            log.info("Temporal worker started on queue: {}", taskQueue);
-        }
     }
 
     @PreDestroy

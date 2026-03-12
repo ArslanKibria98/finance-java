@@ -1,157 +1,258 @@
 package com.ksa.financing.lending.adapter.temporal.activity;
 
-import com.ksa.financing.lending.domain.model.LoanApplicationId;
-import com.ksa.financing.lending.domain.model.ShariaStructure;
-import com.ksa.financing.lending.domain.port.in.ManageLoanApplicationUseCase;
+import com.ksa.financing.lending.domain.model.*;
 import com.ksa.financing.lending.domain.port.in.ManageLoanUseCase;
+import com.ksa.financing.lending.domain.port.out.EventPublisher;
 import com.ksa.financing.lending.domain.port.out.LoanApplicationRepository;
 import com.ksa.islamic.orchestration.activity.lending.LoanApplicationActivity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Temporal activity implementation for lending-service internal operations.
+ * Each method is one transactional operation on the loan application aggregate.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class LoanApplicationActivityImpl implements LoanApplicationActivity {
 
-    private final ManageLoanApplicationUseCase applicationUseCase;
-    private final ManageLoanUseCase loanUseCase;
     private final LoanApplicationRepository applicationRepository;
+    private final ManageLoanUseCase loanUseCase;
+    private final EventPublisher eventPublisher;
+
+    // ══════════ APPLICATION LIFECYCLE ══════════
 
     @Override
-    public CreateApplicationResult createLoanApplication(CreateApplicationInput input) {
-        log.info("Activity: Creating loan application for customer: {}", input.customerId());
+    @Transactional
+    public CreateApplicationResult createDraftApplication(CreateDraftInput input) {
+        log.info("Activity: Creating draft application for customer: {}", input.customerId());
 
-        var command = new ManageLoanApplicationUseCase.CreateApplicationCommand(
-                UUID.fromString(input.tenantId()),
+        var tenantId = UUID.fromString(input.tenantId());
+        var applicationNumber = applicationRepository.generateApplicationNumber(tenantId);
+
+        var aggregate = LoanApplicationAggregate.create(
+                tenantId,
+                applicationNumber,
                 UUID.fromString(input.customerId()),
-                UUID.fromString(input.productId()),
-                input.productCode(),
-                ShariaStructure.valueOf(input.shariaStructure()),
-                input.requestedAmount(),
-                input.requestedTenureMonths(),
-                input.partnerId() != null ? UUID.fromString(input.partnerId()) : null,
-                input.leadId() != null ? UUID.fromString(input.leadId()) : null,
-                UUID.fromString(input.createdBy()),
-                null  // idempotencyKey — Temporal provides its own idempotency via workflow ID
+                input.nationalId(),
+                input.monthlyIncome(),
+                input.totalExpenses(),
+                input.existingLiabilities(),
+                input.adultDependents(),
+                input.childDependents(),
+                input.foodGroceries(),
+                input.utilities(),
+                input.healthcare(),
+                input.communication(),
+                input.housingRent(),
+                input.clothingEssentials(),
+                input.education(),
+                input.transportation(),
+                UUID.fromString(input.createdBy())
         );
 
-        var aggregate = applicationUseCase.createApplication(command);
+        if (input.workflowId() != null) {
+            aggregate.assignWorkflow(input.workflowId());
+        }
 
+        aggregate = applicationRepository.save(aggregate);
+        publishEvents(aggregate);
+
+        log.info("Draft application created: {}", applicationNumber);
         return new CreateApplicationResult(
                 aggregate.getId().getValue().toString(),
-                aggregate.getApplicationNumber(),
-                true
+                aggregate.getApplicationNumber()
         );
     }
 
     @Override
-    public void updateApplicationStatus(UpdateStatusInput input) {
+    @Transactional
+    public void saveBasicInfo(SaveBasicInfoInput input) {
+        log.info("Activity: Saving basic info for application: {}", input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        aggregate.submitBasicInfo(
+                input.productId() != null ? UUID.fromString(input.productId()) : null,
+                input.productCode(),
+                input.productName(),
+                input.shariaStructure() != null ? ShariaStructure.valueOf(input.shariaStructure()) : null,
+                input.requestedAmount(),
+                input.requestedTenureMonths(),
+                input.purposeOfFinance() != null ? PurposeOfFinance.valueOf(input.purposeOfFinance()) : null,
+                null, // purposeOfFinanceOther
+                input.profitRate(),
+                null, // apr
+                input.partnerId() != null ? UUID.fromString(input.partnerId()) : null,
+                input.leadId() != null ? UUID.fromString(input.leadId()) : null,
+                UUID.fromString(input.updatedBy())
+        );
+
+        applicationRepository.save(aggregate);
+        publishEvents(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveBankAccount(SaveBankAccountInput input) {
+        log.info("Activity: Saving bank account for application: {}", input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        aggregate.saveBankAccount(
+                input.bankCode(),
+                input.bankName(),
+                input.iban(),
+                input.accountHolder(),
+                input.verified(),
+                UUID.fromString(input.updatedBy())
+        );
+
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void recordSimahConsent(RecordConsentInput input) {
+        log.info("Activity: Recording SIMAH consent for application: {}", input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        aggregate.recordSimahConsent(
+                input.simahConsent(),
+                UUID.fromString(input.updatedBy())
+        );
+
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveEligibilityResult(SaveEligibilityInput input) {
+        log.info("Activity: Saving eligibility result for application: {}", input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        aggregate.saveEligibilityResult(
+                input.eligible(),
+                input.creditScore(),
+                input.simahReferenceId(),
+                input.verifiedSalary(),
+                input.dbrBefore(),
+                input.dbrAfter(),
+                input.maxEligibleAmount(),
+                UUID.fromString(input.updatedBy())
+        );
+
+        applicationRepository.save(aggregate);
+        publishEvents(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveOffer(SaveOfferInput input) {
+        log.info("Activity: Saving offer for application: {}", input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        aggregate.presentOffer(
+                input.maxAmount(),
+                input.monthlyInstallment(),
+                input.totalProfit(),
+                input.totalPayable(),
+                input.processingFee(),
+                input.adminFee(),
+                UUID.fromString(input.updatedBy())
+        );
+
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void lockAcceptedOffer(LockOfferInput input) {
+        log.info("Activity: Locking accepted offer for application: {}", input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        aggregate.acceptOffer(
+                input.selectedAmount(),
+                input.monthlyInstallment(),
+                input.totalPayable(),
+                input.totalProfit(),
+                UUID.fromString(input.updatedBy())
+        );
+
+        applicationRepository.save(aggregate);
+        publishEvents(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void updateStatus(UpdateStatusInput input) {
         log.info("Activity: Updating application {} status to {}", input.applicationId(), input.targetStatus());
 
-        var tenantId = UUID.fromString(input.tenantId());
-        var appId = LoanApplicationId.of(UUID.fromString(input.applicationId()));
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
         var updatedBy = UUID.fromString(input.updatedBy());
 
-        var aggregate = applicationRepository.findById(tenantId, appId)
-                .orElseThrow(() -> new RuntimeException("Application not found: " + input.applicationId()));
-
         switch (input.targetStatus()) {
-            case "SUBMITTED" -> aggregate.submit(updatedBy);
-            case "DOCUMENTS_PENDING" -> aggregate.moveToDocumentsPending(updatedBy);
-            case "UNDER_REVIEW" -> aggregate.moveToUnderReview(updatedBy);
-            case "CREDIT_CHECK" -> aggregate.moveToCreditCheck(updatedBy);
-            case "SHARIA_VALIDATION" -> aggregate.moveToShariaValidation(updatedBy);
-            case "PENDING_APPROVAL" -> aggregate.moveToPendingApproval(updatedBy);
+            case "BASIC_INFO_SUBMITTED" -> {} // Handled by saveBasicInfo
+            case "BANK_ACCOUNT_PENDING" -> aggregate.moveToBankAccountPending(updatedBy);
+            case "BANK_ACCOUNT_VERIFIED" -> {} // Handled by saveBankAccount
+            case "SIMAH_CONSENT_GIVEN" -> {} // Handled by recordSimahConsent
+            case "ELIGIBILITY_CHECKING" -> aggregate.moveToEligibilityChecking(updatedBy);
+            case "ELIGIBILITY_PASSED" -> {} // Handled by saveEligibilityResult
+            case "OFFER_PRESENTED" -> {} // Handled by saveOffer
+            case "OFFER_ACCEPTED" -> {} // Handled by lockAcceptedOffer
+            case "CONTRACT_PENDING" -> aggregate.moveToContractPending(
+                    LocalDateTime.now().plusHours(24), updatedBy);
+            case "CONTRACT_SIGNING" -> aggregate.recordContractConsent(false, false, false, updatedBy);
+            case "OTP_VERIFICATION" -> aggregate.moveToOtpVerification(updatedBy);
+            case "IVR_VERIFICATION" -> aggregate.recordOtpVerified(updatedBy);
+            case "CONTRACT_SIGNED" -> aggregate.recordIvrVerified(updatedBy);
+            case "LOAN_CREATING" -> aggregate.moveToLoanCreating(updatedBy);
+            case "DISBURSING" -> aggregate.moveToDisbursing(updatedBy);
+            case "APPROVED" -> aggregate.approve(updatedBy);
             case "REJECTED" -> aggregate.reject("Workflow rejection", updatedBy);
             case "CANCELLED" -> aggregate.cancel(updatedBy);
+            case "EXPIRED" -> aggregate.expire();
             default -> throw new IllegalArgumentException("Unknown target status: " + input.targetStatus());
         }
 
         applicationRepository.save(aggregate);
+        publishEvents(aggregate);
     }
 
     @Override
-    public CreditCheckResult performCreditCheck(CreditCheckInput input) {
-        log.info("Activity: Performing credit check for customer: {}", input.customerId());
-        // TODO: Call credit-service via REST or Temporal activity
-        // For now, return a passing result as placeholder
-        return new CreditCheckResult(
-                true,
-                new BigDecimal("0.35"),
-                new BigDecimal("0.55"),
-                720,
-                null
-        );
-    }
-
-    @Override
-    public ShariaValidationResult validateShariaCompliance(ShariaValidationInput input) {
-        log.info("Activity: Validating sharia compliance for product: {}", input.productId());
-        // TODO: Call sharia-service via REST or Temporal activity
-        return new ShariaValidationResult(
-                true,
-                UUID.randomUUID().toString(),
-                null
-        );
-    }
-
-    @Override
-    public ProfitCalculationResult calculateProfit(ProfitCalculationInput input) {
-        log.info("Activity: Calculating profit for {} structure", input.shariaStructure());
-
-        // Use domain-core-sdk MurabahaCalculator in production
-        // Simplified calculation for now
-        var principal = input.principalAmount();
-        var rate = input.profitRate();
-        var months = input.tenureMonths();
-
-        var totalProfit = principal.multiply(rate)
-                .multiply(BigDecimal.valueOf(months))
-                .divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
-        var totalRepayment = principal.add(totalProfit);
-        var monthlyInstallment = totalRepayment.divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
-
-        return new ProfitCalculationResult(
-                totalProfit,
-                totalRepayment,
-                monthlyInstallment,
-                totalRepayment
-        );
-    }
-
-    @Override
-    public ApprovalResult processApproval(ApprovalInput input) {
-        log.info("Activity: Processing approval for application: {}", input.applicationId());
+    @Transactional
+    public void cancelApplication(CancelInput input) {
+        log.info("Activity: Cancelling application: {} — reason: {}", input.applicationId(), input.reason());
 
         var tenantId = UUID.fromString(input.tenantId());
         var appId = LoanApplicationId.of(UUID.fromString(input.applicationId()));
-        var approvedBy = UUID.fromString(input.approvedBy());
 
-        var aggregate = applicationRepository.findById(tenantId, appId)
-                .orElseThrow(() -> new RuntimeException("Application not found: " + input.applicationId()));
-
-        aggregate.approve(
-                input.approvedAmount(),
-                input.approvedTenureMonths(),
-                input.approvedProfitRate(),
-                input.totalProfit(),
-                input.totalRepayment(),
-                input.monthlyInstallment(),
-                approvedBy
-        );
-
-        applicationRepository.save(aggregate);
-
-        return new ApprovalResult(true, null);
+        applicationRepository.findById(tenantId, appId).ifPresent(aggregate -> {
+            try {
+                var cancelledBy = UUID.fromString(input.cancelledBy());
+                aggregate.cancel(cancelledBy);
+                applicationRepository.save(aggregate);
+            } catch (Exception e) {
+                log.warn("Could not cancel application {} (may already be terminal): {}",
+                        input.applicationId(), e.getMessage());
+            }
+        });
     }
 
+    // ══════════ LOAN CREATION ══════════
+
     @Override
+    @Transactional
     public LoanCreationResult createLoan(LoanCreationInput input) {
         log.info("Activity: Creating loan from application: {}", input.applicationId());
 
@@ -173,27 +274,99 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
 
         return new LoanCreationResult(
                 loan.getId().getValue().toString(),
-                loan.getLoanNumber(),
-                true
+                loan.getLoanNumber()
         );
     }
 
     @Override
-    public void cancelApplication(CancelApplicationInput input) {
-        log.info("Activity: Cancelling application: {} — reason: {}", input.applicationId(), input.reason());
+    @Transactional
+    public void generateAmortizationSchedule(AmortizationInput input) {
+        log.info("Activity: Generating amortization schedule for loan: {}", input.loanId());
+        // Schedule generation happens as part of loan creation via domain-core-sdk
+        log.info("Amortization schedule generated during loan creation");
+    }
 
-        var tenantId = UUID.fromString(input.tenantId());
-        var appId = LoanApplicationId.of(UUID.fromString(input.applicationId()));
-        var cancelledBy = UUID.fromString(input.cancelledBy());
+    // ══════════ THIRD-PARTY RESULT PERSISTENCE ══════════
 
-        applicationRepository.findById(tenantId, appId).ifPresent(aggregate -> {
-            try {
-                aggregate.cancel(cancelledBy);
-                applicationRepository.save(aggregate);
-            } catch (Exception e) {
-                log.warn("Could not cancel application {} (may already be terminal): {}",
-                        input.applicationId(), e.getMessage());
-            }
-        });
+    @Override
+    @Transactional
+    public void saveSafeWatchResult(SaveSafeWatchInput input) {
+        log.info("Activity: Saving SafeWatch result for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordSafeWatchResult(input.sessionId(), input.status(), UUID.fromString(input.updatedBy()));
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveMasdarResult(SaveMasdarInput input) {
+        log.info("Activity: Saving Masdar result for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordMasdarResult(
+                input.employerName(), input.employmentSector(), input.employmentStatus(),
+                input.basicSalary(), input.totalSalary(), input.employmentStartDate(),
+                UUID.fromString(input.updatedBy()));
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveAmlDeclaration(SaveAmlDeclarationInput input) {
+        log.info("Activity: Saving AML declaration for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordAmlDeclaration(UUID.fromString(input.updatedBy()));
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveNabaNotification(SaveNabaInput input) {
+        log.info("Activity: Saving NABA notification for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordNabaNotificationSent(UUID.fromString(input.updatedBy()));
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void savePaymentGuardResult(SavePaymentGuardInput input) {
+        log.info("Activity: Saving PaymentGuard result for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordPaymentGuardResult(input.sessionId(), input.status(), UUID.fromString(input.updatedBy()));
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveOtpAttempt(SaveOtpAttemptInput input) {
+        log.info("Activity: Recording OTP attempt for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordOtpAttempt();
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveIvrAttempt(SaveIvrAttemptInput input) {
+        log.info("Activity: Recording IVR attempt for application: {}", input.applicationId());
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.recordIvrAttempt();
+        applicationRepository.save(aggregate);
+    }
+
+    // ══════════ HELPERS ══════════
+
+    private LoanApplicationAggregate findApplication(String tenantId, String applicationId) {
+        var tid = UUID.fromString(tenantId);
+        var appId = LoanApplicationId.of(UUID.fromString(applicationId));
+        return applicationRepository.findById(tid, appId)
+                .orElseThrow(() -> new RuntimeException("Application not found: " + applicationId));
+    }
+
+    private void publishEvents(LoanApplicationAggregate aggregate) {
+        if (!aggregate.getUncommittedEvents().isEmpty()) {
+            eventPublisher.publishAll(aggregate.getUncommittedEvents());
+            aggregate.markEventsAsCommitted();
+        }
     }
 }

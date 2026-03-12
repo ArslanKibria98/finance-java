@@ -4,57 +4,175 @@ import io.temporal.activity.ActivityInterface;
 import io.temporal.activity.ActivityMethod;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
- * Temporal activity interface for loan application processing.
- * Used by the LoanApplicationWorkflow to orchestrate the loan origination SAGA.
+ * Core lending activity — handles loan application CRUD and internal operations.
+ * Runs inside lending-service.
  */
 @ActivityInterface
 public interface LoanApplicationActivity {
 
-    @ActivityMethod
-    CreateApplicationResult createLoanApplication(CreateApplicationInput input);
+    // ══════════ APPLICATION LIFECYCLE ══════════
 
     @ActivityMethod
-    void updateApplicationStatus(UpdateStatusInput input);
+    CreateApplicationResult createDraftApplication(CreateDraftInput input);
 
     @ActivityMethod
-    CreditCheckResult performCreditCheck(CreditCheckInput input);
+    void saveBasicInfo(SaveBasicInfoInput input);
 
     @ActivityMethod
-    ShariaValidationResult validateShariaCompliance(ShariaValidationInput input);
+    void saveBankAccount(SaveBankAccountInput input);
 
     @ActivityMethod
-    ProfitCalculationResult calculateProfit(ProfitCalculationInput input);
+    void recordSimahConsent(RecordConsentInput input);
 
     @ActivityMethod
-    ApprovalResult processApproval(ApprovalInput input);
+    void saveEligibilityResult(SaveEligibilityInput input);
+
+    @ActivityMethod
+    void saveOffer(SaveOfferInput input);
+
+    @ActivityMethod
+    void lockAcceptedOffer(LockOfferInput input);
+
+    @ActivityMethod
+    void updateStatus(UpdateStatusInput input);
+
+    @ActivityMethod
+    void cancelApplication(CancelInput input);
+
+    // ══════════ THIRD-PARTY RESULT PERSISTENCE ══════════
+
+    @ActivityMethod
+    void saveSafeWatchResult(SaveSafeWatchInput input);
+
+    @ActivityMethod
+    void saveMasdarResult(SaveMasdarInput input);
+
+    @ActivityMethod
+    void saveAmlDeclaration(SaveAmlDeclarationInput input);
+
+    @ActivityMethod
+    void saveNabaNotification(SaveNabaInput input);
+
+    @ActivityMethod
+    void savePaymentGuardResult(SavePaymentGuardInput input);
+
+    @ActivityMethod
+    void saveOtpAttempt(SaveOtpAttemptInput input);
+
+    @ActivityMethod
+    void saveIvrAttempt(SaveIvrAttemptInput input);
+
+    // ══════════ LOAN CREATION ══════════
 
     @ActivityMethod
     LoanCreationResult createLoan(LoanCreationInput input);
 
     @ActivityMethod
-    void cancelApplication(CancelApplicationInput input);
+    void generateAmortizationSchedule(AmortizationInput input);
 
-    // ==================== DTOs ====================
+    // ══════════ DTOs ══════════
 
-    record CreateApplicationInput(
+    record CreateDraftInput(
             String tenantId,
             String customerId,
-            String productId,
-            String productCode,
-            String shariaStructure,
-            BigDecimal requestedAmount,
-            int requestedTenureMonths,
-            String partnerId,
-            String leadId,
-            String createdBy
+            String nationalId,
+            BigDecimal monthlyIncome,
+            BigDecimal totalExpenses,
+            BigDecimal existingLiabilities,
+            int adultDependents,
+            int childDependents,
+            BigDecimal foodGroceries,
+            BigDecimal utilities,
+            BigDecimal healthcare,
+            BigDecimal communication,
+            BigDecimal housingRent,
+            BigDecimal clothingEssentials,
+            BigDecimal education,
+            BigDecimal transportation,
+            String createdBy,
+            String workflowId
     ) {}
 
     record CreateApplicationResult(
             String applicationId,
-            String applicationNumber,
-            boolean created
+            String applicationNumber
+    ) {}
+
+    record SaveBasicInfoInput(
+            String tenantId,
+            String applicationId,
+            String productId,
+            String productCode,
+            String productName,
+            String shariaStructure,
+            BigDecimal requestedAmount,
+            int requestedTenureMonths,
+            String purposeOfFinance,
+            BigDecimal profitRate,
+            String partnerId,
+            String leadId,
+            String updatedBy
+    ) {}
+
+    record SaveBankAccountInput(
+            String tenantId,
+            String applicationId,
+            String bankCode,
+            String bankName,
+            String iban,
+            String accountNumber,
+            String accountHolder,
+            boolean verified,
+            String updatedBy
+    ) {}
+
+    record RecordConsentInput(
+            String tenantId,
+            String applicationId,
+            boolean simahConsent,
+            String consentTimestamp,
+            String updatedBy
+    ) {}
+
+    record SaveEligibilityInput(
+            String tenantId,
+            String applicationId,
+            boolean eligible,
+            int creditScore,
+            String simahReferenceId,
+            BigDecimal verifiedSalary,
+            BigDecimal dbrBefore,
+            BigDecimal dbrAfter,
+            BigDecimal maxEligibleAmount,
+            String rejectionReason,
+            String updatedBy
+    ) {}
+
+    record SaveOfferInput(
+            String tenantId,
+            String applicationId,
+            BigDecimal maxAmount,
+            BigDecimal monthlyInstallment,
+            BigDecimal annualProfitRate,
+            int tenureMonths,
+            BigDecimal totalPayable,
+            BigDecimal totalProfit,
+            BigDecimal processingFee,
+            BigDecimal adminFee,
+            String updatedBy
+    ) {}
+
+    record LockOfferInput(
+            String tenantId,
+            String applicationId,
+            BigDecimal selectedAmount,
+            BigDecimal monthlyInstallment,
+            BigDecimal totalPayable,
+            BigDecimal totalProfit,
+            String updatedBy
     ) {}
 
     record UpdateStatusInput(
@@ -64,65 +182,11 @@ public interface LoanApplicationActivity {
             String updatedBy
     ) {}
 
-    record CreditCheckInput(
-            String tenantId,
-            String customerId,
-            String nationalId,
-            BigDecimal requestedAmount,
-            int requestedTenureMonths
-    ) {}
-
-    record CreditCheckResult(
-            boolean passed,
-            BigDecimal dbrBefore,
-            BigDecimal dbrAfter,
-            int creditScore,
-            String reason
-    ) {}
-
-    record ShariaValidationInput(
-            String tenantId,
-            String productId,
-            String shariaStructure,
-            BigDecimal amount,
-            int tenureMonths
-    ) {}
-
-    record ShariaValidationResult(
-            boolean compliant,
-            String certificationId,
-            String reason
-    ) {}
-
-    record ProfitCalculationInput(
-            String shariaStructure,
-            BigDecimal principalAmount,
-            BigDecimal profitRate,
-            int tenureMonths
-    ) {}
-
-    record ProfitCalculationResult(
-            BigDecimal totalProfit,
-            BigDecimal totalRepayment,
-            BigDecimal monthlyInstallment,
-            BigDecimal sellingPrice
-    ) {}
-
-    record ApprovalInput(
+    record CancelInput(
             String tenantId,
             String applicationId,
-            BigDecimal approvedAmount,
-            int approvedTenureMonths,
-            BigDecimal approvedProfitRate,
-            BigDecimal totalProfit,
-            BigDecimal totalRepayment,
-            BigDecimal monthlyInstallment,
-            String approvedBy
-    ) {}
-
-    record ApprovalResult(
-            boolean approved,
-            String reason
+            String reason,
+            String cancelledBy
     ) {}
 
     record LoanCreationInput(
@@ -141,14 +205,70 @@ public interface LoanApplicationActivity {
 
     record LoanCreationResult(
             String loanId,
-            String loanNumber,
-            boolean created
+            String loanNumber
     ) {}
 
-    record CancelApplicationInput(
+    record AmortizationInput(
+            String tenantId,
+            String loanId,
+            BigDecimal principalAmount,
+            BigDecimal profitRate,
+            int tenureMonths,
+            BigDecimal installmentAmount,
+            String shariaStructure
+    ) {}
+
+    // ══════════ THIRD-PARTY PERSISTENCE DTOs ══════════
+
+    record SaveSafeWatchInput(
             String tenantId,
             String applicationId,
-            String reason,
-            String cancelledBy
+            String sessionId,
+            String status,
+            String updatedBy
+    ) {}
+
+    record SaveMasdarInput(
+            String tenantId,
+            String applicationId,
+            String employerName,
+            String employmentSector,
+            String employmentStatus,
+            BigDecimal basicSalary,
+            BigDecimal totalSalary,
+            String employmentStartDate,
+            String updatedBy
+    ) {}
+
+    record SaveAmlDeclarationInput(
+            String tenantId,
+            String applicationId,
+            String updatedBy
+    ) {}
+
+    record SaveNabaInput(
+            String tenantId,
+            String applicationId,
+            String updatedBy
+    ) {}
+
+    record SavePaymentGuardInput(
+            String tenantId,
+            String applicationId,
+            String sessionId,
+            String status,
+            String updatedBy
+    ) {}
+
+    record SaveOtpAttemptInput(
+            String tenantId,
+            String applicationId,
+            String updatedBy
+    ) {}
+
+    record SaveIvrAttemptInput(
+            String tenantId,
+            String applicationId,
+            String updatedBy
     ) {}
 }

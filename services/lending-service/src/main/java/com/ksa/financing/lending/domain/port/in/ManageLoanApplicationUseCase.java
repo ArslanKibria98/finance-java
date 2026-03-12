@@ -1,41 +1,20 @@
 package com.ksa.financing.lending.domain.port.in;
 
 import com.ksa.financing.lending.domain.model.LoanApplicationAggregate;
-import com.ksa.financing.lending.domain.model.ShariaStructure;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Read-only use case for loan applications.
+ * Write operations are handled by Temporal activities (LoanApplicationActivityImpl)
+ * which directly access the repository and aggregate methods.
+ */
 public interface ManageLoanApplicationUseCase {
-
-    LoanApplicationAggregate createApplication(CreateApplicationCommand command);
-
-    LoanApplicationAggregate submitApplication(SubmitApplicationCommand command);
 
     LoanApplicationAggregate getApplication(UUID tenantId, UUID applicationId);
 
     List<LoanApplicationAggregate> listApplications(UUID tenantId);
 
-    // ==================== COMMANDS ====================
-
-    record CreateApplicationCommand(
-            UUID tenantId,
-            UUID customerId,
-            UUID productId,
-            String productCode,
-            ShariaStructure shariaStructure,
-            BigDecimal requestedAmount,
-            int requestedTenureMonths,
-            UUID partnerId,
-            UUID leadId,
-            UUID createdBy,
-            String idempotencyKey
-    ) {}
-
-    record SubmitApplicationCommand(
-            UUID tenantId,
-            UUID applicationId,
-            UUID submittedBy
-    ) {}
+    List<LoanApplicationAggregate> listApplicationsByCustomer(UUID tenantId, UUID customerId);
 }

@@ -60,6 +60,13 @@ spring:
       properties:
         spring.json.trusted.packages: "com.ksa.financing.*"
 
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 5000
+
   # Security Configuration
   security:
     oauth2:
@@ -127,7 +134,7 @@ springdoc:
 temporal:
   service-address: ${TEMPORAL_ADDRESS:localhost:7233}
   namespace: ${TEMPORAL_NAMESPACE:default}
-  task-queue: ${TEMPORAL_TASK_QUEUE:${spring.application.name}-queue}
+  task-queue: ${TEMPORAL_TASK_QUEUE:loan-application-queue}
   worker:
     enabled: true
     activity-pool-size: 10
@@ -153,10 +160,15 @@ app:
       allow-credentials: true
       max-age: 3600
   services:
-    customer-service-url: ${CUSTOMER_SERVICE_URL:http://localhost:8087}
+    customer-service-url: ${CUSTOMER_SERVICE_URL:http://localhost:8084}
     product-service-url: ${PRODUCT_SERVICE_URL:http://localhost:8091}
-    credit-service-url: ${CREDIT_SERVICE_URL:http://localhost:8098}
-    sharia-service-url: ${SHARIA_SERVICE_URL:http://localhost:8099}
+    risk-service-url: ${RISK_SERVICE_URL:http://localhost:8090}
+    middleware-url: ${MIDDLEWARE_THIRD_PARTY_URL:http://localhost:8093}
+    fineract-base-url: ${FINERACT_BASE_URL:https://localhost:8443/fineract-provider/api/v1}
+    fineract-username: ${FINERACT_USERNAME:#{null}}
+    fineract-password: ${FINERACT_PASSWORD:#{null}}
+    fineract-tenant-id: ${FINERACT_TENANT_ID:default}
+    notification-service-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8095}
 
 # Error message configuration
 ksa:
