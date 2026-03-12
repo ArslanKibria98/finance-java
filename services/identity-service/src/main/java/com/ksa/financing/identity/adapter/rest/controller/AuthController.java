@@ -180,7 +180,7 @@ public class AuthController {
 
         var response = new AuthResponse(
                 result.accessToken(), result.refreshToken(),
-                result.expiresIn(), "Bearer"
+                result.expiresIn(), "Bearer", result.customerId()
         );
 
         log.info("PIN login successful for NID ending in: {}", maskNid(request.nationalId()));

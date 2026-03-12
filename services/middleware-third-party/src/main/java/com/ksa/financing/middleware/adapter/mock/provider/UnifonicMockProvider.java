@@ -1,0 +1,70 @@
+package com.ksa.financing.middleware.adapter.mock.provider;
+
+import com.ksa.financing.middleware.adapter.mock.MockResponseResult;
+import org.springframework.stereotype.Component;
+
+import java.util.UUID;
+
+@Component
+public class UnifonicMockProvider implements MockResponseProvider {
+
+    private static final String HEADERS = "Content-Type: application/json";
+
+    @Override
+    public String getProviderCode() {
+        return "UNIFONIC";
+    }
+
+    @Override
+    public MockResponseResult getMockResponse(String apiCode, String requestBody) {
+        return switch (apiCode) {
+            case "UNIFONIC_SEND_OTP" -> smsResponse();
+            case "UNIFONIC_IVR" -> ivrInitiate();
+            case "UNIFONIC_IVR_STATUS" -> ivrStatus();
+            default -> fallbackResponse();
+        };
+    }
+
+    private MockResponseResult smsResponse() {
+        var body = """
+                {
+                    "Status": "Sent",
+                    "MessageId": "MSG-%s",
+                    "Recipient": "966500000000"
+                }
+                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+        return new MockResponseResult(200, body, HEADERS);
+    }
+
+    private MockResponseResult ivrInitiate() {
+        var body = """
+                {
+                    "callId": "CALL-%s",
+                    "status": "Initiated",
+                    "phoneNumber": "966500000000"
+                }
+                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+        return new MockResponseResult(200, body, HEADERS);
+    }
+
+    private MockResponseResult ivrStatus() {
+        var body = """
+                {
+                    "callId": "CALL-%s",
+                    "status": "Completed",
+                    "duration": 45
+                }
+                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+        return new MockResponseResult(200, body, HEADERS);
+    }
+
+    private MockResponseResult fallbackResponse() {
+        var body = """
+                {
+                    "status": "Success",
+                    "callId": "CALL-%s"
+                }
+                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+        return new MockResponseResult(200, body, HEADERS);
+    }
+}

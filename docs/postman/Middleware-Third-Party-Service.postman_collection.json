@@ -1,0 +1,1671 @@
+{
+  "info": {
+    "name": "Middleware Third-Party Service",
+    "description": "Complete API collection for the Middleware Third-Party Service.\n\nThis service manages third-party provider integrations, client access control, and API execution gateway.\n\n## Setup Flow\n1. Create Providers\n2. Create Provider APIs\n3. Configure Environment (URLs, credentials)\n4. Create Clients\n5. Grant Provider Access to Clients\n6. Grant API Access to Clients\n7. Execute APIs via Gateway\n\n## Authentication\n- Admin endpoints: JWT Bearer token (Keycloak)\n- Execution endpoint: Client secretKey (no JWT needed)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8092",
+      "type": "string"
+    },
+    {
+      "key": "kongUrl",
+      "value": "http://localhost:8000/middleware",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "providerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "apiId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clientSecretKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "envConfigId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestLogId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "callbackId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Providers",
+      "description": "Manage third-party providers (SIMAH, NAFATH, TARABUT, UNIFONIC, etc.)",
+      "item": [
+        {
+          "name": "Create Provider",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('providerId', json.id);",
+                  "    console.log('Provider created: ' + json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"code\": \"SIMAH\",\n    \"name\": \"SIMAH (Saudi Credit Bureau)\",\n    \"description\": \"Saudi credit bureau for consumer and commercial credit reports\",\n    \"category\": \"CREDIT_BUREAU\",\n    \"baseUrlDev\": \"https://sandbox.simah.com\",\n    \"baseUrlProd\": \"https://api.simah.com\",\n    \"authType\": \"BEARER\",\n    \"timeoutMs\": 60000,\n    \"retryCount\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers"]
+            },
+            "description": "Create a new third-party provider.\n\nCategories: IDENTITY, CREDIT_BUREAU, GOVERNMENT, COMMUNICATION, OPEN_BANKING, COMMODITY_TRADING, PROMISSORY_NOTES, DIGITAL_SIGNING, NOTIFICATIONS, BANKING, PAYMENT_GATEWAY, INCOME_VERIFICATION, FINANCIAL, AML_SCREENING\n\nAuth Types: NONE, BASIC, BEARER, API_KEY, OAUTH2, CUSTOM"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Provider by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers/{{providerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers", "{{providerId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Provider by Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers/code/SIMAH",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers", "code", "SIMAH"]
+            },
+            "description": "Get provider by its unique code (e.g., SIMAH, NAFATH, UNIFONIC, TARABUT, etc.)"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Providers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    console.log('Total providers: ' + json.length);",
+                  "    json.forEach(function(p) {",
+                  "        console.log(p.code + ' (' + p.id + ') - ' + p.category);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers"]
+            },
+            "description": "List all registered providers. Use this to get provider IDs for assigning to clients."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Provider",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"SIMAH (Saudi Credit Bureau) - Updated\",\n    \"description\": \"Saudi credit bureau - updated description\",\n    \"category\": \"CREDIT_BUREAU\",\n    \"baseUrlDev\": \"https://sandbox.simah.com\",\n    \"baseUrlProd\": \"https://api.simah.com\",\n    \"authType\": \"BEARER\",\n    \"timeoutMs\": 90000,\n    \"retryCount\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers/{{providerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers", "{{providerId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Provider",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers/{{providerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers", "{{providerId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Provider APIs",
+      "description": "Manage APIs under each provider (e.g., SIMAH has 28 APIs, TARABUT has 20 APIs, etc.)",
+      "item": [
+        {
+          "name": "Create Provider API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('apiId', json.id);",
+                  "    console.log('API created: ' + json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"providerId\": \"{{providerId}}\",\n    \"code\": \"SIMAH_SCORE_CREDIT\",\n    \"name\": \"Score Credit Report\",\n    \"description\": \"Consumer credit score report\",\n    \"httpMethod\": \"POST\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/score\",\n    \"async\": false,\n    \"timeoutMs\": 60000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis"]
+            },
+            "description": "Create an API endpoint under a provider.\n\nHTTP Methods: GET, POST, PUT, PATCH, DELETE"
+          },
+          "response": []
+        },
+        {
+          "name": "Get API by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis", "{{apiId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List APIs by Provider",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    console.log('Total APIs for provider: ' + json.length);",
+                  "    json.forEach(function(api) {",
+                  "        console.log(api.code + ' [' + api.httpMethod + '] ' + api.endpointPath);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis/by-provider/{{providerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis", "by-provider", "{{providerId}}"]
+            },
+            "description": "List all APIs belonging to a specific provider. Use this to get API IDs for granting access to clients."
+          },
+          "response": []
+        },
+        {
+          "name": "List All APIs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis"]
+            },
+            "description": "List all APIs across all providers."
+          },
+          "response": []
+        },
+        {
+          "name": "Update API",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Score Credit Report V2\",\n    \"description\": \"Updated consumer credit score report\",\n    \"httpMethod\": \"POST\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/scoreV2\",\n    \"async\": false,\n    \"timeoutMs\": 90000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis", "{{apiId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete API",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis", "{{apiId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Environment Configs",
+      "description": "Configure API environment settings (base URLs, credentials, headers per environment).\n\nEach API can have separate DEV and PROD configs with different base URLs and credentials.",
+      "item": [
+        {
+          "name": "Create Env Config (BEARER auth)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('envConfigId', json.id);",
+                  "    console.log('Env config created: ' + json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox.simah.com\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/score\",\n    \"credentials\": \"{\\\"token\\\": \\\"your-bearer-token-here\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"BEARER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs"]
+            },
+            "description": "Create environment config for an API.\n\nCredentials format by auth type:\n- BEARER: {\"token\": \"xxx\"}\n- API_KEY: {\"headerName\": \"X-API-Key\", \"apiKey\": \"xxx\"}\n- BASIC: {\"username\": \"xxx\", \"password\": \"xxx\"}\n- OAUTH2: {\"accessToken\": \"xxx\"}\n- CUSTOM: {\"Header1\": \"value1\", \"Header2\": \"value2\"}\n\nEnvironment: DEV or PROD"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Env Config (API_KEY auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox.nafath.sa\",\n    \"endpointPath\": \"/initiate\",\n    \"credentials\": \"{\\\"headerName\\\": \\\"X-API-Key\\\", \\\"apiKey\\\": \\\"your-api-key-here\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"API_KEY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Env Config (OAUTH2 auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox.tarabut.com\",\n    \"endpointPath\": \"/sandbox/token\",\n    \"credentials\": \"{\\\"accessToken\\\": \\\"your-oauth2-token\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"OAUTH2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Env Config by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs", "{{envConfigId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Env Configs by API",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs/by-api/{{apiId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs", "by-api", "{{apiId}}"]
+            },
+            "description": "List all environment configs (DEV, PROD) for a specific API."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Env Config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox-v2.simah.com\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/score\",\n    \"credentials\": \"{\\\"token\\\": \\\"updated-bearer-token\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"BEARER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs", "{{envConfigId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Env Config",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "env-configs", "{{envConfigId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Clients",
+      "description": "Manage API clients (internal services or external partners that consume third-party APIs through the gateway).",
+      "item": [
+        {
+          "name": "Create Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('clientId', json.id);",
+                  "    pm.collectionVariables.set('clientSecretKey', json.secretKey);",
+                  "    console.log('Client created: ' + json.id);",
+                  "    console.log('Secret Key: ' + json.secretKey);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Lending Service\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Lending service client for credit checks and IBAN verification\",\n    \"callbackUrl\": \"http://lending-service:8091/api/v1/callbacks\",\n    \"environment\": \"DEV\",\n    \"ipWhitelist\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients"]
+            },
+            "description": "Create a new API client.\n\nEnvironment: DEV, PROD, or BOTH\n- DEV: Client can only call DEV environment APIs\n- PROD: Client can only call PROD environment APIs\n- BOTH: Client can call both\n- TEST: Client gets mock responses (no real HTTP calls)\n\nThe response includes a generated secretKey. Save it — the client uses it to authenticate when executing APIs."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Client by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Clients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Lending Service - Updated\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Updated description\",\n    \"callbackUrl\": \"http://lending-service:8091/api/v1/callbacks\",\n    \"environment\": \"BOTH\",\n    \"ipWhitelist\": [\"10.0.0.1\", \"10.0.0.2\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Regenerate Client Secret",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('clientSecretKey', json.secretKey);",
+                  "    console.log('New Secret Key: ' + json.secretKey);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/regenerate-secret",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "regenerate-secret"]
+            },
+            "description": "Regenerate the client's secretKey. The old key is immediately invalidated."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Client",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Client Access (Provider + API Assignment)",
+      "description": "Grant or revoke access for a client to providers and their specific APIs.\n\nThis is the core assignment flow:\n1. Grant Provider Access — allows the client to use a provider\n2. Grant API Access — allows the client to call a specific API within that provider\n\nBoth are required for execution to work.",
+      "item": [
+        {
+          "name": "Provider Access",
+          "description": "Grant/revoke/list provider-level access for a client.",
+          "item": [
+            {
+              "name": "Grant Provider Access",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{providerId}}\",\n    \"environment\": \"DEV\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
+                },
+                "description": "Grant a client access to a provider.\n\ntargetId = the provider's UUID\nenvironment = DEV, PROD, or BOTH\n\nYou must call this ONCE per provider you want the client to use."
+              },
+              "response": []
+            },
+            {
+              "name": "List Client's Provider Access",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
+                },
+                "description": "List all providers this client has been granted access to."
+              },
+              "response": []
+            },
+            {
+              "name": "Revoke Provider Access",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers/{{providerId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers", "{{providerId}}"]
+                },
+                "description": "Revoke a client's access to a provider."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "API Access",
+          "description": "Grant/revoke/list API-level access for a client.",
+          "item": [
+            {
+              "name": "Grant API Access",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{apiId}}\",\n    \"environment\": \"DEV\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
+                },
+                "description": "Grant a client access to a specific API.\n\ntargetId = the API's UUID (from provider-apis)\nenvironment = DEV, PROD, or BOTH\n\nYou must call this ONCE per API you want the client to use."
+              },
+              "response": []
+            },
+            {
+              "name": "List Client's API Access (All)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
+                },
+                "description": "List all APIs this client has been granted access to (across all providers)."
+              },
+              "response": []
+            },
+            {
+              "name": "List Client's API Access (By Provider)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis/by-provider/{{providerId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis", "by-provider", "{{providerId}}"]
+                },
+                "description": "List APIs this client can access for a specific provider.\n\nUseful to see: 'Which SIMAH APIs does this client have?'"
+              },
+              "response": []
+            },
+            {
+              "name": "Revoke API Access",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis/{{apiId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis", "{{apiId}}"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Bulk Access",
+          "description": "Grant access to multiple providers and their APIs in a single call.",
+          "item": [
+            {
+              "name": "Bulk Grant Access (Providers + APIs)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"environment\": \"DEV\",\n    \"providers\": [\n        {\n            \"providerId\": \"{{providerId}}\",\n            \"apiIds\": [\n                \"{{apiId}}\"\n            ]\n        }\n    ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/bulk",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "bulk"]
+                },
+                "description": "Grant access to multiple providers and their APIs in one call.\n\nSend an array of providers, each with an array of API IDs.\nInserts into both client_provider_access and client_api_access tables.\nSkips any that already exist.\n\nReturns counts of providers and APIs granted."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Execute API (Gateway)",
+      "description": "Execute third-party API calls through the middleware gateway.\n\nNo JWT required — authentication is via client secretKey.\n\nThe gateway:\n1. Authenticates client by secretKey\n2. Checks idempotency\n3. Verifies API access\n4. Routes to mock (TEST) or live (DEV/PROD)\n5. Applies auth credentials from env config\n6. Logs request and response",
+      "item": [
+        {
+          "name": "Execute API (Full Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('requestId', json.requestId);",
+                  "    console.log('Request ID: ' + json.requestId);",
+                  "    console.log('Status: ' + json.httpStatus);",
+                  "    console.log('Success: ' + json.success);",
+                  "    console.log('Duration: ' + json.durationMs + 'ms');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{clientSecretKey}}\",\n    \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\", \\\"productType\\\": \\\"PERSONAL_FINANCE\\\"}\",\n    \"pathParams\": {},\n    \"queryParams\": {},\n    \"headers\": {},\n    \"idempotencyKey\": null,\n    \"nationalId\": \"1234567890\",\n    \"callerService\": \"lending-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT"]
+            },
+            "description": "Execute a third-party API call.\n\nThe apiCode in the URL path is the API's unique code (e.g., SIMAH_SCORE_CREDIT, NAFATH_INITIATE, UNIFONIC_SEND_OTP).\n\nAuthentication is via secretKey in the request body (NOT JWT).\n\nThe requestBody field is a JSON string that will be forwarded to the third-party API."
+          },
+          "response": []
+        },
+        {
+          "name": "Execute API (Simple - Secret in Header)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('requestId', json.requestId);",
+                  "    console.log('Request ID: ' + json.requestId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              },
+              {
+                "key": "X-National-Id",
+                "value": "1234567890"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "lending-service"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nationalId\": \"1234567890\",\n    \"productType\": \"PERSONAL_FINANCE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT", "simple"]
+            },
+            "description": "Simplified execution endpoint.\n\nSecret key goes in X-Secret-Key header instead of request body.\nThe request body is sent directly to the third-party API (no wrapper)."
+          },
+          "response": []
+        },
+        {
+          "name": "Execute SIMAH Login",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"simah_user\",\n    \"password\": \"simah_pass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_LOGIN/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "SIMAH_LOGIN", "simple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute NAFATH Initiate",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              },
+              {
+                "key": "X-National-Id",
+                "value": "1234567890"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nationalId\": \"1234567890\",\n    \"service\": \"LENDING\",\n    \"locale\": \"ar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/NAFATH_INITIATE/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "NAFATH_INITIATE", "simple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute UNIFONIC Send OTP",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"AppSid\": \"your-app-sid\",\n    \"SenderID\": \"KSA-Finance\",\n    \"Body\": \"Your OTP code is: 1234\",\n    \"Recipient\": \"966501234567\",\n    \"responseType\": \"JSON\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/UNIFONIC_SEND_OTP/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "UNIFONIC_SEND_OTP", "simple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute TARABUT IBAN Match",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"iban\": \"SA0380000000608010167519\",\n    \"nationalId\": \"1234567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/TARABUT_KSA_IBAN_MATCH/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "TARABUT_KSA_IBAN_MATCH", "simple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute EIGER Purchase Order",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"commodity\": \"PALLADIUM\",\n    \"quantity\": 1,\n    \"amount\": 50000,\n    \"currency\": \"SAR\",\n    \"referenceId\": \"LOAN-12345\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/EIGER_ORDER_PURCHASE/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "EIGER_ORDER_PURCHASE", "simple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute DAKHLI GOSI Salary",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              },
+              {
+                "key": "X-National-Id",
+                "value": "1234567890"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/DAKHLI_GOSI/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "DAKHLI_GOSI", "simple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute with Idempotency Key",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{clientSecretKey}}\",\n    \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n    \"pathParams\": {},\n    \"queryParams\": {},\n    \"headers\": {},\n    \"idempotencyKey\": \"unique-key-12345\",\n    \"nationalId\": \"1234567890\",\n    \"callerService\": \"lending-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT"]
+            },
+            "description": "Execute with idempotency key. If the same key is used again, the cached response is returned instead of making a new call."
+          },
+          "response": []
+        },
+        {
+          "name": "Execute with Path Params",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{clientSecretKey}}\",\n    \"requestBody\": null,\n    \"pathParams\": {\n        \"nid\": \"1234567890\",\n        \"mobile\": \"966501234567\"\n    },\n    \"queryParams\": {},\n    \"headers\": {},\n    \"idempotencyKey\": null,\n    \"nationalId\": \"1234567890\",\n    \"callerService\": \"kyc-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/TAHAQUQ_VERIFY_MOBILE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "TAHAQUQ_VERIFY_MOBILE"]
+            },
+            "description": "Execute an API that has path parameters.\n\nTAHAQUQ_VERIFY_MOBILE endpoint: /api/v1/person/{nid}/owns-mobile/{mobile}\n\nThe pathParams map replaces {nid} and {mobile} in the URL."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Request Logs",
+      "description": "View API execution logs. Every API call is logged with request/response details.",
+      "item": [
+        {
+          "name": "Get Log by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/request-logs/{{requestLogId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "request-logs", "{{requestLogId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Log by Request ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/request-logs/by-request-id/{{requestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "request-logs", "by-request-id", "{{requestId}}"]
+            },
+            "description": "Look up a log by the requestId returned from the execute endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "List All Logs (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/request-logs?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "request-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Callbacks",
+      "description": "View callback responses from async third-party API calls (e.g., Nafath, IVR).",
+      "item": [
+        {
+          "name": "Get Callback by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/callbacks/{{callbackId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "callbacks", "{{callbackId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Callbacks (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/callbacks?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "callbacks"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Complete Setup Flow (Run in Order)",
+      "description": "Step-by-step guide to set up a client with provider + API access.\n\nRun these requests in order to set up a complete working client.",
+      "item": [
+        {
+          "name": "Step 1: List All Providers (get IDs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    console.log('=== PROVIDERS ===');",
+                  "    json.forEach(function(p) {",
+                  "        console.log(p.code + ' → ' + p.id);",
+                  "        // Auto-set first SIMAH provider",
+                  "        if (p.code === 'SIMAH') {",
+                  "            pm.collectionVariables.set('providerId', p.id);",
+                  "        }",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "providers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2: List SIMAH APIs (get API IDs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    console.log('=== SIMAH APIs ===');",
+                  "    json.forEach(function(api) {",
+                  "        console.log(api.code + ' → ' + api.id);",
+                  "    });",
+                  "    // Auto-set first API",
+                  "    if (json.length > 0) {",
+                  "        pm.collectionVariables.set('apiId', json[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/provider-apis/by-provider/{{providerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "provider-apis", "by-provider", "{{providerId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3: Create Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('clientId', json.id);",
+                  "    pm.collectionVariables.set('clientSecretKey', json.secretKey);",
+                  "    console.log('Client ID: ' + json.id);",
+                  "    console.log('Secret Key: ' + json.secretKey + ' (SAVE THIS!)');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Lending Service\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Lending service - needs SIMAH credit check, TARABUT IBAN verify, UNIFONIC OTP\",\n    \"callbackUrl\": null,\n    \"environment\": \"DEV\",\n    \"ipWhitelist\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4a: Grant Provider Access — SIMAH",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{providerId}}\",\n    \"environment\": \"DEV\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
+            },
+            "description": "Grant provider-level access. Repeat this for each provider (SIMAH, TARABUT, UNIFONIC, etc.).\n\nChange targetId to each provider's UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4b: Grant Provider Access — (another provider)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"<PASTE-PROVIDER-UUID-HERE>\",\n    \"environment\": \"DEV\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
+            },
+            "description": "Copy the provider UUID from Step 1 and paste in targetId.\n\nRepeat for each additional provider."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 5a: Grant API Access — SIMAH Score Credit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{apiId}}\",\n    \"environment\": \"DEV\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
+            },
+            "description": "Grant API-level access. Repeat for each specific API.\n\nChange targetId to each API's UUID (from Step 2)."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 5b: Grant API Access — (another API)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"<PASTE-API-UUID-HERE>\",\n    \"environment\": \"DEV\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
+            },
+            "description": "Copy the API UUID from Step 2 and paste in targetId.\n\nRepeat for each additional API."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 6: Verify — List Client's Provider Access",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
+            },
+            "description": "Verify which providers the client has access to."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 7: Verify — List Client's API Access",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
+            },
+            "description": "Verify which APIs the client has access to."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 8: Execute API Call",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    console.log('SUCCESS!');",
+                  "    console.log('Request ID: ' + json.requestId);",
+                  "    console.log('HTTP Status: ' + json.httpStatus);",
+                  "    console.log('Duration: ' + json.durationMs + 'ms');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Secret-Key",
+                "value": "{{clientSecretKey}}"
+              },
+              {
+                "key": "X-National-Id",
+                "value": "1234567890"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "lending-service"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nationalId\": \"1234567890\",\n    \"productType\": \"PERSONAL_FINANCE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT/simple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT", "simple"]
+            },
+            "description": "Now execute! The client uses its secretKey to call any API it has been granted access to."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

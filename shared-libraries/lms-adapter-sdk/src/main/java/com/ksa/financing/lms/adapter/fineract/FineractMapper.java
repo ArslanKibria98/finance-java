@@ -3,10 +3,12 @@ package com.ksa.financing.lms.adapter.fineract;
 import com.ksa.financing.lms.adapter.fineract.dto.*;
 import com.ksa.financing.lms.dto.*;
 import com.ksa.financing.lms.intent.LoanIntent;
+import com.ksa.financing.lms.intent.LoanProductIntent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +20,45 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class FineractMapper {
+
+    /**
+     * Maps LoanProductIntent to FineractLoanProductRequest.
+     */
+    public FineractLoanProductRequest toFineractLoanProductRequest(LoanProductIntent intent) {
+        BigDecimal defaultPrincipal = intent.getDefaultPrincipal() != null
+                ? intent.getDefaultPrincipal()
+                : intent.getMinPrincipal().add(intent.getMaxPrincipal())
+                    .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+
+        int defaultTenure = intent.getDefaultTenureMonths() > 0
+                ? intent.getDefaultTenureMonths()
+                : (intent.getMinTenureMonths() + intent.getMaxTenureMonths()) / 2;
+
+        String shortName = intent.getShortName() != null
+                ? intent.getShortName()
+                : intent.getProductCode().length() > 4
+                    ? intent.getProductCode().substring(0, 4).toUpperCase()
+                    : intent.getProductCode().toUpperCase();
+
+        int interestType = "FLAT".equalsIgnoreCase(intent.getRateType()) ? 1 : 0;
+
+        return FineractLoanProductRequest.builder()
+                .name(intent.getName())
+                .shortName(shortName)
+                .description(intent.getDescription() != null ? intent.getDescription() : intent.getName())
+                .currencyCode(intent.getCurrency() != null ? intent.getCurrency() : "SAR")
+                .principal(defaultPrincipal)
+                .minPrincipal(intent.getMinPrincipal())
+                .maxPrincipal(intent.getMaxPrincipal())
+                .numberOfRepayments(defaultTenure)
+                .minNumberOfRepayments(intent.getMinTenureMonths())
+                .maxNumberOfRepayments(intent.getMaxTenureMonths())
+                .interestRatePerPeriod(intent.getAnnualProfitRate())
+                .interestType(interestType)
+                .graceOnPrincipalPayment(intent.getGracePeriodDays() > 0 ? 1 : null)
+                .externalId(intent.getExternalId())
+                .build();
+    }
 
     /**
      * Maps LoanIntent to FineractLoanRequest.

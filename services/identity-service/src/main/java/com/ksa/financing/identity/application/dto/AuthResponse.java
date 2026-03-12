@@ -14,5 +14,15 @@ public record AuthResponse(
     long expiresIn,
 
     @Schema(description = "Token type (always Bearer)", example = "Bearer")
-    String tokenType
-) {}
+    String tokenType,
+
+    @Schema(description = "Customer ID (only present for customer PIN login)", example = "550e8400-e29b-41d4-a716-446655440000")
+    String customerId
+) {
+    /**
+     * Constructor without customerId — used by admin login and token refresh.
+     */
+    public AuthResponse(String accessToken, String refreshToken, long expiresIn, String tokenType) {
+        this(accessToken, refreshToken, expiresIn, tokenType, null);
+    }
+}

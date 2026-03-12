@@ -1,0 +1,923 @@
+{
+  "info": {
+    "name": "Lending Service - Stepper Workflow (BRD V1.8)",
+    "description": "Loan Application Stepper Workflow via Temporal Signals.\n\nFlow: Initiate (APPLY) → Basic Info → Bank Account → SIMAH Consent → Accept Offer → Sign Contract → OTP → IVR → Done\n\nBRD Phases: SafeWatch AML, Masdar Employment, AML Declaration, PaymentGuard, NABA, OTP/IVR retries.\n\nRouting: {{kongUrl}}/lending-service/api/v1/...\nAuth: Bearer {{accessToken}} (from identity-service login-with-pin)\n\nAll signal/query endpoints accept optional ?applicationId=xxx to target a specific application.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "kongUrl", "value": "http://46.62.226.94:8000", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "workflowId", "value": "", "type": "string" },
+    { "key": "applicationId", "value": "", "type": "string" },
+    { "key": "applicationNumber", "value": "", "type": "string" },
+    { "key": "customerId", "value": "", "type": "string" },
+    { "key": "productId", "value": "", "type": "string" },
+    { "key": "nationalId", "value": "1234567890", "type": "string" },
+    { "key": "pin", "value": "147852", "type": "string" },
+    { "key": "mobileNumber", "value": "+966500000000", "type": "string" },
+    { "key": "purposeOfFinanceId", "value": "", "type": "string" },
+    { "key": "eligibilityFieldId", "value": "", "type": "string" },
+    { "key": "loanId", "value": "", "type": "string" },
+    { "key": "loanNumber", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0 - Auth (Identity Service)",
+      "description": "Login via identity-service to get JWT access token.",
+      "item": [
+        {
+          "name": "[auth] Login (Get Access Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var data = json.data || json;",
+                  "if (data.access_token || data.accessToken) {",
+                  "    var token = data.access_token || data.accessToken;",
+                  "    pm.collectionVariables.set('accessToken', token);",
+                  "    console.log('✅ accessToken set');",
+                  "}",
+                  "if (data.refresh_token || data.refreshToken) {",
+                  "    pm.collectionVariables.set('refreshToken', data.refresh_token || data.refreshToken);",
+                  "}",
+                  "pm.test('Login successful', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"{{nationalId}}\",\n  \"pin\": \"{{pin}}\"\n}"
+            },
+            "url": "{{kongUrl}}/identity-service/api/v1/auth/login-with-pin",
+            "description": "Login with NID + PIN via identity-service.\nSets accessToken, refreshToken, customerId for all subsequent requests."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - Reference Data",
+      "description": "Purpose of Finance CRUD and Dynamic Eligibility Fields.\nSeed these before initiating a loan application.",
+      "item": [
+        {
+          "name": "[lending] List Purposes of Finance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Purposes listed', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(Array.isArray(json)).to.be.true;",
+                  "});",
+                  "console.log('Total purposes: ' + json.length);",
+                  "if (json.length > 0) {",
+                  "    pm.collectionVariables.set('purposeOfFinanceId', json[0].id);",
+                  "    json.forEach(function(p) { console.log('  ' + p.code + ' - ' + p.nameEn); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/purpose-of-finance?activeOnly=true",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "purpose-of-finance"],
+              "query": [{ "key": "activeOnly", "value": "true" }]
+            }
+          }
+        },
+        {
+          "name": "[lending] Create Purpose of Finance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Purpose created', function() { pm.response.to.have.status(201); });",
+                  "if (json.id) {",
+                  "    pm.collectionVariables.set('purposeOfFinanceId', json.id);",
+                  "    console.log('Created: ' + json.code + ' - ' + json.nameEn);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"PERSONAL\",\n  \"nameEn\": \"Personal Finance\",\n  \"nameAr\": \"تمويل شخصي\",\n  \"descriptionEn\": \"General personal financing\",\n  \"descriptionAr\": \"تمويل شخصي عام\",\n  \"sortOrder\": 1\n}"
+            },
+            "url": "{{kongUrl}}/lending-service/api/v1/purpose-of-finance"
+          }
+        },
+        {
+          "name": "[lending] Update Purpose of Finance",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nameEn\": \"Personal Finance (Updated)\",\n  \"nameAr\": \"تمويل شخصي (محدث)\",\n  \"descriptionEn\": \"Updated\",\n  \"descriptionAr\": \"محدث\",\n  \"sortOrder\": 1,\n  \"active\": true\n}"
+            },
+            "url": "{{kongUrl}}/lending-service/api/v1/purpose-of-finance/{{purposeOfFinanceId}}"
+          }
+        },
+        {
+          "name": "[lending] Delete Purpose of Finance",
+          "request": {
+            "method": "DELETE",
+            "url": "{{kongUrl}}/lending-service/api/v1/purpose-of-finance/{{purposeOfFinanceId}}"
+          }
+        },
+        {
+          "name": "[lending] Get Eligibility Fields for Product (Risk Proxy)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Fields returned', function() { pm.response.to.have.status(200); });",
+                  "console.log('Fields: ' + (Array.isArray(json) ? json.length : 'N/A'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/product/{{productId}}"
+          }
+        },
+        {
+          "name": "[lending] List All Field Definitions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Definitions listed', function() { pm.response.to.have.status(200); });",
+                  "if (json.length > 0) {",
+                  "    pm.collectionVariables.set('eligibilityFieldId', json[0].id);",
+                  "    json.forEach(function(f) { console.log('  ' + f.fieldKey + ' - ' + f.nameEn); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/definitions"
+          }
+        },
+        {
+          "name": "[lending] Create Field Definition",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Created', function() { pm.response.to.have.status(201); });",
+                  "if (json.id) { pm.collectionVariables.set('eligibilityFieldId', json.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fieldKey\": \"monthly_income\",\n  \"nameEn\": \"Monthly Income\",\n  \"nameAr\": \"الدخل الشهري\",\n  \"descriptionEn\": \"Total monthly income\",\n  \"descriptionAr\": \"إجمالي الدخل الشهري\",\n  \"dataType\": \"DECIMAL\",\n  \"inputType\": \"NUMBER\",\n  \"placeholderEn\": \"Enter income in SAR\",\n  \"placeholderAr\": \"أدخل الدخل بالريال\",\n  \"unit\": \"SAR\",\n  \"minValue\": 3000,\n  \"maxValue\": 500000,\n  \"required\": true,\n  \"sortOrder\": 1\n}"
+            },
+            "url": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/definitions"
+          }
+        },
+        {
+          "name": "[lending] Assign Field to Product",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fieldId\": \"{{eligibilityFieldId}}\",\n  \"required\": true,\n  \"sortOrder\": 1\n}"
+            },
+            "url": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/product/{{productId}}/assign"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Stepper Flow (Signals)",
+      "description": "Complete loan application flow.\nRun in order — each sends a Temporal signal.\n\nAfter initiate, applicationId is auto-set and passed to all subsequent calls via ?applicationId=xxx",
+      "item": [
+        {
+          "name": "Step 0: Initiate Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.workflowId) {",
+                  "    pm.collectionVariables.set('workflowId', json.workflowId);",
+                  "    console.log('workflowId: ' + json.workflowId);",
+                  "}",
+                  "if (json.customerId) {",
+                  "    pm.collectionVariables.set('customerId', json.customerId);",
+                  "    console.log('customerId: ' + json.customerId);",
+                  "}",
+                  "if (json.applicationId) {",
+                  "    pm.collectionVariables.set('applicationId', json.applicationId);",
+                  "    console.log('applicationId: ' + json.applicationId);",
+                  "}",
+                  "if (json.applicationNumber) {",
+                  "    pm.collectionVariables.set('applicationNumber', json.applicationNumber);",
+                  "    console.log('applicationNumber: ' + json.applicationNumber);",
+                  "}",
+                  "// Also check workflowState for applicationId",
+                  "if (json.workflowState && json.workflowState.applicationId) {",
+                  "    pm.collectionVariables.set('applicationId', json.workflowState.applicationId);",
+                  "    console.log('applicationId (from state): ' + json.workflowState.applicationId);",
+                  "}",
+                  "if (json.preQualification) {",
+                  "    console.log('Eligible: ' + json.preQualification.eligible);",
+                  "}",
+                  "pm.test('Workflow initiated', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(json.workflowId).to.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"APPLY\",\n  \"customerId\": \"{{customerId}}\",\n  \"nationalId\": \"{{nationalId}}\",\n  \"mobileNumber\": \"{{mobileNumber}}\",\n  \"productId\": \"{{productId}}\",\n  \"requestedAmount\": 100000.00,\n  \"requestedTenureMonths\": 60,\n  \"purposeOfFinance\": \"PERSONAL\",\n  \"purposeOfFinanceOther\": null,\n  \"foodGroceries\": 1500.00,\n  \"utilities\": 500.00,\n  \"healthcare\": 300.00,\n  \"communication\": 200.00,\n  \"housingRent\": 2000.00,\n  \"clothingEssentials\": 400.00,\n  \"education\": 600.00,\n  \"transportation\": 500.00,\n  \"eligibilityAnswers\": {\n    \"monthly_income\": \"15000\",\n    \"age\": \"30\",\n    \"employment_type\": \"government\",\n    \"simah_score\": \"750\",\n    \"existing_liabilities\": \"2000\"\n  }\n}"
+            },
+            "url": "{{kongUrl}}/lending-service/api/v1/loan-applications/initiate",
+            "description": "Starts full Temporal workflow.\n1. SafeWatch AML screening (Phase 1)\n2. Draft application created\n3. Step 1 auto-processed\n\nSets: workflowId, customerId, applicationId, applicationNumber"
+          }
+        },
+        {
+          "name": "Step 1: Submit Basic Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Basic info sent', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step + ' | Status: ' + (json.workflowState ? json.workflowState.status : 'N/A'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"productCode\": \"MURABAHA_PERSONAL\",\n  \"productName\": \"Personal Finance Murabaha\",\n  \"shariaStructure\": \"MURABAHA\",\n  \"requestedAmount\": 100000.00,\n  \"requestedTenureMonths\": 60,\n  \"purposeOfFinance\": \"PERSONAL\",\n  \"profitRate\": 0.12,\n  \"partnerId\": null,\n  \"leadId\": null\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/basic-info?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "basic-info"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 1: Submit product selection. Auto-processed from initiate, but available for override.\nPasses applicationId to target exact application."
+          }
+        },
+        {
+          "name": "Step 2 Helper: Lookup Bank Accounts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Bank accounts', function() { pm.response.to.have.status(200); });",
+                  "var data = json.data || json;",
+                  "console.log('Source: ' + data.source + ', Accounts: ' + (data.accounts ? data.accounts.length : 0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/bank-accounts?nationalId={{nationalId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "bank-accounts"],
+              "query": [{ "key": "nationalId", "value": "{{nationalId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Step 2: Submit Bank Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Bank account sent', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step + ' | Status: ' + (json.workflowState ? json.workflowState.status : 'N/A'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankCode\": \"RJHI\",\n  \"bankName\": \"Al Rajhi Bank\",\n  \"iban\": \"SA0380000000608010167519\",\n  \"accountNumber\": \"608010167519\"\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/bank-account?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "bank-account"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 2: Submit bank account for disbursement.\nTriggers: IBAN verify → Masdar employment (Phase 5) → AML declaration (Phase 6)."
+          }
+        },
+        {
+          "name": "Step 3: Give SIMAH Consent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('SIMAH consent sent', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step + ' | Status: ' + (json.workflowState ? json.workflowState.status : 'N/A'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consentGiven\": true\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/simah-consent?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "simah-consent"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 3: SIMAH consent → credit check → eligibility → offer calculation."
+          }
+        },
+        {
+          "name": "Step 4: Accept Offer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Offer accepted', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step + ' | Status: ' + (json.workflowState ? json.workflowState.status : 'N/A'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accepted\": true,\n  \"selectedAmount\": 100000.00\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/accept-offer?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "accept-offer"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 4: Accept offer. Triggers PaymentGuard (Phase 7) → contract generation."
+          }
+        },
+        {
+          "name": "Step 5a: Sign Contract",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Contract signed', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizeDigitalSignature\": true,\n  \"authorizeSellCommodity\": true,\n  \"wantPhysicalDelivery\": false\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/sign-contract?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "sign-contract"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 5a: Sign contract. Triggers commodity trade + OTP send."
+          }
+        },
+        {
+          "name": "Step 5b: Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('OTP sent', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otpCode\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/verify-otp?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "verify-otp"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 5b: OTP verification (max 3 attempts, 2min timeout).\nAfter OTP: NABA Absher notification (Phase 8)."
+          }
+        },
+        {
+          "name": "Step 5c: IVR Callback",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('IVR callback', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step: ' + json.step);",
+                  "if (json.workflowState) {",
+                  "    console.log('Final status: ' + json.workflowState.status);",
+                  "    if (json.workflowState.loanId) {",
+                  "        pm.collectionVariables.set('loanId', json.workflowState.loanId);",
+                  "        console.log('loanId: ' + json.workflowState.loanId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verified\": true,\n  \"callId\": \"IVR-CALL-001\",\n  \"verificationStatus\": \"VERIFIED\"\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/ivr-callback?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "ivr-callback"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            },
+            "description": "Step 5c: IVR callback (max 3 attempts).\nAfter IVR: Fineract → commodity → disbursement → APPROVED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Query Workflow State",
+      "description": "Query running workflow state. All accept optional ?applicationId=xxx",
+      "item": [
+        {
+          "name": "[lending] Query: Current Step",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Step info', function() { pm.response.to.have.status(200); });",
+                  "console.log('Step ' + json.stepperIndex + ': ' + json.stepName + ' | ' + json.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/step?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "step"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "[lending] Query: Full Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Status', function() { pm.response.to.have.status(200); });",
+                  "if (json.applicationId) { pm.collectionVariables.set('applicationId', json.applicationId); }",
+                  "console.log('Status: ' + json.status + ' | Step: ' + json.stepperIndex);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/status?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "status"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "[lending] Query: Offer Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Offer', function() { pm.response.to.have.status(200); });",
+                  "console.log('Max: ' + json.maxAmount + ' | Monthly: ' + json.monthlyInstallment);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/offer?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "offer"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "[lending] Query: Contract Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Contract', function() { pm.response.to.have.status(200); });",
+                  "console.log('Docs: ' + JSON.stringify(json.documents));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/contract?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "contract"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "[lending] Query: Bank Accounts (Step 2 Helper)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/bank-accounts?nationalId={{nationalId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "bank-accounts"],
+              "query": [{ "key": "nationalId", "value": "{{nationalId}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 - DB Read Endpoints",
+      "description": "Read persisted applications from database.",
+      "item": [
+        {
+          "name": "[lending] Get Application by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Found', function() { pm.response.to.have.status(200); });",
+                  "console.log('Status: ' + json.status + ' | Number: ' + json.applicationNumber);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/lending-service/api/v1/loan-applications/by-id/{{applicationId}}"
+          }
+        },
+        {
+          "name": "[lending] List All Applications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Listed', function() { pm.response.to.have.status(200); });",
+                  "var data = json.data || json;",
+                  "console.log('Total: ' + (Array.isArray(data) ? data.length : 'N/A'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/lending-service/api/v1/loan-applications"
+          }
+        },
+        {
+          "name": "[lending] List Applications by Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Listed by customer', function() { pm.response.to.have.status(200); });",
+                  "var data = json.data || json;",
+                  "if (Array.isArray(data)) {",
+                  "    console.log('Total applications: ' + data.length);",
+                  "    data.forEach(function(app) {",
+                  "        console.log('  ' + app.applicationNumber + ' | ' + app.status + ' | ' + (app.requestedAmount || '-') + ' SAR');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/customer/{{customerId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "customer", "{{customerId}}"]
+            },
+            "description": "List all loan applications for a specific customer by customerId."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - Negative Scenarios",
+      "description": "Test reject/decline/failure paths.",
+      "item": [
+        {
+          "name": "Decline SIMAH Consent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"consentGiven\": false\n}" },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/simah-consent?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "simah-consent"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Reject Offer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"accepted\": false,\n  \"selectedAmount\": null\n}" },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/accept-offer?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "accept-offer"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Wrong OTP (Retry Test)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"otpCode\": \"000000\"\n}" },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/verify-otp?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "verify-otp"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "IVR Failed (Retry Test)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"verified\": false,\n  \"callId\": \"IVR-FAIL-001\",\n  \"verificationStatus\": \"FAILED\"\n}" },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/ivr-callback?applicationId={{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["lending-service", "api", "v1", "loan-applications", "{{customerId}}", "ivr-callback"],
+              "query": [{ "key": "applicationId", "value": "{{applicationId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Initiate with OTHER Purpose",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.workflowId) { pm.collectionVariables.set('workflowId', json.workflowId); }",
+                  "if (json.applicationId) { pm.collectionVariables.set('applicationId', json.applicationId); }",
+                  "if (json.workflowState && json.workflowState.applicationId) { pm.collectionVariables.set('applicationId', json.workflowState.applicationId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"APPLY\",\n  \"customerId\": \"{{customerId}}\",\n  \"nationalId\": \"{{nationalId}}\",\n  \"mobileNumber\": \"{{mobileNumber}}\",\n  \"productId\": \"{{productId}}\",\n  \"requestedAmount\": 30000.00,\n  \"requestedTenureMonths\": 24,\n  \"purposeOfFinance\": \"OTHER\",\n  \"purposeOfFinanceOther\": \"Home renovation and furniture\",\n  \"foodGroceries\": 1200.00,\n  \"utilities\": 400.00,\n  \"healthcare\": 200.00,\n  \"communication\": 150.00,\n  \"housingRent\": 1800.00,\n  \"clothingEssentials\": 300.00,\n  \"education\": 500.00,\n  \"transportation\": 400.00,\n  \"eligibilityAnswers\": {\n    \"monthly_income\": \"12000\",\n    \"existing_liabilities\": \"1500\"\n  }\n}"
+            },
+            "url": "{{kongUrl}}/lending-service/api/v1/loan-applications/initiate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - Middleware Third-Party",
+      "description": "Direct middleware execution tests.",
+      "item": [
+        {
+          "name": "[middleware] SIMAH Credit Check",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-National-Id", "value": "{{nationalId}}" },
+              { "key": "X-Caller-Service", "value": "lending-service" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"{{nationalId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"requestedAmount\": 100000.00,\n  \"enquiryType\": \"NEW_V2\"\n}"
+            },
+            "url": "{{kongUrl}}/middleware-third-party/api/v1/execute/SIMAH_ENQUIRY_NEW_V2/simple"
+          }
+        },
+        {
+          "name": "[middleware] SafeWatch AML Scan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-National-Id", "value": "{{nationalId}}" },
+              { "key": "X-Caller-Service", "value": "lending-service" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"{{nationalId}}\",\n  \"fullName\": \"Mohammed Al-Rashid\",\n  \"dateOfBirth\": \"1990-01-01\"\n}"
+            },
+            "url": "{{kongUrl}}/middleware-third-party/api/v1/execute/SAFEWATCH_SCAN_SESSION/simple"
+          }
+        },
+        {
+          "name": "[middleware] Masdar Employment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-National-Id", "value": "{{nationalId}}" },
+              { "key": "X-Caller-Service", "value": "lending-service" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"{{nationalId}}\"\n}"
+            },
+            "url": "{{kongUrl}}/middleware-third-party/api/v1/execute/MASDAR_INDIVIDUAL_PLUS/simple"
+          }
+        },
+        {
+          "name": "[middleware] IBAN Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-Caller-Service", "value": "lending-service" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"iban\": \"SA0380000000608010167519\",\n  \"nationalId\": \"{{nationalId}}\",\n  \"expectedName\": \"Mohammed Al-Rashid\"\n}"
+            },
+            "url": "{{kongUrl}}/middleware-third-party/api/v1/execute/TARABUT_IBAN_VERIFY/simple"
+          }
+        },
+        {
+          "name": "[middleware] NABA Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-National-Id", "value": "{{nationalId}}" },
+              { "key": "X-Caller-Service", "value": "lending-service" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"{{nationalId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"applicationId\": \"{{applicationId}}\",\n  \"amount\": 100000.00\n}"
+            },
+            "url": "{{kongUrl}}/middleware-third-party/api/v1/execute/NABA_SEND_NOTIFICATION/simple"
+          }
+        },
+        {
+          "name": "[middleware] PaymentGuard Check",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-National-Id", "value": "{{nationalId}}" },
+              { "key": "X-Caller-Service", "value": "lending-service" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"{{nationalId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"applicationId\": \"{{applicationId}}\",\n  \"amount\": 100000.00\n}"
+            },
+            "url": "{{kongUrl}}/middleware-third-party/api/v1/execute/PAYMENT_GUARD_CHECK/simple"
+          }
+        }
+      ]
+    }
+  ]
+}

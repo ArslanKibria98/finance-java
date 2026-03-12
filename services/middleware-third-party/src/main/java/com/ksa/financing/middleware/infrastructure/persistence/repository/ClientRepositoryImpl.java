@@ -55,4 +55,10 @@ public class ClientRepositoryImpl implements ClientRepository {
     public boolean existsByCode(UUID tenantId, String code) {
         return jpaRepository.existsByCodeAndTenantIdAndDeletedAtIsNull(code, tenantId);
     }
+
+    @Override
+    public Optional<ApiClient> findBySecretKey(String secretKey) {
+        return jpaRepository.findBySecretKeyAndDeletedAtIsNull(secretKey)
+                .map(mapper::toDomain);
+    }
 }

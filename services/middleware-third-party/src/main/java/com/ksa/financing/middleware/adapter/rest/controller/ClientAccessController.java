@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.adapter.rest.controller;
 
+import com.ksa.financing.middleware.application.dto.BulkGrantAccessRequest;
+import com.ksa.financing.middleware.application.dto.BulkGrantAccessResponse;
 import com.ksa.financing.middleware.application.dto.ClientApiAccessResponse;
 import com.ksa.financing.middleware.application.dto.ClientProviderAccessResponse;
 import com.ksa.financing.middleware.application.dto.GrantAccessRequest;
@@ -44,6 +46,23 @@ public class ClientAccessController {
             @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
         return ResponseEntity.ok(manageClientAccessUseCase.listProviderAccess(tenantId, clientId));
+    }
+
+    // ==================== Bulk Access (Providers + APIs in one call) ====================
+
+    @SecuredEndpoint(obj = "middleware.client-access", act = "manage")
+    @PostMapping("/bulk")
+    public ResponseEntity<BulkGrantAccessResponse> bulkGrantAccess(
+            @PathVariable UUID clientId,
+            @Valid @RequestBody BulkGrantAccessRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        var grantedBy = UUID.fromString(jwt.getSubject());
+
+        // Override clientId from path into request (ensure consistency)
+        var effectiveRequest = new BulkGrantAccessRequest(clientId, request.environment(), request.providers());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(manageClientAccessUseCase.bulkGrantAccess(tenantId, effectiveRequest, grantedBy));
     }
 
     @SecuredEndpoint(obj = "middleware.client-access", act = "manage")

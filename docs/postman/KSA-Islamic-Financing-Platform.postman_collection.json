@@ -177,6 +177,11 @@
       "key": "countryId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "walletId",
+      "value": "",
+      "type": "string"
     }
   ],
   "auth": {
@@ -350,11 +355,16 @@
                   "    pm.collectionVariables.set('refreshToken', data.refreshToken);",
                   "    console.log('refreshToken set');",
                   "}",
+                  "if (data.customerId) {",
+                  "    pm.collectionVariables.set('customerId', data.customerId);",
+                  "    console.log('customerId set: ' + data.customerId);",
+                  "}",
                   "pm.test('PIN login successful', function() {",
                   "    pm.response.to.have.status(200);",
                   "    pm.expect(data.accessToken).to.not.be.empty;",
                   "    pm.expect(data.refreshToken).to.not.be.empty;",
                   "    pm.expect(data.tokenType).to.equal('Bearer');",
+                  "    pm.expect(data.customerId).to.not.be.undefined;",
                   "});"
                 ]
               }
@@ -1363,13 +1373,85 @@
             "url": "{{kongUrl}}/kyc-adapter-service/api/v1/kyc/sanctions/screen",
             "description": "Kong -> kyc-adapter-service:8087\nSanctions Stub — AML/CFT screening against watchlists"
           }
+        },
+        {
+          "name": "[kyc-adapter-service] GOSI Salary Fetch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('GOSI salary data returned', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(json.employerName).to.not.be.empty;",
+                  "    pm.expect(json.totalSalary).to.be.a('number');",
+                  "});",
+                  "console.log('Employer: ' + json.employerName + ' | Basic: ' + json.basicSalary + ' | Housing: ' + json.housingAllowance + ' | Total: ' + json.totalSalary + ' SAR');",
+                  "console.log('Source: ' + json.verificationSource);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"1234567890\"\n}"
+            },
+            "url": "{{kongUrl}}/kyc-adapter-service/api/v1/kyc/gosi/fetch",
+            "description": "Kong -> kyc-adapter-service:8087\nJWT REQUIRED — Fetch salary information from GOSI (General Organization for Social Insurance).\n@SecuredEndpoint(obj=\"kyc.gosi\", act=\"fetch\")\n\nUsed during lending flow for:\n  - Salary verification (cross-check with customer-declared salary)\n  - Debt Burden Ratio (DBR) calculation\n  - SAMA affordability assessment\n\nResponse:\n  - employerName: Employer registered with GOSI\n  - basicSalary: Base salary (SAR)\n  - housingAllowance: Housing component (SAR)\n  - totalSalary: Gross salary (SAR)\n  - verificationSource: \"GOSI\""
+          }
         }
       ]
     },
     {
       "name": "3 - Identity Service (identity-service)",
-      "description": "Kong -> identity-service:8083\nURL: {{kongUrl}}/identity-service/api/v1/...\n\nIdentity Service: authentication, jCasbin RBAC authorization, role/permission/policy management.\n\nRBAC Architecture:\n  - Casbin enforcer with DB-backed policies (casbin_rule table)\n  - CasbinAuthorizationFilter in Spring Security filter chain\n  - Policy format: (role, resource_path_pattern, HTTP_method)\n  - PathMatch uses AntPathMatcher for /api/v1/** patterns\n\nSeeded Roles: super_admin, admin, product_admin, partner_admin, customer\nSeeded Policies: 40 rules across 5 role tiers",
+      "description": "Kong -> identity-service:8083\nURL: {{kongUrl}}/identity-service/api/v1/...\n\nIdentity Service: authentication, jCasbin RBAC authorization, role/permission/policy management.\n\nRBAC Architecture:\n  - Casbin enforcer with DB-backed policies (casbin_rule table)\n  - CasbinAuthorizationFilter in Spring Security filter chain\n  - Policy format: (role, obj, act) — obj+act model\n  - @SecuredEndpoint annotation on all protected endpoints\n\nSeeded Roles: super_admin, admin, csa, compliance_officer, underwriter, product_admin, partner_admin, head_of_accounts, customer\nSeeded Policies: obj+act policies across 9 role tiers\n\nAuth endpoints: register, onboarding-register, login, login-with-pin, SSO (PKCE), refresh, logout",
       "item": [
+        {
+          "name": "[identity-service] Register User (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('User registered', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(json.id).to.not.be.empty;",
+                  "    pm.expect(json.keycloakUserId).to.not.be.empty;",
+                  "});",
+                  "console.log('User ID: ' + json.id + ' | Keycloak ID: ' + json.keycloakUserId + ' | Status: ' + json.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testadmin\",\n  \"email\": \"testadmin@example.com\",\n  \"mobileNumber\": \"+966501234567\",\n  \"password\": \"Test@12345\",\n  \"tenantId\": \"00000000-0000-0000-0000-000000000001\"\n}"
+            },
+            "url": "{{kongUrl}}/identity-service/api/v1/auth/register",
+            "description": "Kong -> identity-service:8083\nPUBLIC — Register a new admin/employee user in Keycloak.\n\nThis is the BASIC registration endpoint (username + password).\nFor customer onboarding (NID + PIN), use /auth/onboarding-register instead.\n\nFields:\n  - username (required): Keycloak username\n  - email (required): User email\n  - mobileNumber (required): +966 format\n  - password (required): Password (min 8 chars)\n  - tenantId (required): Tenant UUID (from request body, not JWT)\n\nCreates user in Keycloak realm and returns internal ID + Keycloak ID."
+          }
+        },
         {
           "name": "[identity-service] Onboarding Register",
           "event": [
@@ -1927,6 +2009,96 @@
             "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}/kyc-status",
             "description": "Kong -> customer-service:8084\nJWT REQUIRED — Update KYC verification status.\nkycStatus: PENDING | IN_PROGRESS | VERIFIED | EXPIRED | REJECTED | BLOCKED\nKYC status drives lifecycle transitions (VERIFIED -> QUALIFIED)."
           }
+        },
+        {
+          "name": "[customer-service] Add Bank Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Bank account added', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(json.iban).to.not.be.empty;",
+                  "});",
+                  "console.log('Bank: ' + json.bankName + ' | IBAN: ' + json.iban + ' | Primary: ' + json.isPrimary);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankName\": \"Al Rajhi Bank\",\n  \"bankCode\": \"RJHI\",\n  \"iban\": \"SA0380000000608010167519\",\n  \"accountHolderName\": \"Mohammed Al-Saudi\",\n  \"accountType\": \"CURRENT\",\n  \"isPrimary\": true,\n  \"isSalaryAccount\": true\n}"
+            },
+            "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}/bank-accounts",
+            "description": "Kong -> customer-service:8084\nJWT REQUIRED — Add bank account to customer.\n@SecuredEndpoint(obj=\"customers.bank-accounts\", act=\"create\")\n\nFields:\n  - bankName (required): Bank name (e.g., Al Rajhi, SNB, Alinma)\n  - bankCode (optional): SWIFT/bank code\n  - iban (required): Saudi IBAN (SA + 22 chars)\n  - accountHolderName (optional): Account holder name\n  - accountType (optional): CURRENT, SAVINGS\n  - isPrimary (default true): Primary account for disbursements\n  - isSalaryAccount (default false): Salary credited to this account"
+          }
+        },
+        {
+          "name": "[customer-service] List Bank Accounts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Bank accounts listed', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(json).to.be.an('array');",
+                  "});",
+                  "console.log('Total bank accounts: ' + json.length);",
+                  "json.forEach(function(acc) { console.log('  ' + acc.bankName + ' | ' + acc.iban + ' | Primary: ' + acc.isPrimary); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}/bank-accounts",
+            "description": "Kong -> customer-service:8084\nJWT REQUIRED — List all bank accounts for customer.\n@SecuredEndpoint(obj=\"customers.bank-accounts\", act=\"read\")"
+          }
+        },
+        {
+          "name": "[customer-service] Add Employment Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Employment info added', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(json.employerName).to.not.be.empty;",
+                  "});",
+                  "console.log('Employer: ' + json.employerName + ' | Net Salary: ' + json.netSalary + ' SAR');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employerName\": \"Saudi Aramco\",\n  \"employerCrNumber\": \"1234567890\",\n  \"employerSector\": \"OIL_GAS\",\n  \"employmentType\": \"PRIVATE\",\n  \"jobTitle\": \"Senior Engineer\",\n  \"startDate\": \"2020-06-01\",\n  \"basicSalary\": 15000.00,\n  \"housingAllowance\": 3000.00,\n  \"otherAllowances\": 1500.00,\n  \"grossSalary\": 19500.00,\n  \"deductions\": 2000.00,\n  \"netSalary\": 17500.00,\n  \"salaryBankName\": \"Al Rajhi Bank\",\n  \"salaryIban\": \"SA0380000000608010167519\"\n}"
+            },
+            "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}/employment",
+            "description": "Kong -> customer-service:8084\nJWT REQUIRED — Add employment and salary information.\n@SecuredEndpoint(obj=\"customers.employment\", act=\"create\")\n\nemploymentType: PRIVATE | GOVERNMENT | SELF_EMPLOYED\n\nSalary fields used for:\n  - Debt Burden Ratio (DBR) calculation in credit decisioning\n  - GOSI salary verification cross-check\n  - SAMA affordability assessment"
+          }
         }
       ]
     },
@@ -2131,7 +2303,7 @@
     },
     {
       "name": "6 - Wallet Service (wallet-service)",
-      "description": "Kong -> wallet-service:8088\nURL: {{kongUrl}}/wallet-service/api/v1/wallets/...\n\nDigital wallet creation and management.",
+      "description": "Kong -> wallet-service:8088\nURL: {{kongUrl}}/wallet-service/api/v1/wallets/...\n\nSAR digital wallet — closed-loop Islamic compliant wallet.\nOperations: create, get by customer, get balance, top-up.\n\n@SecuredEndpoint authorization:\n  - wallets:read — Get wallet, get balance\n  - wallets:manage — Top-up, create\n\nIdempotency: Top-up requires idempotencyKey (financial operation).",
       "item": [
         {
           "name": "[wallet-service] Get Wallet by Customer ID",
@@ -2149,7 +2321,7 @@
           ],
           "request": {
             "method": "GET",
-            "url": "{{kongUrl}}/wallet-service/api/v1/wallets/customer/{{customerId}}",
+            "url": "{{kongUrl}}/wallet-service/api/v1/wallets/by-customer/{{customerId}}",
             "description": "Kong -> wallet-service:8088\nJWT REQUIRED — Get wallet by customer ID"
           }
         },
@@ -2179,8 +2351,65 @@
               "mode": "raw",
               "raw": "{\n  \"customerId\": \"test-customer-id\",\n  \"currency\": \"SAR\",\n  \"tenantId\": \"KSA\"\n}"
             },
-            "url": "{{kongUrl}}/wallet-service/api/v1/wallets",
-            "description": "Kong -> wallet-service:8088\nJWT REQUIRED — Create new SAR wallet for customer"
+            "url": "{{kongUrl}}/wallet-service/api/v1/wallets/create",
+            "description": "Kong -> wallet-service:8088\nJWT REQUIRED — Create new SAR wallet for customer.\n@SecuredEndpoint(obj=\"wallets\", act=\"manage\")\n\nTypically called internally by onboarding workflow after customer creation.\nOne wallet per customer per currency."
+          }
+        },
+        {
+          "name": "[wallet-service] Get Wallet Balance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Wallet balance retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(json.availableBalance).to.not.be.undefined;",
+                  "});",
+                  "console.log('Available: ' + json.availableBalance + ' | Reserved: ' + json.reservedBalance + ' | Total: ' + json.totalBalance + ' ' + json.currency);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/wallet-service/api/v1/wallets/{{walletId}}/balance",
+            "description": "Kong -> wallet-service:8088\n@SecuredEndpoint(obj=\"wallets\", act=\"read\")\n\nGet wallet balance by wallet UUID.\nReturns availableBalance, reservedBalance, totalBalance.\n\nBalance breakdown:\n  - availableBalance = funds available for transactions\n  - reservedBalance = funds held for pending operations\n  - totalBalance = available + reserved"
+          }
+        },
+        {
+          "name": "[wallet-service] Top Up Wallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Top-up processed', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(json.transactionNumber).to.not.be.empty;",
+                  "    pm.expect(json.status).to.not.be.undefined;",
+                  "});",
+                  "console.log('Txn: ' + json.transactionNumber + ' | Amount: ' + json.amount + ' | Fee: ' + json.feeAmount + ' | Net: ' + json.netAmount + ' | Status: ' + json.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5000.00,\n  \"method\": \"BANK_TRANSFER\",\n  \"sourceIban\": \"SA0380000000608010167519\",\n  \"idempotencyKey\": \"topup-test-001\"\n}"
+            },
+            "url": "{{kongUrl}}/wallet-service/api/v1/wallets/{{walletId}}/top-up",
+            "description": "Kong -> wallet-service:8088\nJWT REQUIRED — Top up wallet balance.\n@SecuredEndpoint(obj=\"wallets\", act=\"manage\")\n\nIDEMPOTENT: idempotencyKey prevents duplicate top-ups.\nSame idempotencyKey = returns cached result (no duplicate charge).\n\nFields:\n  - amount (required): SAR amount (BigDecimal, positive)\n  - method (required): BANK_TRANSFER, SADAD, MADA\n  - sourceIban (optional): Source IBAN for bank transfers\n  - idempotencyKey (required): Unique key per transaction\n\nResponse includes: transactionNumber, feeAmount, netAmount, status."
           }
         }
       ]
@@ -2267,10 +2496,30 @@
       "item": [
         {
           "name": "1 - Internal Checks",
+          "description": "POST /api/v1/risk/internal-checks — Single endpoint that runs all 9 checks sequentially.\n\nChecks execute in order with EARLY EXIT on HARD_BLOCK:\n  Check 1: NID Format Validation (must be 10 digits starting with 1 or 2)\n  Check 2: Blacklist/Watchlist (NID or mobile in blacklist table)\n  Check 3: Fraud History (past fraud incidents for this NID)\n  Check 4: Device Fingerprint (device linked to multiple NIDs)\n  Check 5: Account Lock (locked account in DB)\n  Check 6: Internal Sanctions (NID on sanctions list)\n  Check 7: Risk Score (weighted calculation from all factors)\n  Check 8: CIF Lookup (existing customer → LOGIN, dormant → REONBOARDING)\n  Check 9: Duplicate Mobile (mobile already registered → LOGIN)\n\nPublic API: No JWT required, uses X-Tenant-Id header.",
           "item": [
             {
               "name": "[risk-service] Run Internal Checks",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Internal checks completed', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json.status).to.not.be.undefined;",
+                      "    pm.expect(json.overallDecision).to.not.be.undefined;",
+                      "});",
+                      "console.log('Decision: ' + json.overallDecision + ' | Risk: ' + json.riskScore + ' (' + json.riskLevel + ') | Steps: ' + (json.stepResults ? json.stepResults.length : 0));"
+                    ]
+                  }
+                }
+              ],
               "request": {
+                "auth": {
+                  "type": "noauth"
+                },
                 "method": "POST",
                 "header": [
                   {
@@ -2278,16 +2527,16 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "Authorization",
-                    "value": "Bearer {{accessToken}}"
+                    "key": "X-Tenant-Id",
+                    "value": "00000000-0000-0000-0000-000000000001"
                   },
                   {
                     "key": "X-Device-Id",
-                    "value": "test-device-001"
+                    "value": "test-device-new-001"
                   },
                   {
                     "key": "X-Device-Fingerprint",
-                    "value": "fp-abc123def456"
+                    "value": "fp-new-device-abc123"
                   },
                   {
                     "key": "X-Client-Ip",
@@ -2295,7 +2544,7 @@
                   },
                   {
                     "key": "X-Session-Id",
-                    "value": "session-test-001"
+                    "value": "session-new-001"
                   }
                 ],
                 "body": {
@@ -2315,7 +2564,7 @@
                     "internal-checks"
                   ]
                 },
-                "description": "Runs all 9 Phase 1 internal risk checks synchronously.\n\nChecks: NID Format, Blacklist/Watchlist, Fraud History, Device Fingerprint, Account Lock, Internal Sanctions, Risk Score, CIF Lookup, Duplicate Mobile.\n\nReturns:\n- COMPLETED + PASS: New customer, proceed\n- COMPLETED + PASS + routeTo=LOGIN: Existing customer\n- BLOCKED + HARD_BLOCK: Registration denied\n\nHeaders:\n- X-Device-Id: Device identifier\n- X-Device-Fingerprint: Device fingerprint hash\n- X-Client-Ip: Client IP address\n- X-Session-Id: Session identifier"
+                "description": "Runs all 9 Phase 1 internal risk checks synchronously.\n\nReturns:\n- COMPLETED + PASS: New customer, proceed to onboarding\n- COMPLETED + ROUTE_LOGIN: Existing customer\n- COMPLETED + ROUTE_REONBOARDING: Dormant customer\n- BLOCKED + HARD_BLOCK: Registration denied (silent block)\n\nHeaders:\n- X-Tenant-Id: Tenant UUID (required)\n- X-Device-Id: Device identifier\n- X-Device-Fingerprint: Device fingerprint hash\n- X-Client-Ip: Client IP address\n- X-Session-Id: Session identifier\n\nNID format: 10 digits, starts with 1 (citizen) or 2 (resident)."
               },
               "response": []
             }
@@ -2855,6 +3104,174 @@
               "response": []
             },
             {
+              "name": "[risk-service] Get All Field Definitions (Admin CRUD)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/field-definitions/all",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "field-definitions",
+                    "all"
+                  ]
+                },
+                "description": "Super Admin CRUD — Returns ALL field definitions (active + inactive) for admin management.\n\nUse this for the admin panel to manage field definitions."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Get Field Definition by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/field-definitions/{{fieldDefinitionId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "field-definitions",
+                    "{{fieldDefinitionId}}"
+                  ]
+                },
+                "description": "Super Admin CRUD — Returns a single field definition by its UUID."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Create Field Definition",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"fieldKey\": \"new_custom_field\",\n    \"nameEn\": \"New Custom Field\",\n    \"nameAr\": \"حقل مخصص جديد\",\n    \"dataType\": \"STRING\",\n    \"active\": true,\n    \"sortOrder\": 50\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/field-definitions",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "field-definitions"
+                  ]
+                },
+                "description": "Super Admin CRUD — Creates a new credit scoring field definition.\n\nfieldKey must be unique per tenant. dataType: STRING, NUMERIC, BOOLEAN, DATE."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Update Field Definition",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"fieldKey\": \"updated_field_key\",\n    \"nameEn\": \"Updated Field Name\",\n    \"nameAr\": \"اسم الحقل المحدث\",\n    \"dataType\": \"NUMERIC\",\n    \"active\": true,\n    \"sortOrder\": 50\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/field-definitions/{{fieldDefinitionId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "field-definitions",
+                    "{{fieldDefinitionId}}"
+                  ]
+                },
+                "description": "Super Admin CRUD — Updates an existing field definition. fieldKey must remain unique per tenant."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Delete Field Definition",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/field-definitions/{{fieldDefinitionId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "field-definitions",
+                    "{{fieldDefinitionId}}"
+                  ]
+                },
+                "description": "Super Admin CRUD — Deletes a field definition by its UUID. Returns 204 No Content on success."
+              },
+              "response": []
+            },
+            {
               "name": "[risk-service] Get Product Credit Scoring Criteria",
               "request": {
                 "method": "GET",
@@ -2970,6 +3387,116 @@
                   ]
                 },
                 "description": "Admin API — Deletes all credit scoring criteria and rules for a product.\n\nRules are cascade-deleted when criteria are removed."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Get Product Eligibility Fields",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/products/{{productId}}/fields",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "products",
+                    "{{productId}}",
+                    "fields"
+                  ]
+                },
+                "description": "Decision Engine — Returns the credit scoring field definitions assigned to a product.\nThese are the dynamic eligibility questions that the mobile app renders for the customer.\n\nFallback: If no product-specific criteria exist, returns all active field definitions.\n\nFlow: Mobile app calls this → renders form fields → customer answers → POST /evaluate"
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Evaluate Customer Eligibility",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"answers\": {\n    \"monthly_income\": \"15000\",\n    \"age\": \"30\",\n    \"employment_type\": \"government\",\n    \"simah_score\": \"750\",\n    \"existing_liabilities\": \"2000\",\n    \"employer_name\": \"Ministry of Finance\",\n    \"years_of_experience\": \"8\",\n    \"nationality\": \"saudi\",\n    \"residential_status\": \"owned\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/products/{{productId}}/evaluate",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "products",
+                    "{{productId}}",
+                    "evaluate"
+                  ]
+                },
+                "description": "Decision Engine — Evaluates customer eligibility against product-specific scoring rules.\n\nAlgorithm:\n1. Loads product criteria + rules from DB\n2. For each enabled criteria, resolves field_key from field definitions\n3. Looks up customer answer by field_key\n4. Evaluates all rules for the criteria → picks best matching rule (highest weight)\n5. Sums scored weights → calculates score percentage\n6. Eligible if scorePercentage >= minPassPercentage (default 60%)\n\nResponse includes:\n- eligible: boolean decision\n- totalScore / maxPossibleScore / scorePercentage\n- minimumPassPercentage (configurable via CREDIT_SCORING_MIN_PASS_PCT env var)\n- details: per-criteria breakdown (fieldKey, matched, scoredWeight, matchedRule, failureReason)\n- summary: human-readable result"
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Evaluate Eligibility (Fail — Low Income)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"answers\": {\n    \"monthly_income\": \"2000\",\n    \"age\": \"19\",\n    \"employment_type\": \"unemployed\",\n    \"simah_score\": \"300\",\n    \"existing_liabilities\": \"5000\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/products/{{productId}}/evaluate",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "risk-service",
+                    "api",
+                    "v1",
+                    "risk",
+                    "credit-scoring",
+                    "products",
+                    "{{productId}}",
+                    "evaluate"
+                  ]
+                },
+                "description": "Decision Engine — Tests a failing eligibility scenario (low income, unemployed, low credit score).\nExpected: eligible=false with low scorePercentage."
               },
               "response": []
             }
@@ -4569,7 +5096,7 @@
               ],
               "request": {
                 "method": "GET",
-                "url": "{{kongUrl}}/wallet-service/api/v1/wallets/customer/{{customerId}}",
+                "url": "{{kongUrl}}/wallet-service/api/v1/wallets/by-customer/{{customerId}}",
                 "description": "JWT REQUIRED — Verify wallet was created during onboarding.\nExpected status: PENDING_ACTIVATION or ACTIVE."
               }
             }
@@ -6087,6 +6614,124 @@
               }
             },
             {
+              "name": "List Documents",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Documents listed', function() {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "    var json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an('array');",
+                      "    if (json.data.length > 0) {",
+                      "        pm.collectionVariables.set('documentId', json.data[0].id);",
+                      "    }",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/products/{{productId}}/documents",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "products",
+                    "{{productId}}",
+                    "documents"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Document by ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Document retrieved', function() {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/products/{{productId}}/documents/{{documentId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "products",
+                    "{{productId}}",
+                    "documents",
+                    "{{documentId}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Update Document",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Document updated', function() {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nameEn\": \"National ID (updated)\",\n  \"nameAr\": \"الهوية الوطنية (محدث)\",\n  \"documentType\": \"TEMPLATE\",\n  \"fileUrl\": null,\n  \"fileSizeBytes\": null,\n  \"fileVersion\": \"v2\",\n  \"required\": true,\n  \"sortOrder\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/products/{{productId}}/documents/{{documentId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "products",
+                    "{{productId}}",
+                    "documents",
+                    "{{documentId}}"
+                  ]
+                }
+              }
+            },
+            {
               "name": "Remove Document",
               "event": [
                 {
@@ -6447,7 +7092,7 @@
         },
         {
           "name": "8 - Countries",
-          "description": "Country reference data for product availability.\nGCC countries: SA, AE, BH, KW, OM, QA.\nFull CRUD with GCC filter endpoint.",
+          "description": "Country reference data for product availability.\nGCC countries: SA, AE, BH, KW, OM, QA.\nFull CRUD with GCC filter endpoint.\n\nAdditional filter endpoints:\n  - GET /countries/arab-league — List Arab League member countries\n  - GET /countries/sanctioned — List sanctioned countries\n  - GET /countries/region/:region — Filter by region (e.g., Middle East, Africa)\n  - GET /countries/risk-tier/:riskTier — Filter by risk tier (LOW, MEDIUM, HIGH, CRITICAL)\n  - GET /countries/slug/:slug — Get single country by slug (e.g., saudi-arabia)\n\nNew fields: alpha3Code, numericCode, slug, nationalityEn, nationalityAr, currencyNameEn, currencyNameAr, flagEmoji, capitalEn, capitalAr, region, subRegion, arabLeague, oicMember, sanctioned, riskTier, ibanRequired, ibanLength",
           "item": [
             {
               "name": "List All Countries",
@@ -6528,6 +7173,219 @@
               }
             },
             {
+              "name": "List Arab League Countries",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "var countries = json.data || json;",
+                      "pm.test('Returns Arab League countries only', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(countries).to.be.an('array');",
+                      "    countries.forEach(function(c) {",
+                      "        pm.expect(c.arabLeague).to.be.true;",
+                      "    });",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/countries/arab-league",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "countries",
+                    "arab-league"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List Sanctioned Countries",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "var countries = json.data || json;",
+                      "pm.test('Returns sanctioned countries only', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(countries).to.be.an('array');",
+                      "    countries.forEach(function(c) {",
+                      "        pm.expect(c.sanctioned).to.be.true;",
+                      "    });",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/countries/sanctioned",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "countries",
+                    "sanctioned"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List Countries by Region",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "var countries = json.data || json;",
+                      "pm.test('Returns countries for region', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(countries).to.be.an('array');",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/countries/region/:region",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "countries",
+                    "region",
+                    ":region"
+                  ],
+                  "variable": [
+                    {
+                      "key": "region",
+                      "value": "Middle East",
+                      "description": "Region name (e.g., Middle East, Africa, South Asia, Southeast Asia)"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List Countries by Risk Tier",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "var countries = json.data || json;",
+                      "pm.test('Returns countries for risk tier', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(countries).to.be.an('array');",
+                      "    countries.forEach(function(c) {",
+                      "        pm.expect(c.riskTier).to.eql('LOW');",
+                      "    });",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/countries/risk-tier/:riskTier",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "countries",
+                    "risk-tier",
+                    ":riskTier"
+                  ],
+                  "variable": [
+                    {
+                      "key": "riskTier",
+                      "value": "LOW",
+                      "description": "Risk tier level: LOW, MEDIUM, HIGH, CRITICAL"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Country by Slug",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "var country = json.data || json;",
+                      "pm.test('Returns country by slug', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(country.slug).to.eql('saudi-arabia');",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{kongUrl}}/product-service/api/v1/countries/slug/:slug",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "product-service",
+                    "api",
+                    "v1",
+                    "countries",
+                    "slug",
+                    ":slug"
+                  ],
+                  "variable": [
+                    {
+                      "key": "slug",
+                      "value": "saudi-arabia",
+                      "description": "Country slug (e.g., saudi-arabia, united-arab-emirates, bahrain)"
+                    }
+                  ]
+                }
+              }
+            },
+            {
               "name": "Get Country by ID",
               "request": {
                 "method": "GET",
@@ -6579,7 +7437,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"code\": \"SA\",\n    \"nameEn\": \"Saudi Arabia\",\n    \"nameAr\": \"المملكة العربية السعودية\",\n    \"dialCode\": \"+966\",\n    \"currencyCode\": \"SAR\",\n    \"gcc\": true,\n    \"sortOrder\": 1\n}"
+                  "raw": "{\n    \"code\": \"SA\",\n    \"alpha3Code\": \"SAU\",\n    \"numericCode\": \"682\",\n    \"nameEn\": \"Saudi Arabia\",\n    \"nameAr\": \"المملكة العربية السعودية\",\n    \"slug\": \"saudi-arabia\",\n    \"nationalityEn\": \"Saudi\",\n    \"nationalityAr\": \"سعودي\",\n    \"dialCode\": \"+966\",\n    \"currencyCode\": \"SAR\",\n    \"currencyNameEn\": \"Saudi Riyal\",\n    \"currencyNameAr\": \"ريال سعودي\",\n    \"flagEmoji\": \"\\ud83c\\uddf8\\ud83c\\udde6\",\n    \"capitalEn\": \"Riyadh\",\n    \"capitalAr\": \"الرياض\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 24,\n    \"sortOrder\": 1\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries",
@@ -6620,7 +7478,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"code\": \"AE\",\n    \"nameEn\": \"United Arab Emirates\",\n    \"nameAr\": \"الإمارات العربية المتحدة\",\n    \"dialCode\": \"+971\",\n    \"currencyCode\": \"AED\",\n    \"gcc\": true,\n    \"sortOrder\": 2\n}"
+                  "raw": "{\n    \"code\": \"AE\",\n    \"alpha3Code\": \"ARE\",\n    \"numericCode\": \"784\",\n    \"nameEn\": \"United Arab Emirates\",\n    \"nameAr\": \"الإمارات العربية المتحدة\",\n    \"slug\": \"united-arab-emirates\",\n    \"nationalityEn\": \"Emirati\",\n    \"nationalityAr\": \"إماراتي\",\n    \"dialCode\": \"+971\",\n    \"currencyCode\": \"AED\",\n    \"currencyNameEn\": \"UAE Dirham\",\n    \"currencyNameAr\": \"درهم إماراتي\",\n    \"flagEmoji\": \"\\ud83c\\udde6\\ud83c\\uddea\",\n    \"capitalEn\": \"Abu Dhabi\",\n    \"capitalAr\": \"أبو ظبي\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 23,\n    \"sortOrder\": 2\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries",
@@ -6661,7 +7519,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"code\": \"BH\",\n    \"nameEn\": \"Bahrain\",\n    \"nameAr\": \"البحرين\",\n    \"dialCode\": \"+973\",\n    \"currencyCode\": \"BHD\",\n    \"gcc\": true,\n    \"sortOrder\": 3\n}"
+                  "raw": "{\n    \"code\": \"BH\",\n    \"alpha3Code\": \"BHR\",\n    \"numericCode\": \"048\",\n    \"nameEn\": \"Bahrain\",\n    \"nameAr\": \"البحرين\",\n    \"slug\": \"bahrain\",\n    \"nationalityEn\": \"Bahraini\",\n    \"nationalityAr\": \"بحريني\",\n    \"dialCode\": \"+973\",\n    \"currencyCode\": \"BHD\",\n    \"currencyNameEn\": \"Bahraini Dinar\",\n    \"currencyNameAr\": \"دينار بحريني\",\n    \"flagEmoji\": \"\\ud83c\\udde7\\ud83c\\udded\",\n    \"capitalEn\": \"Manama\",\n    \"capitalAr\": \"المنامة\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 22,\n    \"sortOrder\": 3\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries",
@@ -6702,7 +7560,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"code\": \"KW\",\n    \"nameEn\": \"Kuwait\",\n    \"nameAr\": \"الكويت\",\n    \"dialCode\": \"+965\",\n    \"currencyCode\": \"KWD\",\n    \"gcc\": true,\n    \"sortOrder\": 4\n}"
+                  "raw": "{\n    \"code\": \"KW\",\n    \"alpha3Code\": \"KWT\",\n    \"numericCode\": \"414\",\n    \"nameEn\": \"Kuwait\",\n    \"nameAr\": \"الكويت\",\n    \"slug\": \"kuwait\",\n    \"nationalityEn\": \"Kuwaiti\",\n    \"nationalityAr\": \"كويتي\",\n    \"dialCode\": \"+965\",\n    \"currencyCode\": \"KWD\",\n    \"currencyNameEn\": \"Kuwaiti Dinar\",\n    \"currencyNameAr\": \"دينار كويتي\",\n    \"flagEmoji\": \"\\ud83c\\uddf0\\ud83c\\uddfc\",\n    \"capitalEn\": \"Kuwait City\",\n    \"capitalAr\": \"مدينة الكويت\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 30,\n    \"sortOrder\": 4\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries",
@@ -6743,7 +7601,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"code\": \"OM\",\n    \"nameEn\": \"Oman\",\n    \"nameAr\": \"عُمان\",\n    \"dialCode\": \"+968\",\n    \"currencyCode\": \"OMR\",\n    \"gcc\": true,\n    \"sortOrder\": 5\n}"
+                  "raw": "{\n    \"code\": \"OM\",\n    \"alpha3Code\": \"OMN\",\n    \"numericCode\": \"512\",\n    \"nameEn\": \"Oman\",\n    \"nameAr\": \"عُمان\",\n    \"slug\": \"oman\",\n    \"nationalityEn\": \"Omani\",\n    \"nationalityAr\": \"عماني\",\n    \"dialCode\": \"+968\",\n    \"currencyCode\": \"OMR\",\n    \"currencyNameEn\": \"Omani Rial\",\n    \"currencyNameAr\": \"ريال عماني\",\n    \"flagEmoji\": \"\\ud83c\\uddf4\\ud83c\\uddf2\",\n    \"capitalEn\": \"Muscat\",\n    \"capitalAr\": \"مسقط\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 23,\n    \"sortOrder\": 5\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries",
@@ -6784,7 +7642,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"code\": \"QA\",\n    \"nameEn\": \"Qatar\",\n    \"nameAr\": \"قطر\",\n    \"dialCode\": \"+974\",\n    \"currencyCode\": \"QAR\",\n    \"gcc\": true,\n    \"sortOrder\": 6\n}"
+                  "raw": "{\n    \"code\": \"QA\",\n    \"alpha3Code\": \"QAT\",\n    \"numericCode\": \"634\",\n    \"nameEn\": \"Qatar\",\n    \"nameAr\": \"قطر\",\n    \"slug\": \"qatar\",\n    \"nationalityEn\": \"Qatari\",\n    \"nationalityAr\": \"قطري\",\n    \"dialCode\": \"+974\",\n    \"currencyCode\": \"QAR\",\n    \"currencyNameEn\": \"Qatari Riyal\",\n    \"currencyNameAr\": \"ريال قطري\",\n    \"flagEmoji\": \"\\ud83c\\uddf6\\ud83c\\udde6\",\n    \"capitalEn\": \"Doha\",\n    \"capitalAr\": \"الدوحة\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 29,\n    \"sortOrder\": 6\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries",
@@ -6812,7 +7670,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"nameEn\": \"Saudi Arabia\",\n    \"nameAr\": \"المملكة العربية السعودية\",\n    \"dialCode\": \"+966\",\n    \"currencyCode\": \"SAR\",\n    \"gcc\": true,\n    \"sortOrder\": 1,\n    \"active\": true\n}"
+                  "raw": "{\n    \"alpha3Code\": \"SAU\",\n    \"numericCode\": \"682\",\n    \"nameEn\": \"Saudi Arabia\",\n    \"nameAr\": \"المملكة العربية السعودية\",\n    \"slug\": \"saudi-arabia\",\n    \"nationalityEn\": \"Saudi\",\n    \"nationalityAr\": \"سعودي\",\n    \"dialCode\": \"+966\",\n    \"currencyCode\": \"SAR\",\n    \"currencyNameEn\": \"Saudi Riyal\",\n    \"currencyNameAr\": \"ريال سعودي\",\n    \"flagEmoji\": \"\\ud83c\\uddf8\\ud83c\\udde6\",\n    \"capitalEn\": \"Riyadh\",\n    \"capitalAr\": \"الرياض\",\n    \"region\": \"Middle East\",\n    \"subRegion\": \"Arabian Peninsula\",\n    \"gcc\": true,\n    \"arabLeague\": true,\n    \"oicMember\": true,\n    \"sanctioned\": false,\n    \"riskTier\": \"LOW\",\n    \"ibanRequired\": true,\n    \"ibanLength\": 24,\n    \"sortOrder\": 1,\n    \"active\": true\n}"
                 },
                 "url": {
                   "raw": "{{kongUrl}}/product-service/api/v1/countries/{{countryId}}",
@@ -7050,6 +7908,60 @@
                   ]
                 },
                 "description": "List all loan applications for the current tenant.\n\nReturns all applications ordered by creation date (newest first).\n\nRoles: admin, partner_admin"
+              }
+            },
+            {
+              "name": "[lending] Get Bank Accounts (Step 2 Helper)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "var data = json.data || json;",
+                      "pm.test('Bank accounts response received', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(data.source).to.be.oneOf(['CUSTOMER_SERVICE', 'TARABUT', 'NONE']);",
+                      "});",
+                      "console.log('Source: ' + data.source + ', Accounts found: ' + (data.accounts ? data.accounts.length : 0));",
+                      "if (data.accounts && data.accounts.length > 0) {",
+                      "    data.accounts.forEach(function(acc, i) {",
+                      "        console.log('  [' + i + '] ' + acc.bankName + ' - ' + acc.iban + (acc.salaryAccount ? ' (Salary)' : ''));",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/bank-accounts?nationalId={{nationalId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loan-applications",
+                    "{{customerId}}",
+                    "bank-accounts"
+                  ],
+                  "query": [
+                    {
+                      "key": "nationalId",
+                      "value": "{{nationalId}}"
+                    }
+                  ]
+                },
+                "description": "Step 2 helper: Look up bank accounts for a customer.\n\n1. First checks customer-service for existing bank accounts (by customerId)\n2. If none found, fetches from Tarabut Open Banking via middleware (by NID)\n\nSource values: CUSTOMER_SERVICE | TARABUT | NONE\n\nRoles: customer, admin"
               }
             }
           ]
@@ -7376,6 +8288,114 @@
                 },
                 "description": "Query the current Temporal workflow state.\n\nReturns:\n  - currentStage: INITIATED | CREATING_APPLICATION | SUBMITTING | DOCUMENTS_PENDING | CREDIT_CHECK | SHARIA_VALIDATION | PROFIT_CALCULATION | PENDING_APPROVAL | CREATING_LOAN | COMPLETED | FAILED\n  - applicationStatus: DRAFT | SUBMITTED | DOCUMENTS_PENDING | CREDIT_CHECK | SHARIA_VALIDATION | PENDING_APPROVAL | APPROVED | REJECTED | CANCELLED\n\nThis uses Temporal Query methods (synchronous, no side effects).\n\nNote: This endpoint needs to be implemented in the controller."
               }
+            }
+          ]
+        },
+        {
+          "name": "Eligibility (proxied from risk-service)",
+          "description": "Eligibility field definitions and evaluation — proxied from risk-service.\n\nRisk-service is the single source of truth for:\n  - Credit scoring field definitions (40+ seeded fields)\n  - Product-specific criteria and rules\n  - Eligibility evaluation (decision engine)\n\nLending-service proxies these endpoints so the mobile app uses a single base URL.\n\nFlow:\n  1. GET /eligibility-fields/product/{productId} → returns dynamic form fields\n  2. Customer fills the form\n  3. POST /loan-applications/initiate with eligibilityAnswers → lending-service calls risk-service evaluate\n  4. Risk-service returns scoring result (eligible/not, score, details)",
+          "item": [
+            {
+              "name": "[lending] Get Eligibility Fields for Product (proxy → risk-service)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/product/{{productId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "eligibility-fields",
+                    "product",
+                    "{{productId}}"
+                  ]
+                },
+                "description": "Proxied from risk-service — Returns credit scoring field definitions for the product.\nThese are dynamic eligibility questions the mobile app renders.\n\nRisk-service endpoint: GET /api/v1/risk/credit-scoring/products/{productId}/fields\n\nResponse: List of field definitions with fieldKey, nameEn, nameAr, dataType, active, sortOrder.\nThe mobile app uses field_key as the answer key when posting eligibility answers."
+              },
+              "response": []
+            },
+            {
+              "name": "[lending] Initiate — Eligibility Check Only",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"nationalId\": \"1234567890\",\n  \"mobileNumber\": \"+966500000000\",\n  \"productId\": \"{{productId}}\",\n  \"mode\": \"ELIGIBILITY_CHECK\",\n  \"eligibilityAnswers\": {\n    \"monthly_income\": \"15000\",\n    \"age\": \"30\",\n    \"employment_type\": \"government\",\n    \"simah_score\": \"750\",\n    \"existing_liabilities\": \"2000\",\n    \"employer_name\": \"Ministry of Finance\",\n    \"years_of_experience\": \"8\",\n    \"nationality\": \"saudi\",\n    \"residential_status\": \"owned\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/initiate",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loan-applications",
+                    "initiate"
+                  ]
+                },
+                "description": "ELIGIBILITY_CHECK mode — Checks eligibility WITHOUT starting a loan workflow.\n\nLending-service forwards eligibilityAnswers to risk-service's decision engine:\n  POST risk-service/api/v1/risk/credit-scoring/products/{productId}/evaluate\n\nResponse includes:\n  - status: ELIGIBILITY_CHECKED\n  - preQualification: { eligible, totalScore, maxPossibleScore, scorePercentage, details[] }\n  - message: eligibility result summary\n\nNo workflowId or applicationId is created."
+              },
+              "response": []
+            },
+            {
+              "name": "[lending] Initiate — Apply (with Eligibility)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"nationalId\": \"1234567890\",\n  \"mobileNumber\": \"+966500000000\",\n  \"productId\": \"{{productId}}\",\n  \"mode\": \"APPLY\",\n  \"requestedAmount\": 100000,\n  \"requestedTenureMonths\": 60,\n  \"purposeOfFinance\": \"PERSONAL\",\n  \"eligibilityAnswers\": {\n    \"monthly_income\": \"15000\",\n    \"age\": \"30\",\n    \"employment_type\": \"government\",\n    \"simah_score\": \"750\",\n    \"existing_liabilities\": \"2000\",\n    \"employer_name\": \"Ministry of Finance\",\n    \"years_of_experience\": \"8\",\n    \"nationality\": \"saudi\",\n    \"residential_status\": \"owned\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/initiate",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loan-applications",
+                    "initiate"
+                  ]
+                },
+                "description": "APPLY mode — Evaluates eligibility via risk-service decision engine, then starts Temporal workflow.\n\nFlow:\n  1. Lending-service calls risk-service evaluate with eligibilityAnswers\n  2. If eligible=false → returns ELIGIBILITY_FAILED (no workflow started)\n  3. If eligible=true → starts Temporal LoanApplicationWorkflow\n  4. Returns workflowId, applicationId, preQualification result\n\nRisk-service scoring:\n  - Evaluates answers against product-specific criteria and rules\n  - Returns eligible/not based on scored weight percentage vs minimum pass threshold"
+              },
+              "response": []
             }
           ]
         }
@@ -8293,6 +9313,42 @@
               }
             },
             {
+              "name": "[middleware] Bulk Grant Access (Providers + APIs)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"clientId\": \"{{apiClientId}}\",\n  \"environment\": \"BOTH\",\n  \"providers\": [\n    {\n      \"providerId\": \"{{providerId}}\",\n      \"apiIds\": [\n        \"{{providerApiId}}\"\n      ]\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/clients/{{apiClientId}}/access/bulk",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "middleware-third-party",
+                    "api",
+                    "v1",
+                    "clients",
+                    "{{apiClientId}}",
+                    "access",
+                    "bulk"
+                  ]
+                },
+                "description": "Grant access to multiple providers and their APIs in a single call.\n\nSelect multiple providers, for each provider specify the API IDs to grant access to.\nInserts into both client_provider_access and client_api_access pivot tables.\nSkips any that already exist.\n\nRoles: super_admin, admin\nReturns: 201 Created with counts of providers and APIs granted."
+              }
+            },
+            {
               "name": "[middleware] Revoke API Access",
               "request": {
                 "method": "DELETE",
@@ -8480,6 +9536,473 @@
                   ]
                 },
                 "description": "List all callback responses with pagination.\n\nDefault: page=0, size=20\n\nRoles: super_admin, admin"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Execute API (Mock Testing)",
+          "item": [
+            {
+              "name": "Execute - SIMAH Consumer Report",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\", \\\"enquiryType\\\": \\\"CONSUMER\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/SIMAH_CONSUMER_REPORT",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "SIMAH_CONSUMER_REPORT"]
+                },
+                "description": "Execute SIMAH Consumer Report API via mock provider.\n\nNo JWT required - uses secretKey for authentication.\nClient: TEST_MOCK_CLIENT\nEnvironment: TEST → Mock response"
+              }
+            },
+            {
+              "name": "Execute - SIMAH Login",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/SIMAH_LOGIN",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "SIMAH_LOGIN"]
+                },
+                "description": "Execute SIMAH Login API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - SIMAH Credit Score",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/SIMAH_SCORE_CREDIT",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "SIMAH_SCORE_CREDIT"]
+                },
+                "description": "Execute SIMAH Credit Score API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - SIMAH Salary Certificate",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/SIMAH_SALARY_CERTIFICATE",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "SIMAH_SALARY_CERTIFICATE"]
+                },
+                "description": "Execute SIMAH Salary Certificate API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - NAFATH Initiate",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\", \\\"service\\\": \\\"NAFATH_INITIATE\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/NAFATH_INITIATE",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "NAFATH_INITIATE"]
+                },
+                "description": "Execute Nafath Initiate API via mock provider.\n\nReturns transId, status, requestId, and random number."
+              }
+            },
+            {
+              "name": "Execute - NAFATH Check Status",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"transId\\\": \\\"TRANS-12345678\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/NAFATH_CHECK_STATUS",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "NAFATH_CHECK_STATUS"]
+                },
+                "description": "Execute Nafath Check Status API via mock provider.\n\nReturns COMPLETED status."
+              }
+            },
+            {
+              "name": "Execute - UNIFONIC Send OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"recipient\\\": \\\"966500000000\\\", \\\"body\\\": \\\"Your OTP is 1234\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/UNIFONIC_SEND_OTP",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "UNIFONIC_SEND_OTP"]
+                },
+                "description": "Execute Unifonic Send OTP API via mock provider.\n\nReturns Sent status with MessageId."
+              }
+            },
+            {
+              "name": "Execute - UNIFONIC IVR Initiate",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"phoneNumber\\\": \\\"966500000000\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/UNIFONIC_IVR",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "UNIFONIC_IVR"]
+                },
+                "description": "Execute Unifonic IVR Initiate API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - TAHAQUQ Verify Mobile",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"id\\\": \\\"1049938507\\\", \\\"mobile\\\": \\\"966504488024\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1049938507\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/TAHAQUQ_VERIFY_MOBILE",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "TAHAQUQ_VERIFY_MOBILE"]
+                },
+                "description": "Execute Tahaquq (Yakeen) Verify Mobile API via mock provider.\n\nReturns isOwner: true with reference number."
+              }
+            },
+            {
+              "name": "Execute - DAKHLI GOSI",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/DAKHLI_GOSI",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "DAKHLI_GOSI"]
+                },
+                "description": "Execute Dakhli GOSI (salary verification) API via mock provider.\n\nReturns employer name, basic salary, housing allowance."
+              }
+            },
+            {
+              "name": "Execute - EIGER Order Purchase",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"commodityType\\\": \\\"METALS\\\", \\\"amount\\\": 50000}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/EIGER_ORDER_PURCHASE",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "EIGER_ORDER_PURCHASE"]
+                },
+                "description": "Execute Eiger Order Purchase (Tawarruq commodity) API via mock provider.\n\nReturns orderId with Confirmed status."
+              }
+            },
+            {
+              "name": "Execute - TARABUT KSA Get Accounts",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"consentId\\\": \\\"CONSENT-12345\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/TARABUT_KSA_GET_ACCOUNTS",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "TARABUT_KSA_GET_ACCOUNTS"]
+                },
+                "description": "Execute Tarabut Open Banking Accounts API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - WATHQ Company Info",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"crNumber\\\": \\\"1010000000\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/WATHQ_GET_COMPANY_INFO",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "WATHQ_GET_COMPANY_INFO"]
+                },
+                "description": "Execute Wathq Company Info API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - SAFEWATCH Screening",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"name\\\": \\\"Test Customer\\\", \\\"nationalId\\\": \\\"1234567890\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/SAFEWATCH_SCAN_SESSION",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "SAFEWATCH_SCAN_SESSION"]
+                },
+                "description": "Execute SafeWatch AML/Sanctions Screening API via mock provider.\n\nReturns CLEAR status with no matches."
+              }
+            },
+            {
+              "name": "Execute - MASDAR Individual Plus",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/MASDAR_INDIVIDUAL_PLUS",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "MASDAR_INDIVIDUAL_PLUS"]
+                },
+                "description": "Execute Masdar Individual Plus data lookup via mock provider."
+              }
+            },
+            {
+              "name": "Execute - LEAN Create Entity",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"iban\\\": \\\"SA0380000000608010167519\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/LEAN_CREATE_ENTITY",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "LEAN_CREATE_ENTITY"]
+                },
+                "description": "Execute Lean Create Entity API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - ABSHER Verify Identity",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/ABSHER_VERIFY_IDENTITY",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "ABSHER_VERIFY_IDENTITY"]
+                },
+                "description": "Execute Absher Identity Verification API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - NAFITH Create Sanad",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\", \\\"amount\\\": 60000}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": \"1234567890\",\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/NAFITH_CREATE_SANAD",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "NAFITH_CREATE_SANAD"]
+                },
+                "description": "Execute Nafith Create Sanad (promissory note) API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - HYPERPAY Checkout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"amount\\\": 5000, \\\"currency\\\": \\\"SAR\\\"}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/HYPERPAY_CHECKOUT",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "HYPERPAY_CHECKOUT"]
+                },
+                "description": "Execute HyperPay Checkout API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - ANB Transfer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"test-mock-secret-key-2026\",\n  \"requestBody\": \"{\\\"iban\\\": \\\"SA0380000000608010167519\\\", \\\"amount\\\": 5000}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/ANB_TRANSFER",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "ANB_TRANSFER"]
+                },
+                "description": "Execute ANB Bank Transfer API via mock provider."
+              }
+            },
+            {
+              "name": "Execute - Invalid Secret Key (Error Test)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"secretKey\": \"invalid-secret-key\",\n  \"requestBody\": \"{}\",\n  \"pathParams\": {},\n  \"queryParams\": {},\n  \"headers\": {},\n  \"idempotencyKey\": null,\n  \"nationalId\": null,\n  \"callerService\": \"postman-test\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/SIMAH_LOGIN",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["middleware-third-party", "api", "v1", "execute", "SIMAH_LOGIN"]
+                },
+                "description": "Test with invalid secret key - should return 401/422 error."
               }
             }
           ]

@@ -16,7 +16,7 @@ import java.util.UUID;
 public class ApiClientJpaEntity {
 
     public enum ClientStatusEnum { ACTIVE, INACTIVE, SUSPENDED }
-    public enum AccessEnvironmentEnum { DEV, PROD, BOTH }
+    public enum AccessEnvironmentEnum { DEV, PROD, BOTH, TEST }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

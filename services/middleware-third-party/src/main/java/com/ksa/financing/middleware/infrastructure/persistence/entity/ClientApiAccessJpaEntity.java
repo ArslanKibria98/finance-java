@@ -15,7 +15,7 @@ import java.util.UUID;
 @Setter
 public class ClientApiAccessJpaEntity {
 
-    public enum AccessEnvironmentEnum { DEV, PROD, BOTH }
+    public enum AccessEnvironmentEnum { DEV, PROD, BOTH, TEST }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

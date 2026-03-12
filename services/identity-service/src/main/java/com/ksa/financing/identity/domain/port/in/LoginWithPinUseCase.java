@@ -12,6 +12,7 @@ public interface LoginWithPinUseCase {
     record LoginWithPinResult(
         String accessToken,
         String refreshToken,
-        long expiresIn
+        long expiresIn,
+        String customerId
     ) {}
 }

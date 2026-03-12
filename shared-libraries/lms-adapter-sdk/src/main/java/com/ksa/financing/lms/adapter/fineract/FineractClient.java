@@ -28,6 +28,27 @@ public class FineractClient {
     private final FineractConfig fineractConfig;
 
     /**
+     * Creates a new loan product in Fineract.
+     */
+    @Retry(name = "fineract-api")
+    @CircuitBreaker(name = "fineract-api")
+    public FineractLoanProductResponse createLoanProduct(FineractLoanProductRequest request) {
+        String url = fineractConfig.getBaseUrl() + "/loanproducts";
+        log.debug("Creating loan product in Fineract: {}", request.getName());
+
+        try {
+            ResponseEntity<FineractLoanProductResponse> response = fineractRestTemplate.postForEntity(
+                url, request, FineractLoanProductResponse.class);
+
+            log.info("Loan product created successfully: {}", response.getBody());
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to create loan product: {}", e.getResponseBodyAsString());
+            throw new FineractException("Failed to create loan product", e);
+        }
+    }
+
+    /**
      * Creates a new loan in Fineract.
      */
     @Retry(name = "fineract-api")

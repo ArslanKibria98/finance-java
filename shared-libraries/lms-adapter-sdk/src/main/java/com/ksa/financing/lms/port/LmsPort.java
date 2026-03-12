@@ -2,6 +2,7 @@ package com.ksa.financing.lms.port;
 
 import com.ksa.financing.lms.intent.*;
 import com.ksa.financing.lms.dto.*;
+
 import java.util.List;
 
 /**
@@ -13,6 +14,15 @@ import java.util.List;
  * The port ensures NO CBS-specific details leak to the domain layer.
  */
 public interface LmsPort {
+
+    /**
+     * Creates a loan product definition in the CBS.
+     * The adapter translates the domain-focused intent into CBS-specific API calls.
+     *
+     * @param intent The loan product creation intent
+     * @return The created loan product result with CBS product ID
+     */
+    LoanProductResult createLoanProduct(LoanProductIntent intent);
 
     /**
      * Creates a loan account in the CBS based on the loan intent.

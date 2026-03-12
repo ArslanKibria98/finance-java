@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.domain.port.in;
 
+import com.ksa.financing.middleware.application.dto.BulkGrantAccessRequest;
+import com.ksa.financing.middleware.application.dto.BulkGrantAccessResponse;
 import com.ksa.financing.middleware.application.dto.ClientApiAccessResponse;
 import com.ksa.financing.middleware.application.dto.ClientProviderAccessResponse;
 import com.ksa.financing.middleware.application.dto.GrantAccessRequest;
@@ -14,6 +16,12 @@ public interface ManageClientAccessUseCase {
 
     ClientApiAccessResponse grantApiAccess(UUID tenantId, UUID clientId,
                                             GrantAccessRequest request, UUID grantedBy);
+
+    /**
+     * Bulk grant access: select multiple providers, for each select specific APIs (or all),
+     * and grant provider-level + API-level access in one call.
+     */
+    BulkGrantAccessResponse bulkGrantAccess(UUID tenantId, BulkGrantAccessRequest request, UUID grantedBy);
 
     void revokeProviderAccess(UUID tenantId, UUID clientId, UUID providerId);
 

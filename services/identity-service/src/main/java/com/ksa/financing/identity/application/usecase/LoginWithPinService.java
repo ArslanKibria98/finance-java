@@ -76,10 +76,15 @@ public class LoginWithPinService implements LoginWithPinUseCase {
 
         log.info("PIN login successful for NID ending in: {}", maskNid(command.nationalId()));
 
+        String customerId = identity.getInternalUserId() != null
+                ? identity.getInternalUserId().toString()
+                : null;
+
         return new LoginWithPinResult(
                 tokenResponse.accessToken(),
                 tokenResponse.refreshToken(),
-                tokenResponse.expiresIn()
+                tokenResponse.expiresIn(),
+                customerId
         );
     }
 

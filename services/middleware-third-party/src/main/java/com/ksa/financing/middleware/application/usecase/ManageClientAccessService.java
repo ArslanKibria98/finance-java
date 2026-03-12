@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.application.usecase;
 
+import com.ksa.financing.middleware.application.dto.BulkGrantAccessRequest;
+import com.ksa.financing.middleware.application.dto.BulkGrantAccessResponse;
 import com.ksa.financing.middleware.application.dto.ClientApiAccessResponse;
 import com.ksa.financing.middleware.application.dto.ClientProviderAccessResponse;
 import com.ksa.financing.middleware.application.dto.GrantAccessRequest;
@@ -105,6 +107,44 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
         var saved = clientAccessRepository.saveApiAccess(access);
         log.info("Granted API access: clientId={}, apiId={}, tenantId={}", clientId, request.targetId(), tenantId);
         return toApiAccessResponse(saved, api.getName(), api.getCode(), provider.getId(), provider.getName());
+    }
+
+    @Override
+    public BulkGrantAccessResponse bulkGrantAccess(UUID tenantId, BulkGrantAccessRequest request, UUID grantedBy) {
+        var clientId = request.clientId();
+        var environment = AccessEnvironment.valueOf(request.environment());
+
+        clientRepository.findById(tenantId, clientId)
+                .orElseThrow(() -> NotFoundException.forEntity("Client", clientId.toString()));
+
+        int providersGranted = 0;
+        int apisGranted = 0;
+
+        for (var entry : request.providers()) {
+            var providerId = entry.providerId();
+
+            // Insert into client_provider_access if not already there
+            if (clientAccessRepository.findProviderAccess(tenantId, clientId, providerId).isEmpty()) {
+                clientAccessRepository.saveProviderAccess(
+                        ClientProviderAccess.grant(tenantId, clientId, providerId, environment, grantedBy));
+                providersGranted++;
+            }
+
+            // Insert into client_api_access for each selected API ID
+            var apiIds = entry.apiIds() != null ? entry.apiIds() : List.<UUID>of();
+            for (var apiId : apiIds) {
+                if (clientAccessRepository.findApiAccess(tenantId, clientId, apiId).isEmpty()) {
+                    clientAccessRepository.saveApiAccess(
+                            ClientApiAccess.grant(tenantId, clientId, apiId, environment, grantedBy));
+                    apisGranted++;
+                }
+            }
+        }
+
+        log.info("Bulk access granted: clientId={}, providers={}, apis={}, tenantId={}",
+                clientId, providersGranted, apisGranted, tenantId);
+
+        return new BulkGrantAccessResponse(clientId, providersGranted, apisGranted);
     }
 
     @Override

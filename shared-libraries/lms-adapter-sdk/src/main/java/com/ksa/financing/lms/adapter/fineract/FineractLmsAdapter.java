@@ -37,6 +37,37 @@ public class FineractLmsAdapter implements LmsPort {
     private final IdempotencyStore idempotencyStore;
 
     @Override
+    public LoanProductResult createLoanProduct(LoanProductIntent intent) {
+        log.info("Creating loan product in Fineract: {}", intent.getProductCode());
+
+        // Check idempotency
+        String idempotencyKey = "product-create:" + intent.getRequestId();
+        if (idempotencyStore.exists(idempotencyKey)) {
+            log.warn("Duplicate product creation request: {}", intent.getRequestId());
+            return idempotencyStore.getResult(idempotencyKey, LoanProductResult.class);
+        }
+
+        try {
+            FineractLoanProductRequest request = fineractMapper.toFineractLoanProductRequest(intent);
+            FineractLoanProductResponse response = fineractClient.createLoanProduct(request);
+
+            LoanProductResult result = LoanProductResult.builder()
+                    .loanProductId(String.valueOf(response.getResourceId()))
+                    .shortName(request.getShortName())
+                    .success(true)
+                    .build();
+
+            idempotencyStore.store(idempotencyKey, result);
+            log.info("Loan product created successfully in Fineract: {}", result.getLoanProductId());
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to create loan product in Fineract", e);
+            return LoanProductResult.failed("Fineract product creation failed: " + e.getMessage());
+        }
+    }
+
+    @Override
     @Transactional
     public LoanAccountId createLoanAccount(LoanIntent intent) {
         log.info("Creating loan account for customer: {}", intent.getCustomerId());

@@ -1,0 +1,1584 @@
+public function GET_MOCK_RESPONSE($request) {
+        switch ($request->service) {
+            case 'YAKEEN':
+                if ($request->api == 'KYC_CITIZEN_INFO_SAUDI' || $request->api == 'CITIZEN_INFO') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "nationalId": "' . ($request->nid ?? '1234567890') . '",
+                            "fullNameAr": "اسم المستخدم",
+                            "fullNameEn": "Test User Name",
+                            "dateOfBirth": "' . ($request->dob ?? date('m-Y')) . '",
+                            "gender": "Male",
+                            "nationality": "Saudi"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'KYC_CITIZEN_INFO_NON_SAUDI') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "nationalId": "' . ($request->nid ?? '1234567890') . '",
+                            "fullNameAr": "اسم المستخدم",
+                            "fullNameEn": "Test User Name",
+                            "dateOfBirth": "' . ($request->dob ?? date('m-Y')) . '",
+                            "gender": "Male",
+                            "nationality": "Non-Saudi"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'KYC_CITIZEN_ADDRESS_SAUDI' || $request->api == 'ADDRESS_INFO') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "nationalId": "' . ($request->nid ?? '1234567890') . '",
+                            "address": {
+                                "city": "Riyadh",
+                                "district": "Al Olaya",
+                                "street": "King Fahd Road",
+                                "buildingNumber": "123",
+                                "postalCode": "12345"
+                            }
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'KYC_CITIZEN_ADDRESS_NON_SAUDI') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "nationalId": "' . ($request->nid ?? '1234567890') . '",
+                            "address": {
+                                "city": "Riyadh",
+                                "district": "Al Olaya",
+                                "street": "King Fahd Road",
+                                "buildingNumber": "123",
+                                "postalCode": "12345"
+                            },
+                            "nationality": "Non-Saudi"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "YAKEEN request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'YAKEEN LITE':
+                $response = '{
+                "success": true,
+                "message": "Request Generated",
+                "data": {
+                        "referenceNumber": "1c8d7b8c-556d-4710-90ac-4b37c70ac5db",
+                        "id": "1049938507",
+                        "mobile": "966504488024",
+                        "isOwner": true
+                    },
+                "current_timestamp": "2023-06-27 12:09:17"
+                }';
+                break;
+
+            case 'SIMAH':
+                if ($request->api == 'SIMAH_CONSUMER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "MESSAGE": {
+                                "ITEM": {
+                                    "RSP_REPORT": {
+                                        "RSP_CODE": "000",
+                                        "RSP_MSG": "Success",
+                                        "RSP_DATA": {
+                                            "CUSTOMER_NAME": "Test Customer",
+                                            "CUSTOMER_ID": "1234567890",
+                                            "SCORE": "750",
+                                            "RATING": "Good"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_CONSUMER_V2') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "isSuccess": true,
+                            "data": {
+                                "customerId": "1234567890",
+                                "score": 750,
+                                "rating": "Good",
+                                "reportDate": "' . date('Y-m-d') . '"
+                            }
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMMAH_ENQUIRY') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "enquiryId": "ENQ-' . uniqid() . '",
+                            "status": "Completed",
+                            "result": "Approved"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_CONSUMER_REVIEW_V2') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "reviewId": "REV-' . uniqid() . '",
+                            "status": "Reviewed",
+                            "score": 750
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_CONSUMER_SCORE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "score": 750,
+                            "rating": "Good",
+                            "lastUpdated": "' . date('Y-m-d') . '"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_INSTANT_UPDATE_ADD_NEW_CI') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "updateId": "UPDATE-' . uniqid() . '",
+                            "status": "Completed",
+                            "message": "New CI added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_INSTANT_UPDATE_SETTLE_DEFAULT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "updateId": "UPDATE-' . uniqid() . '",
+                            "status": "Completed",
+                            "message": "Default settled successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_INSTANT_UPDATE_CLOSE_ACCOUNT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "updateId": "UPDATE-' . uniqid() . '",
+                            "status": "Completed",
+                            "message": "Account closed successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_INSTANT_UPDATE_MAINTAIN_ACCOUNT_CYCLES') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "updateId": "UPDATE-' . uniqid() . '",
+                            "status": "Completed",
+                            "message": "Account cycles maintained successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_INSTANT_UPDATE_DEFAULTING_ACCOUNT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "updateId": "UPDATE-' . uniqid() . '",
+                            "status": "Completed",
+                            "message": "Defaulting account updated successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SIMAH_INSTANT_UPDATE_UPDATE_DEFAULT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "updateId": "UPDATE-' . uniqid() . '",
+                            "status": "Completed",
+                            "message": "Default updated successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "SIMAH request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'UNIFONIC':
+                if ($request->api == 'SMS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "Status": "Sent",
+                            "MessageId": "MSG-' . uniqid() . '",
+                            "Recipient": "' . ($request->mobile_number ?? '966500000000') . '"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'UNIFONIC_IVR_INITIATE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "callId": "CALL-' . uniqid() . '",
+                            "status": "Initiated",
+                            "phoneNumber": "' . ($request->mobile_number ?? '966500000000') . '"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "callId": "CALL-' . uniqid() . '"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'NAFATH':
+                $response = '{
+                    "success": true,
+                    "message": "Request Generated",
+                    "data": {
+                        "transId": "TRANS-' . uniqid() . '",
+                        "status": "Pending",
+                        "requestId": "' . ($request->request_id ?? 'REQ-' . uniqid()) . '"
+                    },
+                    "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                }';
+                break;
+
+            case 'DAKHLI':
+                $response = '{
+                    "success": true,
+                    "message": "Request Generated",
+                    "data": {
+                        "requestNumber": "REQ-' . uniqid() . '",
+                        "message": "Information Retrieved",
+                        "employmentStatusInfo": [
+                            {
+                                "fullName": "Test Employee",
+                                "basicWage": 10000,
+                                "housingAllowance": 2000,
+                                "otherAllowance": 1000,
+                                "employerName": "Test Company",
+                                "workingMonths": 24,
+                                "employmentStatus": "ACTIVE"
+                            }
+                        ]
+                    },
+                    "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                }';
+                break;
+
+            case 'AML':
+                if ($request->api == 'AML_ADD_ACCOUNT_EXTENDED_DECLARATION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountId": "ACC-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Account extended declaration added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_PHYSICAL_CUSTOMER_DECLARATION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "declarationId": "DEC-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Physical customer declaration added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_INDIVIDUAL_CUSTOMER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "customerId": "CUST-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Individual customer added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_CUSTOMER_ADDRESS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "addressId": "ADDR-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Customer address added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_CUSTOMER_IDENTITY') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "identityId": "ID-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Customer identity added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_ACCOUNT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountId": "ACC-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Account added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_CUSTOMER_AND_ACCOUNT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "customerId": "CUST-' . uniqid() . '",
+                            "accountId": "ACC-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Customer and account added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_TRANSACTION_OFFLINE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "transactionId": "TXN-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Offline transaction added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_UPDATE_ACCOUNT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountId": "ACC-' . uniqid() . '",
+                            "status": "Updated",
+                            "message": "Account updated successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_UPDATE_CUSTOMER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "customerId": "CUST-' . uniqid() . '",
+                            "status": "Updated",
+                            "message": "Customer updated successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_RISK_STATUS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "riskStatusId": "RISK-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Risk status added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'AML_ADD_CUSTOMER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "customerId": "CUST-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Customer added successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "AML request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'EIGER':
+                if ($request->api == 'EIGER_ORDER_HOLD') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Purchase Requested",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200,
+                            "quantity": 1,
+                            "unitOfMeasurement": "Troy Oz",
+                            "unitPrice": 2500.00,
+                            "unitPriceCurrency": "SAR"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'EIGER_ORDER_PURCHASE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Purchased",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'EIGER_ORDER_SALE_POST') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Sale Requested",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'EIGER_ORDER_SALE_PATCH') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Sold",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'EIGER_ORDER_TRANSFER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Transferred",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "EIGER request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'TARABUT':
+                if ($request->api == 'TARABUT_LOGIN') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "access_token": "TOKEN-' . uniqid() . '",
+                            "token_type": "Bearer",
+                            "expires_in": 3600
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_BANKS_URL') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "banks": [
+                                {
+                                    "id": "1",
+                                    "name": "Test Bank",
+                                    "url": "https://example.com/bank-connect"
+                                }
+                            ]
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_INTENT_STATUS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "intentId": "INT-' . uniqid() . '",
+                            "status": "Completed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_GET_ACCOUNTS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accounts": [
+                                {
+                                    "accountId": "ACC-' . uniqid() . '",
+                                    "accountNumber": "1234567890",
+                                    "bankName": "Test Bank"
+                                }
+                            ]
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_ACCOUNT_HOLDER_NAME') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountHolderName": "Test Account Holder",
+                            "accountNumber": "1234567890"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_ACCOUNT_BALANCE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountNumber": "1234567890",
+                            "balance": 50000.00,
+                            "currency": "SAR"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_ACCOUNT_TRANSACTION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "transactions": [
+                                {
+                                    "transactionId": "TXN-' . uniqid() . '",
+                                    "amount": 1000.00,
+                                    "date": "' . date('Y-m-d') . '"
+                                }
+                            ]
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'TARABUT_CATEGORISE_TRANSACTION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "transactionId": "TXN-' . uniqid() . '",
+                            "category": "Food & Dining",
+                            "status": "Categorised"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "TARABUT request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'MASDAR':
+                if ($request->api == 'MASDAR_AUTH') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "access_token": "TOKEN-' . uniqid() . '",
+                            "token_type": "Bearer",
+                            "expires_in": 3600
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'MASDAR_INDIVIDUAL_PLUS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "requestNumber": "REQ-' . uniqid() . '",
+                            "message": "Information Retrieved from MASDAR",
+                            "employmentStatusInfo": [
+                                {
+                                    "fullName": "Test Employee",
+                                    "basicWage": 12000,
+                                    "housingAllowance": 3000,
+                                    "otherAllowance": 1500,
+                                    "employerName": "Test Company",
+                                    "workingMonths": 36,
+                                    "employmentStatus": "ACTIVE",
+                                    "employmentType": "private"
+                                }
+                            ]
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "MASDAR request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'NAFITH':
+                if ($request->api == 'NAFITH_CREATE_SANAD_GROUP') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "groupId": "GROUP-' . uniqid() . '",
+                            "status": "Created",
+                            "message": "Sanad group created successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'NAFITH_SANAD_CHECK_STATUS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Completed",
+                            "sanadId": "SANAD-' . uniqid() . '",
+                            "message": "Status checked successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'NAFITH_SANAD_RESEND_PENDING_SMS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Sent",
+                            "message": "SMS resent successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'NAFITH_DOWNLOAD_SANAD_PDF') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "pdf_url": "https://example.com/sanad-' . uniqid() . '.pdf",
+                            "download_url": "https://example.com/sanad-' . uniqid() . '.pdf",
+                            "file_path": "nafith/sanads/sanad_' . uniqid() . '.pdf",
+                            "filename": "sanad_' . uniqid() . '.pdf"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "NAFITH request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'PG':
+                if ($request->api == 'PG_LOAN_APPROVAL') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "loanId": "LOAN-' . uniqid() . '",
+                            "status": "Approved",
+                            "approvalAmount": 50000.00,
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_LOAN_REQUEST') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "loanId": "LOAN-' . uniqid() . '",
+                            "status": "Requested",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_ACCOUNT_REGISTRATION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountId": "ACC-' . uniqid() . '",
+                            "status": "Registered",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_GENERAL_AWN_APP') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "appId": "APP-' . uniqid() . '",
+                            "status": "Processed",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_BLOCK_ACCOUNTS_AWN_APP') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountId": "ACC-' . uniqid() . '",
+                            "status": "Blocked",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_LOAN_DISBURSE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "loanId": "LOAN-' . uniqid() . '",
+                            "status": "Disbursed",
+                            "disbursementAmount": 50000.00,
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_LOAN_REPAYMENT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "repaymentId": "REP-' . uniqid() . '",
+                            "status": "Processed",
+                            "repaymentAmount": 5000.00,
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'PG_CUSTOMER_ADD') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "customerId": "CUST-' . uniqid() . '",
+                            "status": "Created",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "PG request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'SAFE WATCH':
+                if ($request->api == 'SCAN_SESSION_DETAILS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "sessionId": "SESSION-' . uniqid() . '",
+                            "status": "Completed",
+                            "details": {
+                                "scanDate": "' . date('Y-m-d') . '",
+                                "result": "Passed"
+                            }
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SCAN_SESSION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "sessionId": "SESSION-' . uniqid() . '",
+                            "status": "Initiated",
+                            "message": "Scan session created successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "SAFE WATCH request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'ABSHER':
+                $response = '{
+                  "success": true,
+                  "message": "Request Generated",
+                  "data": {
+                      "clientId": "1234567890",
+                      "customerId": "12356790",
+                      "status": "0",
+                      "transactionId": "1234567890-235790",
+                      "verificationCode": "4567"
+                     },
+                   "current_timestamp": "2023-06-23 10:42:57"
+                }';
+                break;
+
+            case 'LEAN':
+                $response = '{
+                    "data": {
+                        "meta": null,
+                        "status": "OK",
+                        "message": "Data successfully retrieved",
+                        "timestamp": "2025-08-05T10:32:45.885330667Z",
+                        "results_id": "69a908f7-5dc0-455b-a4d7-d53ad885b6cd",
+                        "status_detail": null,
+                        "verifications": {
+                            "bank_code": "10",
+                            "bank_name": {
+                                "ar": "البنك الأهلي السعودي",
+                                "en": "Saudi National Bank"
+                            },
+                            "swift_code": "NCBKSAJE",
+                            "account_status": "ACTIVE",
+                            "account_holder_name": "Test** Hold** Nam*",
+                            "verification_method": "SARIE",
+                            "iban_ownership_verified": true
+                        }
+                    },
+                    "message": "Success",
+                    "success": true,
+                    "current_timestamp": "2025-08-05 13:32:46"
+                }';
+                break;
+
+            case 'SAFEWATCH':
+                if ($request->api == 'SCAN_SESSION_DETAILS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "sessionId": "SESSION-' . uniqid() . '",
+                            "status": "Completed",
+                            "details": {
+                                "scanDate": "' . date('Y-m-d') . '",
+                                "result": "Passed"
+                            }
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'SCAN_SESSION') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "sessionId": "SESSION-' . uniqid() . '",
+                            "status": "Initiated",
+                            "message": "Scan session created successfully"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "SAFEWATCH request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'ANB':
+                if ($request->api == 'ANB_PAYMENT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "paymentId": "PAY-' . uniqid() . '",
+                            "sequenceNumber": "' . time() . '",
+                            "transactionReferenceNumber": "TXN-' . uniqid() . '",
+                            "status": "INITIATED",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'ANB_GET_PAYMENT_STATUS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "id": "PAY-' . uniqid() . '",
+                            "sequenceNumber": "' . time() . '",
+                            "transactionReferenceNumber": "TXN-' . uniqid() . '",
+                            "status": "PAID",
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'ANB_ACCOUNT_STATEMENT_BALANCE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "accountNumber": "0108071089680019",
+                            "currency": "SAR",
+                            "clearedBalance": 144400.28,
+                            "statusCode": "200"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'ANB_ABC_LIST') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "StatusCode": "I000000",
+                            "POINum": 2582797169,
+                            "IsSanctioned": false,
+                            "FoundInABCList": null,
+                            "status_code": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "ANB request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'HYPERPAY':
+                if ($request->api == 'HYPERPAY_CHECKOUT') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "checkoutId": "CHECKOUT-' . uniqid() . '",
+                            "status": "Created",
+                            "redirectUrl": "https://example.com/checkout/' . uniqid() . '"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'HYPERPAY_STATUS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "checkoutId": "CHECKOUT-' . uniqid() . '",
+                            "status": "Paid",
+                            "paymentId": "PAY-' . uniqid() . '",
+                            "amount": 1000.00
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "HYPERPAY request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+
+            case 'LYNK':
+                if ($request->api == 'LYNK_LOGIN') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "access_token": "TOKEN-' . uniqid() . '",
+                            "token_type": "Bearer",
+                            "expires_in": 3600
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_CREATE_ORDER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Purchase Requested",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200,
+                            "quantity": 1,
+                            "unitOfMeasurement": "Troy Oz",
+                            "unitPrice": 2500.00,
+                            "unitPriceCurrency": "SAR",
+                            "referenceId": "REF-' . uniqid() . '"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_PROCEED_ORDER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Purchased",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_COMPLETE_ORDER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Transferred",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_CANCEL_ORDER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "result": "Cancelled",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_SHOW_ORDER') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "order_id": "ORD-' . uniqid() . '",
+                            "status": "Active",
+                            "result": "Success",
+                            "resultDescription": "OK"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_LIST_ORDERS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "orders": [
+                                {
+                                    "order_id": "ORD-' . uniqid() . '",
+                                    "status": "Active",
+                                    "amount": 2500.00
+                                }
+                            ]
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_TRANSACTIONS') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "result": "Transactions Retrieved",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200,
+                            "transactions": [
+                                {
+                                    "transactionId": "TXN-' . uniqid() . '",
+                                    "amount": 2500.00,
+                                    "date": "' . date('Y-m-d') . '"
+                                }
+                            ]
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else if ($request->api == 'LYNK_BALANCE') {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "result": "Balance Retrieved",
+                            "resultDescription": "OK",
+                            "eigerResultCode": 200,
+                            "balance": 50000.00,
+                            "balanceFormatted": "50,000.00",
+                            "unitPriceCurrency": "SAR"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                } else {
+                    $response = '{
+                        "success": true,
+                        "message": "Request Generated",
+                        "data": {
+                            "status": "Success",
+                            "message": "LYNK request processed"
+                        },
+                        "current_timestamp": "' . date('Y-m-d H:i:s') . '"
+                    }';
+                }
+                break;
+            
+            default:
+                $response = '';
+                break;
+        }
+
+        return $response;
+    }
+
+
+
+
+    public function generateRequest(ClientServiceRequest $request)
+    {
+        try {
+            $service = Service::with(['apis' => function ($query) use ($request) {
+                $query->where('name', $request->api);
+            }])->where('name', $request->service)->first();
+            $apiId = optional($service->apis->first())->id;
+            $access = $this->authenticateAccess($request->client_id, $service, $apiId);
+            if ($access) {
+                $request->merge(['service_id' => $service->id]);
+                $request->merge(['product_id' => 1]);
+                $request->merge(['api_id' => $apiId]);
+                $client_request = $this->clientRequestService->generateClientRequest($request);
+                Log::info($request->service . " against request " . $client_request->request_id);
+                $client = Client::find($request->client_id);
+                $request->merge(['client' => $client]);
+                $apiEnviornment = ApiEnvironment::where('api_id', $apiId)->where('env', $client->env)->first();
+                $request->merge(['api_enviornment' => $apiEnviornment]);
+                if ($client->env == "TEST") {
+                    $request_response = GET_MOCK_RESPONSE($request);
+                    $response = $request_response;
+                    $status = 200;
+                } else {
+                    switch ($request->service) {
+                        case 'YAKEEN':
+                            if ($request->api === 'COMPANY_ADDRESS') {
+                                $request_response = $this->clientRequestService->companyAddressRequest($request);
+                            } else {
+                                $request_response = $this->clientRequestService->kycRequest($request);
+                            }
+                            break;
+                        case 'YAKEEN LITE':
+                            $request_response = $this->clientRequestService->mobileVerificationRequest($request);
+                            break;
+                        case 'BAYAN':
+                            if ($request->api == 'BAYAN_ME_FINANCIAL') {
+                                $request_response = $this->clientRequestService->bayanFinancialRequest($request);
+                            } elseif ($request->api == 'BAYAN_CREDIT') {
+                                $request_response = $this->clientRequestService->bayanCreditRequest($request);
+                            } else {
+                                $request_response = $this->clientRequestService->bayanNaeRequest($request);
+                            }
+                            break;
+                        case 'SIMAH':
+                            if ($request->api == 'SIMAH_CONSUMER') {
+                                $request_response = $this->clientRequestService->simahConsumerRequest($request);
+                            } else {
+                                $request_response = $this->clientRequestService->simahConsumerV2Request($request);
+                            }
+                            break;
+                        case 'NAFATH':
+                            $request_response = $this->clientRequestService->nafathRequest($request);
+                            break;
+                        case 'ORBIT SMS':
+                            $request_response = $this->clientRequestService->orbitSMSRequest($request);
+                            break;
+                        case 'AML WIZARD':
+                            $request_response = $this->clientRequestService->amlWizardRequest($request);
+                            break;
+                        case 'DHAMEN':
+                            $request_response = $this->clientRequestService->ibanValidationRequest($request);
+                            break;
+                        case 'COMMODITY':
+                            if ($request->api === 'NEW_ORDER') {
+                                $request_response = $this->clientRequestService->commodityNewOrderRequest($request);
+                            } elseif ($request->api === 'MATCHING_RESULT') {
+                                $request_response = $this->clientRequestService->commodityMatchingResultRequest($request);
+                            } else {
+                                $request_response = $this->failure('Invalid API Name for Commodity Service!');
+                            }
+                            break;
+                        case 'WATHQ':
+                            $request_response = $this->clientRequestService->wathqRequest($request);
+                            break;
+                        case 'SIGNIT':
+                            $request_response = $this->clientRequestService->signitRequest($request);
+                            break;
+                        default:
+                            $request_response = $this->failure('Invalid Service Name !');
+                            break;
+                    }
+
+                    $response = json_encode($request_response->getData());
+                    $status = $request_response->getStatusCode();
+                }
+                if ($request->service == "NAFITH") {
+                    $getNafithData = $request_response->getData();
+                    if ($getNafithData->data->httpcode == 200 && isset($getNafithData->data->response->data)) {
+                        $client_request->contract_number = $getNafithData->data->response->data->contractNumber;
+                    }
+                }
+//                $client_request->request = json_encode($request->all());
+                $client_request->responses = $response;
+                $client_request->status = $status;
+                $client_request->save();
+                return $request_response;
+            } else {
+                return $this->unauthorizedAccess('Authorization Failed');
+            }
+        } catch (Exception $exception) {
+            return $this->failure(
+                $exception->getMessage(),
+                $exception->getCode()
+            );
+        }
+    }
+
+
+
+    public function mobileVerificationRequest($request)
+    {
+        $request->merge(['iqama_id' => $request->nid, 'mobile_no' => $request->mobile_number]);
+        $array = CURL_REQUEST_MOBILE_VERIFICATION($request);
+        Log::info("Mobile Verification Request against Nid " . $request->nid, ["Response" => $array]);
+
+        // dd($array);
+        if ($array) {
+            if (isset($array['isOwner'])) {
+                // dd("dds");
+                return $this->success('Request Generated', $array);
+            } else if (isset($array['code'])) {
+                return $this->failureWithMessage('', $array['message']);
+            }
+            return $this->failure('Something went wrong, please try again!');
+        }
+        return $this->failure('Something went wrong, please try again!');
+    }
+
+
+function CURL_REQUEST_MOBILE_VERIFICATION($request)
+{
+    $verification_method = GET_VERIFICATION_METHOD($request->product_id, $request->api_id);
+    $curl = curl_init();
+
+    curl_setopt_array($curl, array(
+        CURLOPT_URL => $verification_method['url'] . $request->nid . '/owns-mobile/' . $request->mobile_no,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => $verification_method['method'],
+        CURLOPT_HTTPHEADER => array(
+            'APP-ID: ' . $verification_method['credentials']['APP-ID'],
+            'APP-KEY: ' . $verification_method['credentials']['APP-KEY'],
+            'SERVICE_KEY: 884aa9bc-06dd-4750-a787-4a0418d9565e',
+            'ORGANIZATION-NUMBER: 7001734636',
+        ),
+    ));
+
+    $response = curl_exec($curl);
+
+    curl_close($curl);
+    Log::info("Mobile verification response:", ["body" => $response]);
+    $headers = [
+        'APP-ID: ' . $verification_method['credentials']['APP-ID'],
+        'APP-KEY:' . $verification_method['credentials']['APP-KEY'],
+        'SERVICE_KEY: ' . $verification_method['credentials']['SERVICE_KEY'],
+        'ORGANIZATION-NUMBER: ' . $verification_method['credentials']['ORGANIZATION-NUMBER'],
+    ];
+    $requestData = null;
+    $curlCommand = 'curl -X GET \'' . $verification_method['url'] . $request->nid . '/owns-mobile/' . $request->mobile_no . '\'';
+    foreach ($headers as $header) {
+        $curlCommand .= ' -H \'' . $header . '\'';
+    }
+    $curlCommand .= ' --data-raw \'' . $requestData . '\'';
+    Log::info("MOBILE VERIFICATION CURL REQUEST:", ["body" => $curlCommand]);
+    $response = shell_exec($curlCommand);
+    $response = curl_exec($curl);
+    curl_close($curl);
+
+    return json_decode($response, true);
+}
+
+
+    public function simahConsumerV2Request($request)
+    {
+        if ($request->api == 'SIMAH_CONSUMER_V2') {
+            $api_response = CURL_REQUEST_SIMAH_CONSUMER_V2($request);
+            Log::info("Simah consumer version 2 Response", ["SIMAH_CONSUMER_V2" => $api_response]);
+            if ($api_response) {
+                if ($api_response['httpcode'] == 200 && $api_response['response']['isSuccess'] == true)
+                    return $this->success('Success', $api_response['response']);
+                else
+                    return $this->failureWithMessage('Failure', $api_response['response']);
+            } else {
+                return $this->failureWithMessage('Something went wrong, please try again!');
+            }
+        } else {
+            return $this->failureWithMessage('The requested API does not exist.');
+        }
+    }
+
+
+function CURL_REQUEST_SIMAH_CONSUMER_V2($request)
+{
+    $verification_method = GET_SIMAH_CONSUMER_V2_VERIFICATION_METHOD('SIMAH_CONSUMER_V2', $request->client->env);
+
+    $uniqueReferenceNumber = GeneralHelper::randomNumber();
+    $request->merge([
+        'referenceNumber' => $uniqueReferenceNumber,
+        'productType' => 23,
+        'accept' => true
+    ]);
+    $body = $request->except([
+        'service_id',
+        'product_id',
+        'client_id',
+        'client',
+        'service',
+        'api',
+        'ip'
+    ]);
+
+    $url = $verification_method['url'];
+    $endpoint = $verification_method['endpoint'];
+    $method = strtoupper($verification_method['method'] ?? 'POST');
+
+        $headers = [
+            'Content-Type: application/json',
+        'Accept: text/plain',
+        'language: En',
+            'Authorization: Bearer ' . $verification_method['authorization_token'],
+        ];
+
+    if ($verification_method != false) {
+
+        $curl = curl_init();
+
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => $url . $endpoint,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => json_encode($body),
+            CURLOPT_HTTPHEADER => $headers,
+        ));
+
+        // ✅ Build the cURL command string
+        $curlCommand = "curl -X POST '" . $url . $endpoint . "'";
+
+        foreach ($headers as $header) {
+            $curlCommand .= " -H \"" . $header . "\"";
+        }
+        $curlCommand .= " -d '" . json_encode($body) . "'";
+        // 🔵 Log the generated cURL command
+        Log::info('Generated SIMAH CONSUMER V2 CURL command:', ['command' => $curlCommand]);
+        $response = curl_exec($curl);
+        $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+        return [
+            'httpcode' => $httpcode,
+            'response' => json_decode($response, true)
+        ];
+    } else {
+        $response = [];
+        $response['httpcode'] = 404;
+        return $response;
+    }
+}
+
+
+function GET_SIMAH_CONSUMER_V2_VERIFICATION_METHOD($name, $env)
+{
+    $login_verification_method = VerificationMethod::where('name', 'SIMAH_CONSUMER_LOGIN_V2')
+        ->where('env', $env)
+        ->first();
+    $headers = $login_verification_method->headers ? json_decode($login_verification_method->headers, true) : [];
+    $start = $now = Carbon::now('UTC');
+    $end = isset($headers['last_updated'])
+        ? Carbon::parse($headers['last_updated'])->setTimezone('UTC')
+        : $start;
+    $differenceInMinutes = $start->diffInMinutes($end);
+    if (empty($headers['Authorization']) || $differenceInMinutes >= 30) {
+        $response = GET_SIMAH_CONSUMER_V2_AUTHORIZATION_TOKEN($login_verification_method);
+        Log::info("Simah consumer authorization token Request Data:", ["response" => $response]);
+        if ($response['httpcode'] === 200 && $response['response']['isSuccess'] === true) {
+            $headers['Authorization'] = $response['response']['data']['token'];
+            $headers['last_updated'] = now();
+            $login_verification_method->headers = json_encode($headers);
+            $login_verification_method->save();
+        }
+    }
+
+    $curl_request_details = VerificationMethod::where('name', $name)
+        ->where('env', $env)
+        ->first();
+    return [
+        'authorization_token' => $headers['Authorization'] ?? null,
+        'x_company' => $headers['X-Company'] ?? null,
+        'url' => $curl_request_details->url,
+        'endpoint' => $curl_request_details->endpoint,
+        'method' => $curl_request_details->method,
+        'headers' => $headers,
+        'credentials' => json_decode($curl_request_details->credentials, true),
+    ];
+}
+
+
+function GET_SIMAH_CONSUMER_V2_AUTHORIZATION_TOKEN($login_verification_method)
+{
+
+    $url = $login_verification_method->url;
+    $endpoint = $login_verification_method->endpoint;
+    $method = strtoupper($login_verification_method->method ?? 'POST');
+    $credentials = json_decode($login_verification_method->credentials, true);
+    $fullUrl = $url . $endpoint;
+
+    $postFields = $credentials; // Make credentials dynamic
+
+
+    $curl = curl_init();
+
+    curl_setopt_array($curl, array(
+        CURLOPT_URL => $fullUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_POSTFIELDS => json_encode($postFields),
+        CURLOPT_HTTPHEADER => array(
+        'Content-Type: application/json',
+            'Accept: application/json'
+        ),
+    ));
+    // ✅ Generate equivalent CURL command string
+    $curlCommand = "curl -X {$method} '{$fullUrl}'";
+    $curlCommand .= " -H 'Content-Type: application/json'";
+    $curlCommand .= " --data '" . json_encode($postFields) . "'";
+    Log::info("Lean authorization token Request Data:", ["body" => $curlCommand]);
+
+    // 🔵 Log the generated CURL command
+    Log::info('Generated SIMAH CURL command for login verification:', ['command' => $curlCommand]);
+
+    $response = curl_exec($curl);
+    $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+    curl_close($curl);
+
+
+    return [
+        'httpcode' => $httpcode,
+        'response' => json_decode($response, true)
+    ];
+}
