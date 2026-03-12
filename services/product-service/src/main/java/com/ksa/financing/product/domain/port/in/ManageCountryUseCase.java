@@ -8,11 +8,13 @@ public interface ManageCountryUseCase {
 
     List<Country> listCountries(UUID tenantId);
     List<Country> listGccCountries(UUID tenantId);
+    List<Country> listArabLeagueCountries(UUID tenantId);
+    List<Country> listSanctionedCountries(UUID tenantId);
+    List<Country> listByRegion(UUID tenantId, String region);
+    List<Country> listByRiskTier(UUID tenantId, String riskTier);
     Country getCountry(UUID tenantId, UUID id);
-    Country createCountry(UUID tenantId, String code, String nameEn, String nameAr,
-                          String dialCode, String currencyCode, boolean gcc, int sortOrder);
-    Country updateCountry(UUID tenantId, UUID id, String nameEn, String nameAr,
-                          String dialCode, String currencyCode, boolean gcc,
-                          int sortOrder, boolean active);
+    Country getCountryBySlug(UUID tenantId, String slug);
+    Country createCountry(UUID tenantId, Country country);
+    Country updateCountry(UUID tenantId, UUID id, Country country);
     void deleteCountry(UUID tenantId, UUID id);
 }

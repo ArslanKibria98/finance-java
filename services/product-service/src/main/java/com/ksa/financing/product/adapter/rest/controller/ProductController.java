@@ -81,6 +81,7 @@ public class ProductController {
                 request.repaymentFrequency(),
                 request.gracePeriodDays(),
                 request.earlySettlementAllowed(),
+                request.countryId(),
                 userId
         );
 
@@ -146,6 +147,7 @@ public class ProductController {
                 request.customerTypes(),
                 request.involvesCommodity(),
                 request.logoUrl(),
+                request.countryId(),
                 userId
         );
 
@@ -157,17 +159,33 @@ public class ProductController {
 
     @SecuredEndpoint(obj = "products", act = "manage")
     @PostMapping("/{id}/activate")
-    @Operation(summary = "Activate product", description = "Activates a DRAFT or INACTIVE product")
-    public ResponseEntity<Void> activateProduct(
+    @Operation(summary = "Activate product", description = "Validates product, creates in Fineract, and activates the product via Temporal workflow")
+    public ResponseEntity<java.util.Map<String, Object>> activateProduct(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
         log.info("Activating product id: {} for tenantId: {}", id, tenantId);
 
-        manageProductUseCase.activate(tenantId, id);
+        var result = manageProductUseCase.activate(tenantId, id);
 
-        return ResponseEntity.ok().build();
+        var response = new java.util.LinkedHashMap<String, Object>();
+        response.put("productId", result.productId());
+        response.put("status", result.status());
+        response.put("success", result.success());
+        response.put("workflowId", result.workflowId());
+        if (result.fineractProductId() != null) {
+            response.put("fineractProductId", result.fineractProductId());
+        }
+        if (result.failureReason() != null) {
+            response.put("failureReason", result.failureReason());
+        }
+
+        if (result.success()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.unprocessableEntity().body(response);
+        }
     }
 
     @SecuredEndpoint(obj = "products", act = "manage")

@@ -1,8 +1,8 @@
 package com.ksa.financing.product.infrastructure.persistence.repository;
 
-import com.ksa.financing.product.domain.model.AdminFeeSlab;
-import com.ksa.financing.product.domain.model.Product;
+import com.ksa.financing.product.domain.model.*;
 import com.ksa.financing.product.domain.port.out.ProductRepository;
+import com.ksa.financing.product.infrastructure.persistence.mapper.CountryPersistenceMapper;
 import com.ksa.financing.product.infrastructure.persistence.mapper.ProductPersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /**
  * Infrastructure implementation of the {@link ProductRepository} output port.
- * Delegates to {@link JpaProductRepository} and uses {@link ProductPersistenceMapper}
+ * Delegates to JPA repositories and uses {@link ProductPersistenceMapper}
  * for domain/JPA entity translation.
  */
 @Repository
@@ -24,6 +24,18 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     private final JpaProductRepository jpaProductRepository;
     private final JpaAdminFeeSlabRepository jpaAdminFeeSlabRepository;
+    private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
+    private final JpaFeeSettingsRepository jpaFeeSettingsRepository;
+    private final JpaApplicationStepRepository jpaApplicationStepRepository;
+    private final JpaDurationSettingsRepository jpaDurationSettingsRepository;
+    private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigRepository;
+    private final JpaApprovalWorkflowRepository jpaApprovalWorkflowRepository;
+    private final JpaApprovalConditionRepository jpaApprovalConditionRepository;
+    private final JpaApprovalActionRepository jpaApprovalActionRepository;
+    private final JpaCountryRepository jpaCountryRepository;
+    private final JpaMasterCategoryRepository jpaMasterCategoryRepository;
+    private final JpaSubCategoryRepository jpaSubCategoryRepository;
+    private final ProductDocumentRepositoryImpl productDocumentRepository;
 
     @Override
     public Product save(Product product) {
@@ -43,16 +55,7 @@ public class ProductRepositoryImpl implements ProductRepository {
         return jpaProductRepository.findByIdAndTenantIdAndDeletedAtIsNull(id, tenantId)
                 .map(entity -> {
                     var product = ProductPersistenceMapper.toDomain(entity);
-                    var slabs = jpaAdminFeeSlabRepository
-                            .findByProductIdAndTenantIdOrderBySortOrder(id, tenantId)
-                            .stream()
-                            .map(s -> new AdminFeeSlab(
-                                    s.getId(), s.getMinAmount(), s.getMaxAmount(),
-                                    s.getProfitPercentage(), s.getProcessingFee(),
-                                    s.getAdminFee(), s.getPartnerScope(), s.getStatus(),
-                                    s.getSortOrder(), s.getMinTenure(), s.getMaxTenure()))
-                            .toList();
-                    product.setAdminFeeSlabs(slabs);
+                    loadSettings(product, tenantId, id);
                     return product;
                 });
     }
@@ -69,14 +72,130 @@ public class ProductRepositoryImpl implements ProductRepository {
     public List<Product> findAllByTenant(UUID tenantId) {
         log.debug("Listing all products for tenantId={}", tenantId);
 
-        return jpaProductRepository.findAllByTenantIdAndDeletedAtIsNull(tenantId)
+        var products = jpaProductRepository.findAllByTenantIdAndDeletedAtIsNull(tenantId)
                 .stream()
                 .map(ProductPersistenceMapper::toDomain)
                 .toList();
+
+        // Enrich with country and category names for listing
+        products.forEach(product -> {
+            if (product.getCountryId() != null) {
+                jpaCountryRepository.findById(product.getCountryId())
+                        .map(CountryPersistenceMapper::toDomain)
+                        .ifPresent(product::setCountry);
+            }
+            if (product.getMasterCategoryId() != null) {
+                jpaMasterCategoryRepository.findById(product.getMasterCategoryId())
+                        .ifPresent(cat -> {
+                            product.setMasterCategoryNameEn(cat.getNameEn());
+                            product.setMasterCategoryNameAr(cat.getNameAr());
+                        });
+            }
+            if (product.getSubCategoryId() != null) {
+                jpaSubCategoryRepository.findById(product.getSubCategoryId())
+                        .ifPresent(sub -> {
+                            product.setSubCategoryNameEn(sub.getNameEn());
+                            product.setSubCategoryNameAr(sub.getNameAr());
+                        });
+            }
+        });
+
+        return products;
     }
 
     @Override
     public boolean existsByProductCode(UUID tenantId, String productCode) {
         return jpaProductRepository.existsByProductCodeAndTenantIdAndDeletedAtIsNull(productCode, tenantId);
+    }
+
+    private void loadSettings(Product product, UUID tenantId, UUID productId) {
+        // Admin fee slabs
+        var slabs = jpaAdminFeeSlabRepository
+                .findByProductIdAndTenantIdOrderBySortOrder(productId, tenantId)
+                .stream()
+                .map(s -> new AdminFeeSlab(
+                        s.getId(), s.getMinAmount(), s.getMaxAmount(),
+                        s.getProfitPercentage(), s.getProcessingFee(),
+                        s.getAdminFee(), s.getPartnerScope(), s.getStatus(),
+                        s.getSortOrder(), s.getMinTenure(), s.getMaxTenure()))
+                .toList();
+        product.setAdminFeeSlabs(slabs);
+
+        // Terms & Conditions
+        jpaTermsConditionsRepository.findByProductIdAndTenantId(productId, tenantId)
+                .ifPresent(tc -> product.setTermsConditions(
+                        new TermsConditions(tc.getId(), tc.getTermsEn(), tc.getTermsAr())));
+
+        // Fee Settings
+        jpaFeeSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
+                .ifPresent(fs -> product.setFeeSettings(new FeeSettings(
+                        fs.getId(), fs.getMinFinancingAmount(), fs.getMaxFinancingAmount(),
+                        fs.getVatPercentage(), fs.getRevenueEligibilityThreshold(),
+                        fs.getMaxDbrPercentage(), fs.getDbrCalculationMethod(),
+                        fs.getDbrExceptions())));
+
+        // Application Steps
+        var steps = jpaApplicationStepRepository
+                .findByProductIdAndTenantIdOrderBySortOrder(productId, tenantId)
+                .stream()
+                .map(s -> new ApplicationStep(
+                        s.getId(), s.getStepNumber(), s.getTitleEn(), s.getTitleAr(),
+                        s.getDescription(), s.isRequired(), s.getSortOrder()))
+                .toList();
+        product.setApplicationSteps(steps);
+
+        // Duration Settings
+        jpaDurationSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
+                .ifPresent(ds -> product.setDurationSettings(new DurationSettings(
+                        ds.getId(), ds.getRequestDurationDays(), ds.getApprovalDurationDays(),
+                        ds.getDisbursementDurationDays(), ds.getRepaymentDurationDays())));
+
+        // Environment Configs
+        var envConfigs = jpaProductEnvironmentConfigRepository
+                .findByProductIdAndTenantId(productId, tenantId)
+                .stream()
+                .map(ec -> new EnvironmentConfigLink(
+                        ec.getId(), ec.getEnvironmentConfigId(), ec.isActive(), ec.getSortOrder()))
+                .toList();
+        product.setEnvironmentConfigs(envConfigs);
+
+        // Approval Workflows (with conditions and actions)
+        var workflows = jpaApprovalWorkflowRepository
+                .findByProductIdAndTenantIdOrderByPriority(productId, tenantId)
+                .stream()
+                .map(wf -> {
+                    var conditions = jpaApprovalConditionRepository
+                            .findByWorkflowIdOrderBySortOrder(wf.getId())
+                            .stream()
+                            .map(c -> new ApprovalWorkflow.ApprovalCondition(
+                                    c.getId(), c.getField(), c.getOperator(),
+                                    c.getValue(), c.getSortOrder()))
+                            .toList();
+
+                    var actions = jpaApprovalActionRepository
+                            .findByWorkflowIdOrderBySortOrder(wf.getId())
+                            .stream()
+                            .map(a -> new ApprovalWorkflow.ApprovalAction(
+                                    a.getId(), a.getActionType(), a.getConfiguration(),
+                                    a.getSortOrder()))
+                            .toList();
+
+                    return new ApprovalWorkflow(
+                            wf.getId(), wf.getWorkflowType(), wf.getNameEn(), wf.getNameAr(),
+                            wf.getDescription(), wf.getTemplateSource(), wf.isActive(),
+                            wf.getPriority(), conditions, actions);
+                })
+                .toList();
+        product.setApprovalWorkflows(workflows);
+
+        // Documents
+        product.setDocuments(productDocumentRepository.findByProductId(tenantId, productId));
+
+        // Country (if countryId is set)
+        if (product.getCountryId() != null) {
+            jpaCountryRepository.findById(product.getCountryId())
+                    .map(CountryPersistenceMapper::toDomain)
+                    .ifPresent(product::setCountry);
+        }
     }
 }

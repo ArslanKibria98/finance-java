@@ -72,11 +72,35 @@ public class Product {
     private boolean waiveUnearnedProfit;
     private Integer minTenureBeforeSettlement;
 
+    // Core banking system (Fineract) reference
+    private String fineractProductId;
+
     // Regional
     private String currency;
+    private UUID countryId;
+
+    // Country (loaded eagerly on getById)
+    private Country country;
+
+    // Category names (resolved from IDs for listing)
+    private String masterCategoryNameEn;
+    private String masterCategoryNameAr;
+    private String subCategoryNameEn;
+    private String subCategoryNameAr;
 
     // Admin fee slabs (loaded eagerly on getById)
     private List<AdminFeeSlab> adminFeeSlabs;
+
+    // Settings (loaded eagerly on getById)
+    private TermsConditions termsConditions;
+    private FeeSettings feeSettings;
+    private List<ApplicationStep> applicationSteps;
+    private DurationSettings durationSettings;
+    private List<EnvironmentConfigLink> environmentConfigs;
+    private List<ApprovalWorkflow> approvalWorkflows;
+
+    // Documents (loaded eagerly on getById)
+    private List<ProductDocument> documents;
 
     // Audit
     private Instant createdAt;
@@ -140,12 +164,42 @@ public class Product {
 
     // === Domain behavior ===
 
-    public void activate() {
-        if (this.status != ProductStatus.DRAFT && this.status != ProductStatus.INACTIVE) {
+    public void requestActivation() {
+        if (this.status != ProductStatus.DRAFT && this.status != ProductStatus.ACTIVATION_FAILED) {
+            throw new IllegalStateException(
+                "Cannot request activation for product in status: " + this.status);
+        }
+        this.status = ProductStatus.PENDING_ACTIVATION;
+    }
+
+    public void activate(String fineractProductId) {
+        if (this.status != ProductStatus.PENDING_ACTIVATION && this.status != ProductStatus.INACTIVE) {
             throw new IllegalStateException(
                 "Cannot activate product in status: " + this.status);
         }
+        this.fineractProductId = fineractProductId;
         this.status = ProductStatus.ACTIVE;
+    }
+
+    public void activate() {
+        activate(null);
+    }
+
+    public void markActivationFailed() {
+        if (this.status != ProductStatus.PENDING_ACTIVATION) {
+            throw new IllegalStateException(
+                "Cannot mark activation failed for product in status: " + this.status);
+        }
+        this.status = ProductStatus.ACTIVATION_FAILED;
+    }
+
+    public void revertToDraft() {
+        if (this.status != ProductStatus.PENDING_ACTIVATION
+                && this.status != ProductStatus.ACTIVATION_FAILED) {
+            throw new IllegalStateException(
+                "Cannot revert to draft from status: " + this.status);
+        }
+        this.status = ProductStatus.DRAFT;
     }
 
     public void deactivate() {
@@ -295,8 +349,17 @@ public class Product {
     public Integer getMinTenureBeforeSettlement() { return minTenureBeforeSettlement; }
     public void setMinTenureBeforeSettlement(Integer minTenureBeforeSettlement) { this.minTenureBeforeSettlement = minTenureBeforeSettlement; }
 
+    public String getFineractProductId() { return fineractProductId; }
+    public void setFineractProductId(String fineractProductId) { this.fineractProductId = fineractProductId; }
+
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
+
+    public UUID getCountryId() { return countryId; }
+    public void setCountryId(UUID countryId) { this.countryId = countryId; }
+
+    public Country getCountry() { return country; }
+    public void setCountry(Country country) { this.country = country; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
@@ -321,4 +384,37 @@ public class Product {
 
     public List<AdminFeeSlab> getAdminFeeSlabs() { return adminFeeSlabs; }
     public void setAdminFeeSlabs(List<AdminFeeSlab> adminFeeSlabs) { this.adminFeeSlabs = adminFeeSlabs; }
+
+    public TermsConditions getTermsConditions() { return termsConditions; }
+    public void setTermsConditions(TermsConditions termsConditions) { this.termsConditions = termsConditions; }
+
+    public FeeSettings getFeeSettings() { return feeSettings; }
+    public void setFeeSettings(FeeSettings feeSettings) { this.feeSettings = feeSettings; }
+
+    public List<ApplicationStep> getApplicationSteps() { return applicationSteps; }
+    public void setApplicationSteps(List<ApplicationStep> applicationSteps) { this.applicationSteps = applicationSteps; }
+
+    public DurationSettings getDurationSettings() { return durationSettings; }
+    public void setDurationSettings(DurationSettings durationSettings) { this.durationSettings = durationSettings; }
+
+    public List<EnvironmentConfigLink> getEnvironmentConfigs() { return environmentConfigs; }
+    public void setEnvironmentConfigs(List<EnvironmentConfigLink> environmentConfigs) { this.environmentConfigs = environmentConfigs; }
+
+    public List<ApprovalWorkflow> getApprovalWorkflows() { return approvalWorkflows; }
+    public void setApprovalWorkflows(List<ApprovalWorkflow> approvalWorkflows) { this.approvalWorkflows = approvalWorkflows; }
+
+    public List<ProductDocument> getDocuments() { return documents; }
+    public void setDocuments(List<ProductDocument> documents) { this.documents = documents; }
+
+    public String getMasterCategoryNameEn() { return masterCategoryNameEn; }
+    public void setMasterCategoryNameEn(String masterCategoryNameEn) { this.masterCategoryNameEn = masterCategoryNameEn; }
+
+    public String getMasterCategoryNameAr() { return masterCategoryNameAr; }
+    public void setMasterCategoryNameAr(String masterCategoryNameAr) { this.masterCategoryNameAr = masterCategoryNameAr; }
+
+    public String getSubCategoryNameEn() { return subCategoryNameEn; }
+    public void setSubCategoryNameEn(String subCategoryNameEn) { this.subCategoryNameEn = subCategoryNameEn; }
+
+    public String getSubCategoryNameAr() { return subCategoryNameAr; }
+    public void setSubCategoryNameAr(String subCategoryNameAr) { this.subCategoryNameAr = subCategoryNameAr; }
 }

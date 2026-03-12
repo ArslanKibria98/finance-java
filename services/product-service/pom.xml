@@ -44,6 +44,25 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- Temporal Workflow SDK -->
+        <dependency>
+            <groupId>com.ksa.islamic.finance</groupId>
+            <artifactId>product-activity-api</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.temporal</groupId>
+            <artifactId>temporal-sdk</artifactId>
+            <version>1.32.1</version>
+        </dependency>
+
+        <!-- LMS Adapter SDK (Fineract) -->
+        <dependency>
+            <groupId>com.ksa.islamic.finance</groupId>
+            <artifactId>lms-adapter-sdk</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

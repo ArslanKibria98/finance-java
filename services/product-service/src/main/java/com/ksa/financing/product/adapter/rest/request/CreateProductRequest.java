@@ -34,5 +34,6 @@ public record CreateProductRequest(
     String rateType,
     String repaymentFrequency,
     int gracePeriodDays,
-    boolean earlySettlementAllowed
+    boolean earlySettlementAllowed,
+    UUID countryId
 ) {}

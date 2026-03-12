@@ -15,13 +15,9 @@ public class CountryMapper {
         return new CountryResponse(
                 country.getId(),
                 country.getCode(),
+                country.getAlpha3Code(),
                 country.getNameEn(),
-                country.getNameAr(),
-                country.getDialCode(),
-                country.getCurrencyCode(),
-                country.isGcc(),
-                country.isActive(),
-                country.getSortOrder()
+                country.getNameAr()
         );
     }
 }

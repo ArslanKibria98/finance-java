@@ -15,5 +15,15 @@ public interface JpaCountryRepository extends JpaRepository<CountryJpaEntity, UU
 
     List<CountryJpaEntity> findAllByTenantIdAndIsGccTrueAndIsActiveTrue(UUID tenantId);
 
+    List<CountryJpaEntity> findAllByTenantIdAndIsArabLeagueTrueAndIsActiveTrue(UUID tenantId);
+
+    List<CountryJpaEntity> findAllByTenantIdAndIsSanctionedTrue(UUID tenantId);
+
+    List<CountryJpaEntity> findAllByTenantIdAndRegionAndIsActiveTrue(UUID tenantId, String region);
+
+    List<CountryJpaEntity> findAllByTenantIdAndRiskTierAndIsActiveTrue(UUID tenantId, String riskTier);
+
     Optional<CountryJpaEntity> findByTenantIdAndCode(UUID tenantId, String code);
+
+    Optional<CountryJpaEntity> findByTenantIdAndSlug(UUID tenantId, String slug);
 }

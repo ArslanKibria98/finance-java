@@ -5,7 +5,9 @@ package com.ksa.financing.product.domain.model;
  */
 public enum ProductStatus {
     DRAFT,
+    PENDING_ACTIVATION,
     ACTIVE,
     INACTIVE,
+    ACTIVATION_FAILED,
     ARCHIVED
 }

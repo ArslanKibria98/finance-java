@@ -5,11 +5,7 @@ import java.util.UUID;
 public record CountryResponse(
     UUID id,
     String code,
+    String alpha3Code,
     String nameEn,
-    String nameAr,
-    String dialCode,
-    String currencyCode,
-    boolean gcc,
-    boolean active,
-    int sortOrder
+    String nameAr
 ) {}

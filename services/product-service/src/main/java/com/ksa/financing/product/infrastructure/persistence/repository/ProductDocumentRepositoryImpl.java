@@ -1,5 +1,6 @@
 package com.ksa.financing.product.infrastructure.persistence.repository;
 
+import com.ksa.financing.product.domain.model.ProductDocument;
 import com.ksa.financing.product.domain.port.out.ProductDocumentRepository;
 import com.ksa.financing.product.infrastructure.persistence.entity.ProductDocumentJpaEntity;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -20,6 +23,39 @@ import java.util.UUID;
 public class ProductDocumentRepositoryImpl implements ProductDocumentRepository {
 
     private final JpaProductDocumentRepository jpaDocumentRepository;
+
+    @Override
+    public List<ProductDocument> findByProductId(UUID tenantId, UUID productId) {
+        return jpaDocumentRepository.findByProductIdAndTenantIdOrderBySortOrder(productId, tenantId)
+                .stream()
+                .map(e -> new ProductDocument(
+                        e.getId(),
+                        e.getNameEn(),
+                        e.getNameAr(),
+                        e.getDocumentType(),
+                        e.getFileUrl(),
+                        e.getFileSizeBytes(),
+                        e.getFileVersion(),
+                        e.getCreatedByName(),
+                        e.getStatus(),
+                        e.isRequired(),
+                        e.getSortOrder(),
+                        e.getCreatedAt() != null ? e.getCreatedAt().toInstant() : null,
+                        e.getUpdatedAt() != null ? e.getUpdatedAt().toInstant() : null))
+                .toList();
+    }
+
+    @Override
+    public Optional<ProductDocument> findById(UUID tenantId, UUID productId, UUID documentId) {
+        return jpaDocumentRepository.findByIdAndProductIdAndTenantId(documentId, productId, tenantId)
+                .map(e -> new ProductDocument(
+                        e.getId(), e.getNameEn(), e.getNameAr(),
+                        e.getDocumentType(), e.getFileUrl(), e.getFileSizeBytes(),
+                        e.getFileVersion(), e.getCreatedByName(), e.getStatus(),
+                        e.isRequired(), e.getSortOrder(),
+                        e.getCreatedAt() != null ? e.getCreatedAt().toInstant() : null,
+                        e.getUpdatedAt() != null ? e.getUpdatedAt().toInstant() : null));
+    }
 
     @Override
     public void saveDocument(UUID tenantId, UUID productId, String nameEn, String nameAr,
@@ -47,6 +83,31 @@ public class ProductDocumentRepositoryImpl implements ProductDocumentRepository 
 
         jpaDocumentRepository.save(entity);
         log.debug("Document saved for productId={}, id={}", productId, entity.getId());
+    }
+
+    @Override
+    @Transactional
+    public void updateDocument(UUID tenantId, UUID productId, UUID documentId,
+                               String nameEn, String nameAr, String documentType,
+                               String fileUrl, Long fileSizeBytes, String fileVersion,
+                               Boolean required, Integer sortOrder) {
+        log.debug("Updating document: id={}, productId={}", documentId, productId);
+
+        var entity = jpaDocumentRepository.findByIdAndProductIdAndTenantId(documentId, productId, tenantId)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+
+        if (nameEn != null) entity.setNameEn(nameEn);
+        if (nameAr != null) entity.setNameAr(nameAr);
+        if (documentType != null) entity.setDocumentType(documentType);
+        if (fileUrl != null) entity.setFileUrl(fileUrl);
+        if (fileSizeBytes != null) entity.setFileSizeBytes(fileSizeBytes);
+        if (fileVersion != null) entity.setFileVersion(fileVersion);
+        if (required != null) entity.setRequired(required);
+        if (sortOrder != null) entity.setSortOrder(sortOrder);
+        entity.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+
+        jpaDocumentRepository.save(entity);
+        log.debug("Document updated: id={}", documentId);
     }
 
     @Override

@@ -4,7 +4,7 @@ package com.ksa.financing.product.application.mapper;
 // Fix: Move ProductResponse/ProductSummaryResponse to application.dto package,
 // or create application-layer DTOs and map to adapter responses in the controller.
 import com.ksa.financing.product.adapter.rest.response.ProductResponse;
-import com.ksa.financing.product.adapter.rest.response.ProductResponse.AdminFeeSlabResponse;
+import com.ksa.financing.product.adapter.rest.response.ProductResponse.*;
 import com.ksa.financing.product.adapter.rest.response.ProductSummaryResponse;
 import com.ksa.financing.product.domain.model.Product;
 import org.springframework.stereotype.Component;
@@ -64,6 +64,16 @@ public class ProductMapper {
                 product.isWaiveUnearnedProfit(),
                 product.getMinTenureBeforeSettlement(),
                 product.getCurrency(),
+                product.getCountryId(),
+                product.getFineractProductId(),
+                product.getCountry() != null
+                    ? new CountryResponse(
+                            product.getCountry().getId(),
+                            product.getCountry().getCode(),
+                            product.getCountry().getAlpha3Code(),
+                            product.getCountry().getNameEn(),
+                            product.getCountry().getNameAr())
+                    : null,
                 product.getAdminFeeSlabs() != null
                     ? product.getAdminFeeSlabs().stream()
                         .map(s -> new AdminFeeSlabResponse(
@@ -71,6 +81,72 @@ public class ProductMapper {
                                 s.profitPercentage(), s.processingFee(),
                                 s.adminFee(), s.partnerScope(), s.status(),
                                 s.sortOrder(), s.minTenure(), s.maxTenure()))
+                        .toList()
+                    : Collections.emptyList(),
+                product.getTermsConditions() != null
+                    ? new TermsConditionsResponse(
+                            product.getTermsConditions().id(),
+                            product.getTermsConditions().termsEn(),
+                            product.getTermsConditions().termsAr())
+                    : null,
+                product.getFeeSettings() != null
+                    ? new FeeSettingsResponse(
+                            product.getFeeSettings().id(),
+                            product.getFeeSettings().minFinancingAmount(),
+                            product.getFeeSettings().maxFinancingAmount(),
+                            product.getFeeSettings().vatPercentage(),
+                            product.getFeeSettings().revenueEligibilityThreshold(),
+                            product.getFeeSettings().maxDbrPercentage(),
+                            product.getFeeSettings().dbrCalculationMethod(),
+                            product.getFeeSettings().dbrExceptions())
+                    : null,
+                product.getApplicationSteps() != null
+                    ? product.getApplicationSteps().stream()
+                        .map(s -> new ApplicationStepResponse(
+                                s.id(), s.stepNumber(), s.titleEn(), s.titleAr(),
+                                s.description(), s.required(), s.sortOrder()))
+                        .toList()
+                    : Collections.emptyList(),
+                product.getDurationSettings() != null
+                    ? new DurationSettingsResponse(
+                            product.getDurationSettings().id(),
+                            product.getDurationSettings().requestDurationDays(),
+                            product.getDurationSettings().approvalDurationDays(),
+                            product.getDurationSettings().disbursementDurationDays(),
+                            product.getDurationSettings().repaymentDurationDays())
+                    : null,
+                product.getEnvironmentConfigs() != null
+                    ? product.getEnvironmentConfigs().stream()
+                        .map(ec -> new EnvironmentConfigResponse(
+                                ec.id(), ec.environmentConfigId(), ec.active(), ec.sortOrder()))
+                        .toList()
+                    : Collections.emptyList(),
+                product.getApprovalWorkflows() != null
+                    ? product.getApprovalWorkflows().stream()
+                        .map(wf -> new ApprovalWorkflowResponse(
+                                wf.id(), wf.workflowType(), wf.nameEn(), wf.nameAr(),
+                                wf.description(), wf.templateSource(), wf.active(), wf.priority(),
+                                wf.conditions() != null
+                                    ? wf.conditions().stream()
+                                        .map(c -> new ApprovalConditionResponse(
+                                                c.id(), c.field(), c.operator(), c.value(), c.sortOrder()))
+                                        .toList()
+                                    : Collections.emptyList(),
+                                wf.actions() != null
+                                    ? wf.actions().stream()
+                                        .map(a -> new ApprovalActionResponse(
+                                                a.id(), a.actionType(), a.configuration(), a.sortOrder()))
+                                        .toList()
+                                    : Collections.emptyList()))
+                        .toList()
+                    : Collections.emptyList(),
+                product.getDocuments() != null
+                    ? product.getDocuments().stream()
+                        .map(d -> new ProductResponse.DocumentResponse(
+                                d.id(), d.nameEn(), d.nameAr(), d.documentType(),
+                                d.fileUrl(), d.fileSizeBytes(), d.fileVersion(),
+                                d.createdByName(), d.status(), d.required(),
+                                d.sortOrder(), d.createdAt(), d.updatedAt()))
                         .toList()
                     : Collections.emptyList(),
                 product.getCreatedAt(),
@@ -94,7 +170,14 @@ public class ProductMapper {
                 product.getProductType() != null ? product.getProductType().name() : null,
                 product.getStatus() != null ? product.getStatus().name() : null,
                 product.getMasterCategoryId(),
+                product.getMasterCategoryNameEn(),
+                product.getMasterCategoryNameAr(),
                 product.getSubCategoryId(),
+                product.getSubCategoryNameEn(),
+                product.getSubCategoryNameAr(),
+                product.getNotificationEmail(),
+                product.getCountry() != null ? product.getCountry().getNameEn() : null,
+                product.getCountry() != null ? product.getCountry().getNameAr() : null,
                 product.getWizardStep(),
                 product.isWizardCompleted(),
                 product.getCreatedAt()

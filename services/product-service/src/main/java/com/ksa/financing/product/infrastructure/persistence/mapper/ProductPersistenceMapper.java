@@ -92,8 +92,12 @@ public class ProductPersistenceMapper {
         entity.setWaiveUnearnedProfit(domain.isWaiveUnearnedProfit());
         entity.setMinTenureBeforeSettlement(domain.getMinTenureBeforeSettlement());
 
+        // Core banking
+        entity.setFineractProductId(domain.getFineractProductId());
+
         // Regional
         entity.setCurrency(domain.getCurrency());
+        entity.setCountryId(domain.getCountryId());
 
         // Audit
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
@@ -183,8 +187,12 @@ public class ProductPersistenceMapper {
         domain.setWaiveUnearnedProfit(entity.isWaiveUnearnedProfit());
         domain.setMinTenureBeforeSettlement(entity.getMinTenureBeforeSettlement());
 
+        // Core banking
+        domain.setFineractProductId(entity.getFineractProductId());
+
         // Regional
         domain.setCurrency(entity.getCurrency());
+        domain.setCountryId(entity.getCountryId());
 
         // Audit
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));

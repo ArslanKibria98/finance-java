@@ -119,3 +119,25 @@ ksa:
   authorization:
     enabled: true
     cache-key-prefix: casbin:policies
+
+# Temporal Workflow Configuration
+temporal:
+  service-address: ${TEMPORAL_ADDRESS:localhost:7233}
+  namespace: ${TEMPORAL_NAMESPACE:default}
+  task-queue: ${TEMPORAL_TASK_QUEUE:product-activation-queue}
+  worker:
+    enabled: ${TEMPORAL_WORKER_ENABLED:true}
+
+# Fineract Core Banking Configuration
+fineract:
+  base-url: ${FINERACT_BASE_URL:https://localhost:8443/fineract-provider/api/v1}
+  username: ${FINERACT_USERNAME:mifos}
+  password: ${FINERACT_PASSWORD:password}
+  tenant-id: ${FINERACT_TENANT_ID:default}
+
+# Kafka Topic Configuration
+kafka:
+  topics:
+    product-created: ${KAFKA_TOPIC_PRODUCT_CREATED:financing.product.created}
+    product-activated: ${KAFKA_TOPIC_PRODUCT_ACTIVATED:financing.product.activated}
+    product-updated: ${KAFKA_TOPIC_PRODUCT_UPDATED:financing.product.updated}

@@ -170,10 +170,18 @@ public class ProductJpaEntity {
     @Column(name = "min_tenure_before_settlement")
     private Integer minTenureBeforeSettlement;
 
+    // --- Core banking ---
+
+    @Column(name = "fineract_product_id", length = 50)
+    private String fineractProductId;
+
     // --- Regional ---
 
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
+
+    @Column(name = "country_id")
+    private UUID countryId;
 
     // --- Audit ---
 

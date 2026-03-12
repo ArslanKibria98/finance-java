@@ -37,6 +37,42 @@ public class CountryRepositoryImpl implements CountryRepository {
     }
 
     @Override
+    public List<Country> findArabLeagueByTenant(UUID tenantId) {
+        log.debug("Listing Arab League countries for tenantId={}", tenantId);
+        return jpaCountryRepository.findAllByTenantIdAndIsArabLeagueTrueAndIsActiveTrue(tenantId)
+                .stream()
+                .map(CountryPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Country> findSanctionedByTenant(UUID tenantId) {
+        log.debug("Listing sanctioned countries for tenantId={}", tenantId);
+        return jpaCountryRepository.findAllByTenantIdAndIsSanctionedTrue(tenantId)
+                .stream()
+                .map(CountryPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Country> findByRegion(UUID tenantId, String region) {
+        log.debug("Listing countries by region={} for tenantId={}", region, tenantId);
+        return jpaCountryRepository.findAllByTenantIdAndRegionAndIsActiveTrue(tenantId, region)
+                .stream()
+                .map(CountryPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Country> findByRiskTier(UUID tenantId, String riskTier) {
+        log.debug("Listing countries by riskTier={} for tenantId={}", riskTier, tenantId);
+        return jpaCountryRepository.findAllByTenantIdAndRiskTierAndIsActiveTrue(tenantId, riskTier)
+                .stream()
+                .map(CountryPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<Country> findById(UUID id) {
         log.debug("Finding country by id={}", id);
         return jpaCountryRepository.findById(id)
@@ -47,6 +83,13 @@ public class CountryRepositoryImpl implements CountryRepository {
     public Optional<Country> findByCode(UUID tenantId, String code) {
         log.debug("Finding country by code={}, tenantId={}", code, tenantId);
         return jpaCountryRepository.findByTenantIdAndCode(tenantId, code)
+                .map(CountryPersistenceMapper::toDomain);
+    }
+
+    @Override
+    public Optional<Country> findBySlug(UUID tenantId, String slug) {
+        log.debug("Finding country by slug={}, tenantId={}", slug, tenantId);
+        return jpaCountryRepository.findByTenantIdAndSlug(tenantId, slug)
                 .map(CountryPersistenceMapper::toDomain);
     }
 

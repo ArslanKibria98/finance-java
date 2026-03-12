@@ -11,9 +11,18 @@ public interface ManageProductUseCase {
     Product getById(UUID tenantId, UUID productId);
     List<Product> listByTenant(UUID tenantId);
     Product updateBasicInfo(UUID tenantId, UUID productId, UpdateBasicInfoCommand command);
-    void activate(UUID tenantId, UUID productId);
+    ActivationResultDto activate(UUID tenantId, UUID productId);
     void deactivate(UUID tenantId, UUID productId);
     void softDelete(UUID tenantId, UUID productId);
+
+    record ActivationResultDto(
+        String productId,
+        String fineractProductId,
+        String status,
+        String failureReason,
+        boolean success,
+        String workflowId
+    ) {}
 
     record CreateProductCommand(
         UUID tenantId,
@@ -44,6 +53,7 @@ public interface ManageProductUseCase {
         String repaymentFrequency,
         int gracePeriodDays,
         boolean earlySettlementAllowed,
+        UUID countryId,
         UUID createdBy
     ) {}
 
@@ -58,6 +68,7 @@ public interface ManageProductUseCase {
         List<String> customerTypes,
         boolean involvesCommodity,
         String logoUrl,
+        UUID countryId,
         UUID updatedBy
     ) {}
 }

@@ -8,8 +8,13 @@ import com.ksa.financing.product.domain.model.ProductStatus;
 import com.ksa.financing.product.domain.port.in.ManageProductUseCase;
 import com.ksa.financing.product.domain.port.out.EventPublisherPort;
 import com.ksa.financing.product.domain.port.out.ProductRepository;
+import com.ksa.islamic.orchestration.activity.product.ProductActivationWorkflow;
+import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowExecutionAlreadyStarted;
+import io.temporal.client.WorkflowOptions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +28,10 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
 
     private final ProductRepository productRepository;
     private final EventPublisherPort eventPublisher;
+    private final WorkflowClient workflowClient;
+
+    @Value("${temporal.task-queue:product-activation-queue}")
+    private String taskQueue;
 
     @Override
     @Transactional
@@ -69,6 +78,7 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
         product.setRepaymentFrequency(command.repaymentFrequency() != null ? command.repaymentFrequency() : "MONTHLY");
         product.setGracePeriodDays(command.gracePeriodDays() > 0 ? command.gracePeriodDays() : 3);
         product.setEarlySettlementAllowed(command.earlySettlementAllowed());
+        product.setCountryId(command.countryId());
         product.setVisibleToPartners(true);
         product.setCreatedBy(command.createdBy());
 
@@ -76,7 +86,8 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
         log.info("Product created with id: {}", saved.getId());
 
         eventPublisher.publishProductCreated(saved);
-        return saved;
+        // Re-fetch with all settings loaded (including country)
+        return productRepository.findById(command.tenantId(), saved.getId()).orElse(saved);
     }
 
     @Override
@@ -110,32 +121,91 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
         if (command.customerTypes() != null) product.setCustomerTypes(command.customerTypes());
         product.setInvolvesCommodity(command.involvesCommodity());
         if (command.logoUrl() != null) product.setLogoUrl(command.logoUrl());
+        product.setCountryId(command.countryId());
         product.setUpdatedBy(command.updatedBy());
 
-        Product saved = productRepository.save(product);
-        eventPublisher.publishProductUpdated(saved);
-        return saved;
+        productRepository.save(product);
+        eventPublisher.publishProductUpdated(product);
+        // Re-fetch with all settings loaded
+        return productRepository.findById(tenantId, productId)
+            .orElseThrow(() -> NotFoundException.forEntity("Product", productId.toString()));
     }
 
     @Override
-    @Transactional
-    public void activate(UUID tenantId, UUID productId) {
-        log.info("Activating product: {}", productId);
+    public ActivationResultDto activate(UUID tenantId, UUID productId) {
+        log.info("Starting product activation workflow: productId={} tenant={}", productId, tenantId);
 
         var product = productRepository.findById(tenantId, productId)
             .orElseThrow(() -> NotFoundException.forEntity("Product", productId.toString()));
 
-        try {
-            product.activate();
-        } catch (IllegalStateException e) {
+        if (product.getStatus() != ProductStatus.DRAFT
+                && product.getStatus() != ProductStatus.ACTIVATION_FAILED) {
             throw new BusinessException(
                 ErrorCodes.Product.INVALID_TRANSITION,
-                e.getMessage(),
+                "Cannot activate product in status: " + product.getStatus(),
                 product.getStatus().name(), ProductStatus.ACTIVE.name());
         }
 
-        productRepository.save(product);
-        eventPublisher.publishProductActivated(product);
+        String workflowId = "product-activation-" + productId;
+
+        var options = WorkflowOptions.newBuilder()
+                .setWorkflowId(workflowId)
+                .setTaskQueue(taskQueue)
+                .setWorkflowExecutionTimeout(java.time.Duration.ofMinutes(10))
+                .build();
+
+        var request = new ProductActivationWorkflow.ActivationRequest(
+                tenantId.toString(),
+                productId.toString(),
+                product.getProductCode(),
+                product.getNameEn(),
+                product.getNameAr(),
+                product.getProductType() != null ? product.getProductType().name() : null,
+                product.getShariaStructure(),
+                product.getTargetSegment(),
+                product.getCurrency(),
+                product.getMinAmount(),
+                product.getMaxAmount(),
+                product.getMinTenureMonths(),
+                product.getMaxTenureMonths(),
+                product.getBaseProfitRate(),
+                product.getRateType(),
+                product.getRepaymentFrequency(),
+                product.getGracePeriodDays(),
+                product.isEarlySettlementAllowed(),
+                product.getAllowedTenures(),
+                null
+        );
+
+        try {
+            var workflow = workflowClient.newWorkflowStub(ProductActivationWorkflow.class, options);
+
+            // Execute workflow synchronously — wait for result
+            var result = workflow.execute(request);
+            log.info("Product activation workflow completed: workflowId={} success={}", workflowId, result.success());
+
+            return new ActivationResultDto(
+                    result.productId(),
+                    result.fineractProductId(),
+                    result.status(),
+                    result.failureReason(),
+                    result.success(),
+                    workflowId
+            );
+
+        } catch (WorkflowExecutionAlreadyStarted e) {
+            log.warn("Product activation workflow already running: workflowId={}", workflowId);
+            throw new BusinessException(
+                    ErrorCodes.Product.INVALID_TRANSITION,
+                    "Product activation is already in progress",
+                    productId.toString());
+        } catch (Exception e) {
+            log.error("Product activation workflow failed: productId={}", productId, e);
+            throw new BusinessException(
+                    ErrorCodes.Product.INVALID_TRANSITION,
+                    "Product activation failed: " + e.getMessage(),
+                    productId.toString());
+        }
     }
 
     @Override
