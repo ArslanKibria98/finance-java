@@ -1,0 +1,137 @@
+package com.ksa.financing.fraud.infrastructure.persistence;
+
+import com.ksa.financing.fraud.domain.model.fraud.FraudBlockType;
+import com.ksa.financing.fraud.domain.model.fraud.FraudDecision;
+import com.ksa.financing.fraud.domain.model.rule.*;
+import com.ksa.financing.fraud.domain.port.out.FraudRuleRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+@RequiredArgsConstructor
+@Slf4j
+public class FraudRuleRepositoryImpl implements FraudRuleRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
+
+    @Override
+    public List<FraudRule> findActiveByTenant(UUID tenantId) {
+        return jdbcTemplate.query(
+                "SELECT * FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY priority",
+                ruleMapper(), tenantId);
+    }
+
+    @Override
+    public List<FraudRule> findAllByTenant(UUID tenantId) {
+        return jdbcTemplate.query(
+                "SELECT * FROM fraud_rules WHERE tenant_id = ? ORDER BY priority",
+                ruleMapper(), tenantId);
+    }
+
+    @Override
+    public Optional<FraudRule> findByTenantAndRuleId(UUID tenantId, FraudRuleId ruleId) {
+        var results = jdbcTemplate.query(
+                "SELECT * FROM fraud_rules WHERE tenant_id = ? AND rule_id = ?",
+                ruleMapper(), tenantId, ruleId.name());
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
+    }
+
+    @Override
+    public FraudRule save(FraudRule rule) {
+        var id = rule.id() != null ? rule.id() : UUID.randomUUID();
+        var paramsJson = serializeParameters(rule.parameters());
+        jdbcTemplate.update("""
+            INSERT INTO fraud_rules (id, tenant_id, rule_id, scenario_name, scenario_name_ar,
+                category, detection_logic, default_action, block_type, status, parameters, priority,
+                created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?::fraud_rule_category, ?, ?::fraud_decision_type, ?::fraud_block_type,
+                ?::fraud_rule_status, ?::jsonb, ?, ?, ?)
+            ON CONFLICT (tenant_id, rule_id) DO UPDATE SET
+                scenario_name = EXCLUDED.scenario_name,
+                parameters = EXCLUDED.parameters,
+                status = EXCLUDED.status,
+                updated_at = EXCLUDED.updated_at
+            """,
+            id, rule.tenantId(), rule.ruleId().name(),
+            rule.scenarioName(), rule.scenarioNameAr(),
+            rule.category().name(), rule.detectionLogic(),
+            rule.defaultAction().name(),
+            rule.blockType() != null ? rule.blockType().name() : null,
+            rule.status().name(), paramsJson, rule.priority(),
+            Timestamp.from(Instant.now()), Timestamp.from(Instant.now()));
+        return rule;
+    }
+
+    @Override
+    public void updateStatus(UUID tenantId, FraudRuleId ruleId, String status) {
+        jdbcTemplate.update(
+                "UPDATE fraud_rules SET status = ?::fraud_rule_status, updated_at = ? WHERE tenant_id = ? AND rule_id = ?",
+                status, Timestamp.from(Instant.now()), tenantId, ruleId.name());
+    }
+
+    @Override
+    public void updateParameters(UUID tenantId, FraudRuleId ruleId, String parametersJson) {
+        jdbcTemplate.update(
+                "UPDATE fraud_rules SET parameters = ?::jsonb, updated_at = ? WHERE tenant_id = ? AND rule_id = ?",
+                parametersJson, Timestamp.from(Instant.now()), tenantId, ruleId.name());
+    }
+
+    private RowMapper<FraudRule> ruleMapper() {
+        return (rs, rowNum) -> {
+            var params = deserializeParameters(rs.getString("parameters"));
+            return new FraudRule(
+                    rs.getObject("id", UUID.class),
+                    rs.getObject("tenant_id", UUID.class),
+                    parseEnum(FraudRuleId.class, rs.getString("rule_id")),
+                    rs.getString("scenario_name"),
+                    rs.getString("scenario_name_ar"),
+                    parseEnum(FraudRuleCategory.class, rs.getString("category")),
+                    rs.getString("detection_logic"),
+                    parseEnum(FraudDecision.class, rs.getString("default_action")),
+                    parseEnum(FraudBlockType.class, rs.getString("block_type")),
+                    parseEnum(FraudRuleStatus.class, rs.getString("status")),
+                    params,
+                    rs.getInt("priority"),
+                    rs.getTimestamp("created_at").toLocalDateTime(),
+                    rs.getTimestamp("updated_at").toLocalDateTime()
+            );
+        };
+    }
+
+    private List<RuleParameter> deserializeParameters(String json) {
+        if (json == null || json.isBlank() || "[]".equals(json)) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("Failed to deserialize rule parameters: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private String serializeParameters(List<RuleParameter> params) {
+        if (params == null || params.isEmpty()) return "[]";
+        try {
+            return objectMapper.writeValueAsString(params);
+        } catch (Exception e) {
+            log.warn("Failed to serialize rule parameters: {}", e.getMessage());
+            return "[]";
+        }
+    }
+
+    private static <T extends Enum<T>> T parseEnum(Class<T> clazz, String value) {
+        if (value == null) return null;
+        try { return Enum.valueOf(clazz, value); } catch (IllegalArgumentException e) { return null; }
+    }
+}

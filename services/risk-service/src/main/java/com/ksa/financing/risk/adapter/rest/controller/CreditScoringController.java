@@ -1,12 +1,20 @@
 package com.ksa.financing.risk.adapter.rest.controller;
 
+import com.ksa.financing.risk.adapter.rest.request.CreateFieldDefinitionRequest;
+import com.ksa.financing.risk.adapter.rest.request.EvaluateEligibilityRequest;
 import com.ksa.financing.risk.adapter.rest.request.SaveCreditScoringRequest;
+import com.ksa.financing.risk.adapter.rest.request.UpdateFieldDefinitionRequest;
 import com.ksa.financing.risk.domain.model.credit.CreditScoringCriteria;
 import com.ksa.financing.risk.domain.model.credit.CreditScoringFieldDefinition;
+import com.ksa.financing.risk.domain.model.credit.EligibilityEvaluationResult;
+import com.ksa.financing.risk.domain.port.in.EvaluateEligibilityUseCase;
 import com.ksa.financing.risk.domain.port.in.GetCreditScoringFieldsUseCase;
 import com.ksa.financing.risk.domain.port.in.ManageCreditScoringUseCase;
 import com.ksa.financing.risk.domain.port.in.ManageCreditScoringUseCase.CreditScoringCriteriaCommand;
 import com.ksa.financing.risk.domain.port.in.ManageCreditScoringUseCase.CreditScoringRuleCommand;
+import com.ksa.financing.risk.domain.port.in.ManageFieldDefinitionsUseCase;
+import com.ksa.financing.risk.domain.port.in.ManageFieldDefinitionsUseCase.CreateFieldDefinitionCommand;
+import com.ksa.financing.risk.domain.port.in.ManageFieldDefinitionsUseCase.UpdateFieldDefinitionCommand;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,6 +41,8 @@ public class CreditScoringController {
 
     private final GetCreditScoringFieldsUseCase getCreditScoringFieldsUseCase;
     private final ManageCreditScoringUseCase manageCreditScoringUseCase;
+    private final ManageFieldDefinitionsUseCase manageFieldDefinitionsUseCase;
+    private final EvaluateEligibilityUseCase evaluateEligibilityUseCase;
 
     @SecuredEndpoint(obj = "risk.credit-scoring", act = "read")
     @GetMapping("/field-definitions")
@@ -92,6 +103,107 @@ public class CreditScoringController {
         manageCreditScoringUseCase.deleteCriteriaByProduct(tenantId, productId);
         return ResponseEntity.ok().build();
     }
+
+    // ==================== Field Definition CRUD (Super Admin Only) ====================
+
+    @SecuredEndpoint(obj = "risk.credit-scoring.field-definitions", act = "read")
+    @GetMapping("/field-definitions/all")
+    @Operation(summary = "List all field definitions", description = "Returns all credit scoring field definitions (active and inactive) for admin management")
+    public List<CreditScoringFieldDefinition> getAllFieldDefinitions(@AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Admin fetching all field definitions for tenant={}", tenantId);
+        return manageFieldDefinitionsUseCase.getAllFieldDefinitions(tenantId);
+    }
+
+    @SecuredEndpoint(obj = "risk.credit-scoring.field-definitions", act = "read")
+    @GetMapping("/field-definitions/{id}")
+    @Operation(summary = "Get field definition by ID", description = "Returns a single field definition by its ID")
+    public CreditScoringFieldDefinition getFieldDefinitionById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Admin fetching field definition id={} for tenant={}", id, tenantId);
+        return manageFieldDefinitionsUseCase.getFieldDefinitionById(tenantId, id);
+    }
+
+    @SecuredEndpoint(obj = "risk.credit-scoring.field-definitions", act = "create")
+    @PostMapping("/field-definitions")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create field definition", description = "Creates a new credit scoring field definition")
+    public CreditScoringFieldDefinition createFieldDefinition(
+            @Valid @RequestBody CreateFieldDefinitionRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Admin creating field definition fieldKey={} for tenant={}", request.fieldKey(), tenantId);
+
+        var command = new CreateFieldDefinitionCommand(
+                request.fieldKey(), request.nameEn(), request.nameAr(),
+                request.dataType(), request.active(), request.sortOrder()
+        );
+
+        return manageFieldDefinitionsUseCase.createFieldDefinition(tenantId, command);
+    }
+
+    @SecuredEndpoint(obj = "risk.credit-scoring.field-definitions", act = "update")
+    @PutMapping("/field-definitions/{id}")
+    @Operation(summary = "Update field definition", description = "Updates an existing credit scoring field definition")
+    public CreditScoringFieldDefinition updateFieldDefinition(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateFieldDefinitionRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Admin updating field definition id={} for tenant={}", id, tenantId);
+
+        var command = new UpdateFieldDefinitionCommand(
+                request.fieldKey(), request.nameEn(), request.nameAr(),
+                request.dataType(), request.active(), request.sortOrder()
+        );
+
+        return manageFieldDefinitionsUseCase.updateFieldDefinition(tenantId, id, command);
+    }
+
+    @SecuredEndpoint(obj = "risk.credit-scoring.field-definitions", act = "delete")
+    @DeleteMapping("/field-definitions/{id}")
+    @Operation(summary = "Delete field definition", description = "Deletes a credit scoring field definition by ID")
+    public ResponseEntity<Void> deleteFieldDefinition(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Admin deleting field definition id={} for tenant={}", id, tenantId);
+        manageFieldDefinitionsUseCase.deleteFieldDefinition(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ==================== Decision Engine: Product Fields + Evaluate ====================
+
+    @SecuredEndpoint(obj = "risk.credit-scoring", act = "read")
+    @GetMapping("/products/{productId}/fields")
+    @Operation(summary = "Get eligibility fields for a product",
+            description = "Returns field definitions assigned to a product (for mobile form rendering). "
+                    + "Falls back to all active definitions if no product-specific criteria exist.")
+    public List<CreditScoringFieldDefinition> getProductFields(
+            @PathVariable UUID productId,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Getting eligibility fields for product={} tenant={}", productId, tenantId);
+        return evaluateEligibilityUseCase.getProductFields(tenantId, productId);
+    }
+
+    @SecuredEndpoint(obj = "risk.credit-scoring", act = "read")
+    @PostMapping("/products/{productId}/evaluate")
+    @Operation(summary = "Evaluate customer eligibility against product scoring rules",
+            description = "Runs the decision engine: loads product criteria + rules, evaluates customer "
+                    + "answers against each rule, returns score and eligibility decision.")
+    public EligibilityEvaluationResult evaluateEligibility(
+            @PathVariable UUID productId,
+            @Valid @RequestBody EvaluateEligibilityRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Evaluating eligibility for product={} tenant={}", productId, tenantId);
+        return evaluateEligibilityUseCase.evaluate(tenantId, productId, request.answers());
+    }
+
+    // ==================== Helpers ====================
 
     private UUID extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");

@@ -1,4 +1,4 @@
-package com.ksa.financing.risk.infrastructure.config;
+package com.ksa.financing.fraud.infrastructure.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -40,7 +40,14 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
         return http
-            .securityMatcher("/api/v1/risk/internal-checks", "/api/v1/risk/aml-score", "/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+            .securityMatcher(
+                "/api/v1/fraud/evaluate",
+                "/api/v1/fraud/history-check",
+                "/actuator/**",
+                "/v3/api-docs/**",
+                "/swagger-ui/**",
+                "/swagger-ui.html"
+            )
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session

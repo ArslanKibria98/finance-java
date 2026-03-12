@@ -93,7 +93,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
 
             var fraudResult = fraudHistoryCheck.check(
                 new FraudHistoryCheck.FraudHistoryInput(
-                    request.nidHash(), request.mobileHash()
+                    request.nidHash(), request.mobileHash(), null
                 )
             );
             if (fraudResult.decision() == CheckDecision.HARD_BLOCK) {

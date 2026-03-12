@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -29,17 +30,127 @@ public class CreditScoringRepositoryImpl implements CreditScoringRepository {
                 WHERE tenant_id = ?::uuid AND is_active = true
                 ORDER BY sort_order
                 """,
-                (rs, rowNum) -> new CreditScoringFieldDefinition(
-                        UUID.fromString(rs.getString("id")),
-                        UUID.fromString(rs.getString("tenant_id")),
-                        rs.getString("field_key"),
-                        rs.getString("name_en"),
-                        rs.getString("name_ar"),
-                        rs.getString("data_type"),
-                        rs.getBoolean("is_active"),
-                        rs.getInt("sort_order")
-                ),
+                fieldDefinitionRowMapper(),
                 tenantId
+        );
+    }
+
+    @Override
+    public List<CreditScoringFieldDefinition> findAllFieldDefinitions(UUID tenantId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, tenant_id, field_key, name_en, name_ar, data_type, is_active, sort_order
+                FROM credit_scoring_field_definitions
+                WHERE tenant_id = ?
+                ORDER BY sort_order
+                """,
+                fieldDefinitionRowMapper(),
+                tenantId
+        );
+    }
+
+    @Override
+    public Optional<CreditScoringFieldDefinition> findFieldDefinitionById(UUID tenantId, UUID id) {
+        var results = jdbcTemplate.query(
+                """
+                SELECT id, tenant_id, field_key, name_en, name_ar, data_type, is_active, sort_order
+                FROM credit_scoring_field_definitions
+                WHERE tenant_id = ? AND id = ?
+                """,
+                fieldDefinitionRowMapper(),
+                tenantId, id
+        );
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
+    }
+
+    @Override
+    public CreditScoringFieldDefinition saveFieldDefinition(CreditScoringFieldDefinition fieldDefinition) {
+        var id = UUID.randomUUID();
+        var now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO credit_scoring_field_definitions
+                    (id, tenant_id, field_key, name_en, name_ar, data_type, is_active, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                id, fieldDefinition.tenantId(), fieldDefinition.fieldKey(),
+                fieldDefinition.nameEn(), fieldDefinition.nameAr(),
+                fieldDefinition.dataType(), fieldDefinition.active(),
+                fieldDefinition.sortOrder(), now, now
+        );
+
+        return new CreditScoringFieldDefinition(
+                id, fieldDefinition.tenantId(), fieldDefinition.fieldKey(),
+                fieldDefinition.nameEn(), fieldDefinition.nameAr(),
+                fieldDefinition.dataType(), fieldDefinition.active(),
+                fieldDefinition.sortOrder()
+        );
+    }
+
+    @Override
+    public CreditScoringFieldDefinition updateFieldDefinition(CreditScoringFieldDefinition fieldDefinition) {
+        var now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        jdbcTemplate.update(
+                """
+                UPDATE credit_scoring_field_definitions
+                SET field_key = ?, name_en = ?, name_ar = ?, data_type = ?,
+                    is_active = ?, sort_order = ?, updated_at = ?
+                WHERE tenant_id = ? AND id = ?
+                """,
+                fieldDefinition.fieldKey(), fieldDefinition.nameEn(), fieldDefinition.nameAr(),
+                fieldDefinition.dataType(), fieldDefinition.active(), fieldDefinition.sortOrder(),
+                now, fieldDefinition.tenantId(), fieldDefinition.id()
+        );
+
+        return fieldDefinition;
+    }
+
+    @Override
+    public void deleteFieldDefinition(UUID tenantId, UUID id) {
+        jdbcTemplate.update(
+                """
+                DELETE FROM credit_scoring_field_definitions
+                WHERE tenant_id = ? AND id = ?
+                """,
+                tenantId, id
+        );
+    }
+
+    @Override
+    public boolean fieldKeyExists(UUID tenantId, String fieldKey, UUID excludeId) {
+        String sql;
+        Object[] params;
+
+        if (excludeId != null) {
+            sql = """
+                SELECT COUNT(*) FROM credit_scoring_field_definitions
+                WHERE tenant_id = ? AND field_key = ? AND id != ?
+                """;
+            params = new Object[]{tenantId, fieldKey, excludeId};
+        } else {
+            sql = """
+                SELECT COUNT(*) FROM credit_scoring_field_definitions
+                WHERE tenant_id = ? AND field_key = ?
+                """;
+            params = new Object[]{tenantId, fieldKey};
+        }
+
+        var count = jdbcTemplate.queryForObject(sql, Integer.class, params);
+        return count != null && count > 0;
+    }
+
+    private org.springframework.jdbc.core.RowMapper<CreditScoringFieldDefinition> fieldDefinitionRowMapper() {
+        return (rs, rowNum) -> new CreditScoringFieldDefinition(
+                UUID.fromString(rs.getString("id")),
+                UUID.fromString(rs.getString("tenant_id")),
+                rs.getString("field_key"),
+                rs.getString("name_en"),
+                rs.getString("name_ar"),
+                rs.getString("data_type"),
+                rs.getBoolean("is_active"),
+                rs.getInt("sort_order")
         );
     }
 
@@ -153,5 +264,21 @@ public class CreditScoringRepositoryImpl implements CreditScoringRepository {
                 tenantId, productId
         );
         log.debug("Deleted {} existing criteria for product={}", deleted, productId);
+    }
+
+    @Override
+    public List<CreditScoringFieldDefinition> findFieldDefinitionsByProductId(UUID tenantId, UUID productId) {
+        return jdbcTemplate.query(
+                """
+                SELECT DISTINCT fd.id, fd.tenant_id, fd.field_key, fd.name_en, fd.name_ar,
+                       fd.data_type, fd.is_active, fd.sort_order
+                FROM credit_scoring_field_definitions fd
+                JOIN product_credit_scoring_criteria c ON c.field_definition_id = fd.id
+                WHERE c.tenant_id = ? AND c.product_id = ? AND c.is_enabled = true
+                ORDER BY c.sort_order, fd.sort_order
+                """,
+                fieldDefinitionRowMapper(),
+                tenantId, productId
+        );
     }
 }
