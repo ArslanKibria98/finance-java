@@ -25,8 +25,10 @@ public interface ProductValidationActivity {
 
     record ProductValidationResult(
             boolean valid,
+            String productCode,
             String productName,
             String shariaStructure,
+            String fineractProductId,
             BigDecimal minAmount,
             BigDecimal maxAmount,
             int minTenureMonths,

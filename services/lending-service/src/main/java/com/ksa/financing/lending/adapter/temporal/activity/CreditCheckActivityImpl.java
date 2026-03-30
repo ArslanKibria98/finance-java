@@ -7,6 +7,7 @@ import com.ksa.financing.domain.sharia.MurabahaCalculation;
 import com.ksa.financing.domain.valueobject.SarMoney;
 import com.ksa.financing.domain.valueobject.ProfitRate;
 import com.ksa.financing.domain.valueobject.Tenure;
+import com.ksa.financing.lending.domain.service.AffordabilityCalculationService;
 import com.ksa.islamic.orchestration.activity.lending.CreditCheckActivity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,14 +30,26 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final String riskServiceUrl;
+    private final String fineractBaseUrl;
+    private final String fineractUsername;
+    private final String fineractPassword;
+    private final String fineractTenantId;
 
     public CreditCheckActivityImpl(
             RestTemplate restTemplate,
             ObjectMapper objectMapper,
-            @Value("${app.services.risk-service-url}") String riskServiceUrl) {
+            @Value("${app.services.risk-service-url}") String riskServiceUrl,
+            @Value("${app.services.fineract-base-url:https://localhost:8443/fineract-provider/api/v1}") String fineractBaseUrl,
+            @Value("${fineract.username:mifos}") String fineractUsername,
+            @Value("${fineract.password:password}") String fineractPassword,
+            @Value("${fineract.tenant-id:default}") String fineractTenantId) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.riskServiceUrl = riskServiceUrl;
+        this.fineractBaseUrl = fineractBaseUrl;
+        this.fineractUsername = fineractUsername;
+        this.fineractPassword = fineractPassword;
+        this.fineractTenantId = fineractTenantId;
     }
 
     @Override
@@ -64,7 +77,10 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
                 return new CreditCheckResult(0, "UNKNOWN", null, BigDecimal.ZERO, BigDecimal.ZERO, true);
             }
 
-            var result = objectMapper.readTree(response.getBody());
+            var rootNode = objectMapper.readTree(response.getBody());
+            // Risk-service wraps response in {"data": {...}} envelope
+            var result = rootNode.has("data") && !rootNode.get("data").isNull()
+                    ? rootNode.get("data") : rootNode;
 
             int creditScore = intOrZero(result, "creditScore");
             String simahGrade = textOrNull(result, "simahGrade");
@@ -92,37 +108,44 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
     public EligibilityResult calculateEligibility(EligibilityInput input) {
         log.info("Activity: Calculating eligibility for tenant={}", input.tenantId());
 
+        // ══════ FINERACT PRODUCT VALIDATION (BRD fix: validate before loan creation) ══════
+        var fineractCheck = validateAgainstFineractProducts(input.requestedAmount(), input.requestedTenureMonths());
+        if (fineractCheck != null) {
+            log.warn("Fineract product validation failed: {}", fineractCheck);
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null, fineractCheck);
+        }
+
         // Check credit score
         if (input.minCreditScore() > 0 && input.creditScore() < input.minCreditScore()) {
-            return new EligibilityResult(false, BigDecimal.ZERO, null, null,
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null,
                     "Credit score " + input.creditScore() + " below minimum " + input.minCreditScore());
         }
 
         // Check defaults
         if (input.hasActiveDefaults()) {
-            return new EligibilityResult(false, BigDecimal.ZERO, null, null,
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null,
                     "Customer has active defaults in SIMAH");
         }
 
         // Check salary
         if (input.minSalary() != null && input.verifiedSalary().compareTo(input.minSalary()) < 0) {
-            return new EligibilityResult(false, BigDecimal.ZERO, null, null,
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null,
                     "Salary " + input.verifiedSalary() + " below minimum " + input.minSalary());
         }
 
         // Check age
         if (input.minAge() > 0 && input.customerAge() < input.minAge()) {
-            return new EligibilityResult(false, BigDecimal.ZERO, null, null,
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null,
                     "Age " + input.customerAge() + " below minimum " + input.minAge());
         }
         if (input.maxAge() > 0 && input.customerAge() > input.maxAge()) {
-            return new EligibilityResult(false, BigDecimal.ZERO, null, null,
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null,
                     "Age " + input.customerAge() + " exceeds maximum " + input.maxAge());
         }
 
         // Check employment duration
         if (input.minEmploymentMonths() > 0 && input.employmentDurationMonths() < input.minEmploymentMonths()) {
-            return new EligibilityResult(false, BigDecimal.ZERO, null, null,
+            return new EligibilityResult(false, BigDecimal.ZERO, null, null, null,
                     "Employment duration " + input.employmentDurationMonths() + " months below minimum " + input.minEmploymentMonths());
         }
 
@@ -153,15 +176,35 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
                     availableForInstallment, input.profitRate(), input.requestedTenureMonths());
 
             if (maxEligible.compareTo(BigDecimal.ZERO) <= 0) {
-                return new EligibilityResult(false, BigDecimal.ZERO, dbrBefore, dbrAfter,
+                return new EligibilityResult(false, BigDecimal.ZERO, dbrBefore, dbrAfter, BigDecimal.ZERO,
                         "DBR exceeds maximum " + maxDbr + "% — no eligible amount");
             }
 
-            return new EligibilityResult(true, maxEligible, dbrBefore, dbrAfter, null);
+            // Even with reduced amount, run affordability check
+            BigDecimal reducedInstallment = calculateMonthlyInstallment(
+                    maxEligible, input.profitRate(), input.requestedTenureMonths());
+            var affordability = runAffordabilityCheck(input, reducedInstallment);
+            if (!affordability.eligible()) {
+                return new EligibilityResult(false, BigDecimal.ZERO, dbrBefore, dbrAfter,
+                        affordability.disposableIncome(), affordability.reason());
+            }
+
+            return new EligibilityResult(true, maxEligible, dbrBefore, dbrAfter,
+                    affordability.disposableIncome(), null);
         }
 
-        log.info("Eligibility passed: dbrBefore={}%, dbrAfter={}%", dbrBefore, dbrAfter);
-        return new EligibilityResult(true, input.requestedAmount(), dbrBefore, dbrAfter, null);
+        // ══════ BRD AFFORDABILITY CHECK (Steps 5-6, 27) ══════
+        // After DBR passes, verify disposable income covers expenses + installment
+        var affordability = runAffordabilityCheck(input, proposedInstallment);
+        if (!affordability.eligible()) {
+            return new EligibilityResult(false, BigDecimal.ZERO, dbrBefore, dbrAfter,
+                    affordability.disposableIncome(), affordability.reason());
+        }
+
+        log.info("Eligibility passed: dbrBefore={}%, dbrAfter={}%, disposableIncome={}",
+                dbrBefore, dbrAfter, affordability.disposableIncome());
+        return new EligibilityResult(true, input.requestedAmount(), dbrBefore, dbrAfter,
+                affordability.disposableIncome(), null);
     }
 
     @Override
@@ -169,13 +212,12 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
         log.info("Activity: Calculating offer for structure={}, amount={}",
                 input.shariaStructure(), input.principalAmount());
 
-        // Use domain-core-sdk MurabahaCalculator for Sharia-compliant calculation
-        MurabahaCalculation calc = MurabahaCalculator.calculate(
-                SarMoney.of(input.principalAmount()),
-                new ProfitRate(input.profitRate()),
-                new Tenure(input.tenureMonths()),
-                java.time.LocalDate.now()
-        );
+        // Use BRD V1.8 formula (same as initiate endpoint) for consistent values
+        // Auto-detect: if value > 1, treat as percentage and convert to decimal
+        BigDecimal rate = input.profitRate();
+        BigDecimal decimalRate = rate.compareTo(BigDecimal.ONE) > 0
+                ? rate.movePointLeft(2)
+                : rate;
 
         BigDecimal processingFee = input.processingFeePercent() != null
                 ? input.principalAmount().multiply(input.processingFeePercent())
@@ -184,24 +226,84 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
 
         BigDecimal adminFee = input.adminFeeAmount() != null ? input.adminFeeAmount() : BigDecimal.ZERO;
 
-        log.info("Offer calculated: monthly={}, totalProfit={}, totalPayable={}",
-                calc.monthlyInstallment(), calc.profitAmount(), calc.salePrice());
-
-        return new ProfitCalculationResult(
-                calc.monthlyInstallment().getValue(),
-                calc.profitAmount().getValue(),
-                calc.salePrice().getValue(),  // totalPayable = sale price
-                calc.salePrice().getValue(),  // sellingPrice
+        var calcResult = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
+                input.principalAmount(),
+                decimalRate,
+                null,
+                input.tenureMonths(),
                 processingFee,
                 adminFee
         );
+
+        log.info("Offer calculated (BRD formula): monthly={}, totalProfit={}, totalPayable={}",
+                calcResult.monthlyInstallment(), calcResult.totalCostOfFinancing(), calcResult.totalPayable());
+
+        return new ProfitCalculationResult(
+                calcResult.monthlyInstallment(),
+                calcResult.totalCostOfFinancing(),
+                calcResult.totalPayable(),
+                calcResult.totalPayable(),  // sellingPrice = totalPayable
+                processingFee,
+                adminFee
+        );
+    }
+
+    /**
+     * BRD Affordability check (Steps 5-6, 27): verifies disposable income after expenses.
+     * Uses customer-declared expenses (8 categories) to ensure the customer can actually
+     * afford the proposed installment after covering living costs.
+     * Prefers SIMAH-verified salary over customer-declared income.
+     */
+    private AffordabilityCalculationService.AffordabilityResult runAffordabilityCheck(
+            EligibilityInput input, BigDecimal proposedInstallment) {
+
+        // Use SIMAH-verified salary (more reliable), fall back to customer-declared
+        BigDecimal salary = input.verifiedSalary().compareTo(BigDecimal.ZERO) > 0
+                ? input.verifiedSalary()
+                : (input.declaredMonthlyIncome() != null ? input.declaredMonthlyIncome() : BigDecimal.ZERO);
+
+        // Use declared expenses from BRD 8 categories (sum provided by workflow)
+        BigDecimal expenses = input.declaredExpenses() != null ? input.declaredExpenses() : BigDecimal.ZERO;
+
+        // Use SIMAH obligations (already includes liabilities from credit bureau)
+        BigDecimal liabilities = input.existingObligations();
+
+        BigDecimal maxDbr = input.maxDbrPercent() != null ? input.maxDbrPercent() : BigDecimal.valueOf(65);
+
+        // Skip affordability if no expense data provided (backward compatibility)
+        if (expenses.compareTo(BigDecimal.ZERO) == 0) {
+            log.info("No declared expenses provided, skipping affordability check (DBR-only mode)");
+            BigDecimal disposable = salary.subtract(liabilities).subtract(proposedInstallment);
+            return new AffordabilityCalculationService.AffordabilityResult(
+                    true, BigDecimal.ZERO, BigDecimal.ZERO, disposable, null);
+        }
+
+        var result = AffordabilityCalculationService.check(salary, liabilities, expenses, proposedInstallment, maxDbr);
+
+        log.info("Affordability check: eligible={}, dbrAfter={}, disposableIncome={}, reason={}",
+                result.eligible(), result.dbrAfter(), result.disposableIncome(), result.reason());
+
+        return result;
+    }
+
+    /**
+     * Normalize profit rate: if value > 1, treat as percentage and convert to decimal.
+     * Product DB stores rates as percentages (e.g., 2.5 for 2.5%), but calculations need
+     * decimal form (0.025). The offer calculator already does this; eligibility must too.
+     */
+    private BigDecimal normalizeRate(BigDecimal rate) {
+        if (rate == null) return BigDecimal.ZERO;
+        return rate.compareTo(BigDecimal.ONE) > 0
+                ? rate.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)
+                : rate;
     }
 
     private BigDecimal calculateMonthlyInstallment(BigDecimal principal, BigDecimal annualRate, int tenureMonths) {
         if (tenureMonths <= 0 || principal.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
-        BigDecimal totalProfit = principal.multiply(annualRate)
+        BigDecimal rate = normalizeRate(annualRate);
+        BigDecimal totalProfit = principal.multiply(rate)
                 .multiply(BigDecimal.valueOf(tenureMonths))
                 .divide(BigDecimal.valueOf(12), 6, RoundingMode.HALF_UP);
         BigDecimal total = principal.add(totalProfit);
@@ -212,8 +314,9 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
         if (tenureMonths <= 0 || maxInstallment.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
+        BigDecimal rate = normalizeRate(annualRate);
         // Reverse: principal = installment * months / (1 + rate * months/12)
-        BigDecimal rateForTenure = annualRate.multiply(BigDecimal.valueOf(tenureMonths))
+        BigDecimal rateForTenure = rate.multiply(BigDecimal.valueOf(tenureMonths))
                 .divide(BigDecimal.valueOf(12), 6, RoundingMode.HALF_UP);
         BigDecimal divisor = BigDecimal.ONE.add(rateForTenure);
         return maxInstallment.multiply(BigDecimal.valueOf(tenureMonths))
@@ -231,5 +334,60 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
     private BigDecimal decimalOrZero(JsonNode node, String field) {
         return node.has(field) && !node.get(field).isNull()
                 ? new BigDecimal(node.get(field).asText()) : BigDecimal.ZERO;
+    }
+
+    /**
+     * Validate requested amount/tenure against Fineract loan products.
+     * Returns error message if no matching product found, null if OK.
+     */
+    private String validateAgainstFineractProducts(BigDecimal amount, int tenureMonths) {
+        try {
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBasicAuth(fineractUsername, fineractPassword);
+            headers.set("Fineract-Platform-TenantId", fineractTenantId);
+
+            var response = restTemplate.exchange(
+                    fineractBaseUrl + "/loanproducts",
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
+            );
+
+            var products = objectMapper.readTree(response.getBody());
+            if (products == null || !products.isArray() || products.isEmpty()) {
+                log.warn("No Fineract loan products found, skipping validation");
+                return null;
+            }
+
+            // Check if any product accepts this amount
+            boolean matchFound = false;
+            var reasons = new StringBuilder();
+            for (var product : products) {
+                var name = product.has("name") ? product.get("name").asText() : "Unknown";
+                var minPrincipal = product.has("minPrincipal")
+                        ? new BigDecimal(product.get("minPrincipal").asText()) : BigDecimal.ZERO;
+                var maxPrincipal = product.has("maxPrincipal")
+                        ? new BigDecimal(product.get("maxPrincipal").asText()) : new BigDecimal("999999999");
+
+                if (amount.compareTo(minPrincipal) >= 0 && amount.compareTo(maxPrincipal) <= 0) {
+                    matchFound = true;
+                    log.info("Fineract product match: {} (min={}, max={})", name, minPrincipal, maxPrincipal);
+                    break;
+                }
+                reasons.append(name).append(" (").append(minPrincipal).append("-").append(maxPrincipal).append("), ");
+            }
+
+            if (!matchFound) {
+                return "No Fineract loan product supports amount " + amount
+                        + " SAR. Available products: " + reasons.toString().replaceAll(", $", "");
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            log.warn("Fineract product validation unavailable ({}), skipping check", e.getMessage());
+            return null; // Don't block if Fineract is down
+        }
     }
 }

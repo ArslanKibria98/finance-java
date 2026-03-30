@@ -13,6 +13,8 @@ public interface LoginWithPinUseCase {
         String accessToken,
         String refreshToken,
         long expiresIn,
-        String customerId
+        String customerId,
+        String nationalId,
+        String mobileNumber
     ) {}
 }

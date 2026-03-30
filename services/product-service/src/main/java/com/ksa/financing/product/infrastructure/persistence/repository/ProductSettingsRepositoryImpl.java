@@ -83,6 +83,7 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
     public void saveFeeSettings(UUID tenantId, UUID productId, BigDecimal minAmount,
                                 BigDecimal maxAmount, BigDecimal vatPercentage,
                                 BigDecimal revenueThreshold, BigDecimal maxDbrPct,
+                                BigDecimal globalDbrPct,
                                 String dbrMethod, String dbrExceptions) {
         log.debug("Saving fee settings for productId={}", productId);
         var now = OffsetDateTime.now(ZoneOffset.UTC);
@@ -101,6 +102,7 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
         entity.setVatPercentage(vatPercentage);
         entity.setRevenueEligibilityThreshold(revenueThreshold);
         entity.setMaxDbrPercentage(maxDbrPct);
+        entity.setGlobalDbrPercentage(globalDbrPct);
         entity.setDbrCalculationMethod(dbrMethod);
         entity.setDbrExceptions(dbrExceptions);
         entity.setUpdatedAt(now);

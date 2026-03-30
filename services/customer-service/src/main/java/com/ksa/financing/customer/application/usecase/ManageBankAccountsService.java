@@ -29,6 +29,11 @@ public class ManageBankAccountsService implements ManageBankAccountsUseCase {
         customerRepository.findById(tenantId, customerId)
             .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + customerId));
 
+        var existing = bankAccountRepository.findByCustomerIdAndIban(customerId, command.iban());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
         BankAccount account = new BankAccount();
         account.setTenantId(tenantId);
         account.setCustomerId(customerId);

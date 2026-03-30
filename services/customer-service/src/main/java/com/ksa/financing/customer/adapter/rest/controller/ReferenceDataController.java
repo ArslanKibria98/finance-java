@@ -7,10 +7,14 @@ import com.ksa.financing.customer.application.dto.ReferenceDataResponse;
 import com.ksa.financing.customer.application.dto.UpdateNetWorthRangeRequest;
 import com.ksa.financing.customer.application.dto.UpdateReferenceDataRequest;
 import com.ksa.financing.customer.domain.model.NetWorthRangeOption;
+import com.ksa.financing.customer.domain.model.PurposeOfFinanceOption;
 import com.ksa.financing.customer.domain.model.SourceOfFundsOption;
+import com.ksa.financing.customer.domain.model.SourceOfIncomeOption;
 import com.ksa.financing.customer.domain.model.SourceOfWealthOption;
 import com.ksa.financing.customer.domain.port.in.ManageNetWorthRangeUseCase;
+import com.ksa.financing.customer.domain.port.in.ManagePurposeOfFinanceUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfFundsUseCase;
+import com.ksa.financing.customer.domain.port.in.ManageSourceOfIncomeUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfWealthUseCase;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
@@ -47,6 +51,8 @@ public class ReferenceDataController {
 
     private final ManageSourceOfWealthUseCase sourceOfWealthUseCase;
     private final ManageSourceOfFundsUseCase sourceOfFundsUseCase;
+    private final ManageSourceOfIncomeUseCase sourceOfIncomeUseCase;
+    private final ManagePurposeOfFinanceUseCase purposeOfFinanceUseCase;
     private final ManageNetWorthRangeUseCase netWorthRangeUseCase;
 
     // ========================================================================
@@ -256,6 +262,212 @@ public class ReferenceDataController {
     }
 
     // ========================================================================
+    // SOURCE OF INCOME
+    // ========================================================================
+
+    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @PostMapping("/source-of-income")
+    @Operation(summary = "Create source of income option", description = "Creates a new admin-managed source of income dropdown option")
+    @ApiResponse(responseCode = "201", description = "Option created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate code")
+    public ResponseEntity<ReferenceDataResponse> createSourceOfIncome(
+            @Valid @RequestBody CreateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Creating source of income option: {} for tenant: {}", request.code(), tenantId);
+
+        var command = new ManageSourceOfIncomeUseCase.CreateSourceOfIncomeCommand(
+                request.code(), request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(), request.displayOrder());
+
+        SourceOfIncomeOption created = sourceOfIncomeUseCase.create(tenantId, command);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @GetMapping("/source-of-income")
+    @Operation(summary = "List all source of income options", description = "Returns all options including inactive (admin view)")
+    @ApiResponse(responseCode = "200", description = "Options retrieved")
+    public ResponseEntity<List<ReferenceDataResponse>> getAllSourceOfIncome(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        List<ReferenceDataResponse> responses = sourceOfIncomeUseCase.getAll(tenantId)
+                .stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/source-of-income/active")
+    @Operation(summary = "List active source of income options",
+               description = "Returns only active options sorted by display order (for dropdown population). "
+                           + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
+    @ApiResponse(responseCode = "200", description = "Active options retrieved")
+    public ResponseEntity<List<ReferenceDataResponse>> getActiveSourceOfIncome(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest) {
+
+        UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
+        List<ReferenceDataResponse> responses = sourceOfIncomeUseCase.getActive(tenantId)
+                .stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @GetMapping("/source-of-income/{id}")
+    @Operation(summary = "Get source of income option by ID")
+    @ApiResponse(responseCode = "200", description = "Option found")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> getSourceOfIncomeById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        SourceOfIncomeOption option = sourceOfIncomeUseCase.getById(tenantId, id);
+        return ResponseEntity.ok(toResponse(option));
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @PutMapping("/source-of-income/{id}")
+    @Operation(summary = "Update source of income option", description = "Updates an existing option (partial update supported)")
+    @ApiResponse(responseCode = "200", description = "Option updated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> updateSourceOfIncome(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Updating source of income option: {} for tenant: {}", id, tenantId);
+
+        var command = new ManageSourceOfIncomeUseCase.UpdateSourceOfIncomeCommand(
+                request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(),
+                request.isActive(), request.displayOrder());
+
+        SourceOfIncomeOption updated = sourceOfIncomeUseCase.update(tenantId, id, command);
+        return ResponseEntity.ok(toResponse(updated));
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @DeleteMapping("/source-of-income/{id}")
+    @Operation(summary = "Deactivate source of income option", description = "Soft-deactivates the option (sets is_active = false)")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deactivateSourceOfIncome(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Deactivating source of income option: {} for tenant: {}", id, tenantId);
+        sourceOfIncomeUseCase.deactivate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ========================================================================
+    // PURPOSE OF FINANCE
+    // ========================================================================
+
+    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @PostMapping("/purpose-of-finance")
+    @Operation(summary = "Create purpose of finance option", description = "Creates a new admin-managed purpose of finance dropdown option")
+    @ApiResponse(responseCode = "201", description = "Option created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate code")
+    public ResponseEntity<ReferenceDataResponse> createPurposeOfFinance(
+            @Valid @RequestBody CreateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Creating purpose of finance option: {} for tenant: {}", request.code(), tenantId);
+
+        var command = new ManagePurposeOfFinanceUseCase.CreatePurposeOfFinanceCommand(
+                request.code(), request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(), request.displayOrder());
+
+        PurposeOfFinanceOption created = purposeOfFinanceUseCase.create(tenantId, command);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @GetMapping("/purpose-of-finance")
+    @Operation(summary = "List all purpose of finance options", description = "Returns all options including inactive (admin view)")
+    @ApiResponse(responseCode = "200", description = "Options retrieved")
+    public ResponseEntity<List<ReferenceDataResponse>> getAllPurposeOfFinance(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        List<ReferenceDataResponse> responses = purposeOfFinanceUseCase.getAll(tenantId)
+                .stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/purpose-of-finance/active")
+    @Operation(summary = "List active purpose of finance options",
+               description = "Returns only active options sorted by display order (for dropdown population). "
+                           + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
+    @ApiResponse(responseCode = "200", description = "Active options retrieved")
+    public ResponseEntity<List<ReferenceDataResponse>> getActivePurposeOfFinance(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest) {
+
+        UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
+        List<ReferenceDataResponse> responses = purposeOfFinanceUseCase.getActive(tenantId)
+                .stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @GetMapping("/purpose-of-finance/{id}")
+    @Operation(summary = "Get purpose of finance option by ID")
+    @ApiResponse(responseCode = "200", description = "Option found")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> getPurposeOfFinanceById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        PurposeOfFinanceOption option = purposeOfFinanceUseCase.getById(tenantId, id);
+        return ResponseEntity.ok(toResponse(option));
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @PutMapping("/purpose-of-finance/{id}")
+    @Operation(summary = "Update purpose of finance option", description = "Updates an existing option (partial update supported)")
+    @ApiResponse(responseCode = "200", description = "Option updated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> updatePurposeOfFinance(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Updating purpose of finance option: {} for tenant: {}", id, tenantId);
+
+        var command = new ManagePurposeOfFinanceUseCase.UpdatePurposeOfFinanceCommand(
+                request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(),
+                request.isActive(), request.displayOrder());
+
+        PurposeOfFinanceOption updated = purposeOfFinanceUseCase.update(tenantId, id, command);
+        return ResponseEntity.ok(toResponse(updated));
+    }
+
+    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @DeleteMapping("/purpose-of-finance/{id}")
+    @Operation(summary = "Deactivate purpose of finance option", description = "Soft-deactivates the option (sets is_active = false)")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deactivatePurposeOfFinance(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Deactivating purpose of finance option: {} for tenant: {}", id, tenantId);
+        purposeOfFinanceUseCase.deactivate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ========================================================================
     // NET WORTH RANGES
     // ========================================================================
 
@@ -397,6 +609,22 @@ public class ReferenceDataController {
     }
 
     private ReferenceDataResponse toResponse(SourceOfWealthOption o) {
+        return new ReferenceDataResponse(
+                o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
+                o.getDescriptionEn(), o.getDescriptionAr(),
+                o.isActive(), o.getDisplayOrder(),
+                o.getCreatedAt(), o.getUpdatedAt());
+    }
+
+    private ReferenceDataResponse toResponse(SourceOfIncomeOption o) {
+        return new ReferenceDataResponse(
+                o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
+                o.getDescriptionEn(), o.getDescriptionAr(),
+                o.isActive(), o.getDisplayOrder(),
+                o.getCreatedAt(), o.getUpdatedAt());
+    }
+
+    private ReferenceDataResponse toResponse(PurposeOfFinanceOption o) {
         return new ReferenceDataResponse(
                 o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
                 o.getDescriptionEn(), o.getDescriptionAr(),

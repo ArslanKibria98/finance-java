@@ -79,11 +79,13 @@ public final class AmortizationScheduleGenerator {
         // Calculate fixed monthly installment
         SarMoney monthlyInstallment = totalAmount.divide(tenure.months());
 
-        // Calculate profit per installment (distributed evenly)
-        SarMoney profitPerInstallment = totalProfit.divide(tenure.months());
-
         // Calculate principal per installment (distributed evenly)
         SarMoney principalPerInstallment = principal.divide(tenure.months());
+
+        // Derive profit per installment from total minus principal to avoid rounding mismatch
+        // (independently dividing principal, profit, and total by tenure can produce
+        //  values where principal + profit != total due to independent rounding)
+        SarMoney profitPerInstallment = monthlyInstallment.subtract(principalPerInstallment);
 
         List<InstallmentLine> schedule = new ArrayList<>();
         SarMoney remainingPrincipal = principal;

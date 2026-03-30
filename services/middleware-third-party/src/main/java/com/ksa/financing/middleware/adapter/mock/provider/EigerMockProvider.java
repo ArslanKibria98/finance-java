@@ -3,7 +3,6 @@ package com.ksa.financing.middleware.adapter.mock.provider;
 import com.ksa.financing.middleware.adapter.mock.MockResponseResult;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @Component
@@ -20,11 +19,12 @@ public class EigerMockProvider implements MockResponseProvider {
     public MockResponseResult getMockResponse(String apiCode, String requestBody) {
         return switch (apiCode) {
             case "EIGER_AUTH" -> authResponse();
+            case "EIGER_ORDER_HOLD" -> orderHold();
             case "EIGER_ORDER_PURCHASE" -> orderPurchase();
-            case "EIGER_ORDER_PURCHASE_UPDATE" -> orderPurchaseUpdate();
+            case "EIGER_ORDER_PURCHASE_UPDATE" -> orderPurchase();
             case "EIGER_TRANSFER_NOTIFICATION" -> transferNotification();
-            case "EIGER_ORDER_SALE" -> orderSale();
-            case "EIGER_ORDER_SALE_UPDATE" -> orderSaleUpdate();
+            case "EIGER_ORDER_SALE" -> orderSalePost();
+            case "EIGER_ORDER_SALE_UPDATE" -> orderSalePatch();
             default -> fallbackResponse();
         };
     }
@@ -40,87 +40,67 @@ public class EigerMockProvider implements MockResponseProvider {
         return new MockResponseResult(200, body, HEADERS);
     }
 
-    private MockResponseResult orderPurchase() {
+    private MockResponseResult orderHold() {
         var body = """
                 {
-                    "order_id": "ORD-%s",
-                    "status": "PURCHASED",
-                    "commodity": "Palladium",
-                    "quantity": 10,
-                    "unitPrice": 1250.00,
-                    "totalValue": 12500.00,
-                    "purchaseDate": "%s"
+                    "result": "Sale Requested",
+                    "resultDescription": "OK",
+                    "eigerResultCode": 200
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8), Instant.now().toString());
+                """;
         return new MockResponseResult(200, body, HEADERS);
     }
 
-    private MockResponseResult orderPurchaseUpdate() {
+    private MockResponseResult orderPurchase() {
         var body = """
                 {
-                    "order_id": "ORD-%s",
-                    "status": "PURCHASE_UPDATED",
-                    "commodity": "Palladium",
-                    "quantity": 10,
-                    "unitPrice": 1255.00,
-                    "totalValue": 12550.00,
-                    "updatedAt": "%s"
+                    "result": "Purchased",
+                    "resultDescription": "OK",
+                    "eigerResultCode": 200
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8), Instant.now().toString());
+                """;
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult transferNotification() {
         var body = """
                 {
-                    "order_id": "ORD-%s",
-                    "status": "TRANSFERRED",
-                    "commodity": "Palladium",
-                    "quantity": 10,
-                    "transferReference": "TRF-%s",
-                    "transferDate": "%s"
+                    "result": "Transferred",
+                    "resultDescription": "OK",
+                    "eigerResultCode": 200
                 }
-                """.formatted(
-                UUID.randomUUID().toString().substring(0, 8),
-                UUID.randomUUID().toString().substring(0, 8),
-                Instant.now().toString());
+                """;
         return new MockResponseResult(200, body, HEADERS);
     }
 
-    private MockResponseResult orderSale() {
+    private MockResponseResult orderSalePost() {
         var body = """
                 {
-                    "order_id": "ORD-%s",
-                    "status": "SALE_REQUESTED",
-                    "commodity": "Palladium",
-                    "quantity": 10,
-                    "requestedPrice": 1260.00,
-                    "requestDate": "%s"
+                    "result": "Sale Requested",
+                    "resultDescription": "OK",
+                    "eigerResultCode": 200
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8), Instant.now().toString());
+                """;
         return new MockResponseResult(200, body, HEADERS);
     }
 
-    private MockResponseResult orderSaleUpdate() {
+    private MockResponseResult orderSalePatch() {
         var body = """
                 {
-                    "order_id": "ORD-%s",
-                    "status": "SALE_CONFIRMED",
-                    "commodity": "Palladium",
-                    "quantity": 10,
-                    "salePrice": 1260.00,
-                    "totalProceeds": 12600.00,
-                    "confirmationDate": "%s"
+                    "result": "Sold",
+                    "resultDescription": "OK",
+                    "eigerResultCode": 200
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8), Instant.now().toString());
+                """;
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult fallbackResponse() {
         var body = """
                 {
-                    "status": "Success",
-                    "message": "EIGER request processed"
+                    "result": "OK",
+                    "resultDescription": "OK",
+                    "eigerResultCode": 200
                 }
                 """;
         return new MockResponseResult(200, body, HEADERS);

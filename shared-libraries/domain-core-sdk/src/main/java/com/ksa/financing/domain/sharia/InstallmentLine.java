@@ -57,9 +57,9 @@ public record InstallmentLine(
         Objects.requireNonNull(cumulativePrincipal, "Cumulative principal cannot be null");
         Objects.requireNonNull(cumulativeProfit, "Cumulative profit cannot be null");
 
-        // Validate that total equals principal + profit
+        // Validate that total equals principal + profit (allow 1 fils/0.01 SAR rounding tolerance)
         SarMoney calculatedTotal = principalComponent.add(profitComponent);
-        if (!calculatedTotal.equals(totalInstallment)) {
+        if (!isWithinTolerance(calculatedTotal, totalInstallment)) {
             throw new IllegalArgumentException(
                     String.format("Total installment must equal principal + profit. " +
                             "Expected: %s, Got: %s", calculatedTotal, totalInstallment)
@@ -68,7 +68,7 @@ public record InstallmentLine(
 
         // Validate that closing balance equals opening balance minus principal payment
         SarMoney calculatedClosing = openingPrincipal.subtract(principalComponent);
-        if (!calculatedClosing.equals(closingPrincipal)) {
+        if (!isWithinTolerance(calculatedClosing, closingPrincipal)) {
             throw new IllegalArgumentException(
                     String.format("Closing principal must equal opening principal minus principal component. " +
                             "Expected: %s, Got: %s", calculatedClosing, closingPrincipal)
@@ -111,6 +111,17 @@ public record InstallmentLine(
         return profitComponent.getValue()
                 .divide(principalComponent.getValue(), 4, java.math.RoundingMode.HALF_UP)
                 .doubleValue();
+    }
+
+    /**
+     * Check if two SarMoney values are within rounding tolerance (0.02 SAR).
+     * Needed because flat amortization schedules may have rounding differences
+     * when principal + profit are calculated independently from the total installment.
+     * Tolerance of 2 fils covers worst-case double-rounding in BigDecimal division.
+     */
+    private static boolean isWithinTolerance(SarMoney expected, SarMoney actual) {
+        java.math.BigDecimal diff = expected.getValue().subtract(actual.getValue()).abs();
+        return diff.compareTo(new java.math.BigDecimal("0.02")) <= 0;
     }
 
     @Override

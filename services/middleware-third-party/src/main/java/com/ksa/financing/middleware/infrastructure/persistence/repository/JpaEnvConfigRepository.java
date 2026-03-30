@@ -14,4 +14,6 @@ public interface JpaEnvConfigRepository extends JpaRepository<ApiEnvironmentConf
     Optional<ApiEnvironmentConfigJpaEntity> findByIdAndTenantIdAndDeletedAtIsNull(UUID id, UUID tenantId);
 
     List<ApiEnvironmentConfigJpaEntity> findByApiIdAndTenantIdAndDeletedAtIsNull(UUID apiId, UUID tenantId);
+
+    List<ApiEnvironmentConfigJpaEntity> findByTenantIdAndDeletedAtIsNull(UUID tenantId);
 }

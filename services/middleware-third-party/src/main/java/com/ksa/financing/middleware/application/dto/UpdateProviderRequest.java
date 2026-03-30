@@ -5,8 +5,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record UpdateProviderRequest(
-        @NotBlank @Size(max = 200) String name,
-        String description,
+        @NotBlank @Size(max = 200) String nameEn,
+        @Size(max = 200) String nameAr,
+        String descriptionEn,
+        String descriptionAr,
         @NotNull String category,
         String baseUrlDev,
         String baseUrlProd,

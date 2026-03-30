@@ -21,6 +21,8 @@ public interface JpaLoanRepository extends JpaRepository<LoanJpaEntity, UUID> {
 
     List<LoanJpaEntity> findByTenantIdAndStatus(UUID tenantId, String status);
 
+    Optional<LoanJpaEntity> findByTenantIdAndApplicationId(UUID tenantId, UUID applicationId);
+
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(l.loanNumber, 5) AS int)), 0) + 1 " +
            "FROM LoanJpaEntity l WHERE l.tenantId = :tenantId")
     int getNextLoanSequence(@Param("tenantId") UUID tenantId);

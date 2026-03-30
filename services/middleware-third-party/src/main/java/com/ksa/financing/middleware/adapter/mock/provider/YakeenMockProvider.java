@@ -18,17 +18,17 @@ public class YakeenMockProvider implements MockResponseProvider {
     @Override
     public MockResponseResult getMockResponse(String apiCode, String requestBody) {
         return switch (apiCode) {
-            case "TAHAQUQ_VERIFY_MOBILE" -> verifyMobile(requestBody);
+            case "TAHAQUQ_VERIFY_MOBILE" -> verifyMobile();
             default -> fallbackResponse();
         };
     }
 
-    private MockResponseResult verifyMobile(String requestBody) {
+    private MockResponseResult verifyMobile() {
         var body = """
                 {
                     "referenceNumber": "%s",
-                    "id": "1049938507",
-                    "mobile": "966504488024",
+                    "id": "1088052343",
+                    "mobile": "966501088642",
                     "isOwner": true
                 }
                 """.formatted(UUID.randomUUID().toString());
@@ -38,10 +38,12 @@ public class YakeenMockProvider implements MockResponseProvider {
     private MockResponseResult fallbackResponse() {
         var body = """
                 {
-                    "status": "Success",
-                    "message": "YAKEEN request processed"
+                    "referenceNumber": "%s",
+                    "id": "1088052343",
+                    "mobile": "966501088642",
+                    "isOwner": true
                 }
-                """;
+                """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 }

@@ -57,7 +57,11 @@ public interface CreditCheckActivity {
             // Requested
             BigDecimal requestedAmount,
             BigDecimal profitRate,
-            int requestedTenureMonths
+            int requestedTenureMonths,
+            // BRD Affordability: customer-declared expenses (sum of 8 categories)
+            BigDecimal declaredMonthlyIncome,
+            BigDecimal declaredExpenses,
+            BigDecimal declaredLiabilities
     ) {}
 
     record EligibilityResult(
@@ -65,6 +69,7 @@ public interface CreditCheckActivity {
             BigDecimal maxEligibleAmount,
             BigDecimal dbrBefore,
             BigDecimal dbrAfter,
+            BigDecimal disposableIncome,
             String rejectionReason
     ) {}
 

@@ -43,6 +43,7 @@ public class RegisterUserService implements RegisterUserUseCase {
         identity.setKeycloakUserId(keycloakUser.keycloakUserId());
         identity.setKeycloakRealm(realm);
         identity.setKeycloakUsername(command.username());
+        identity.setMobileNumber(command.mobileNumber());
         identity.setInternalUserId(UUID.randomUUID());
         identity.setUserType(UserType.CUSTOMER);
         identity.setStatus(UserStatus.PENDING_VERIFICATION);

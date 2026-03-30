@@ -3,6 +3,7 @@ package com.ksa.financing.identity.application.usecase;
 import com.ksa.financing.identity.domain.model.UserIdentity;
 import com.ksa.financing.identity.domain.model.UserStatus;
 import com.ksa.financing.identity.domain.port.in.LoginWithPinUseCase;
+import com.ksa.financing.identity.domain.port.out.CustomerLookupPort;
 import com.ksa.financing.identity.domain.port.out.KeycloakAdapterPort;
 import com.ksa.financing.identity.domain.port.out.UserIdentityRepository;
 import com.ksa.financing.infra.exception.BusinessException;
@@ -27,6 +28,7 @@ public class LoginWithPinService implements LoginWithPinUseCase {
 
     private final KeycloakAdapterPort keycloakAdapter;
     private final UserIdentityRepository userIdentityRepository;
+    private final CustomerLookupPort customerLookupPort;
 
     @Override
     public LoginWithPinResult login(LoginWithPinCommand command) {
@@ -76,15 +78,24 @@ public class LoginWithPinService implements LoginWithPinUseCase {
 
         log.info("PIN login successful for NID ending in: {}", maskNid(command.nationalId()));
 
-        String customerId = identity.getInternalUserId() != null
-                ? identity.getInternalUserId().toString()
-                : null;
+        // Resolve actual customer-service ID by NID
+        String customerId = customerLookupPort
+                .resolveCustomerIdByNationalId(command.nationalId(), tokenResponse.accessToken())
+                .orElseGet(() -> {
+                    log.warn("Could not resolve customer-service ID for NID: {}, falling back to internalUserId",
+                            maskNid(command.nationalId()));
+                    return identity.getInternalUserId() != null
+                            ? identity.getInternalUserId().toString()
+                            : null;
+                });
 
         return new LoginWithPinResult(
                 tokenResponse.accessToken(),
                 tokenResponse.refreshToken(),
                 tokenResponse.expiresIn(),
-                customerId
+                customerId,
+                identity.getKeycloakUsername(),
+                identity.getMobileNumber()
         );
     }
 

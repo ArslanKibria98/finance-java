@@ -1,1669 +1,1147 @@
 {
   "info": {
     "name": "Middleware Third-Party Service",
-    "description": "Complete API collection for the Middleware Third-Party Service.\n\nThis service manages third-party provider integrations, client access control, and API execution gateway.\n\n## Setup Flow\n1. Create Providers\n2. Create Provider APIs\n3. Configure Environment (URLs, credentials)\n4. Create Clients\n5. Grant Provider Access to Clients\n6. Grant API Access to Clients\n7. Execute APIs via Gateway\n\n## Authentication\n- Admin endpoints: JWT Bearer token (Keycloak)\n- Execution endpoint: Client secretKey (no JWT needed)",
+    "description": "Complete API collection for the Middleware Third-Party Service.\n\nAll endpoints are public — no JWT required.\n\n## Execute API Authentication\nExecution endpoints use client secretKey via X-Secret-Key header.\n\n## Setup Flow\n1. Create Providers\n2. Create Provider APIs\n3. Configure Environment\n4. Create Clients\n5. Grant Access\n6. Execute APIs",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8092",
-      "type": "string"
-    },
-    {
-      "key": "kongUrl",
-      "value": "http://localhost:8000/middleware",
-      "type": "string"
-    },
-    {
-      "key": "accessToken",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "providerId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "apiId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "clientId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "clientSecretKey",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "envConfigId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "requestLogId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "requestId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "callbackId",
-      "value": "",
-      "type": "string"
-    }
+    {"key": "baseUrl", "value": "http://localhost:8093", "type": "string"},
+    {"key": "kongUrl", "value": "http://localhost:8000/middleware-third-party", "type": "string"},
+    {"key": "clientSecretKey", "value": "test-mock-secret-key-2026", "type": "string"},
+    {"key": "providerId", "value": "", "type": "string"},
+    {"key": "apiId", "value": "", "type": "string"},
+    {"key": "clientId", "value": "", "type": "string"},
+    {"key": "envConfigId", "value": "", "type": "string"},
+    {"key": "requestLogId", "value": "", "type": "string"},
+    {"key": "requestId", "value": "", "type": "string"},
+    {"key": "callbackId", "value": "", "type": "string"}
   ],
-  "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{accessToken}}",
-        "type": "string"
-      }
-    ]
-  },
+  "auth": {"type": "noauth"},
   "item": [
     {
-      "name": "1. Providers",
-      "description": "Manage third-party providers (SIMAH, NAFATH, TARABUT, UNIFONIC, etc.)",
+      "name": "Providers",
       "item": [
         {
           "name": "Create Provider",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('providerId', json.id);",
-                  "    console.log('Provider created: ' + json.id);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) {", "    var json = pm.response.json();", "    pm.collectionVariables.set('providerId', json.id);", "}"], "type": "text/javascript"}}],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"code\": \"SIMAH\",\n    \"name\": \"SIMAH (Saudi Credit Bureau)\",\n    \"description\": \"Saudi credit bureau for consumer and commercial credit reports\",\n    \"category\": \"CREDIT_BUREAU\",\n    \"baseUrlDev\": \"https://sandbox.simah.com\",\n    \"baseUrlProd\": \"https://api.simah.com\",\n    \"authType\": \"BEARER\",\n    \"timeoutMs\": 60000,\n    \"retryCount\": 3\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers"]
-            },
-            "description": "Create a new third-party provider.\n\nCategories: IDENTITY, CREDIT_BUREAU, GOVERNMENT, COMMUNICATION, OPEN_BANKING, COMMODITY_TRADING, PROMISSORY_NOTES, DIGITAL_SIGNING, NOTIFICATIONS, BANKING, PAYMENT_GATEWAY, INCOME_VERIFICATION, FINANCIAL, AML_SCREENING\n\nAuth Types: NONE, BASIC, BEARER, API_KEY, OAUTH2, CUSTOM"
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"code\": \"SIMAH\",\n    \"nameEn\": \"Saudi Credit Bureau\",\n    \"nameAr\": \"\u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629 \u0644\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0627\u0626\u062a\u0645\u0627\u0646\u064a\u0629\",\n    \"descriptionEn\": \"SIMAH credit reporting services\",\n    \"descriptionAr\": \"\u062e\u062f\u0645\u0627\u062a \u062a\u0642\u0627\u0631\u064a\u0631 \u0633\u0645\u0629 \u0627\u0644\u0627\u0626\u062a\u0645\u0627\u0646\u064a\u0629\",\n    \"category\": \"CREDIT_BUREAU\",\n    \"authType\": \"BEARER\",\n    \"timeoutMs\": 30000,\n    \"retryCount\": 3\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/providers", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers"]}
+          }
+        },
+        {
+          "name": "List All Providers",
+          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) {", "    var json = pm.response.json();", "    json.forEach(function(p) { console.log(p.code + ' → ' + p.id); });", "}"], "type": "text/javascript"}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/providers", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers"]}
+          }
         },
         {
           "name": "Get Provider by ID",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers/{{providerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers", "{{providerId}}"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers", "{{providerId}}"]}
+          }
         },
         {
           "name": "Get Provider by Code",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers/code/SIMAH",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers", "code", "SIMAH"]
-            },
-            "description": "Get provider by its unique code (e.g., SIMAH, NAFATH, UNIFONIC, TARABUT, etc.)"
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/providers/by-code/SIMAH", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers", "by-code", "SIMAH"]}
+          }
         },
         {
-          "name": "List All Providers",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    console.log('Total providers: ' + json.length);",
-                  "    json.forEach(function(p) {",
-                  "        console.log(p.code + ' (' + p.id + ') - ' + p.category);",
-                  "    });",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Get Provider with APIs and Env Configs",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers"]
-            },
-            "description": "List all registered providers. Use this to get provider IDs for assigning to clients."
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/providers/{{providerId}}/with-apis", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers", "{{providerId}}", "with-apis"]}
+          }
+        },
+        {
+          "name": "Get Provider Environments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/providers/{{providerId}}/environments", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers", "{{providerId}}", "environments"]}
+          }
         },
         {
           "name": "Update Provider",
           "request": {
             "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"SIMAH (Saudi Credit Bureau) - Updated\",\n    \"description\": \"Saudi credit bureau - updated description\",\n    \"category\": \"CREDIT_BUREAU\",\n    \"baseUrlDev\": \"https://sandbox.simah.com\",\n    \"baseUrlProd\": \"https://api.simah.com\",\n    \"authType\": \"BEARER\",\n    \"timeoutMs\": 90000,\n    \"retryCount\": 5\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers/{{providerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers", "{{providerId}}"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"nameEn\": \"Saudi Credit Bureau (Updated)\",\n    \"nameAr\": \"\u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629 \u0644\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0627\u0626\u062a\u0645\u0627\u0646\u064a\u0629 (\u0645\u062d\u062f\u062b)\",\n    \"descriptionEn\": \"SIMAH credit reporting services\",\n    \"descriptionAr\": \"\u062e\u062f\u0645\u0627\u062a \u062a\u0642\u0627\u0631\u064a\u0631 \u0633\u0645\u0629 \u0627\u0644\u0627\u0626\u062a\u0645\u0627\u0646\u064a\u0629\",\n    \"category\": \"CREDIT_BUREAU\",\n    \"authType\": \"BEARER\",\n    \"timeoutMs\": 30000,\n    \"retryCount\": 3\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers", "{{providerId}}"]}
+          }
         },
         {
           "name": "Delete Provider",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers/{{providerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers", "{{providerId}}"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "providers", "{{providerId}}"]}
+          }
         }
       ]
     },
     {
-      "name": "2. Provider APIs",
-      "description": "Manage APIs under each provider (e.g., SIMAH has 28 APIs, TARABUT has 20 APIs, etc.)",
+      "name": "Provider APIs",
       "item": [
         {
           "name": "Create Provider API",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('apiId', json.id);",
-                  "    console.log('API created: ' + json.id);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) {", "    var json = pm.response.json();", "    pm.collectionVariables.set('apiId', json.id);", "}"], "type": "text/javascript"}}],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"providerId\": \"{{providerId}}\",\n    \"code\": \"SIMAH_SCORE_CREDIT\",\n    \"name\": \"Score Credit Report\",\n    \"description\": \"Consumer credit score report\",\n    \"httpMethod\": \"POST\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/score\",\n    \"async\": false,\n    \"timeoutMs\": 60000\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis"]
-            },
-            "description": "Create an API endpoint under a provider.\n\nHTTP Methods: GET, POST, PUT, PATCH, DELETE"
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"providerId\": \"{{providerId}}\",\n    \"code\": \"SIMAH_CONSUMER_REPORT\",\n    \"nameEn\": \"Consumer Report\",\n    \"nameAr\": \"\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u0633\u062a\u0647\u0644\u0643\",\n    \"descriptionEn\": \"Full consumer credit report\",\n    \"descriptionAr\": \"\u062a\u0642\u0631\u064a\u0631 \u0627\u0626\u062a\u0645\u0627\u0646\u064a \u0643\u0627\u0645\u0644 \u0644\u0644\u0645\u0633\u062a\u0647\u0644\u0643\",\n    \"httpMethod\": \"POST\",\n    \"endpointPath\": \"/api/v1/consumer/report\",\n    \"async\": false,\n    \"timeoutMs\": 30000\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/provider-apis", "host": ["{{baseUrl}}"], "path": ["api", "v1", "provider-apis"]}
+          }
+        },
+        {
+          "name": "List APIs by Provider",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/provider-apis/by-provider/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "provider-apis", "by-provider", "{{providerId}}"]}
+          }
         },
         {
           "name": "Get API by ID",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis", "{{apiId}}"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "provider-apis", "{{apiId}}"]}
+          }
         },
         {
-          "name": "List APIs by Provider",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    console.log('Total APIs for provider: ' + json.length);",
-                  "    json.forEach(function(api) {",
-                  "        console.log(api.code + ' [' + api.httpMethod + '] ' + api.endpointPath);",
-                  "    });",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Get API by Code",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis/by-provider/{{providerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis", "by-provider", "{{providerId}}"]
-            },
-            "description": "List all APIs belonging to a specific provider. Use this to get API IDs for granting access to clients."
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/provider-apis/by-code/SIMAH_CONSUMER_REPORT", "host": ["{{baseUrl}}"], "path": ["api", "v1", "provider-apis", "by-code", "SIMAH_CONSUMER_REPORT"]}
+          }
         },
         {
-          "name": "List All APIs",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis"]
-            },
-            "description": "List all APIs across all providers."
-          },
-          "response": []
-        },
-        {
-          "name": "Update API",
+          "name": "Update Provider API",
           "request": {
             "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Score Credit Report V2\",\n    \"description\": \"Updated consumer credit score report\",\n    \"httpMethod\": \"POST\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/scoreV2\",\n    \"async\": false,\n    \"timeoutMs\": 90000\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis", "{{apiId}}"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"nameEn\": \"Consumer Report (Updated)\",\n    \"nameAr\": \"\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u0633\u062a\u0647\u0644\u0643 (\u0645\u062d\u062f\u062b)\",\n    \"descriptionEn\": \"Full consumer credit report\",\n    \"descriptionAr\": \"\u062a\u0642\u0631\u064a\u0631 \u0627\u0626\u062a\u0645\u0627\u0646\u064a \u0643\u0627\u0645\u0644 \u0644\u0644\u0645\u0633\u062a\u0647\u0644\u0643\",\n    \"httpMethod\": \"POST\",\n    \"endpointPath\": \"/api/v1/consumer/report\",\n    \"async\": false,\n    \"timeoutMs\": 30000\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "provider-apis", "{{apiId}}"]}
+          }
         },
         {
-          "name": "Delete API",
+          "name": "Delete Provider API",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis", "{{apiId}}"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/provider-apis/{{apiId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "provider-apis", "{{apiId}}"]}
+          }
         }
       ]
     },
     {
-      "name": "3. Environment Configs",
-      "description": "Configure API environment settings (base URLs, credentials, headers per environment).\n\nEach API can have separate DEV and PROD configs with different base URLs and credentials.",
+      "name": "Environment Configs",
       "item": [
         {
-          "name": "Create Env Config (BEARER auth)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('envConfigId', json.id);",
-                  "    console.log('Env config created: ' + json.id);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Create Env Config",
+          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) {", "    var json = pm.response.json();", "    pm.collectionVariables.set('envConfigId', json.id);", "}"], "type": "text/javascript"}}],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox.simah.com\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/score\",\n    \"credentials\": \"{\\\"token\\\": \\\"your-bearer-token-here\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"BEARER\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs"]
-            },
-            "description": "Create environment config for an API.\n\nCredentials format by auth type:\n- BEARER: {\"token\": \"xxx\"}\n- API_KEY: {\"headerName\": \"X-API-Key\", \"apiKey\": \"xxx\"}\n- BASIC: {\"username\": \"xxx\", \"password\": \"xxx\"}\n- OAUTH2: {\"accessToken\": \"xxx\"}\n- CUSTOM: {\"Header1\": \"value1\", \"Header2\": \"value2\"}\n\nEnvironment: DEV or PROD"
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"providerId\": \"{{providerId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://api-sandbox.simah.com\",\n    \"authType\": \"BEARER\",\n    \"authCredentials\": {\"token\": \"dev-token-123\"},\n    \"defaultHeaders\": {\"Accept\": \"application/json\"}\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/env-configs", "host": ["{{baseUrl}}"], "path": ["api", "v1", "env-configs"]}
+          }
         },
         {
-          "name": "Create Env Config (API_KEY auth)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox.nafath.sa\",\n    \"endpointPath\": \"/initiate\",\n    \"credentials\": \"{\\\"headerName\\\": \\\"X-API-Key\\\", \\\"apiKey\\\": \\\"your-api-key-here\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"API_KEY\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create Env Config (OAUTH2 auth)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox.tarabut.com\",\n    \"endpointPath\": \"/sandbox/token\",\n    \"credentials\": \"{\\\"accessToken\\\": \\\"your-oauth2-token\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"OAUTH2\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Env Config by ID",
+          "name": "List Env Configs by Provider",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs", "{{envConfigId}}"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "List Env Configs by API",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs/by-api/{{apiId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs", "by-api", "{{apiId}}"]
-            },
-            "description": "List all environment configs (DEV, PROD) for a specific API."
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/env-configs/by-provider/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "env-configs", "by-provider", "{{providerId}}"]}
+          }
         },
         {
           "name": "Update Env Config",
           "request": {
             "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"apiId\": \"{{apiId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://sandbox-v2.simah.com\",\n    \"endpointPath\": \"/api/v2/enquiry/consumer/score\",\n    \"credentials\": \"{\\\"token\\\": \\\"updated-bearer-token\\\"}\",\n    \"headers\": \"{\\\"Accept\\\": \\\"application/json\\\"}\",\n    \"queryParams\": null,\n    \"authType\": \"BEARER\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs", "{{envConfigId}}"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"providerId\": \"{{providerId}}\",\n    \"environment\": \"DEV\",\n    \"baseUrl\": \"https://api-sandbox.simah.com\",\n    \"authType\": \"BEARER\",\n    \"authCredentials\": {\"token\": \"updated-token\"},\n    \"defaultHeaders\": {\"Accept\": \"application/json\"}\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "env-configs", "{{envConfigId}}"]}
+          }
         },
         {
           "name": "Delete Env Config",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "env-configs", "{{envConfigId}}"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/env-configs/{{envConfigId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "env-configs", "{{envConfigId}}"]}
+          }
+        },
+        {
+          "name": "Bulk Upsert Env Configs",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "[\n    {\n        \"providerId\": \"{{providerId}}\",\n        \"environment\": \"DEV\",\n        \"baseUrl\": \"https://api-sandbox.simah.com\",\n        \"authType\": \"BEARER\",\n        \"authCredentials\": {\"token\": \"dev-token\"}\n    },\n    {\n        \"providerId\": \"{{providerId}}\",\n        \"environment\": \"PROD\",\n        \"baseUrl\": \"https://api.simah.com\",\n        \"authType\": \"BEARER\",\n        \"authCredentials\": {\"token\": \"prod-token\"}\n    }\n]", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/env-configs/bulk", "host": ["{{baseUrl}}"], "path": ["api", "v1", "env-configs", "bulk"]}
+          }
+        },
+        {
+          "name": "List All Env Configs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/env-configs", "host": ["{{baseUrl}}"], "path": ["api", "v1", "env-configs"]}
+          }
         }
       ]
     },
     {
-      "name": "4. Clients",
-      "description": "Manage API clients (internal services or external partners that consume third-party APIs through the gateway).",
+      "name": "API Clients",
       "item": [
         {
           "name": "Create Client",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('clientId', json.id);",
-                  "    pm.collectionVariables.set('clientSecretKey', json.secretKey);",
-                  "    console.log('Client created: ' + json.id);",
-                  "    console.log('Secret Key: ' + json.secretKey);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) {", "    var json = pm.response.json();", "    pm.collectionVariables.set('clientId', json.id);", "    pm.collectionVariables.set('clientSecretKey', json.secretKey);", "    console.log('Client ID: ' + json.id);", "    console.log('Secret Key: ' + json.secretKey);", "}"], "type": "text/javascript"}}],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Lending Service\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Lending service client for credit checks and IBAN verification\",\n    \"callbackUrl\": \"http://lending-service:8091/api/v1/callbacks\",\n    \"environment\": \"DEV\",\n    \"ipWhitelist\": []\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients"]
-            },
-            "description": "Create a new API client.\n\nEnvironment: DEV, PROD, or BOTH\n- DEV: Client can only call DEV environment APIs\n- PROD: Client can only call PROD environment APIs\n- BOTH: Client can call both\n- TEST: Client gets mock responses (no real HTTP calls)\n\nThe response includes a generated secretKey. Save it — the client uses it to authenticate when executing APIs."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Client by ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"name\": \"Lending Service\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Lending service client\",\n    \"callbackUrl\": null,\n    \"environment\": \"DEV\",\n    \"ipWhitelist\": []\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/clients", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients"]}
+          }
         },
         {
           "name": "List All Clients",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/clients", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients"]}
+          }
         },
         {
-          "name": "Update Client",
+          "name": "Get Client by ID",
           "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Lending Service - Updated\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Updated description\",\n    \"callbackUrl\": \"http://lending-service:8091/api/v1/callbacks\",\n    \"environment\": \"BOTH\",\n    \"ipWhitelist\": [\"10.0.0.1\", \"10.0.0.2\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}"]
-            }
-          },
-          "response": []
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}"]}
+          }
         },
         {
-          "name": "Regenerate Client Secret",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('clientSecretKey', json.secretKey);",
-                  "    console.log('New Secret Key: ' + json.secretKey);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Regenerate Secret Key",
           "request": {
             "method": "POST",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/regenerate-secret",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "regenerate-secret"]
-            },
-            "description": "Regenerate the client's secretKey. The old key is immediately invalidated."
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/regenerate-key", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "regenerate-key"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client Access Control",
+      "item": [
+        {
+          "name": "Grant Provider Access",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{providerId}}\",\n    \"environment\": \"DEV\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]}
+          }
         },
         {
-          "name": "Delete Client",
+          "name": "Grant API Access",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{apiId}}\",\n    \"environment\": \"DEV\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]}
+          }
+        },
+        {
+          "name": "List Provider Access",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]}
+          }
+        },
+        {
+          "name": "List API Access",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]}
+          }
+        },
+        {
+          "name": "Revoke Provider Access",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}"]
-            }
-          },
-          "response": []
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers", "{{providerId}}"]}
+          }
+        },
+        {
+          "name": "Revoke API Access",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis/{{apiId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis", "{{apiId}}"]}
+          }
         }
       ]
     },
     {
-      "name": "5. Client Access (Provider + API Assignment)",
-      "description": "Grant or revoke access for a client to providers and their specific APIs.\n\nThis is the core assignment flow:\n1. Grant Provider Access — allows the client to use a provider\n2. Grant API Access — allows the client to call a specific API within that provider\n\nBoth are required for execution to work.",
-      "item": [
-        {
-          "name": "Provider Access",
-          "description": "Grant/revoke/list provider-level access for a client.",
-          "item": [
-            {
-              "name": "Grant Provider Access",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{providerId}}\",\n    \"environment\": \"DEV\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
-                },
-                "description": "Grant a client access to a provider.\n\ntargetId = the provider's UUID\nenvironment = DEV, PROD, or BOTH\n\nYou must call this ONCE per provider you want the client to use."
-              },
-              "response": []
-            },
-            {
-              "name": "List Client's Provider Access",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
-                },
-                "description": "List all providers this client has been granted access to."
-              },
-              "response": []
-            },
-            {
-              "name": "Revoke Provider Access",
-              "request": {
-                "method": "DELETE",
-                "header": [],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers/{{providerId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers", "{{providerId}}"]
-                },
-                "description": "Revoke a client's access to a provider."
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "API Access",
-          "description": "Grant/revoke/list API-level access for a client.",
-          "item": [
-            {
-              "name": "Grant API Access",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{apiId}}\",\n    \"environment\": \"DEV\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
-                },
-                "description": "Grant a client access to a specific API.\n\ntargetId = the API's UUID (from provider-apis)\nenvironment = DEV, PROD, or BOTH\n\nYou must call this ONCE per API you want the client to use."
-              },
-              "response": []
-            },
-            {
-              "name": "List Client's API Access (All)",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
-                },
-                "description": "List all APIs this client has been granted access to (across all providers)."
-              },
-              "response": []
-            },
-            {
-              "name": "List Client's API Access (By Provider)",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis/by-provider/{{providerId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis", "by-provider", "{{providerId}}"]
-                },
-                "description": "List APIs this client can access for a specific provider.\n\nUseful to see: 'Which SIMAH APIs does this client have?'"
-              },
-              "response": []
-            },
-            {
-              "name": "Revoke API Access",
-              "request": {
-                "method": "DELETE",
-                "header": [],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis/{{apiId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis", "{{apiId}}"]
-                }
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Bulk Access",
-          "description": "Grant access to multiple providers and their APIs in a single call.",
-          "item": [
-            {
-              "name": "Bulk Grant Access (Providers + APIs)",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"environment\": \"DEV\",\n    \"providers\": [\n        {\n            \"providerId\": \"{{providerId}}\",\n            \"apiIds\": [\n                \"{{apiId}}\"\n            ]\n        }\n    ]\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/bulk",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "clients", "{{clientId}}", "access", "bulk"]
-                },
-                "description": "Grant access to multiple providers and their APIs in one call.\n\nSend an array of providers, each with an array of API IDs.\nInserts into both client_provider_access and client_api_access tables.\nSkips any that already exist.\n\nReturns counts of providers and APIs granted."
-              },
-              "response": []
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "6. Execute API (Gateway)",
-      "description": "Execute third-party API calls through the middleware gateway.\n\nNo JWT required — authentication is via client secretKey.\n\nThe gateway:\n1. Authenticates client by secretKey\n2. Checks idempotency\n3. Verifies API access\n4. Routes to mock (TEST) or live (DEV/PROD)\n5. Applies auth credentials from env config\n6. Logs request and response",
-      "item": [
-        {
-          "name": "Execute API (Full Request)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('requestId', json.requestId);",
-                  "    console.log('Request ID: ' + json.requestId);",
-                  "    console.log('Status: ' + json.httpStatus);",
-                  "    console.log('Success: ' + json.success);",
-                  "    console.log('Duration: ' + json.durationMs + 'ms');",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"secretKey\": \"{{clientSecretKey}}\",\n    \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\", \\\"productType\\\": \\\"PERSONAL_FINANCE\\\"}\",\n    \"pathParams\": {},\n    \"queryParams\": {},\n    \"headers\": {},\n    \"idempotencyKey\": null,\n    \"nationalId\": \"1234567890\",\n    \"callerService\": \"lending-service\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT"]
-            },
-            "description": "Execute a third-party API call.\n\nThe apiCode in the URL path is the API's unique code (e.g., SIMAH_SCORE_CREDIT, NAFATH_INITIATE, UNIFONIC_SEND_OTP).\n\nAuthentication is via secretKey in the request body (NOT JWT).\n\nThe requestBody field is a JSON string that will be forwarded to the third-party API."
-          },
-          "response": []
-        },
-        {
-          "name": "Execute API (Simple - Secret in Header)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('requestId', json.requestId);",
-                  "    console.log('Request ID: ' + json.requestId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              },
-              {
-                "key": "X-National-Id",
-                "value": "1234567890"
-              },
-              {
-                "key": "X-Caller-Service",
-                "value": "lending-service"
-              },
-              {
-                "key": "X-Idempotency-Key",
-                "value": "",
-                "disabled": true
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"nationalId\": \"1234567890\",\n    \"productType\": \"PERSONAL_FINANCE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT", "simple"]
-            },
-            "description": "Simplified execution endpoint.\n\nSecret key goes in X-Secret-Key header instead of request body.\nThe request body is sent directly to the third-party API (no wrapper)."
-          },
-          "response": []
-        },
-        {
-          "name": "Execute SIMAH Login",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"username\": \"simah_user\",\n    \"password\": \"simah_pass\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_LOGIN/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "SIMAH_LOGIN", "simple"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Execute NAFATH Initiate",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              },
-              {
-                "key": "X-National-Id",
-                "value": "1234567890"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"nationalId\": \"1234567890\",\n    \"service\": \"LENDING\",\n    \"locale\": \"ar\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/NAFATH_INITIATE/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "NAFATH_INITIATE", "simple"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Execute UNIFONIC Send OTP",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"AppSid\": \"your-app-sid\",\n    \"SenderID\": \"KSA-Finance\",\n    \"Body\": \"Your OTP code is: 1234\",\n    \"Recipient\": \"966501234567\",\n    \"responseType\": \"JSON\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/UNIFONIC_SEND_OTP/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "UNIFONIC_SEND_OTP", "simple"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Execute TARABUT IBAN Match",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"iban\": \"SA0380000000608010167519\",\n    \"nationalId\": \"1234567890\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/TARABUT_KSA_IBAN_MATCH/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "TARABUT_KSA_IBAN_MATCH", "simple"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Execute EIGER Purchase Order",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"commodity\": \"PALLADIUM\",\n    \"quantity\": 1,\n    \"amount\": 50000,\n    \"currency\": \"SAR\",\n    \"referenceId\": \"LOAN-12345\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/EIGER_ORDER_PURCHASE/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "EIGER_ORDER_PURCHASE", "simple"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Execute DAKHLI GOSI Salary",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              },
-              {
-                "key": "X-National-Id",
-                "value": "1234567890"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/DAKHLI_GOSI/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "DAKHLI_GOSI", "simple"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Execute with Idempotency Key",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"secretKey\": \"{{clientSecretKey}}\",\n    \"requestBody\": \"{\\\"nationalId\\\": \\\"1234567890\\\"}\",\n    \"pathParams\": {},\n    \"queryParams\": {},\n    \"headers\": {},\n    \"idempotencyKey\": \"unique-key-12345\",\n    \"nationalId\": \"1234567890\",\n    \"callerService\": \"lending-service\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT"]
-            },
-            "description": "Execute with idempotency key. If the same key is used again, the cached response is returned instead of making a new call."
-          },
-          "response": []
-        },
-        {
-          "name": "Execute with Path Params",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"secretKey\": \"{{clientSecretKey}}\",\n    \"requestBody\": null,\n    \"pathParams\": {\n        \"nid\": \"1234567890\",\n        \"mobile\": \"966501234567\"\n    },\n    \"queryParams\": {},\n    \"headers\": {},\n    \"idempotencyKey\": null,\n    \"nationalId\": \"1234567890\",\n    \"callerService\": \"kyc-service\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/TAHAQUQ_VERIFY_MOBILE",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "TAHAQUQ_VERIFY_MOBILE"]
-            },
-            "description": "Execute an API that has path parameters.\n\nTAHAQUQ_VERIFY_MOBILE endpoint: /api/v1/person/{nid}/owns-mobile/{mobile}\n\nThe pathParams map replaces {nid} and {mobile} in the URL."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "7. Request Logs",
-      "description": "View API execution logs. Every API call is logged with request/response details.",
+      "name": "Request Logs",
       "item": [
         {
           "name": "Get Log by ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/request-logs/{{requestLogId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "request-logs", "{{requestLogId}}"]
-            }
-          },
-          "response": []
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/request-logs/{{requestLogId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "request-logs", "{{requestLogId}}"]}}
         },
         {
           "name": "Get Log by Request ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/request-logs/by-request-id/{{requestId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "request-logs", "by-request-id", "{{requestId}}"]
-            },
-            "description": "Look up a log by the requestId returned from the execute endpoint."
-          },
-          "response": []
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/request-logs/by-request-id/{{requestId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "request-logs", "by-request-id", "{{requestId}}"]}}
         },
         {
-          "name": "List All Logs (Paginated)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/request-logs?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "request-logs"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "0"
-                },
-                {
-                  "key": "size",
-                  "value": "20"
-                }
-              ]
-            }
-          },
-          "response": []
+          "name": "List All Logs",
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/request-logs?page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api", "v1", "request-logs"], "query": [{"key": "page", "value": "0"}, {"key": "size", "value": "20"}]}}
         }
       ]
     },
     {
-      "name": "8. Callbacks",
-      "description": "View callback responses from async third-party API calls (e.g., Nafath, IVR).",
+      "name": "Callbacks",
       "item": [
         {
           "name": "Get Callback by ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/callbacks/{{callbackId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "callbacks", "{{callbackId}}"]
-            }
-          },
-          "response": []
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/callbacks/{{callbackId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "callbacks", "{{callbackId}}"]}}
         },
         {
-          "name": "List All Callbacks (Paginated)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/callbacks?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "callbacks"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "0"
-                },
-                {
-                  "key": "size",
-                  "value": "20"
-                }
-              ]
-            }
-          },
-          "response": []
+          "name": "List All Callbacks",
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/callbacks?page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api", "v1", "callbacks"], "query": [{"key": "page", "value": "0"}, {"key": "size", "value": "20"}]}}
         }
       ]
     },
     {
-      "name": "Complete Setup Flow (Run in Order)",
-      "description": "Step-by-step guide to set up a client with provider + API access.\n\nRun these requests in order to set up a complete working client.",
+      "name": "Execute API (Mock Testing)",
+      "description": "Execute third-party API calls.\n\nAuthentication: X-Secret-Key header\nMetadata: X-National-Id, X-Caller-Service headers\nBody: Raw API payload only",
       "item": [
         {
-          "name": "Step 1: List All Providers (get IDs)",
-          "event": [
+          "name": "SIMAH",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    console.log('=== PROVIDERS ===');",
-                  "    json.forEach(function(p) {",
-                  "        console.log(p.code + ' → ' + p.id);",
-                  "        // Auto-set first SIMAH provider",
-                  "        if (p.code === 'SIMAH') {",
-                  "            pm.collectionVariables.set('providerId', p.id);",
-                  "        }",
-                  "    });",
-                  "}"
-                ],
-                "type": "text/javascript"
+              "name": "Execute - SIMAH Consumer Report",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); console.log('ReqID: ' + j.data.requestId + ' | Status: ' + j.data.httpStatus + ' | ' + j.data.durationMs + 'ms'); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"enquiryType\": \"CONSUMER\",\n    \"productType\": 155,\n    \"amount\": 1000\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_CONSUMER_REPORT", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_CONSUMER_REPORT", "simple"]}
               }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/providers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "providers"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Step 2: List SIMAH APIs (get API IDs)",
-          "event": [
+            },
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    console.log('=== SIMAH APIs ===');",
-                  "    json.forEach(function(api) {",
-                  "        console.log(api.code + ' → ' + api.id);",
-                  "    });",
-                  "    // Auto-set first API",
-                  "    if (json.length > 0) {",
-                  "        pm.collectionVariables.set('apiId', json[0].id);",
-                  "    }",
-                  "}"
-                ],
-                "type": "text/javascript"
+              "name": "Execute - SIMAH Login",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); console.log('ReqID: ' + j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"username\": \"simah_user\",\n    \"password\": \"simah_pass\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_LOGIN", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_LOGIN", "simple"]}
               }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/provider-apis/by-provider/{{providerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "provider-apis", "by-provider", "{{providerId}}"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Step 3: Create Client",
-          "event": [
+            },
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    var json = pm.response.json();",
-                  "    pm.collectionVariables.set('clientId', json.id);",
-                  "    pm.collectionVariables.set('clientSecretKey', json.secretKey);",
-                  "    console.log('Client ID: ' + json.id);",
-                  "    console.log('Secret Key: ' + json.secretKey + ' (SAVE THIS!)');",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Lending Service\",\n    \"code\": \"LENDING_SERVICE\",\n    \"description\": \"Lending service - needs SIMAH credit check, TARABUT IBAN verify, UNIFONIC OTP\",\n    \"callbackUrl\": null,\n    \"environment\": \"DEV\",\n    \"ipWhitelist\": []\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
+              "name": "Execute - SIMAH Credit Score",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); console.log('ReqID: ' + j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"productType\": \"PERSONAL_FINANCE\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT", "simple"]}
               }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients"]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Step 4a: Grant Provider Access — SIMAH",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{providerId}}\",\n    \"environment\": \"DEV\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
-            },
-            "description": "Grant provider-level access. Repeat this for each provider (SIMAH, TARABUT, UNIFONIC, etc.).\n\nChange targetId to each provider's UUID."
-          },
-          "response": []
-        },
-        {
-          "name": "Step 4b: Grant Provider Access — (another provider)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"<PASTE-PROVIDER-UUID-HERE>\",\n    \"environment\": \"DEV\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
-            },
-            "description": "Copy the provider UUID from Step 1 and paste in targetId.\n\nRepeat for each additional provider."
-          },
-          "response": []
-        },
-        {
-          "name": "Step 5a: Grant API Access — SIMAH Score Credit",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"{{apiId}}\",\n    \"environment\": \"DEV\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
-            },
-            "description": "Grant API-level access. Repeat for each specific API.\n\nChange targetId to each API's UUID (from Step 2)."
-          },
-          "response": []
-        },
-        {
-          "name": "Step 5b: Grant API Access — (another API)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"clientId\": \"{{clientId}}\",\n    \"targetId\": \"<PASTE-API-UUID-HERE>\",\n    \"environment\": \"DEV\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
-            },
-            "description": "Copy the API UUID from Step 2 and paste in targetId.\n\nRepeat for each additional API."
-          },
-          "response": []
-        },
-        {
-          "name": "Step 6: Verify — List Client's Provider Access",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/providers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "access", "providers"]
-            },
-            "description": "Verify which providers the client has access to."
-          },
-          "response": []
-        },
-        {
-          "name": "Step 7: Verify — List Client's API Access",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/clients/{{clientId}}/access/apis",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "clients", "{{clientId}}", "access", "apis"]
-            },
-            "description": "Verify which APIs the client has access to."
-          },
-          "response": []
-        },
-        {
-          "name": "Step 8: Execute API Call",
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    var json = pm.response.json();",
-                  "    console.log('SUCCESS!');",
-                  "    console.log('Request ID: ' + json.requestId);",
-                  "    console.log('HTTP Status: ' + json.httpStatus);",
-                  "    console.log('Duration: ' + json.durationMs + 'ms');",
-                  "}"
-                ],
-                "type": "text/javascript"
+              "name": "Execute - SIMAH Salary Certificate",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); console.log('ReqID: ' + j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"employerName\": \"Saudi Aramco\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_SALARY_CERTIFICATE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_SALARY_CERTIFICATE", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Enquiry V1",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"enquiryType\": \"CONSUMER\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_ENQUIRY_NEW_V1", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_ENQUIRY_NEW_V1", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Enquiry V2",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"enquiryType\": \"CONSUMER\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_ENQUIRY_NEW_V2", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_ENQUIRY_NEW_V2", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Enquiry Review",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_ENQUIRY_REVIEW", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_ENQUIRY_REVIEW", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Negative Consumer",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_NEGATIVE_CONSUMER", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_NEGATIVE_CONSUMER", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Consumer Affordability",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"monthlyIncome\": 15000\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_CONSUMER_AFFORDABILITY", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_CONSUMER_AFFORDABILITY", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Credit Commitments",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_CREDIT_COMMITMENTS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_CREDIT_COMMITMENTS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SIMAH Miscellaneous",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SIMAH_MISCELLANEOUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SIMAH_MISCELLANEOUS", "simple"]}
               }
             }
-          ],
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Secret-Key",
-                "value": "{{clientSecretKey}}"
-              },
-              {
-                "key": "X-National-Id",
-                "value": "1234567890"
-              },
-              {
-                "key": "X-Caller-Service",
-                "value": "lending-service"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"nationalId\": \"1234567890\",\n    \"productType\": \"PERSONAL_FINANCE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
+          ]
+        },
+        {
+          "name": "NAFATH",
+          "item": [
+            {
+              "name": "Execute - NAFATH Initiate",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); console.log('ReqID: ' + j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"service\": \"LENDING\",\n    \"locale\": \"ar\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFATH_INITIATE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFATH_INITIATE", "simple"]}
               }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/execute/SIMAH_SCORE_CREDIT/simple",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "execute", "SIMAH_SCORE_CREDIT", "simple"]
+            {
+              "name": "Execute - NAFATH Check Status",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"transId\": \"NAF-123456789\",\n    \"random\": \"12\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFATH_CHECK_STATUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFATH_CHECK_STATUS", "simple"]}
+              }
             },
-            "description": "Now execute! The client uses its secretKey to call any API it has been granted access to."
-          },
-          "response": []
+            {
+              "name": "Execute - NAFATH Callback",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"transId\": \"NAF-123456789\",\n    \"status\": \"COMPLETED\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFATH_CALLBACK", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFATH_CALLBACK", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - NAFATH Get JWK",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFATH_GET_JWK", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFATH_GET_JWK", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "UNIFONIC",
+          "item": [
+            {
+              "name": "Execute - UNIFONIC Send OTP",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"AppSid\": \"your-app-sid\",\n    \"SenderID\": \"KSA-Finance\",\n    \"Body\": \"Your OTP code is: 1234\",\n    \"Recipient\": \"966501234567\",\n    \"responseType\": \"JSON\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/UNIFONIC_SEND_OTP", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "UNIFONIC_SEND_OTP", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - UNIFONIC IVR Initiate",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"recipient\": \"966501234567\",\n    \"otp\": \"1234\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/UNIFONIC_IVR", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "UNIFONIC_IVR", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - UNIFONIC IVR Status",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"callId\": \"IVR-123456\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/UNIFONIC_IVR_STATUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "UNIFONIC_IVR_STATUS", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "TAHAQUQ",
+          "item": [
+            {
+              "name": "Execute - TAHAQUQ Verify Mobile",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nid\": \"1108149475\",\n    \"mobile\": \"966501234567\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TAHAQUQ_VERIFY_MOBILE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TAHAQUQ_VERIFY_MOBILE", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "DAKHLI",
+          "item": [
+            {
+              "name": "Execute - DAKHLI GOSI",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/DAKHLI_GOSI", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "DAKHLI_GOSI", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - DAKHLI GOVT",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/DAKHLI_GOVT", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "DAKHLI_GOVT", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "EIGER",
+          "item": [
+            {
+              "name": "Execute - EIGER Auth",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"username\": \"eiger_user\",\n    \"password\": \"eiger_pass\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/EIGER_AUTH", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "EIGER_AUTH", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - EIGER Order Purchase",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"commodity\": \"PALLADIUM\",\n    \"quantity\": 1,\n    \"amount\": 50000,\n    \"currency\": \"SAR\",\n    \"referenceId\": \"LOAN-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/EIGER_ORDER_PURCHASE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "EIGER_ORDER_PURCHASE", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - EIGER Order Hold",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"orderId\": \"ORD-12345\",\n    \"amount\": 50000\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/EIGER_ORDER_HOLD", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "EIGER_ORDER_HOLD", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - EIGER Order Sale",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"orderId\": \"ORD-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/EIGER_ORDER_SALE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "EIGER_ORDER_SALE", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - EIGER Transfer Notification",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"orderId\": \"ORD-12345\",\n    \"transferRef\": \"TRF-789\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/EIGER_TRANSFER_NOTIFICATION", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "EIGER_TRANSFER_NOTIFICATION", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "TARABUT",
+          "item": [
+            {
+              "name": "Execute - TARABUT Auth",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"clientId\": \"tarabut-client\",\n    \"clientSecret\": \"tarabut-secret\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TARABUT_AUTH", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TARABUT_AUTH", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - TARABUT KSA Get Accounts",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"consentId\": \"CON-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TARABUT_KSA_GET_ACCOUNTS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TARABUT_KSA_GET_ACCOUNTS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - TARABUT KSA IBAN Match",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"iban\": \"SA0380000000608010167519\",\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TARABUT_KSA_IBAN_MATCH", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TARABUT_KSA_IBAN_MATCH", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - TARABUT KSA Salary Check",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountId\": \"ACC-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TARABUT_KSA_SALARY_CHECK", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TARABUT_KSA_SALARY_CHECK", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - TARABUT KSA Get Transactions",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountId\": \"ACC-12345\",\n    \"fromDate\": \"2025-01-01\",\n    \"toDate\": \"2025-12-31\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TARABUT_KSA_GET_TRANSACTIONS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TARABUT_KSA_GET_TRANSACTIONS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - TARABUT KSA Get Balances",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountId\": \"ACC-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/TARABUT_KSA_GET_BALANCES", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "TARABUT_KSA_GET_BALANCES", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "WATHQ",
+          "item": [
+            {
+              "name": "Execute - WATHQ Verify CR",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"crNumber\": \"1010123456\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/WATHQ_VERIFY_CR", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "WATHQ_VERIFY_CR", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - WATHQ Company Info",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"crNumber\": \"1010123456\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/WATHQ_GET_COMPANY_INFO", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "WATHQ_GET_COMPANY_INFO", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - WATHQ Freelance License",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/WATHQ_GET_FREELANCE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "WATHQ_GET_FREELANCE", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "ABSHER",
+          "item": [
+            {
+              "name": "Execute - ABSHER Verify Identity",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ABSHER_VERIFY_IDENTITY", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ABSHER_VERIFY_IDENTITY", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ABSHER Get Address",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ABSHER_GET_ADDRESS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ABSHER_GET_ADDRESS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ABSHER Get Dependents",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ABSHER_GET_DEPENDENTS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ABSHER_GET_DEPENDENTS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ABSHER Verify Iqama",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"iqamaNumber\": \"2012345678\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ABSHER_VERIFY_IQAMA", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ABSHER_VERIFY_IQAMA", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "SAFEWATCH",
+          "item": [
+            {
+              "name": "Execute - SAFEWATCH Scan Session",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"fullName\": \"Ahmed Al-Rashid\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SAFEWATCH_SCAN_SESSION", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SAFEWATCH_SCAN_SESSION", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SAFEWATCH Add Customer",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"fullName\": \"Ahmed Al-Rashid\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SAFEWATCH_ADD_CUSTOMER", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SAFEWATCH_ADD_CUSTOMER", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SAFEWATCH Add Individual Customer",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\",\n    \"firstName\": \"Ahmed\",\n    \"lastName\": \"Al-Rashid\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SAFEWATCH_ADD_INDIVIDUAL_CUSTOMER", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SAFEWATCH_ADD_INDIVIDUAL_CUSTOMER", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - SAFEWATCH Add Account",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"customerId\": \"CUST-123\",\n    \"accountType\": \"SAVINGS\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/SAFEWATCH_ADD_ACCOUNT", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "SAFEWATCH_ADD_ACCOUNT", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "HYPERPAY",
+          "item": [
+            {
+              "name": "Execute - HYPERPAY Checkout",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"amount\": \"1000.00\",\n    \"currency\": \"SAR\",\n    \"paymentType\": \"DB\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/HYPERPAY_CHECKOUT", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "HYPERPAY_CHECKOUT", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - HYPERPAY Status",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"checkoutId\": \"CHK-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/HYPERPAY_STATUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "HYPERPAY_STATUS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - HYPERPAY Refund",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"paymentId\": \"PAY-12345\",\n    \"amount\": \"500.00\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/HYPERPAY_REFUND", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "HYPERPAY_REFUND", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "MASDAR",
+          "item": [
+            {
+              "name": "Execute - MASDAR Auth",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"username\": \"masdar_user\",\n    \"password\": \"masdar_pass\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/MASDAR_AUTH", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "MASDAR_AUTH", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - MASDAR Individual Plus",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/MASDAR_INDIVIDUAL_PLUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "MASDAR_INDIVIDUAL_PLUS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - MASDAR Employment",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/MASDAR_EMPLOYMENT", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "MASDAR_EMPLOYMENT", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - MASDAR Address",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-National-Id", "value": "1108149475"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"nationalId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/MASDAR_ADDRESS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "MASDAR_ADDRESS", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "ANB",
+          "item": [
+            {
+              "name": "Execute - ANB Auth",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"username\": \"anb_user\",\n    \"password\": \"anb_pass\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ANB_AUTH", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ANB_AUTH", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ANB Transfer",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"fromAccount\": \"SA1234567890\",\n    \"toAccount\": \"SA0987654321\",\n    \"amount\": 5000,\n    \"currency\": \"SAR\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ANB_TRANSFER", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ANB_TRANSFER", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ANB Transfer Status",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"transferId\": \"TRF-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ANB_TRANSFER_STATUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ANB_TRANSFER_STATUS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ANB Account Inquiry",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountNumber\": \"SA1234567890\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ANB_ACCOUNT_INQUIRY", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ANB_ACCOUNT_INQUIRY", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - ANB Balance Inquiry",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountNumber\": \"SA1234567890\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/ANB_BALANCE_INQUIRY", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "ANB_BALANCE_INQUIRY", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "NAFITH",
+          "item": [
+            {
+              "name": "Execute - NAFITH Auth",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"username\": \"nafith_user\",\n    \"password\": \"nafith_pass\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFITH_AUTH", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFITH_AUTH", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - NAFITH Create Sanad",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"debtorId\": \"1108149475\",\n    \"amount\": 50000,\n    \"currency\": \"SAR\",\n    \"dueDate\": \"2027-01-15\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFITH_CREATE_SANAD", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFITH_CREATE_SANAD", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - NAFITH Sanad Status",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"sanadGroupId\": \"SNG-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFITH_SANAD_STATUS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFITH_SANAD_STATUS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - NAFITH Download PDF",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"sanadGroupId\": \"SNG-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/NAFITH_DOWNLOAD_PDF", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "NAFITH_DOWNLOAD_PDF", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "LEAN",
+          "item": [
+            {
+              "name": "Execute - LEAN Create Entity",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"customerId\": \"CUST-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/LEAN_CREATE_ENTITY", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "LEAN_CREATE_ENTITY", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - LEAN Get Accounts",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"entityId\": \"ENT-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/LEAN_GET_ACCOUNTS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "LEAN_GET_ACCOUNTS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - LEAN Get Transactions",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountId\": \"ACC-12345\",\n    \"startDate\": \"2025-01-01\",\n    \"endDate\": \"2025-12-31\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/LEAN_GET_TRANSACTIONS", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "LEAN_GET_TRANSACTIONS", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - LEAN Get Identity",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"entityId\": \"ENT-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/LEAN_GET_IDENTITY", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "LEAN_GET_IDENTITY", "simple"]}
+              }
+            },
+            {
+              "name": "Execute - LEAN Get Balance",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountId\": \"ACC-12345\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/LEAN_GET_BALANCE", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "LEAN_GET_BALANCE", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMDHA",
+          "item": [
+            {
+              "name": "Execute - EMDHA Sign",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"documentId\": \"DOC-12345\",\n    \"signerId\": \"1108149475\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/EMDHA_SIGN", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "EMDHA_SIGN", "simple"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "PAYMENT_GUARD",
+          "item": [
+            {
+              "name": "Execute - Payment Guard Account Registration",
+              "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var j = pm.response.json(); if (j.data) { pm.collectionVariables.set('requestId', j.data.requestId); } }"], "type": "text/javascript"}}],
+              "request": {
+                "auth": {"type": "noauth"},
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Secret-Key", "value": "{{clientSecretKey}}"}, {"key": "X-Caller-Service", "value": "postman-test"}],
+                "body": {"mode": "raw", "raw": "{\n    \"accountNumber\": \"SA1234567890\",\n    \"bankCode\": \"ANB\"\n}", "options": {"raw": {"language": "json"}}},
+                "url": {"raw": "{{kongUrl}}/api/v1/execute/PAYMENT_GUARD_ACCOUNT_REGISTRATION", "host": ["{{kongUrl}}"], "path": ["api", "v1", "execute", "PAYMENT_GUARD_ACCOUNT_REGISTRATION", "simple"]}
+              }
+            }
+          ]
         }
       ]
     }

@@ -108,7 +108,44 @@ public class LoanApplicationMapper {
                 // Audit
                 agg.getCreatedAt(),
                 agg.getUpdatedAt(),
-                agg.getVersion()
+                agg.getVersion(),
+
+                // Loan / Disbursement (populated separately)
+                null, null, null, null, null, null, null, null
+        );
+    }
+
+    public LoanApplicationDto withLoanData(LoanApplicationDto dto,
+                                            String loanId, String loanNumber, String loanStatus,
+                                            java.math.BigDecimal principalAmount, java.math.BigDecimal totalAmount,
+                                            java.math.BigDecimal installmentAmount, String fineractLoanId,
+                                            java.time.LocalDate disbursementDate) {
+        return new LoanApplicationDto(
+                dto.id(), dto.tenantId(), dto.applicationNumber(), dto.customerId(), dto.nationalId(),
+                dto.status(), dto.stepperIndex(), dto.stepperLabel(), dto.workflowId(),
+                dto.monthlyIncome(), dto.totalExpenses(), dto.existingLiabilities(),
+                dto.adultDependents(), dto.childDependents(),
+                dto.foodGroceries(), dto.utilities(), dto.healthcare(), dto.communication(),
+                dto.housingRent(), dto.clothingEssentials(), dto.education(), dto.transportation(),
+                dto.productId(), dto.productCode(), dto.productName(), dto.shariaStructure(),
+                dto.requestedAmount(), dto.requestedTenureMonths(), dto.purposeOfFinance(),
+                dto.purposeOfFinanceOther(), dto.profitRate(), dto.apr(),
+                dto.safeWatchSessionId(), dto.safeWatchStatus(),
+                dto.employerName(), dto.employmentSector(), dto.employmentStatus(),
+                dto.basicSalary(), dto.totalSalary(), dto.employmentStartDate(),
+                dto.amlDeclarationCompleted(), dto.amlDeclarationAt(),
+                dto.disbursementBankCode(), dto.disbursementBankName(), dto.disbursementIban(),
+                dto.disbursementAccountHolder(), dto.ibanVerified(),
+                dto.simahConsent(), dto.simahConsentAt(), dto.creditScore(), dto.simahReferenceId(),
+                dto.verifiedSalary(), dto.maxEligibleAmount(),
+                dto.offeredAmount(), dto.offeredMonthlyInstallment(), dto.offeredTotalProfit(),
+                dto.offeredTotalPayable(), dto.processingFee(), dto.adminFee(), dto.acceptedAmount(),
+                dto.contractExpiresAt(), dto.otpVerified(), dto.otpAttempts(),
+                dto.ivrVerified(), dto.ivrAttempts(),
+                dto.nabaNotificationSent(), dto.paymentGuardSessionId(), dto.paymentGuardStatus(),
+                dto.createdAt(), dto.updatedAt(), dto.version(),
+                loanId, loanNumber, loanStatus, principalAmount, totalAmount,
+                installmentAmount, fineractLoanId, disbursementDate
         );
     }
 

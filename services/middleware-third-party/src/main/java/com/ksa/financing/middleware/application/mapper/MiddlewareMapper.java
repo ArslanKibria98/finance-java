@@ -7,12 +7,57 @@ import org.springframework.stereotype.Component;
 @Component
 public class MiddlewareMapper {
 
+    public ProviderEnvironmentResponse toEnvironmentResponse(ThirdPartyProvider provider,
+                                                               java.util.List<ProviderApiWithEnvConfigsResponse> apis) {
+        return new ProviderEnvironmentResponse(
+                provider.getId(),
+                provider.getCode(),
+                provider.getNameEn(),
+                provider.getNameAr(),
+                provider.getDescriptionEn(),
+                provider.getDescriptionAr(),
+                provider.getCategory() != null ? provider.getCategory().name() : null,
+                provider.getBaseUrlDev(),
+                provider.getBaseUrlProd(),
+                provider.getAuthType() != null ? provider.getAuthType().name() : null,
+                provider.getStatus() != null ? provider.getStatus().name() : null,
+                provider.getTimeoutMs(),
+                provider.getRetryCount(),
+                provider.getCreatedAt(),
+                provider.getUpdatedAt(),
+                apis
+        );
+    }
+
+    public ProviderApiWithEnvConfigsResponse toApiWithEnvConfigsResponse(ProviderApi api,
+                                                                          java.util.List<EnvConfigResponse> envConfigs) {
+        return new ProviderApiWithEnvConfigsResponse(
+                api.getId(),
+                api.getProviderId(),
+                api.getCode(),
+                api.getNameEn(),
+                api.getNameAr(),
+                api.getDescriptionEn(),
+                api.getDescriptionAr(),
+                api.getHttpMethod() != null ? api.getHttpMethod().name() : null,
+                api.getEndpointPath(),
+                api.getStatus() != null ? api.getStatus().name() : null,
+                api.isAsync(),
+                api.getTimeoutMs(),
+                api.getCreatedAt(),
+                api.getUpdatedAt(),
+                envConfigs
+        );
+    }
+
     public ProviderResponse toResponse(ThirdPartyProvider provider) {
         return new ProviderResponse(
                 provider.getId(),
                 provider.getCode(),
-                provider.getName(),
-                provider.getDescription(),
+                provider.getNameEn(),
+                provider.getNameAr(),
+                provider.getDescriptionEn(),
+                provider.getDescriptionAr(),
                 provider.getCategory() != null ? provider.getCategory().name() : null,
                 provider.getBaseUrlDev(),
                 provider.getBaseUrlProd(),
@@ -30,8 +75,10 @@ public class MiddlewareMapper {
                 api.getId(),
                 api.getProviderId(),
                 api.getCode(),
-                api.getName(),
-                api.getDescription(),
+                api.getNameEn(),
+                api.getNameAr(),
+                api.getDescriptionEn(),
+                api.getDescriptionAr(),
                 api.getHttpMethod() != null ? api.getHttpMethod().name() : null,
                 api.getEndpointPath(),
                 api.getStatus() != null ? api.getStatus().name() : null,

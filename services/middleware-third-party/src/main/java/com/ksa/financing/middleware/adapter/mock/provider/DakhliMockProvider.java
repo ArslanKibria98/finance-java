@@ -27,53 +27,53 @@ public class DakhliMockProvider implements MockResponseProvider {
     private MockResponseResult gosiResponse() {
         var body = """
                 {
-                    "requestNumber": "REQ-%s",
-                    "message": "Information Retrieved",
+                    "requestNumber": "%s",
+                    "message": "Information Retreived from GOSI",
                     "employmentStatusInfo": [
                         {
-                            "fullName": "Test Employee",
-                            "basicWage": 10000,
-                            "housingAllowance": 2000,
-                            "otherAllowance": 1000,
-                            "employerName": "Test Company",
-                            "workingMonths": 24,
-                            "employmentStatus": "ACTIVE"
+                            "fullName": "\u0641\u064a\u0635\u0644 \u0647\u0644\u064a\u0644 \u0639\u0628\u064a\u062f \u0627\u0644\u0639\u062a\u064a\u0628\u064a",
+                            "basicWage": 7408.0,
+                            "housingAllowance": 1851.0,
+                            "otherAllowance": 0.0,
+                            "employerName": "\u0634\u0631\u0643\u0629 \u0639\u0648\u0646 \u0627\u0644\u0631\u0627\u0626\u062f\u0629 \u0644\u0644\u062a\u0645\u0648\u064a\u0644 \u0627\u0644\u0627\u0633\u062a\u0647\u0644\u0627\u0643\u064a \u0627\u0644\u0645\u0635\u063a\u0631",
+                            "workingMonths": "54",
+                            "employmentStatus": "\u0646\u0634\u064a\u0637"
                         }
                     ]
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+                """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult govtResponse() {
         var body = """
                 {
-                    "requestNumber": "REQ-%s",
-                    "message": "Government Employment Retrieved",
+                    "requestNumber": "%s",
+                    "message": "Information Retreived from GOSI",
                     "employmentStatusInfo": [
                         {
-                            "fullName": "Test Employee",
-                            "basicWage": 12000,
-                            "housingAllowance": 3000,
-                            "otherAllowance": 1500,
+                            "fullName": "\u0641\u064a\u0635\u0644 \u0647\u0644\u064a\u0644 \u0639\u0628\u064a\u062f \u0627\u0644\u0639\u062a\u064a\u0628\u064a",
+                            "basicWage": 12000.0,
+                            "housingAllowance": 3000.0,
+                            "otherAllowance": 1500.0,
                             "employerName": "Ministry of Finance",
-                            "workingMonths": 36,
-                            "employmentStatus": "ACTIVE",
-                            "sector": "GOVERNMENT"
+                            "workingMonths": "36",
+                            "employmentStatus": "\u0646\u0634\u064a\u0637"
                         }
                     ]
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+                """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult fallbackResponse() {
         var body = """
                 {
-                    "status": "Success",
-                    "message": "DAKHLI request processed"
+                    "requestNumber": "%s",
+                    "message": "Information Retreived from GOSI",
+                    "employmentStatusInfo": []
                 }
-                """;
+                """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 }

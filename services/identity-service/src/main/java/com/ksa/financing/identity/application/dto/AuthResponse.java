@@ -17,12 +17,18 @@ public record AuthResponse(
     String tokenType,
 
     @Schema(description = "Customer ID (only present for customer PIN login)", example = "550e8400-e29b-41d4-a716-446655440000")
-    String customerId
+    String customerId,
+
+    @Schema(description = "National ID (only present for customer PIN login)", example = "1234567890")
+    String nationalId,
+
+    @Schema(description = "Mobile number (only present for customer PIN login)", example = "+966501234567")
+    String mobileNumber
 ) {
     /**
-     * Constructor without customerId — used by admin login and token refresh.
+     * Constructor without customer-specific fields — used by admin login and token refresh.
      */
     public AuthResponse(String accessToken, String refreshToken, long expiresIn, String tokenType) {
-        this(accessToken, refreshToken, expiresIn, tokenType, null);
+        this(accessToken, refreshToken, expiresIn, tokenType, null, null, null);
     }
 }

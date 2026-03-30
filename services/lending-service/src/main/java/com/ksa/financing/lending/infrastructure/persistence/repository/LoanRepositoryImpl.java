@@ -61,6 +61,13 @@ public class LoanRepositoryImpl implements LoanRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<LoanAggregate> findByApplicationId(UUID tenantId, UUID applicationId) {
+        return jpaRepository.findByTenantIdAndApplicationId(tenantId, applicationId)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public String generateLoanNumber(UUID tenantId) {
         int seq = jpaRepository.getNextLoanSequence(tenantId);
         return String.format("LN-%08d", seq);

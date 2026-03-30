@@ -17,6 +17,8 @@ public interface JpaProductRepository extends JpaRepository<ProductJpaEntity, UU
 
     Optional<ProductJpaEntity> findByIdAndTenantIdAndDeletedAtIsNull(UUID id, UUID tenantId);
 
+    Optional<ProductJpaEntity> findByIdAndDeletedAtIsNull(UUID id);
+
     List<ProductJpaEntity> findAllByTenantIdAndDeletedAtIsNull(UUID tenantId);
 
     boolean existsByProductCodeAndTenantIdAndDeletedAtIsNull(String productCode, UUID tenantId);

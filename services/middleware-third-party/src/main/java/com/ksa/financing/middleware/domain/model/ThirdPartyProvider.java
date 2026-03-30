@@ -7,8 +7,10 @@ public class ThirdPartyProvider {
     private UUID id;
     private UUID tenantId;
     private String code;
-    private String name;
-    private String description;
+    private String nameEn;
+    private String nameAr;
+    private String descriptionEn;
+    private String descriptionAr;
     private ProviderCategory category;
     private String baseUrlDev;
     private String baseUrlProd;
@@ -24,14 +26,17 @@ public class ThirdPartyProvider {
 
     public ThirdPartyProvider() {}
 
-    public static ThirdPartyProvider create(UUID tenantId, String code, String name, String description,
+    public static ThirdPartyProvider create(UUID tenantId, String code, String nameEn, String nameAr,
+                                             String descriptionEn, String descriptionAr,
                                              ProviderCategory category, AuthType authType,
                                              int timeoutMs, int retryCount, UUID createdBy) {
         var provider = new ThirdPartyProvider();
         provider.tenantId = tenantId;
         provider.code = code;
-        provider.name = name;
-        provider.description = description;
+        provider.nameEn = nameEn;
+        provider.nameAr = nameAr;
+        provider.descriptionEn = descriptionEn;
+        provider.descriptionAr = descriptionAr;
         provider.category = category;
         provider.authType = authType;
         provider.status = ProviderStatus.ACTIVE;
@@ -41,10 +46,12 @@ public class ThirdPartyProvider {
         return provider;
     }
 
-    public void update(String name, String description, ProviderCategory category,
-                       AuthType authType, int timeoutMs, int retryCount) {
-        this.name = name;
-        this.description = description;
+    public void update(String nameEn, String nameAr, String descriptionEn, String descriptionAr,
+                       ProviderCategory category, AuthType authType, int timeoutMs, int retryCount) {
+        this.nameEn = nameEn;
+        this.nameAr = nameAr;
+        this.descriptionEn = descriptionEn;
+        this.descriptionAr = descriptionAr;
         this.category = category;
         this.authType = authType;
         this.timeoutMs = timeoutMs;
@@ -71,8 +78,10 @@ public class ThirdPartyProvider {
     public UUID getId() { return id; }
     public UUID getTenantId() { return tenantId; }
     public String getCode() { return code; }
-    public String getName() { return name; }
-    public String getDescription() { return description; }
+    public String getNameEn() { return nameEn; }
+    public String getNameAr() { return nameAr; }
+    public String getDescriptionEn() { return descriptionEn; }
+    public String getDescriptionAr() { return descriptionAr; }
     public ProviderCategory getCategory() { return category; }
     public String getBaseUrlDev() { return baseUrlDev; }
     public String getBaseUrlProd() { return baseUrlProd; }
@@ -90,8 +99,10 @@ public class ThirdPartyProvider {
     public void setId(UUID id) { this.id = id; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
     public void setCode(String code) { this.code = code; }
-    public void setName(String name) { this.name = name; }
-    public void setDescription(String description) { this.description = description; }
+    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
+    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
+    public void setDescriptionEn(String descriptionEn) { this.descriptionEn = descriptionEn; }
+    public void setDescriptionAr(String descriptionAr) { this.descriptionAr = descriptionAr; }
     public void setCategory(ProviderCategory category) { this.category = category; }
     public void setBaseUrlDev(String baseUrlDev) { this.baseUrlDev = baseUrlDev; }
     public void setBaseUrlProd(String baseUrlProd) { this.baseUrlProd = baseUrlProd; }

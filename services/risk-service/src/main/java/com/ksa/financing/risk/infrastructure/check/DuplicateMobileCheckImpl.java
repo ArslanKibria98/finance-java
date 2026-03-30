@@ -15,14 +15,27 @@ public class DuplicateMobileCheckImpl implements DuplicateMobileCheck {
 
     @Override
     public DuplicateMobileResult check(DuplicateMobileInput input) {
-        log.info("Starting duplicate mobile check for hash: {}...", maskHash(input.mobileHash()));
+        log.info("Starting duplicate mobile check for mobile: {}",
+                input.mobileNumber() != null ? maskMobile(input.mobileNumber()) : maskHash(input.mobileHash()));
 
         try {
-            Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM customers_view WHERE mobile_hash = ? AND status != 'DELETED'",
-                Integer.class,
-                input.mobileHash()
-            );
+            Integer count;
+
+            if (input.mobileNumber() != null && !input.mobileNumber().isBlank()) {
+                // Query by raw mobile number directly — avoids hash mismatch issues
+                count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM ft_customers WHERE mobile_number = ? AND deleted_at IS NULL",
+                    Integer.class,
+                    input.mobileNumber()
+                );
+            } else {
+                // Fallback to hash-based lookup
+                count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM customers_view WHERE mobile_hash = ? AND status != 'DELETED'",
+                    Integer.class,
+                    input.mobileHash()
+                );
+            }
 
             boolean duplicate = count != null && count > 0;
 
@@ -39,6 +52,11 @@ public class DuplicateMobileCheckImpl implements DuplicateMobileCheck {
             log.error("Duplicate mobile check failed", e);
             return new DuplicateMobileResult(true, "Mobile verification error");
         }
+    }
+
+    private String maskMobile(String mobile) {
+        if (mobile == null || mobile.length() < 4) return "****";
+        return "***" + mobile.substring(mobile.length() - 4);
     }
 
     private String maskHash(String hash) {

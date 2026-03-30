@@ -56,6 +56,9 @@ public class UserIdentityJpaEntity {
     @Column(name = "global_uid")
     private UUID globalUid;
 
+    @Column(name = "mobile_number", length = 20)
+    private String mobileNumber;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "user_type", nullable = false)

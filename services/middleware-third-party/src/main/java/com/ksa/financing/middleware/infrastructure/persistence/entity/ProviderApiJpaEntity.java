@@ -32,11 +32,17 @@ public class ProviderApiJpaEntity {
     @Column(name = "code", nullable = false, length = 100)
     private String code;
 
-    @Column(name = "name", nullable = false, length = 200)
-    private String name;
+    @Column(name = "name_en", nullable = false, length = 200)
+    private String nameEn;
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "name_ar", length = 200)
+    private String nameAr;
+
+    @Column(name = "description_en", columnDefinition = "TEXT")
+    private String descriptionEn;
+
+    @Column(name = "description_ar", columnDefinition = "TEXT")
+    private String descriptionAr;
 
     @Column(name = "http_method", nullable = false, columnDefinition = "http_method")
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)

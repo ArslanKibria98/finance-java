@@ -70,8 +70,9 @@ public class SsoService implements SsoUseCase {
     @Value("${keycloak.sso.redirect-uri}")
     private String redirectUri;
 
-    // Redis key prefix — state UUID se PKCE verifier dhundne ke liye
+    // Redis key prefixes — state UUID se PKCE verifier + redirect URI dhundne ke liye
     private static final String PKCE_KEY_PREFIX = "sso:pkce:";
+    private static final String REDIRECT_KEY_PREFIX = "sso:redirect:";
 
     // 10 minute — user ko itne waqt mein login karna hoga
     private static final Duration PKCE_TTL = Duration.ofMinutes(10);
@@ -81,7 +82,7 @@ public class SsoService implements SsoUseCase {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
-    public SsoLoginUrlResponse generateLoginUrl() {
+    public SsoLoginUrlResponse generateLoginUrl(String requestRedirectUri) {
         // 1a. Random state generate karo (CSRF protection + Redis key)
         String state = UUID.randomUUID().toString();
 
@@ -89,14 +90,20 @@ public class SsoService implements SsoUseCase {
         String codeVerifier = generateCodeVerifier();
         String codeChallenge = generateCodeChallenge(codeVerifier);
 
-        // 1c. Verifier Redis mein state ke sath store karo (10 min TTL)
-        redisTemplate.opsForValue().set(PKCE_KEY_PREFIX + state, codeVerifier, PKCE_TTL);
+        // 1c. Effective redirect URI — frontend ne bheja toh woh, warna config fallback
+        String effectiveRedirectUri = (requestRedirectUri != null && !requestRedirectUri.isBlank())
+                ? requestRedirectUri
+                : redirectUri;
 
-        // 1d. Keycloak authorization URL banao
+        // 1d. Verifier + redirect URI Redis mein state ke sath store karo (10 min TTL)
+        redisTemplate.opsForValue().set(PKCE_KEY_PREFIX + state, codeVerifier, PKCE_TTL);
+        redisTemplate.opsForValue().set(REDIRECT_KEY_PREFIX + state, effectiveRedirectUri, PKCE_TTL);
+
+        // 1e. Keycloak authorization URL banao
         String authUrl = UriComponentsBuilder
                 .fromHttpUrl(keycloakBaseUrl + "/realms/" + realm + "/protocol/openid-connect/auth")
                 .queryParam("client_id", clientId)
-                .queryParam("redirect_uri", redirectUri)
+                .queryParam("redirect_uri", effectiveRedirectUri)
                 .queryParam("response_type", "code")
                 .queryParam("scope", "openid profile email")
                 .queryParam("state", state)
@@ -105,7 +112,7 @@ public class SsoService implements SsoUseCase {
                 .build()
                 .toUriString();
 
-        log.info("SSO login URL generated for state: {}", state);
+        log.info("SSO login URL generated for state: {}, redirect: {}", state, effectiveRedirectUri);
         return new SsoLoginUrlResponse(authUrl, state);
     }
 
@@ -116,8 +123,9 @@ public class SsoService implements SsoUseCase {
     @Override
     public SsoTokenResponse exchangeToken(SsoTokenExchangeRequest request) {
         // 2a. Redis se verifier nikalo (state key use karke)
-        String redisKey = PKCE_KEY_PREFIX + request.state();
-        String codeVerifier = redisTemplate.opsForValue().get(redisKey);
+        String pkceKey = PKCE_KEY_PREFIX + request.state();
+        String redirectKey = REDIRECT_KEY_PREFIX + request.state();
+        String codeVerifier = redisTemplate.opsForValue().get(pkceKey);
 
         if (codeVerifier == null) {
             log.warn("PKCE verifier not found for state: {} — expired or invalid", request.state());
@@ -126,17 +134,24 @@ public class SsoService implements SsoUseCase {
             );
         }
 
-        // 2b. One-time use — Redis se delete karo
-        redisTemplate.delete(redisKey);
+        // 2b. Redirect URI — Redis se nikalo (login waqt store kiya tha), fallback to request, then config
+        String storedRedirectUri = redisTemplate.opsForValue().get(redirectKey);
+        String effectiveRedirectUri = storedRedirectUri != null ? storedRedirectUri
+                : (request.redirectUri() != null && !request.redirectUri().isBlank()) ? request.redirectUri()
+                : redirectUri;
 
-        // 2c. Keycloak token endpoint call karo (internal URL — ensures iss matches service config)
+        // 2c. One-time use — Redis se delete karo
+        redisTemplate.delete(pkceKey);
+        redisTemplate.delete(redirectKey);
+
+        // 2d. Keycloak token endpoint call karo (internal URL — ensures iss matches service config)
         String tokenUrl = keycloakInternalUrl + "/realms/" + realm
                 + "/protocol/openid-connect/token";
 
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "authorization_code");
         body.add("client_id", clientId);
-        body.add("redirect_uri", redirectUri);
+        body.add("redirect_uri", effectiveRedirectUri);
         body.add("code", request.code());
         body.add("code_verifier", codeVerifier);
 

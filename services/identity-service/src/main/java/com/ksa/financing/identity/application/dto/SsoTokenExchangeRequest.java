@@ -12,5 +12,7 @@ public record SsoTokenExchangeRequest(
         String code,
 
         @NotBlank(message = "State is required")
-        String state
+        String state,
+
+        String redirectUri
 ) {}

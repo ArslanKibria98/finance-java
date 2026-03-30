@@ -11,6 +11,7 @@ import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,9 +45,14 @@ public class ManageClientService implements ManageClientUseCase {
         );
         client.setIpWhitelist(request.ipWhitelist());
 
-        var saved = clientRepository.save(client);
-        log.info("Created client: code={}, tenantId={}", saved.getCode(), tenantId);
-        return mapper.toResponse(saved);
+        try {
+            var saved = clientRepository.save(client);
+            log.info("Created client: code={}, tenantId={}", saved.getCode(), tenantId);
+            return mapper.toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessException("MIDDLEWARE.CLIENT.DUPLICATE_CODE",
+                    "Client with code already exists: " + request.code(), request.code());
+        }
     }
 
     @Override

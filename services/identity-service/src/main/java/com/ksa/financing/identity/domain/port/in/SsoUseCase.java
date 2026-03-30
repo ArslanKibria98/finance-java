@@ -18,7 +18,7 @@ import com.ksa.financing.identity.application.dto.SsoTokenResponse;
  */
 public interface SsoUseCase {
 
-    SsoLoginUrlResponse generateLoginUrl();
+    SsoLoginUrlResponse generateLoginUrl(String redirectUri);
 
     SsoTokenResponse exchangeToken(SsoTokenExchangeRequest request);
 }

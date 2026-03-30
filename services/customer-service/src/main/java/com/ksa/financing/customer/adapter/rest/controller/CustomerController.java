@@ -10,6 +10,7 @@ import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.EmploymentInfo;
 import com.ksa.financing.customer.domain.model.EmploymentType;
 import com.ksa.financing.customer.domain.model.KycStatus;
+import com.ksa.financing.customer.domain.model.LifecycleStage;
 import com.ksa.financing.customer.domain.port.in.CreateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
@@ -142,6 +143,54 @@ public class CustomerController {
 
         Customer customer = getCustomerUseCase.getByCifNumber(tenantId, cifNumber);
         return ResponseEntity.ok(toResponse(customer));
+    }
+
+    @SecuredEndpoint(obj = "customers", act = "read")
+    @GetMapping("/by-nid/{nationalId}")
+    @Operation(summary = "Get customer by National ID", description = "Retrieves customer details by Saudi National ID")
+    @ApiResponse(responseCode = "200", description = "Customer found")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<CustomerResponse> getCustomerByNationalId(
+            @PathVariable String nationalId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        log.info("Getting customer by NID: ***{}", nationalId.substring(nationalId.length() - 4));
+
+        Customer customer = getCustomerUseCase.getByNationalId(nationalId);
+        return ResponseEntity.ok(toResponse(customer));
+    }
+
+    @SecuredEndpoint(obj = "customers", act = "read")
+    @GetMapping
+    @Operation(summary = "List all customers", description = "Retrieves customers. super_admin sees all tenants, other roles see only their tenant. Optionally filter by lifecycleStage or kycStatus.")
+    @ApiResponse(responseCode = "200", description = "Customers retrieved")
+    public ResponseEntity<List<CustomerResponse>> listCustomers(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String lifecycleStage,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String kycStatus,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        boolean isSuperAdmin = isSuperAdmin(jwt);
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Listing customers - superAdmin: {}, tenant: {}, lifecycleStage: {}, kycStatus: {}",
+                isSuperAdmin, tenantId, lifecycleStage, kycStatus);
+
+        List<Customer> customers;
+        if (lifecycleStage != null && !lifecycleStage.isBlank()) {
+            LifecycleStage stage = LifecycleStage.valueOf(lifecycleStage.toUpperCase());
+            customers = getCustomerUseCase.getByLifecycleStage(tenantId, stage);
+        } else if (kycStatus != null && !kycStatus.isBlank()) {
+            KycStatus status = KycStatus.valueOf(kycStatus.toUpperCase());
+            customers = getCustomerUseCase.getByKycStatus(tenantId, status);
+        } else if (isSuperAdmin) {
+            customers = getCustomerUseCase.getAll();
+        } else {
+            customers = getCustomerUseCase.getAllByTenant(tenantId);
+        }
+
+        List<CustomerResponse> responses = customers.stream()
+                .map(this::toResponse)
+                .toList();
+        return ResponseEntity.ok(responses);
     }
 
     @SecuredEndpoint(obj = "customers", act = "update")
@@ -311,6 +360,14 @@ public class CustomerController {
             }
         }
         return extractTenantId(jwt);
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isSuperAdmin(Jwt jwt) {
+        var realmAccess = jwt.getClaimAsMap("realm_access");
+        if (realmAccess == null) return false;
+        var roles = (java.util.Collection<String>) realmAccess.get("roles");
+        return roles != null && roles.contains("super_admin");
     }
 
     private UUID extractTenantId(Jwt jwt) {

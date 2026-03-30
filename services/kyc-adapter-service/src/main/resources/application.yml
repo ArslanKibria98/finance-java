@@ -88,7 +88,7 @@ temporal:
 app:
   security:
     cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://65.108.31.172:7374}
   tenant:
     header-name: X-Tenant-ID
     default: default

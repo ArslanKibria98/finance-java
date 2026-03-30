@@ -93,6 +93,14 @@ public class ManageLoanUseCaseImpl implements ManageLoanUseCase {
         return loanRepository.findByCustomer(tenantId, customerId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public LoanAggregate getLoanByApplicationId(UUID tenantId, UUID applicationId) {
+        log.debug("Getting loan by applicationId: {}", applicationId);
+        return loanRepository.findByApplicationId(tenantId, applicationId)
+                .orElseThrow(() -> NotFoundException.forEntity("Loan for application", applicationId.toString()));
+    }
+
     private LoanAggregate findLoan(UUID tenantId, UUID loanId) {
         return loanRepository.findById(tenantId, LoanId.of(loanId))
                 .orElseThrow(() -> NotFoundException.forEntity("Loan", loanId.toString()));

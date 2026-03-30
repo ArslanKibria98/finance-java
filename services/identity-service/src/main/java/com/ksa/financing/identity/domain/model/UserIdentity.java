@@ -14,6 +14,7 @@ public class UserIdentity {
     private UUID internalPartnerId;
     private UUID globalUid;
     private UserType userType;
+    private String mobileNumber;
     private UserStatus status;
     private Instant lastSyncedAt;
     private Instant createdAt;
@@ -41,6 +42,8 @@ public class UserIdentity {
     public void setGlobalUid(UUID globalUid) { this.globalUid = globalUid; }
     public UserType getUserType() { return userType; }
     public void setUserType(UserType userType) { this.userType = userType; }
+    public String getMobileNumber() { return mobileNumber; }
+    public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
     public UserStatus getStatus() { return status; }
     public void setStatus(UserStatus status) { this.status = status; }
     public Instant getLastSyncedAt() { return lastSyncedAt; }

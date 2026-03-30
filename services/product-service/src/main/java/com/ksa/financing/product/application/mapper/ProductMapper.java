@@ -97,6 +97,7 @@ public class ProductMapper {
                             product.getFeeSettings().vatPercentage(),
                             product.getFeeSettings().revenueEligibilityThreshold(),
                             product.getFeeSettings().maxDbrPercentage(),
+                            product.getFeeSettings().globalDbrPercentage(),
                             product.getFeeSettings().dbrCalculationMethod(),
                             product.getFeeSettings().dbrExceptions())
                     : null,
@@ -167,7 +168,11 @@ public class ProductMapper {
                 product.getProductCode(),
                 product.getNameEn(),
                 product.getNameAr(),
+                product.getShortDescriptionEn(),
+                product.getShortDescriptionAr(),
                 product.getProductType() != null ? product.getProductType().name() : null,
+                product.getTargetSegment(),
+                product.getShariaStructure(),
                 product.getStatus() != null ? product.getStatus().name() : null,
                 product.getMasterCategoryId(),
                 product.getMasterCategoryNameEn(),
@@ -180,6 +185,18 @@ public class ProductMapper {
                 product.getCountry() != null ? product.getCountry().getNameAr() : null,
                 product.getWizardStep(),
                 product.isWizardCompleted(),
+                product.getMinAmount(),
+                product.getMaxAmount(),
+                product.getMinTenureMonths(),
+                product.getMaxTenureMonths(),
+                product.getAllowedTenures(),
+                product.getBaseProfitRate(),
+                product.getRateType(),
+                product.getRepaymentFrequency(),
+                product.getCurrency(),
+                product.getFineractProductId(),
+                product.isVisibleToCustomers(),
+                product.isVisibleToPartners(),
                 product.getCreatedAt()
         );
     }

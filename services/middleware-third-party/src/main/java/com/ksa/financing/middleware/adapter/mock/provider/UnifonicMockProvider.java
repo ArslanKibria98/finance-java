@@ -30,41 +30,41 @@ public class UnifonicMockProvider implements MockResponseProvider {
                 {
                     "Status": "Sent",
                     "MessageId": "MSG-%s",
-                    "Recipient": "966500000000"
+                    "Recipient": "966590933288"
                 }
                 """.formatted(UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult ivrInitiate() {
+        var callId = UUID.randomUUID().toString();
         var body = """
                 {
-                    "callId": "CALL-%s",
-                    "status": "Initiated",
-                    "phoneNumber": "966500000000"
+                    "status": "Request has been sent.",
+                    "callId": "%s"
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+                """.formatted(callId);
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult ivrStatus() {
         var body = """
                 {
-                    "callId": "CALL-%s",
+                    "callId": "%s",
                     "status": "Completed",
                     "duration": 45
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+                """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult fallbackResponse() {
         var body = """
                 {
-                    "status": "Success",
-                    "callId": "CALL-%s"
+                    "status": "Request has been sent.",
+                    "callId": "%s"
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+                """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 }

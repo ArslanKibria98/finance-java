@@ -1,9 +1,11 @@
 package com.ksa.financing.lending.adapter.temporal.activity;
 
+import com.ksa.financing.lending.application.usecase.BankAccountLookupService;
 import com.ksa.financing.lending.domain.model.*;
 import com.ksa.financing.lending.domain.port.in.ManageLoanUseCase;
 import com.ksa.financing.lending.domain.port.out.EventPublisher;
 import com.ksa.financing.lending.domain.port.out.LoanApplicationRepository;
+import com.ksa.financing.lending.infrastructure.client.FraudEventNotifier;
 import com.ksa.islamic.orchestration.activity.lending.LoanApplicationActivity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,8 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
     private final LoanApplicationRepository applicationRepository;
     private final ManageLoanUseCase loanUseCase;
     private final EventPublisher eventPublisher;
+    private final BankAccountLookupService bankAccountLookupService;
+    private final FraudEventNotifier fraudEventNotifier;
 
     // ══════════ APPLICATION LIFECYCLE ══════════
 
@@ -79,7 +83,7 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
         var aggregate = findApplication(input.tenantId(), input.applicationId());
 
         aggregate.submitBasicInfo(
-                input.productId() != null ? UUID.fromString(input.productId()) : null,
+                safeUuid(input.productId()),
                 input.productCode(),
                 input.productName(),
                 input.shariaStructure() != null ? ShariaStructure.valueOf(input.shariaStructure()) : null,
@@ -89,8 +93,8 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
                 null, // purposeOfFinanceOther
                 input.profitRate(),
                 null, // apr
-                input.partnerId() != null ? UUID.fromString(input.partnerId()) : null,
-                input.leadId() != null ? UUID.fromString(input.leadId()) : null,
+                safeUuid(input.partnerId()),
+                safeUuid(input.leadId()),
                 UUID.fromString(input.updatedBy())
         );
 
@@ -115,6 +119,14 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
         );
 
         applicationRepository.save(aggregate);
+
+        // Sync bank account to customer-service so it shows in bank-accounts list API
+        String customerId = aggregate.getCustomerId() != null ? aggregate.getCustomerId().toString() : null;
+        if (customerId != null) {
+            bankAccountLookupService.syncBankAccountToCustomerService(
+                    customerId, input.bankName(), input.bankCode(),
+                    input.iban(), input.accountHolder(), null);
+        }
     }
 
     @Override
@@ -260,7 +272,7 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
                 UUID.fromString(input.tenantId()),
                 LoanApplicationId.of(UUID.fromString(input.applicationId())),
                 UUID.fromString(input.customerId()),
-                UUID.fromString(input.productId()),
+                safeUuid(input.productId()),
                 input.productCode(),
                 ShariaStructure.valueOf(input.shariaStructure()),
                 input.principalAmount(),
@@ -271,6 +283,16 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
         );
 
         var loan = loanUseCase.createLoanFromApplication(command);
+
+        // Fire non-blocking fraud event for loan creation
+        try {
+            fraudEventNotifier.notifyLoanApplicationCreated(
+                    input.tenantId(), input.customerId(), null,
+                    input.applicationId(), input.productCode(),
+                    input.principalAmount(), null, null);
+        } catch (Exception e) {
+            log.warn("Fraud event notification failed (non-blocking): {}", e.getMessage());
+        }
 
         return new LoanCreationResult(
                 loan.getId().getValue().toString(),
@@ -284,6 +306,22 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
         log.info("Activity: Generating amortization schedule for loan: {}", input.loanId());
         // Schedule generation happens as part of loan creation via domain-core-sdk
         log.info("Amortization schedule generated during loan creation");
+    }
+
+    @Override
+    @Transactional
+    public void markLoanDisbursed(MarkDisbursedInput input) {
+        log.info("Activity: Marking loan {} as disbursed", input.loanId());
+        var tenantId = UUID.fromString(input.tenantId());
+        var loanId = UUID.fromString(input.loanId());
+        var command = new com.ksa.financing.lending.domain.port.in.ManageLoanUseCase.DisburseLoanCommand(
+                tenantId, loanId,
+                java.time.LocalDate.now(),
+                java.time.LocalDate.now().plusMonths(1),
+                null
+        );
+        loanUseCase.disburseLoan(command);
+        log.info("Loan {} marked as disbursed", input.loanId());
     }
 
     // ══════════ THIRD-PARTY RESULT PERSISTENCE ══════════
@@ -367,6 +405,20 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
         if (!aggregate.getUncommittedEvents().isEmpty()) {
             eventPublisher.publishAll(aggregate.getUncommittedEvents());
             aggregate.markEventsAsCommitted();
+        }
+    }
+
+    /**
+     * Safely parses a string as UUID, returning null if the string is null, blank, or not a valid UUID.
+     * This handles cases where product/partner IDs may be codes (e.g., "MURABAHA-001") rather than UUIDs.
+     */
+    private UUID safeUuid(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            log.warn("Could not parse '{}' as UUID, treating as null", value);
+            return null;
         }
     }
 }

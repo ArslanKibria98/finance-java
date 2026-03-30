@@ -235,10 +235,26 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
             applicationNumber = createResult.applicationNumber();
             log.info("Draft application created: {}", applicationNumber);
 
+            // Pre-populate basicInfoData from initiate request so tracker shows requestedAmount immediately
+            if (requestedAmount != null) {
+                basicInfoData = new BasicInfoData(
+                        productId, null, null, null,
+                        requestedAmount, requestedTenureMonths, purposeOfFinance, null
+                );
+            }
+
             // ── BRD PHASE 1: SAFEWATCH AML SCREENING ──
             processSafeWatchScreening();
 
-            // ══════════ STEP 1: BASIC INFORMATION (auto-processed from initiate) ══════════
+            // ══════════ STEP 1: BASIC INFORMATION ══════════
+            updateStep(1, "Basic Information", "DRAFT", "AWAITING_INPUT");
+
+            // Wait for basic info signal from user (POST /{customerId}/basic-info)
+            received = Workflow.await(STEP_TIMEOUT, () -> basicInfoReceived);
+            if (!received) {
+                return expireApplication(workflowId, "Step 1 timed out: Basic information not submitted");
+            }
+
             updateStep(1, "Basic Information", "DRAFT", "PROCESSING");
             processBasicInfoFromInitiate();
 
@@ -374,7 +390,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                     thirdPartyActivity.initiateIvrCall(new ThirdPartyActivity.IvrInitiateInput(
                             tenantId, applicationId, mobileNumber,
                             customerValidation.fullName(),
-                            offerDetails.selectedAmount() != null ? offerDetails.selectedAmount() : offerDetails.maxAmount()));
+                            offerDetails.selectedAmount() != null ? offerDetails.selectedAmount() : basicInfoSignal.requestedAmount()));
                     continue;
                 }
 
@@ -454,9 +470,9 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                     "CUSTOMER_VALIDATION_FAILED");
         }
 
-        // Resolve product details
+        // Resolve product details from validation (product-service is source of truth)
+        String productCode = productValidation.productCode();
         String productName = productValidation.productName();
-        String productCode = productValidation.productName() != null ? productId : null;
         String shariaStructure = productValidation.shariaStructure();
         BigDecimal profitRate = productValidation.profitRate();
 
@@ -488,7 +504,22 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 shariaStructure,
                 requestedAmount,
                 requestedTenureMonths,
-                purposeOfFinance
+                purposeOfFinance,
+                profitRate
+        );
+
+        // Synthesize basicInfoSignal so downstream methods can use it uniformly
+        basicInfoSignal = new BasicInfoSignal(
+                productId,
+                productCode,
+                productName,
+                shariaStructure != null ? shariaStructure : "MURABAHA",
+                requestedAmount,
+                requestedTenureMonths,
+                purposeOfFinance,
+                profitRate,
+                null, // partnerId
+                null  // leadId
         );
 
         errorMessage = null;
@@ -526,18 +557,22 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                     "CUSTOMER_VALIDATION_FAILED");
         }
 
-        // Save basic info to application (use signal data as fallback for null validation fields)
+        // Resolve product details from validation (product-service is source of truth)
+        String resolvedProductCode = productValidation.productCode() != null
+                ? productValidation.productCode() : basicInfoSignal.productCode();
         String productName = productValidation.productName() != null
                 ? productValidation.productName() : basicInfoSignal.productName();
+        String resolvedShariaStructure = productValidation.shariaStructure() != null
+                ? productValidation.shariaStructure() : basicInfoSignal.shariaStructure();
         BigDecimal profitRate = productValidation.profitRate() != null
                 ? productValidation.profitRate() : basicInfoSignal.requestedProfitRate();
 
         lendingActivity.saveBasicInfo(new LoanApplicationActivity.SaveBasicInfoInput(
                 tenantId, applicationId,
                 basicInfoSignal.productId(),
-                basicInfoSignal.productCode(),
+                resolvedProductCode,
                 productName,
-                basicInfoSignal.shariaStructure(),
+                resolvedShariaStructure,
                 basicInfoSignal.requestedAmount(),
                 basicInfoSignal.requestedTenureMonths(),
                 basicInfoSignal.purposeOfFinance(),
@@ -554,12 +589,13 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
 
         basicInfoData = new BasicInfoData(
                 basicInfoSignal.productId(),
-                basicInfoSignal.productCode(),
+                resolvedProductCode,
                 productName,
-                basicInfoSignal.shariaStructure(),
+                resolvedShariaStructure,
                 basicInfoSignal.requestedAmount(),
                 basicInfoSignal.requestedTenureMonths(),
-                basicInfoSignal.purposeOfFinance()
+                basicInfoSignal.purposeOfFinance(),
+                profitRate
         );
 
         errorMessage = null;
@@ -633,10 +669,20 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 tenantId, applicationId, "ELIGIBILITY_CHECKING", createdBy));
 
         // 3a: Credit check via SIMAH
+        // Use workflow fields (set from initiate) with fallback to basicInfoSignal
+        BigDecimal effectiveAmount = requestedAmount;
+        int effectiveTenure = requestedTenureMonths;
+        if (effectiveAmount == null && basicInfoSignal != null) {
+            effectiveAmount = basicInfoSignal.requestedAmount();
+        }
+        if (effectiveTenure <= 0 && basicInfoSignal != null) {
+            effectiveTenure = basicInfoSignal.requestedTenureMonths();
+        }
+
         var creditResult = creditCheckActivity.performCreditCheck(
                 new CreditCheckActivity.CreditCheckInput(
                         tenantId, nationalId, customerId,
-                        basicInfoSignal.requestedAmount()
+                        effectiveAmount
                 )
         );
 
@@ -644,11 +690,21 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         subStep = "CALCULATING_ELIGIBILITY";
         // Use signal profit rate as fallback when product validation returned null
         BigDecimal effectiveProfitRate = productValidation.profitRate() != null
-                ? productValidation.profitRate() : basicInfoSignal.requestedProfitRate();
+                ? productValidation.profitRate()
+                : (basicInfoSignal != null ? basicInfoSignal.requestedProfitRate() : null);
         if (effectiveProfitRate == null) {
             effectiveProfitRate = new BigDecimal("0.12"); // default rate
         }
         resolvedProfitRate = effectiveProfitRate;  // Store for later steps
+
+        // BRD Steps 5-6: Sum declared expenses from 8 categories for affordability check
+        // Prefer individual expense fields (from initiate request) over pre-computed totalExpenses
+        BigDecimal declaredExpensesTotal = sumExpenses(
+                foodGroceries, utilities, healthcare, communication,
+                housingRent, clothingEssentials, education, transportation);
+        if (declaredExpensesTotal.compareTo(BigDecimal.ZERO) == 0 && totalExpenses != null) {
+            declaredExpensesTotal = totalExpenses; // Fallback to pre-computed total
+        }
 
         var eligibilityResult = creditCheckActivity.calculateEligibility(
                 new CreditCheckActivity.EligibilityInput(
@@ -665,9 +721,13 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                         productValidation.maxAge(),
                         productValidation.minEmploymentMonths(),
                         productValidation.maxDbrPercent(),
-                        basicInfoSignal.requestedAmount(),
+                        effectiveAmount,
                         effectiveProfitRate,
-                        basicInfoSignal.requestedTenureMonths()
+                        effectiveTenure,
+                        // BRD Affordability fields
+                        monthlyIncome,
+                        declaredExpensesTotal,
+                        existingLiabilities
                 )
         );
 
@@ -758,9 +818,17 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     private void processOfferAcceptance() {
         log.info("Processing Step 4: Offer Acceptance");
 
+        // Use selectedAmount from signal, fallback to requested amount (NOT maxAmount)
         BigDecimal selectedAmount = acceptOfferSignal.selectedAmount() != null
                 ? acceptOfferSignal.selectedAmount()
-                : offerDetails.maxAmount();
+                : basicInfoSignal.requestedAmount();
+
+        // Validate: selectedAmount must not exceed maxEligibleAmount
+        if (offerDetails.maxAmount() != null && selectedAmount.compareTo(offerDetails.maxAmount()) > 0) {
+            log.warn("Selected amount {} exceeds max eligible amount {}, capping to max",
+                    selectedAmount, offerDetails.maxAmount());
+            selectedAmount = offerDetails.maxAmount();
+        }
 
         // Recalculate if customer chose a lower amount
         var recalc = creditCheckActivity.calculateOffer(
@@ -810,7 +878,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         log.info("Processing Step 5: Contract Generation");
 
         BigDecimal selectedAmount = offerDetails.selectedAmount() != null
-                ? offerDetails.selectedAmount() : offerDetails.maxAmount();
+                ? offerDetails.selectedAmount() : basicInfoSignal.requestedAmount();
 
         // Execute commodity trade for Tawarruq structure
         if ("TAWARRUQ".equalsIgnoreCase(basicInfoSignal.shariaStructure())
@@ -1114,7 +1182,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         log.info("Processing Phase 6: Loan Creation & Disbursement");
 
         BigDecimal selectedAmount = offerDetails.selectedAmount() != null
-                ? offerDetails.selectedAmount() : offerDetails.maxAmount();
+                ? offerDetails.selectedAmount() : basicInfoSignal.requestedAmount();
 
         // 6a: Update status to LOAN_CREATING
         status = "LOAN_CREATING";
@@ -1156,6 +1224,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 new DisbursementActivity.FineractInput(
                         tenantId, loanResult.loanId(), customerId,
                         basicInfoSignal.productCode(),
+                        productValidation != null ? productValidation.fineractProductId() : null,
                         selectedAmount,
                         resolvedProfitRate,
                         basicInfoSignal.requestedTenureMonths(),
@@ -1174,7 +1243,28 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 offerDetails.monthlyInstallment()
         ));
 
-        // 6f: Disburse funds to customer IBAN
+        // 6f: Pre-disbursement fraud gate (PaymentGuard)
+        subStep = "FRAUD_CHECK_PRE_DISBURSE";
+        try {
+            var fraudResult = thirdPartyActivity.checkPaymentGuard(
+                    new ThirdPartyActivity.PaymentGuardInput(
+                            tenantId, applicationId, customerId, nationalId,
+                            selectedAmount,
+                            bankAccountData.iban()
+                    ));
+            if (!fraudResult.approved()) {
+                log.warn("PaymentGuard flagged disbursement: status={}, risk={}, sessionId={}. Proceeding with caution.",
+                        fraudResult.status(), fraudResult.riskLevel(), fraudResult.sessionId());
+                // Log warning but do NOT block — fraud-service review task will handle manually
+            } else {
+                log.info("PaymentGuard check PASSED: sessionId={}, riskLevel={}",
+                        fraudResult.sessionId(), fraudResult.riskLevel());
+            }
+        } catch (Exception e) {
+            log.warn("PaymentGuard pre-disbursement check failed ({}), proceeding with disbursement.", e.getMessage());
+        }
+
+        // 6g: Disburse funds to customer IBAN
         subStep = "DISBURSING_FUNDS";
         var disbursementResult = disbursementActivity.disburseFunds(
                 new DisbursementActivity.DisburseFundsInput(
@@ -1187,7 +1277,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 )
         );
 
-        // 6g: Send completion notification
+        // 6h: Send completion notification
         subStep = "SENDING_NOTIFICATION";
         disbursementActivity.sendCompletionNotification(
                 new DisbursementActivity.NotificationInput(
@@ -1197,10 +1287,17 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 )
         );
 
+        // 6i: Mark loan as disbursed in lending DB
+        subStep = "MARKING_DISBURSED";
+        lendingActivity.markLoanDisbursed(new LoanApplicationActivity.MarkDisbursedInput(
+                tenantId, loanResult.loanId(),
+                null
+        ));
+
         loanInfo = new LoanInfo(
                 loanResult.loanId(),
                 loanResult.loanNumber(),
-                "DISBURSED",
+                "ACTIVE",
                 selectedAmount,
                 Instant.ofEpochMilli(Workflow.currentTimeMillis()).toString()
         );
@@ -1218,6 +1315,13 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         log.info("Signal received: submitBasicInfo (product={}, amount={})",
                 signal.productCode(), signal.requestedAmount());
         this.basicInfoSignal = signal;
+
+        // Update workflow fields so processBasicInfoFromInitiate uses signal data
+        if (signal.productId() != null) this.productId = signal.productId();
+        if (signal.requestedAmount() != null) this.requestedAmount = signal.requestedAmount();
+        if (signal.requestedTenureMonths() > 0) this.requestedTenureMonths = signal.requestedTenureMonths();
+        if (signal.purposeOfFinance() != null) this.purposeOfFinance = signal.purposeOfFinance();
+
         this.basicInfoReceived = true;
     }
 
@@ -1431,5 +1535,25 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * BRD Steps 5-6: Sum the 8 declared expense categories for affordability check.
+     * Null-safe — treats null values as zero.
+     */
+    private static BigDecimal sumExpenses(
+            BigDecimal foodGroceries, BigDecimal utilities, BigDecimal healthcare,
+            BigDecimal communication, BigDecimal housingRent, BigDecimal clothingEssentials,
+            BigDecimal education, BigDecimal transportation) {
+        BigDecimal total = BigDecimal.ZERO;
+        if (foodGroceries != null) total = total.add(foodGroceries);
+        if (utilities != null) total = total.add(utilities);
+        if (healthcare != null) total = total.add(healthcare);
+        if (communication != null) total = total.add(communication);
+        if (housingRent != null) total = total.add(housingRent);
+        if (clothingEssentials != null) total = total.add(clothingEssentials);
+        if (education != null) total = total.add(education);
+        if (transportation != null) total = total.add(transportation);
+        return total;
     }
 }

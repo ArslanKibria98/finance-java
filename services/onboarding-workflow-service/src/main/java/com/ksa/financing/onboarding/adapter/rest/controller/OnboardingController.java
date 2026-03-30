@@ -14,8 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -62,6 +61,12 @@ public class OnboardingController {
     @Value("${app.services.identity-url}")
     private String identityUrl;
 
+    @Value("${app.services.risk-service-url}")
+    private String riskServiceUrl;
+
+    @Value("${app.services.customer-service-url}")
+    private String customerServiceUrl;
+
     public OnboardingController(StartOnboardingUseCase startOnboardingUseCase,
                                 GetOnboardingStatusUseCase getOnboardingStatusUseCase,
                                 VerifyOtpUseCase verifyOtpUseCase,
@@ -94,6 +99,17 @@ public class OnboardingController {
         log.info("Onboarding initiate for NID ending ...{}", maskNid(request.nationalId()));
         DeviceInfo deviceInfo = extractDeviceInfo(httpRequest);
         String tenantId = extractTenantIdFromHeader(httpRequest);
+
+        // ===== RISK GATE: Call internal checks API before starting workflow =====
+        var riskGateResult = runInternalChecksGate(
+                request.nationalId(), request.mobileNumber(), tenantId,
+                deviceInfo, httpRequest);
+
+        if (riskGateResult != null) {
+            // Internal checks failed — return error, do NOT start workflow
+            return riskGateResult;
+        }
+        // ===== END RISK GATE =====
 
         OnboardingRequest domainRequest = new OnboardingRequest(
                 request.nationalId(),
@@ -750,23 +766,31 @@ public class OnboardingController {
         ));
     }
 
-    // ==================== Status Query (JWT) ====================
+    // ==================== Status Query (PUBLIC) ====================
 
-    @SecuredEndpoint(obj = "onboarding", act = "status")
     @GetMapping("/status")
     @Operation(summary = "Get onboarding status", description = "Query full onboarding state including Yakeen data", tags = "8. Status")
     public ResponseEntity<OnboardingStatusResponse> getStatus(
-            @RequestParam @NotBlank String nationalId,
-            @AuthenticationPrincipal Jwt jwt) {
-
-        if (jwt != null) {
-            extractTenantId(jwt); // validate tenant present in JWT when authenticated
-        }
+            @RequestParam @NotBlank String nationalId) {
         String workflowId = "onboarding-" + nationalId;
         log.debug("Status query for workflow: {}", workflowId);
 
         OnboardingState state = getOnboardingStatusUseCase.getStatus(workflowId);
         OnboardingStep currentStep = state.getCurrentStep();
+
+        // If no workflow exists, check if customer is already registered
+        if (currentStep == OnboardingStep.INITIATED && state.getCustomerId() == null) {
+            if (isCustomerRegistered(nationalId)) {
+                OnboardingStatusResponse completeResponse = new OnboardingStatusResponse(
+                        workflowId, "COMPLETE", "COMPLETE", "LOGIN",
+                        null, null, null, null, null, 0, false, null,
+                        "An account already exists with this ID. Please log in.",
+                        null, null, List.of(),
+                        null, null
+                );
+                return ResponseEntity.ok(completeResponse);
+            }
+        }
 
         // Infer which step failed from state data
         OnboardingStep failedAtStep = (currentStep == OnboardingStep.FAILED)
@@ -794,6 +818,39 @@ public class OnboardingController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    // ==================== Active Onboardings (super_admin) ====================
+
+    @SecuredEndpoint(obj = "onboarding", act = "read")
+    @GetMapping("/active")
+    @Operation(summary = "List all active onboarding workflows",
+            description = "Returns all running onboarding workflows from Temporal. super_admin only.",
+            tags = "8. Status",
+            security = @SecurityRequirement(name = "bearer-jwt"))
+    public ResponseEntity<List<Map<String, Object>>> listActiveOnboardings(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        log.info("Listing active onboardings requested by: {}", jwt.getSubject());
+
+        List<OnboardingState> activeWorkflows = getOnboardingStatusUseCase.listActiveOnboardings();
+
+        List<Map<String, Object>> results = activeWorkflows.stream().map(state -> {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("workflowId", state.getWorkflowId());
+            entry.put("nationalId", state.getNationalId());
+            entry.put("mobileNumber", state.getMobileNumber());
+            entry.put("currentStep", state.getCurrentStep() != null ? state.getCurrentStep().name() : null);
+            entry.put("lifecycleStage", state.getLifecycleStage());
+            entry.put("customerId", state.getCustomerId());
+            entry.put("globalUid", state.getGlobalUid());
+            entry.put("deviceTrusted", state.isDeviceTrusted());
+            entry.put("startedAt", state.getStartedAt() != null ? state.getStartedAt().toString() : null);
+            entry.put("lastUpdatedAt", state.getLastUpdatedAt() != null ? state.getLastUpdatedAt().toString() : null);
+            return entry;
+        }).toList();
+
+        return ResponseEntity.ok(results);
     }
 
     // ==================== Private Helpers ====================
@@ -961,5 +1018,143 @@ public class OnboardingController {
             log.warn("Could not query workflow state for {}: {}", workflowId, e.getMessage());
             return new OnboardingState();
         }
+    }
+
+    // ==================== RISK GATE: Internal Checks ====================
+
+    /**
+     * Calls risk-service POST /api/v1/risk/internal-checks BEFORE starting the workflow.
+     * If the result is not PASS, returns a response that blocks onboarding.
+     * If the result is PASS, returns null (caller should proceed).
+     *
+     * <p>Fail-closed: if risk-service is unreachable, onboarding is blocked.</p>
+     */
+    @SuppressWarnings("unchecked")
+    private ResponseEntity<InitiateOnboardingResponse> runInternalChecksGate(
+            String nationalId, String mobileNumber, String tenantId,
+            DeviceInfo deviceInfo, HttpServletRequest httpRequest) {
+
+        String url = riskServiceUrl + "/api/v1/risk/internal-checks";
+
+        try {
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Tenant-Id", tenantId);
+            if (deviceInfo.deviceId() != null) headers.set("X-Device-Id", deviceInfo.deviceId());
+            if (httpRequest.getHeader("X-Device-Fingerprint") != null) {
+                headers.set("X-Device-Fingerprint", httpRequest.getHeader("X-Device-Fingerprint"));
+            }
+            if (deviceInfo.ipAddress() != null) headers.set("X-Client-Ip", deviceInfo.ipAddress());
+            if (httpRequest.getHeader("X-Session-Id") != null) {
+                headers.set("X-Session-Id", httpRequest.getHeader("X-Session-Id"));
+            }
+
+            var body = Map.of(
+                    "nationalId", nationalId,
+                    "mobileNumber", mobileNumber
+            );
+
+            var request = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, request, Map.class);
+
+            if (response.getBody() == null) {
+                log.warn("Risk-service returned null — failing closed");
+                return buildRiskGateBlockResponse("HARD_BLOCK",
+                        "Service temporarily unavailable. Please try again later.", null);
+            }
+
+            // Unwrap {data: {...}}
+            Map<String, Object> data = response.getBody();
+            if (data.containsKey("data") && data.get("data") instanceof Map) {
+                data = (Map<String, Object>) data.get("data");
+            }
+
+            String decision = data.get("overallDecision") != null ? data.get("overallDecision").toString() : null;
+            String blockReason = (String) data.get("blockReason");
+            String routeTo = (String) data.get("routeTo");
+            String assessmentId = (String) data.get("assessmentId");
+
+            log.info("Risk gate result: assessmentId={}, decision={}", assessmentId, decision);
+
+            if ("PASS".equals(decision)) {
+                // All checks passed — proceed with onboarding
+                return null;
+            }
+
+            // Not PASS — block the onboarding
+            if ("HARD_BLOCK".equals(decision)) {
+                log.warn("Onboarding BLOCKED by internal checks: assessmentId={}", assessmentId);
+                return buildRiskGateBlockResponse("BLOCKED",
+                        blockReason != null ? blockReason : "Unable to proceed with registration at this time.",
+                        null);
+            }
+
+            if ("ROUTE_LOGIN".equals(decision)) {
+                log.info("Onboarding redirected to LOGIN: assessmentId={}", assessmentId);
+                return buildRiskGateBlockResponse("ROUTE_LOGIN",
+                        blockReason != null ? blockReason
+                                : "An account already exists with this ID. Please log in.",
+                        "LOGIN");
+            }
+
+            if ("ROUTE_REONBOARDING".equals(decision)) {
+                log.info("Onboarding redirected to WELCOME_BACK: assessmentId={}", assessmentId);
+                return buildRiskGateBlockResponse("ROUTE_REONBOARDING",
+                        "Welcome back! Your account is inactive. Please reactivate.",
+                        "WELCOME_BACK");
+            }
+
+            // Any other non-PASS decision — block
+            log.warn("Onboarding blocked by unknown decision: {}", decision);
+            return buildRiskGateBlockResponse(decision,
+                    blockReason != null ? blockReason : "Unable to proceed with registration at this time.",
+                    routeTo);
+
+        } catch (Exception e) {
+            // Fail-closed: risk-service down = onboarding blocked
+            log.error("Risk-service internal checks call failed — failing closed: {}", e.getMessage());
+            return buildRiskGateBlockResponse("HARD_BLOCK",
+                    "Service temporarily unavailable. Please try again later.", null);
+        }
+    }
+
+    private boolean isCustomerRegistered(String nationalId) {
+        try {
+            String url = customerServiceUrl + "/internal/customers/exists/" + nationalId;
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            if (response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // Unwrap {data: {exists: true}} envelope
+                if (body.containsKey("data") && body.get("data") instanceof Map) {
+                    body = (Map<String, Object>) body.get("data");
+                }
+                return Boolean.TRUE.equals(body.get("exists"));
+            }
+        } catch (Exception e) {
+            log.warn("Customer existence check failed for NID ending ...{}: {}",
+                    nationalId.substring(nationalId.length() - 4), e.getMessage());
+        }
+        return false;
+    }
+
+    private ResponseEntity<InitiateOnboardingResponse> buildRiskGateBlockResponse(
+            String status, String message, String routeTo) {
+        String effectiveStatus = ("ROUTE_LOGIN".equals(status) || "ROUTE_REONBOARDING".equals(status))
+                ? "COMPLETE" : status;
+        var response = new InitiateOnboardingResponse(
+                null,           // no workflowId — workflow was never started
+                effectiveStatus,
+                "BLOCKED",
+                routeTo != null ? routeTo : "NONE",
+                null, null, null, null,
+                message,
+                List.of(),
+                Instant.now().toString()
+        );
+        if ("ROUTE_LOGIN".equals(status) || "ROUTE_REONBOARDING".equals(status)) {
+            return ResponseEntity.ok(response);
+        }
+        // HARD_BLOCK and others → 403 Forbidden
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 }

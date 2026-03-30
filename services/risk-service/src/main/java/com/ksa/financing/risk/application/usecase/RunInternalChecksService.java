@@ -22,6 +22,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
     private final DeviceFingerprintCheck deviceFingerprintCheck;
     private final AccountLockCheck accountLockCheck;
     private final InternalSanctionsCheck internalSanctionsCheck;
+    private final VelocityCheck velocityCheck;
     private final RiskScoreCalculator riskScoreCalculator;
     private final CifLookupCheck cifLookupCheck;
     private final DuplicateMobileCheck duplicateMobileCheck;
@@ -161,15 +162,37 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
             updateState(state, InternalCheckStep.SANCTIONS_CHECKED);
 
             // =================================================================
-            // CHECK 7: Preliminary Internal Risk Score
+            // CHECK 7: Velocity Rate Limiting
             // =================================================================
-            log.info("Check 7: Risk Score Calculation for assessment: {}", assessmentId);
+            log.info("Check 7: Velocity Check for assessment: {}", assessmentId);
+
+            var velocityResult = velocityCheck.check(
+                new VelocityCheck.VelocityInput(
+                    request.ipAddress(), request.deviceId(),
+                    request.nidHash(), request.mobileHash()
+                )
+            );
+            if (velocityResult.decision() == CheckDecision.SOFT_BLOCK) {
+                state.getFlags().add("VELOCITY_EXCEEDED");
+            }
+            boolean velocityAnomaly = velocityResult.exceeded();
+            String velocityDetail = velocityResult.exceeded()
+                ? velocityResult.exceededRule()
+                : "PASS";
+            addCheckResult(state, "VELOCITY_CHECK", velocityResult.decision(),
+                velocityDetail, velocityResult.exceeded() ? 25 : 0);
+            updateState(state, InternalCheckStep.VELOCITY_CHECKED);
+
+            // =================================================================
+            // CHECK 8: Preliminary Internal Risk Score
+            // =================================================================
+            log.info("Check 8: Risk Score Calculation for assessment: {}", assessmentId);
 
             var scoreResult = riskScoreCalculator.calculateScore(
                 new RiskScoreCalculator.RiskScoreInput(
                     state.getCompletedChecks(),
                     watchlistMatch,
-                    false,
+                    velocityAnomaly,
                     newDevice,
                     newNid,
                     newMobile,
@@ -192,9 +215,9 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
             updateState(state, InternalCheckStep.RISK_SCORED);
 
             // =================================================================
-            // CHECK 8: CIF/NID Lookup (existing customer check)
+            // CHECK 9: CIF/NID Lookup (existing customer check)
             // =================================================================
-            log.info("Check 8: CIF/NID Lookup for assessment: {}", assessmentId);
+            log.info("Check 9: CIF/NID Lookup for assessment: {}", assessmentId);
 
             var cifResult = cifLookupCheck.lookup(
                 new CifLookupCheck.CifLookupInput(request.nidHash())
@@ -241,13 +264,13 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
             }
 
             // =================================================================
-            // CHECK 9: Duplicate Mobile Number
+            // CHECK 10: Duplicate Mobile Number
             // =================================================================
-            log.info("Check 9: Duplicate Mobile Check for assessment: {}", assessmentId);
+            log.info("Check 10: Duplicate Mobile Check for assessment: {}", assessmentId);
 
             var mobileResult = duplicateMobileCheck.check(
                 new DuplicateMobileCheck.DuplicateMobileInput(
-                    request.mobileHash(), request.sessionId()
+                    request.mobileHash(), request.mobileNumber(), request.sessionId()
                 )
             );
             if (mobileResult.duplicate()) {
@@ -262,7 +285,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
             updateState(state, InternalCheckStep.MOBILE_CHECKED);
 
             // =================================================================
-            // SUCCESS - All 9 checks passed
+            // SUCCESS - All 10 checks passed
             // =================================================================
             state.setOverallDecision(CheckDecision.PASS);
             updateState(state, InternalCheckStep.COMPLETED);

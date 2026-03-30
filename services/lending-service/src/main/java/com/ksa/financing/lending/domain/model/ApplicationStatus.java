@@ -40,7 +40,10 @@ public enum ApplicationStatus {
     APPROVED,
     REJECTED,
     CANCELLED,
-    EXPIRED;
+    EXPIRED,
+
+    // BRD V1.8 Step 71: User can resume within 30 days if contract signing expired
+    EXPIRED_RESUMABLE;
 
     public boolean canTransitionTo(ApplicationStatus target) {
         if (target == CANCELLED || target == EXPIRED) {
@@ -65,6 +68,7 @@ public enum ApplicationStatus {
             case CONTRACT_SIGNED -> target == LOAN_CREATING;
             case LOAN_CREATING -> target == DISBURSING || target == REJECTED;
             case DISBURSING -> target == APPROVED || target == REJECTED;
+            case EXPIRED_RESUMABLE -> target == CONTRACT_PENDING;
             case APPROVED, REJECTED, CANCELLED, EXPIRED -> false;
         };
     }
@@ -85,6 +89,7 @@ public enum ApplicationStatus {
             case CONTRACT_PENDING, CONTRACT_SIGNING, OTP_VERIFICATION,
                  IVR_VERIFICATION, CONTRACT_SIGNED -> 5;
             case LOAN_CREATING, DISBURSING, APPROVED -> 5;
+            case EXPIRED_RESUMABLE -> 5;
             case REJECTED, CANCELLED, EXPIRED -> 0;
         };
     }
@@ -101,6 +106,7 @@ public enum ApplicationStatus {
             case CONTRACT_PENDING, CONTRACT_SIGNING, OTP_VERIFICATION,
                  IVR_VERIFICATION, CONTRACT_SIGNED,
                  LOAN_CREATING, DISBURSING, APPROVED -> "Sign Contract";
+            case EXPIRED_RESUMABLE -> "Contract Expired (Resumable)";
             case REJECTED -> "Rejected";
             case CANCELLED -> "Cancelled";
             case EXPIRED -> "Expired";

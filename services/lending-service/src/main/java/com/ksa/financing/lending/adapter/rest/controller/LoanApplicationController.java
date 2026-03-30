@@ -4,11 +4,14 @@ import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
 import com.ksa.financing.lending.adapter.rest.request.*;
+import com.ksa.financing.lending.adapter.rest.response.ApplicationTrackerResponse;
 import com.ksa.financing.lending.adapter.rest.response.BankAccountInfoResponse;
 import com.ksa.financing.lending.adapter.rest.response.LoanApplicationResponse;
+import com.ksa.financing.lending.adapter.rest.response.LoanApplicationStepInfo;
 import com.ksa.financing.lending.adapter.rest.response.StepSignalResponse;
 import com.ksa.financing.lending.application.mapper.LoanApplicationMapper;
 import com.ksa.financing.lending.application.usecase.BankAccountLookupService;
+import com.ksa.financing.lending.domain.model.ApplicationStatus;
 import com.ksa.financing.lending.domain.model.LoanApplicationAggregate;
 import com.ksa.financing.lending.domain.port.in.ManageLoanApplicationUseCase;
 import com.ksa.islamic.orchestration.activity.lending.LoanApplicationWorkflow;
@@ -24,6 +27,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowNotFoundException;
 import io.temporal.client.WorkflowOptions;
 
 import java.math.BigDecimal;
@@ -44,21 +48,27 @@ import java.util.UUID;
 public class LoanApplicationController {
 
     private final ManageLoanApplicationUseCase useCase;
+    private final com.ksa.financing.lending.domain.port.in.ManageLoanUseCase loanUseCase;
     private final LoanApplicationMapper mapper;
     private final WorkflowClient workflowClient;
     private final BankAccountLookupService bankAccountLookupService;
+    private final com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort;
 
     @Value("${temporal.task-queue:loan-application-queue}")
     private String taskQueue;
 
     public LoanApplicationController(ManageLoanApplicationUseCase useCase,
+                                      com.ksa.financing.lending.domain.port.in.ManageLoanUseCase loanUseCase,
                                       LoanApplicationMapper mapper,
                                       WorkflowClient workflowClient,
-                                      BankAccountLookupService bankAccountLookupService) {
+                                      BankAccountLookupService bankAccountLookupService,
+                                      com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort) {
         this.useCase = useCase;
+        this.loanUseCase = loanUseCase;
         this.mapper = mapper;
         this.workflowClient = workflowClient;
         this.bankAccountLookupService = bankAccountLookupService;
+        this.productConfigPort = productConfigPort;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -84,6 +94,36 @@ public class LoanApplicationController {
         if (request.requestedTenureMonths() <= 0) {
             throw new BusinessException(ErrorCodes.BAD_REQUEST,
                     "Requested tenure is required");
+        }
+
+        // Validate against product + Fineract limits before starting workflow
+        try {
+            var config = productConfigPort.fetchProductConfig(
+                    tenantId, request.productId(), request.requestedAmount(), request.requestedTenureMonths());
+            var errors = new java.util.ArrayList<String>();
+            if (!config.fineractLinked()) {
+                throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                        "Product '" + config.productName() + "' is not linked to any Fineract loan product. Please configure the product in Fineract first.");
+            }
+            if (config.minAmount() != null && request.requestedAmount().compareTo(config.minAmount()) < 0) {
+                errors.add("Amount " + request.requestedAmount() + " SAR is below minimum " + config.minAmount() + " SAR");
+            }
+            if (config.maxAmount() != null && request.requestedAmount().compareTo(config.maxAmount()) > 0) {
+                errors.add("Amount " + request.requestedAmount() + " SAR exceeds maximum " + config.maxAmount() + " SAR");
+            }
+            if (config.minTenureMonths() > 0 && request.requestedTenureMonths() < config.minTenureMonths()) {
+                errors.add("Tenure " + request.requestedTenureMonths() + " months is below minimum " + config.minTenureMonths() + " months");
+            }
+            if (config.maxTenureMonths() > 0 && request.requestedTenureMonths() > config.maxTenureMonths()) {
+                errors.add("Tenure " + request.requestedTenureMonths() + " months exceeds maximum " + config.maxTenureMonths() + " months");
+            }
+            if (!errors.isEmpty()) {
+                throw new BusinessException(ErrorCodes.BAD_REQUEST, String.join("; ", errors));
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Product/Fineract validation unavailable, proceeding: {}", e.getMessage());
         }
 
         // Start Temporal workflow — all inter-service calls (eligibility, credit check,
@@ -125,17 +165,77 @@ public class LoanApplicationController {
 
         log.info("Loan application workflow started: {}", workflowId);
 
-        // Query workflow for initial state (applicationId, applicationNumber)
-        ApplicationStatusInfo statusInfo = queryWorkflowStatusSafe(workflowId);
+        // Calculate offer/installment preview for the response
+        Map<String, Object> preQualification = null;
+        try {
+            // Fetch product profit rate for calculation
+            BigDecimal profitRate = new BigDecimal("0.0385"); // default (decimal form)
+            try {
+                var config = productConfigPort.fetchProductConfig(
+                        tenantId, request.productId(), request.requestedAmount(), request.requestedTenureMonths());
+                if (config.profitRate() != null) {
+                    // baseProfitRate from product-service: 2.5 means 2.5%, convert to decimal 0.025
+                    // config.profitRate() from parseProductConfig: if from API = 2.5, if default = 0.0385
+                    BigDecimal rate = config.profitRate();
+                    profitRate = rate.compareTo(BigDecimal.ONE) > 0 ? rate.movePointLeft(2) : rate;
+                }
+            } catch (Exception ignored) {}
+
+            var calcResult = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
+                    request.requestedAmount(),
+                    profitRate,
+                    null,
+                    request.requestedTenureMonths(),
+                    null, null
+            );
+            if (!calcResult.hasErrors()) {
+                preQualification = new java.util.LinkedHashMap<>();
+                preQualification.put("requestedAmount", request.requestedAmount());
+                preQualification.put("tenureMonths", request.requestedTenureMonths());
+                preQualification.put("monthlyInstallment", calcResult.monthlyInstallment());
+                preQualification.put("totalPayable", calcResult.totalPayable());
+                preQualification.put("totalProfit", calcResult.totalCostOfFinancing());
+                preQualification.put("profitRate", calcResult.profitRate());
+                preQualification.put("apr", calcResult.apr());
+                preQualification.put("numInstallments", calcResult.numInstallments());
+                preQualification.put("firstInstallmentDueDate", calcResult.firstInstallmentDueDate());
+                preQualification.put("processingFee", calcResult.processingFee());
+                preQualification.put("adminFee", calcResult.adminFee());
+            }
+        } catch (Exception e) {
+            log.warn("Pre-qualification calculation failed, skipping: {}", e.getMessage());
+        }
+
+        // Poll workflow until applicationId is available (Step 1 auto-processing creates it)
+        ApplicationStatusInfo statusInfo = null;
+        for (int i = 0; i < 10; i++) {
+            statusInfo = queryWorkflowStatusSafe(workflowId);
+            if (statusInfo != null && statusInfo.applicationId() != null) {
+                break;
+            }
+            try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+
+        var currentStatusStr = statusInfo != null ? statusInfo.status() : "DRAFT";
+        ApplicationStatus appStatus;
+        try {
+            appStatus = ApplicationStatus.valueOf(currentStatusStr);
+        } catch (IllegalArgumentException e) {
+            appStatus = ApplicationStatus.DRAFT;
+        }
+        var steps = LoanApplicationStepInfo.buildSteps(appStatus);
+        var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new InitiateApplicationResponse(
                 workflowId,
                 request.customerId(),
                 statusInfo != null ? statusInfo.applicationId() : null,
                 statusInfo != null ? statusInfo.applicationNumber() : null,
-                "DRAFT",
+                currentStatusStr,
                 "Loan application workflow initiated",
-                null,
+                nextAction,
+                steps,
+                preQualification,
                 statusInfo != null ? new StepSignalResponse.WorkflowState(
                         statusInfo.stepperIndex(),
                         statusInfo.stepName(),
@@ -155,6 +255,8 @@ public class LoanApplicationController {
             String applicationNumber,
             String status,
             String message,
+            String nextAction,
+            List<LoanApplicationStepInfo> steps,
             Map<String, Object> preQualification,
             StepSignalResponse.WorkflowState workflowState
     ) {}
@@ -179,19 +281,24 @@ public class LoanApplicationController {
 
         log.info("Signal: submitBasicInfo for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.submitBasicInfo(new BasicInfoSignal(
-                request.productId(),
-                request.productCode(),
-                request.productName(),
-                request.shariaStructure(),
-                request.requestedAmount(),
-                request.requestedTenureMonths(),
-                request.purposeOfFinance(),
-                request.profitRate(),
-                request.partnerId(),
-                request.leadId()
-        ));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.submitBasicInfo(new BasicInfoSignal(
+                    request.productId(),
+                    null,  // productCode — resolved from product-service
+                    null,  // productName — resolved from product-service
+                    null,  // shariaStructure — resolved from product-service
+                    request.requestedAmount(),
+                    request.requestedTenureMonths(),
+                    request.purposeOfFinance(),
+                    null,  // profitRate — resolved from product-service
+                    request.partnerId(),
+                    request.leadId()
+            ));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
         // Basic info triggers product + customer validation — poll until past DRAFT
         return ResponseEntity.ok(buildStepResponseWithWait("BASIC_INFO", workflowId, "DRAFT", 8));
@@ -211,13 +318,18 @@ public class LoanApplicationController {
 
         log.info("Signal: submitBankAccount for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.submitBankAccount(new BankAccountSignal(
-                request.bankCode(),
-                request.bankName(),
-                request.iban(),
-                request.accountNumber()
-        ));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.submitBankAccount(new BankAccountSignal(
+                    request.bankCode(),
+                    request.bankName(),
+                    request.iban(),
+                    request.accountNumber()
+            ));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
         // Bank account triggers IBAN verification — poll until past BANK_ACCOUNT_PENDING
         return ResponseEntity.ok(buildStepResponseWithWait("BANK_ACCOUNT", workflowId, "BANK_ACCOUNT_PENDING", 8));
@@ -237,11 +349,17 @@ public class LoanApplicationController {
 
         log.info("Signal: giveSimahConsent for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.giveSimahConsent(new SimahConsentSignal(request.consentGiven()));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.giveSimahConsent(new SimahConsentSignal(request.consentGiven()));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
-        // SIMAH consent triggers credit check → eligibility → offer calc — poll until past SIMAH_CONSENT_GIVEN
-        return ResponseEntity.ok(buildStepResponseWithWait("SIMAH_CONSENT", workflowId, "SIMAH_CONSENT_GIVEN", 10));
+        // SIMAH consent triggers credit check → eligibility → offer calc — poll until past all intermediate states
+        return ResponseEntity.ok(buildStepResponseWithWait("SIMAH_CONSENT", workflowId,
+                List.of("SIMAH_CONSENT_GIVEN", "ELIGIBILITY_CHECKING"), 30));
     }
 
     @SecuredEndpoint(obj = "loan-applications", act = "manage")
@@ -258,11 +376,16 @@ public class LoanApplicationController {
 
         log.info("Signal: acceptOffer for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.acceptOffer(new AcceptOfferSignal(
-                request.accepted(),
-                request.selectedAmount()
-        ));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.acceptOffer(new AcceptOfferSignal(
+                    request.accepted(),
+                    request.selectedAmount()
+            ));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
         // Accept offer triggers recalc + contract generation — poll until past OFFER_PRESENTED
         return ResponseEntity.ok(buildStepResponseWithWait("ACCEPT_OFFER", workflowId, "OFFER_PRESENTED", 10));
@@ -282,12 +405,17 @@ public class LoanApplicationController {
 
         log.info("Signal: signContract for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.signContract(new SignContractSignal(
-                request.authorizeDigitalSignature(),
-                request.authorizeSellCommodity(),
-                request.wantPhysicalDelivery()
-        ));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.signContract(new SignContractSignal(
+                    request.authorizeDigitalSignature(),
+                    request.authorizeSellCommodity(),
+                    request.wantPhysicalDelivery()
+            ));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
         // Sign contract triggers consent recording + OTP send — poll until past CONTRACT_SIGNING
         return ResponseEntity.ok(buildStepResponseWithWait("SIGN_CONTRACT", workflowId, "CONTRACT_SIGNING", 8));
@@ -307,8 +435,13 @@ public class LoanApplicationController {
 
         log.info("Signal: verifySigningOtp for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.verifySigningOtp(new OtpVerifySignal(request.otpCode()));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.verifySigningOtp(new OtpVerifySignal(request.otpCode()));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
         // OTP verification triggers IVR call initiation — poll until past OTP_VERIFICATION
         return ResponseEntity.ok(buildStepResponseWithWait("VERIFY_OTP", workflowId, "OTP_VERIFICATION", 8));
@@ -328,15 +461,20 @@ public class LoanApplicationController {
 
         log.info("Signal: ivrCallback for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
-        var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
-        workflow.ivrCallback(new IvrCallbackSignal(
-                request.verified(),
-                request.callId(),
-                request.verificationStatus()
-        ));
+        try {
+            var workflow = workflowClient.newWorkflowStub(LoanApplicationWorkflow.class, workflowId);
+            workflow.ivrCallback(new IvrCallbackSignal(
+                    request.verified(),
+                    request.callId(),
+                    request.verificationStatus()
+            ));
+        } catch (WorkflowNotFoundException e) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Loan application workflow has already completed or expired. Please start a new application.");
+        }
 
         // IVR is the last user step — poll up to 15s for final APPROVED status with loan data
-        return ResponseEntity.ok(buildStepResponseWithWait("IVR_CALLBACK", workflowId, null, 15));
+        return ResponseEntity.ok(buildStepResponseWithWait("IVR_CALLBACK", workflowId, (String) null, 15));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -443,9 +581,7 @@ public class LoanApplicationController {
 
         var tenantId = extractTenantId(jwt);
         var aggregates = useCase.listApplications(tenantId);
-        var responses = mapper.toDtos(aggregates).stream()
-                .map(LoanApplicationResponse::from)
-                .toList();
+        var responses = enrichWithLoanData(tenantId, mapper.toDtos(aggregates));
         return ResponseEntity.ok(responses);
     }
 
@@ -458,10 +594,128 @@ public class LoanApplicationController {
 
         var tenantId = extractTenantId(jwt);
         var aggregates = useCase.listApplicationsByCustomer(tenantId, UUID.fromString(customerId));
-        var responses = mapper.toDtos(aggregates).stream()
-                .map(LoanApplicationResponse::from)
-                .toList();
+        var responses = enrichWithLoanData(tenantId, mapper.toDtos(aggregates));
         return ResponseEntity.ok(responses);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // BRD UC#03: APPLICATION TRACKER
+    // ══════════════════════════════════════════════════════════════
+
+    @SecuredEndpoint(obj = "loan-applications.tracker", act = "read")
+    @GetMapping("/{customerId}/tracker")
+    @Operation(summary = "Get application tracker with step-by-step progress (BRD UC#03)")
+    public ResponseEntity<ApplicationTrackerResponse> getTracker(
+            @PathVariable String customerId,
+            @RequestParam(required = false) String applicationId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+
+        // Try to get from active workflow first
+        try {
+            var workflowId = resolveWorkflowId(tenantId, customerId, applicationId);
+            var workflow = workflowClient.newWorkflowStub(
+                    com.ksa.islamic.orchestration.activity.lending.LoanApplicationWorkflow.class, workflowId);
+            var statusInfo = workflow.getApplicationStatus();
+
+            if (statusInfo != null) {
+                BigDecimal trackerTotalPayable = statusInfo.offer() != null
+                        ? statusInfo.offer().totalPayable() : null;
+
+                // If no offer yet but basicInfo exists, calculate preliminary totalPayable
+                if (trackerTotalPayable == null && statusInfo.basicInfo() != null
+                        && statusInfo.basicInfo().requestedAmount() != null
+                        && statusInfo.basicInfo().requestedTenureMonths() > 0) {
+                    trackerTotalPayable = calculatePreliminaryTotalPayable(
+                            tenantId, statusInfo.basicInfo().requestedAmount(),
+                            statusInfo.basicInfo().requestedTenureMonths(),
+                            statusInfo.basicInfo().productId());
+                }
+
+                return ResponseEntity.ok(ApplicationTrackerResponse.build(
+                        statusInfo.applicationId(),
+                        statusInfo.applicationNumber(),
+                        statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedAmount() : null,
+                        trackerTotalPayable,
+                        statusInfo.status()
+                ));
+            }
+        } catch (Exception e) {
+            log.debug("No active workflow for tracker, falling back to DB: {}", e.getMessage());
+        }
+
+        // Fallback: get from DB
+        var apps = useCase.listApplicationsByCustomer(tenantId, java.util.UUID.fromString(customerId));
+        if (apps.isEmpty()) {
+            return ResponseEntity.ok(ApplicationTrackerResponse.build(
+                    null, null, null, null, null));
+        }
+
+        var latest = apps.get(0);
+        BigDecimal dbTotalPayable = latest.getOfferedTotalPayable();
+        if (dbTotalPayable == null && latest.getRequestedAmount() != null && latest.getRequestedTenureMonths() > 0) {
+            dbTotalPayable = calculatePreliminaryTotalPayable(tenantId, latest.getRequestedAmount(),
+                    latest.getRequestedTenureMonths(), latest.getProductId() != null ? latest.getProductId().toString() : null);
+        }
+        return ResponseEntity.ok(ApplicationTrackerResponse.build(
+                latest.getId().getValue().toString(),
+                latest.getApplicationNumber(),
+                latest.getRequestedAmount(),
+                dbTotalPayable,
+                latest.getStatus().name(),
+                null,
+                latest.getCreatedAt() != null ? latest.getCreatedAt().toString() : null,
+                latest.getUpdatedAt() != null ? latest.getUpdatedAt().toString() : null
+        ));
+    }
+
+    @SecuredEndpoint(obj = "loan-applications.tracker", act = "read")
+    @GetMapping("/tracker/{applicationId}")
+    @Operation(summary = "Get application tracker by applicationId (BRD UC#03)")
+    public ResponseEntity<ApplicationTrackerResponse> getTrackerByApplicationId(
+            @PathVariable String applicationId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        var aggregate = useCase.getApplication(tenantId, UUID.fromString(applicationId));
+
+        // Try active workflow first for real-time state
+        if (aggregate.getWorkflowId() != null) {
+            try {
+                var workflow = workflowClient.newWorkflowStub(
+                        LoanApplicationWorkflow.class, aggregate.getWorkflowId());
+                var statusInfo = workflow.getApplicationStatus();
+                if (statusInfo != null) {
+                    return ResponseEntity.ok(ApplicationTrackerResponse.build(
+                            statusInfo.applicationId(),
+                            statusInfo.applicationNumber(),
+                            statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedAmount() : null,
+                            resolveTotalPayable(statusInfo),
+                            statusInfo.status()
+                    ));
+                }
+            } catch (Exception e) {
+                log.debug("No active workflow for tracker, using DB: {}", e.getMessage());
+            }
+        }
+
+        // Fallback: build from DB aggregate
+        BigDecimal aggTotalPayable = aggregate.getOfferedTotalPayable();
+        if (aggTotalPayable == null && aggregate.getRequestedAmount() != null && aggregate.getRequestedTenureMonths() > 0) {
+            aggTotalPayable = calculatePreliminaryTotalPayable(tenantId, aggregate.getRequestedAmount(),
+                    aggregate.getRequestedTenureMonths(), aggregate.getProductId() != null ? aggregate.getProductId().toString() : null);
+        }
+        return ResponseEntity.ok(ApplicationTrackerResponse.build(
+                aggregate.getId().getValue().toString(),
+                aggregate.getApplicationNumber(),
+                aggregate.getRequestedAmount(),
+                aggTotalPayable,
+                aggregate.getStatus().name(),
+                null,
+                aggregate.getCreatedAt() != null ? aggregate.getCreatedAt().toString() : null,
+                aggregate.getUpdatedAt() != null ? aggregate.getUpdatedAt().toString() : null
+        ));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -524,6 +778,12 @@ public class LoanApplicationController {
      */
     private StepSignalResponse buildStepResponseWithWait(String step, String workflowId,
                                                           String waitUntilNotStatus, int maxWaitSeconds) {
+        return buildStepResponseWithWait(step, workflowId,
+                waitUntilNotStatus != null ? List.of(waitUntilNotStatus) : null, maxWaitSeconds);
+    }
+
+    private StepSignalResponse buildStepResponseWithWait(String step, String workflowId,
+                                                          List<String> waitWhileStatuses, int maxWaitSeconds) {
         ApplicationStatusInfo statusInfo = null;
         StepInfo stepInfo = null;
 
@@ -545,8 +805,8 @@ public class LoanApplicationController {
                         || "CANCELLED".equals(s) || "EXPIRED".equals(s)) {
                     break;
                 }
-                // Stop when status has advanced past the expected intermediate state
-                if (waitUntilNotStatus != null && !waitUntilNotStatus.equals(s)) {
+                // Stop when status has advanced past ALL expected intermediate states
+                if (waitWhileStatuses != null && !waitWhileStatuses.contains(s)) {
                     break;
                 }
             }
@@ -583,6 +843,68 @@ public class LoanApplicationController {
             return workflow.getApplicationStatus();
         } catch (Exception e) {
             log.debug("Could not query workflow status for {}: {}", workflowId, e.getMessage());
+            return null;
+        }
+    }
+
+    private List<LoanApplicationResponse> enrichWithLoanData(UUID tenantId,
+                                                               List<com.ksa.financing.lending.application.dto.LoanApplicationDto> dtos) {
+        return dtos.stream().map(dto -> {
+            try {
+                var loan = loanUseCase.getLoanByApplicationId(tenantId, UUID.fromString(dto.id()));
+                var enriched = mapper.withLoanData(dto,
+                        loan.getId().getValue().toString(),
+                        loan.getLoanNumber(),
+                        loan.getStatus().name(),
+                        loan.getPrincipalAmount(),
+                        loan.getTotalAmount(),
+                        loan.getInstallmentAmount(),
+                        loan.getFineractLoanId() != null ? loan.getFineractLoanId().toString() : null,
+                        loan.getDisbursementDate() != null ? loan.getDisbursementDate() : null);
+                return LoanApplicationResponse.from(enriched);
+            } catch (Exception e) {
+                // No loan yet for this application
+                return LoanApplicationResponse.from(dto);
+            }
+        }).toList();
+    }
+
+    private BigDecimal resolveTotalPayable(ApplicationStatusInfo statusInfo) {
+        if (statusInfo.offer() != null && statusInfo.offer().totalPayable() != null) {
+            return statusInfo.offer().totalPayable();
+        }
+        var info = statusInfo.basicInfo();
+        if (info != null && info.requestedAmount() != null && info.requestedTenureMonths() > 0) {
+            BigDecimal profitRate = info.profitRate();
+            if (profitRate == null) profitRate = new BigDecimal("0.0385");
+            else if (profitRate.compareTo(BigDecimal.ONE) > 0) profitRate = profitRate.movePointLeft(2);
+            try {
+                var calc = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
+                        info.requestedAmount(), profitRate, null, info.requestedTenureMonths(), null, null);
+                if (!calc.hasErrors()) return calc.totalPayable();
+            } catch (Exception e) {
+                log.debug("Preliminary totalPayable failed: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal calculatePreliminaryTotalPayable(UUID tenantId, BigDecimal amount, int tenureMonths, String productId) {
+        try {
+            BigDecimal profitRate = new BigDecimal("0.0385");
+            try {
+                var config = productConfigPort.fetchProductConfig(tenantId, productId, amount, tenureMonths);
+                if (config.profitRate() != null) {
+                    BigDecimal rate = config.profitRate();
+                    profitRate = rate.compareTo(BigDecimal.ONE) > 0 ? rate.movePointLeft(2) : rate;
+                }
+            } catch (Exception ignored) {}
+
+            var calc = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
+                    amount, profitRate, null, tenureMonths, null, null);
+            return calc.hasErrors() ? null : calc.totalPayable();
+        } catch (Exception e) {
+            log.debug("Preliminary totalPayable calculation failed: {}", e.getMessage());
             return null;
         }
     }

@@ -10,6 +10,7 @@ public interface ManageEnvConfigUseCase {
     EnvConfigResponse create(UUID tenantId, CreateEnvConfigRequest request, UUID createdBy);
     EnvConfigResponse getById(UUID tenantId, UUID id);
     List<EnvConfigResponse> listByApi(UUID tenantId, UUID apiId);
+    List<EnvConfigResponse> listAll(UUID tenantId);
     EnvConfigResponse update(UUID tenantId, UUID id, CreateEnvConfigRequest request);
     void delete(UUID tenantId, UUID id);
 }

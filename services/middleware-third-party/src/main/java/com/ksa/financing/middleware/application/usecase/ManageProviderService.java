@@ -1,6 +1,7 @@
 package com.ksa.financing.middleware.application.usecase;
 
 import com.ksa.financing.middleware.application.dto.CreateProviderRequest;
+import com.ksa.financing.middleware.application.dto.ProviderEnvironmentResponse;
 import com.ksa.financing.middleware.application.dto.ProviderResponse;
 import com.ksa.financing.middleware.application.dto.UpdateProviderRequest;
 import com.ksa.financing.middleware.application.mapper.MiddlewareMapper;
@@ -8,6 +9,8 @@ import com.ksa.financing.middleware.domain.model.AuthType;
 import com.ksa.financing.middleware.domain.model.ProviderCategory;
 import com.ksa.financing.middleware.domain.model.ThirdPartyProvider;
 import com.ksa.financing.middleware.domain.port.in.ManageProviderUseCase;
+import com.ksa.financing.middleware.domain.port.out.EnvConfigRepository;
+import com.ksa.financing.middleware.domain.port.out.ProviderApiRepository;
 import com.ksa.financing.middleware.domain.port.out.ProviderRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
@@ -26,6 +29,8 @@ import java.util.UUID;
 public class ManageProviderService implements ManageProviderUseCase {
 
     private final ProviderRepository providerRepository;
+    private final ProviderApiRepository providerApiRepository;
+    private final EnvConfigRepository envConfigRepository;
     private final MiddlewareMapper mapper;
 
     @Override
@@ -38,8 +43,10 @@ public class ManageProviderService implements ManageProviderUseCase {
         var provider = ThirdPartyProvider.create(
                 tenantId,
                 request.code(),
-                request.name(),
-                request.description(),
+                request.nameEn(),
+                request.nameAr(),
+                request.descriptionEn(),
+                request.descriptionAr(),
                 ProviderCategory.valueOf(request.category()),
                 AuthType.valueOf(request.authType()),
                 request.timeoutMs() > 0 ? request.timeoutMs() : 30000,
@@ -78,13 +85,44 @@ public class ManageProviderService implements ManageProviderUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ProviderEnvironmentResponse> listAllWithEnvironment(UUID tenantId) {
+        var providers = providerRepository.findAllByTenant(tenantId);
+        return providers.stream()
+                .map(provider -> buildEnvironmentResponse(tenantId, provider))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProviderEnvironmentResponse getByIdWithEnvironment(UUID tenantId, UUID id) {
+        var provider = providerRepository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("Provider", id.toString()));
+        return buildEnvironmentResponse(tenantId, provider);
+    }
+
+    private ProviderEnvironmentResponse buildEnvironmentResponse(UUID tenantId, ThirdPartyProvider provider) {
+        var apis = providerApiRepository.findAllByProvider(tenantId, provider.getId());
+        var apisWithConfigs = apis.stream()
+                .map(api -> {
+                    var envConfigs = envConfigRepository.findAllByApi(tenantId, api.getId())
+                            .stream().map(mapper::toResponse).toList();
+                    return mapper.toApiWithEnvConfigsResponse(api, envConfigs);
+                })
+                .toList();
+        return mapper.toEnvironmentResponse(provider, apisWithConfigs);
+    }
+
+    @Override
     public ProviderResponse update(UUID tenantId, UUID id, UpdateProviderRequest request) {
         var provider = providerRepository.findById(tenantId, id)
                 .orElseThrow(() -> NotFoundException.forEntity("Provider", id.toString()));
 
         provider.update(
-                request.name(),
-                request.description(),
+                request.nameEn(),
+                request.nameAr(),
+                request.descriptionEn(),
+                request.descriptionAr(),
                 ProviderCategory.valueOf(request.category()),
                 AuthType.valueOf(request.authType()),
                 request.timeoutMs(),

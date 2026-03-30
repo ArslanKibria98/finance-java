@@ -201,7 +201,8 @@ public interface LoanApplicationWorkflow {
             String shariaStructure,
             BigDecimal requestedAmount,
             int requestedTenureMonths,
-            String purposeOfFinance
+            String purposeOfFinance,
+            BigDecimal profitRate
     ) {}
 
     record BankAccountData(

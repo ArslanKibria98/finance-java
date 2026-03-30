@@ -41,6 +41,12 @@ public class EnvConfigRepositoryImpl implements EnvConfigRepository {
     }
 
     @Override
+    public List<ApiEnvironmentConfig> findAllByTenant(UUID tenantId) {
+        return jpaRepository.findByTenantIdAndDeletedAtIsNull(tenantId)
+                .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     public void deleteById(UUID tenantId, UUID id) {
         jpaRepository.findByIdAndTenantIdAndDeletedAtIsNull(id, tenantId)
                 .ifPresent(jpaRepository::delete);

@@ -50,16 +50,25 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
                 return invalidResult("Product not found: " + input.productId());
             }
 
-            var product = objectMapper.readTree(response.getBody());
+            var rawBody = objectMapper.readTree(response.getBody());
+            // Handle wrapped response: { "data": { ... } } or direct { ... }
+            var product = rawBody.has("data") ? rawBody.get("data") : rawBody;
 
-            // Extract product details
-            String productName = textOrNull(product, "name");
+            // Extract product details (product-service uses nameEn/productCode/productType fields)
+            String productCode = textOrNull(product, "productCode");
+            String productName = textOrNull(product, "nameEn");
             String shariaStructure = textOrNull(product, "shariaStructure");
+            if (shariaStructure == null) {
+                shariaStructure = textOrNull(product, "productType");
+            }
             BigDecimal minAmount = decimalOrNull(product, "minAmount");
             BigDecimal maxAmount = decimalOrNull(product, "maxAmount");
             int minTenure = intOrZero(product, "minTenureMonths");
             int maxTenure = intOrZero(product, "maxTenureMonths");
             BigDecimal profitRate = decimalOrNull(product, "profitRate");
+            if (profitRate == null) {
+                profitRate = decimalOrNull(product, "baseProfitRate");
+            }
             BigDecimal processingFeePercent = decimalOrNull(product, "processingFeePercent");
             BigDecimal adminFeeAmount = decimalOrNull(product, "adminFeeAmount");
             int minAge = intOrZero(product, "minAge");
@@ -68,6 +77,11 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
             int minEmploymentMonths = intOrZero(product, "minEmploymentMonths");
             int minCreditScore = intOrZero(product, "minCreditScore");
             BigDecimal maxDbrPercent = decimalOrNull(product, "maxDbrPercent");
+            // Fallback: product-service stores DBR limit under feeSettings.maxDbrPercentage
+            if (maxDbrPercent == null && product.has("feeSettings") && !product.get("feeSettings").isNull()) {
+                maxDbrPercent = decimalOrNull(product.get("feeSettings"), "maxDbrPercentage");
+            }
+            String fineractProductId = textOrNull(product, "fineractProductId");
 
             // Validate amount range
             if (minAmount != null && input.requestedAmount().compareTo(minAmount) < 0) {
@@ -91,9 +105,9 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
                 product.get("requiredDocuments").forEach(doc -> requiredDocs.add(doc.asText()));
             }
 
-            log.info("Product validated successfully: {}", productName);
+            log.info("Product validated successfully: {} ({})", productName, productCode);
             return new ProductValidationResult(
-                    true, productName, shariaStructure,
+                    true, productCode, productName, shariaStructure, fineractProductId,
                     minAmount, maxAmount, minTenure, maxTenure,
                     profitRate, processingFeePercent, adminFeeAmount,
                     minAge, maxAge, minSalary, minEmploymentMonths, minCreditScore, maxDbrPercent,
@@ -106,7 +120,7 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
             // Graceful fallback: allow workflow to continue with user-provided data.
             // Full validation happens during eligibility/credit check phase.
             return new ProductValidationResult(
-                    true, null, null,
+                    true, null, null, null, null,
                     null, null, 0, 0,
                     null, null, null,
                     0, 0, null, 0, 0, null,
@@ -117,7 +131,7 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
 
     private ProductValidationResult invalidResult(String reason) {
         return new ProductValidationResult(
-                false, null, null, null, null, 0, 0,
+                false, null, null, null, null, null, null, 0, 0,
                 null, null, null, 0, 0, null, 0, 0, null,
                 List.of(), reason
         );

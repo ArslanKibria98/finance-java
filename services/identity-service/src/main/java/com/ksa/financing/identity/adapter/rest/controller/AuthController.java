@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -180,7 +181,8 @@ public class AuthController {
 
         var response = new AuthResponse(
                 result.accessToken(), result.refreshToken(),
-                result.expiresIn(), "Bearer", result.customerId()
+                result.expiresIn(), "Bearer", result.customerId(),
+                result.nationalId(), result.mobileNumber()
         );
 
         log.info("PIN login successful for NID ending in: {}", maskNid(request.nationalId()));
@@ -213,9 +215,10 @@ public class AuthController {
                     """
     )
     @ApiResponse(responseCode = "200", description = "Login URL generated successfully")
-    public ResponseEntity<SsoLoginUrlResponse> getSsoLoginUrl() {
-        log.info("SSO login URL requested");
-        return ResponseEntity.ok(ssoUseCase.generateLoginUrl());
+    public ResponseEntity<SsoLoginUrlResponse> getSsoLoginUrl(
+            @RequestParam(value = "redirect_uri", required = false) String redirectUri) {
+        log.info("SSO login URL requested, redirect_uri: {}", redirectUri);
+        return ResponseEntity.ok(ssoUseCase.generateLoginUrl(redirectUri));
     }
 
     @PostMapping("/sso/token")

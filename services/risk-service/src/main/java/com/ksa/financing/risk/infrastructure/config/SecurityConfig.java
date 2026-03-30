@@ -40,7 +40,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
         return http
-            .securityMatcher("/api/v1/risk/internal-checks", "/api/v1/risk/aml-score", "/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+            .securityMatcher("/api/v1/risk/internal-checks", "/api/v1/risk/aml-score", "/api/v1/credit-check", "/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session

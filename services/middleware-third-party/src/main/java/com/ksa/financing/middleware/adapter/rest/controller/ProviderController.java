@@ -1,6 +1,7 @@
 package com.ksa.financing.middleware.adapter.rest.controller;
 
 import com.ksa.financing.middleware.application.dto.CreateProviderRequest;
+import com.ksa.financing.middleware.application.dto.ProviderEnvironmentResponse;
 import com.ksa.financing.middleware.application.dto.ProviderResponse;
 import com.ksa.financing.middleware.application.dto.UpdateProviderRequest;
 import com.ksa.financing.middleware.domain.port.in.ManageProviderUseCase;
@@ -34,11 +35,11 @@ public class ProviderController {
     }
 
     @SecuredEndpoint(obj = "middleware.providers", act = "read")
-    @GetMapping("/{id}")
-    public ResponseEntity<ProviderResponse> getById(@PathVariable UUID id,
-                                                     @AuthenticationPrincipal Jwt jwt) {
+    @GetMapping("/environment")
+    public ResponseEntity<List<ProviderEnvironmentResponse>> listAllWithEnvironment(
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(manageProviderUseCase.getById(tenantId, id));
+        return ResponseEntity.ok(manageProviderUseCase.listAllWithEnvironment(tenantId));
     }
 
     @SecuredEndpoint(obj = "middleware.providers", act = "read")
@@ -47,6 +48,23 @@ public class ProviderController {
                                                        @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
         return ResponseEntity.ok(manageProviderUseCase.getByCode(tenantId, code));
+    }
+
+    @SecuredEndpoint(obj = "middleware.providers", act = "read")
+    @GetMapping("/{id}")
+    public ResponseEntity<ProviderResponse> getById(@PathVariable UUID id,
+                                                     @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        return ResponseEntity.ok(manageProviderUseCase.getById(tenantId, id));
+    }
+
+    @SecuredEndpoint(obj = "middleware.providers", act = "read")
+    @GetMapping("/{id}/environment")
+    public ResponseEntity<ProviderEnvironmentResponse> getByIdWithEnvironment(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        return ResponseEntity.ok(manageProviderUseCase.getByIdWithEnvironment(tenantId, id));
     }
 
     @SecuredEndpoint(obj = "middleware.providers", act = "read")

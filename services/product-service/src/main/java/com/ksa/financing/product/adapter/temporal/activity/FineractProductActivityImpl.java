@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 @Component
 @RequiredArgsConstructor
@@ -29,14 +31,15 @@ public class FineractProductActivityImpl implements FineractProductActivity {
             int defaultTenure = (input.minTenureMonths() + input.maxTenureMonths()) / 2;
             if (defaultTenure <= 0) defaultTenure = input.minTenureMonths();
 
-            String shortName = input.productCode().length() > 4
-                    ? input.productCode().substring(0, 4).toUpperCase()
-                    : input.productCode().toUpperCase();
+            String shortName = generateUniqueShortName(input.productCode());
 
             int interestType = "FLAT".equalsIgnoreCase(input.rateType()) ? 1 : 0;
 
+            // Ensure unique Fineract product name by appending product code
+            String fineractName = input.nameEn() + " (" + input.productCode() + ")";
+
             var request = FineractLoanProductRequest.builder()
-                    .name(input.nameEn())
+                    .name(fineractName)
                     .shortName(shortName)
                     .description(input.nameEn() + " - " + input.shariaStructure())
                     .currencyCode(input.currency() != null ? input.currency() : "SAR")
@@ -62,6 +65,26 @@ public class FineractProductActivityImpl implements FineractProductActivity {
         } catch (Exception e) {
             log.error("Failed to create loan product in Fineract: {}", e.getMessage(), e);
             return new CreateFineractProductResult(null, null, false, e.getMessage());
+        }
+    }
+
+    /**
+     * Generates a unique 4-char shortName for Fineract by hashing the product code.
+     * Takes the first letter of the code prefix + 3 hex chars from hash.
+     * Example: "MRB-E2E-001" → "ME7A" (M + 3-char hash)
+     */
+    private String generateUniqueShortName(String productCode) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(productCode.getBytes(StandardCharsets.UTF_8));
+            String hexHash = String.format("%02x%02x", hash[0], hash[1]).toUpperCase();
+            String prefix = productCode.substring(0, 1).toUpperCase();
+            return prefix + hexHash.substring(0, 3);
+        } catch (Exception e) {
+            // Fallback: use last 4 chars of product code
+            return productCode.length() > 4
+                    ? productCode.substring(productCode.length() - 4).toUpperCase()
+                    : productCode.toUpperCase();
         }
     }
 

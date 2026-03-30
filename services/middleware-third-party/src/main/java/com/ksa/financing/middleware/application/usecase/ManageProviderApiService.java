@@ -38,8 +38,10 @@ public class ManageProviderApiService implements ManageProviderApiUseCase {
                 tenantId,
                 request.providerId(),
                 request.code(),
-                request.name(),
-                request.description(),
+                request.nameEn(),
+                request.nameAr(),
+                request.descriptionEn(),
+                request.descriptionAr(),
                 HttpMethod.valueOf(request.httpMethod()),
                 request.endpointPath(),
                 request.async(),
@@ -79,8 +81,10 @@ public class ManageProviderApiService implements ManageProviderApiUseCase {
         var api = providerApiRepository.findById(tenantId, id)
                 .orElseThrow(() -> NotFoundException.forEntity("ProviderApi", id.toString()));
 
-        api.setName(request.name());
-        api.setDescription(request.description());
+        api.setNameEn(request.nameEn());
+        api.setNameAr(request.nameAr());
+        api.setDescriptionEn(request.descriptionEn());
+        api.setDescriptionAr(request.descriptionAr());
         api.setHttpMethod(HttpMethod.valueOf(request.httpMethod()));
         api.setEndpointPath(request.endpointPath());
         api.setAsync(request.async());

@@ -56,8 +56,8 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
             tenantId, productId,
             command.minFinancingAmount(), command.maxFinancingAmount(),
             command.vatPercentage(), command.revenueEligibilityThreshold(),
-            command.maxDbrPercentage(), command.dbrCalculationMethod(),
-            command.dbrExceptions()
+            command.maxDbrPercentage(), command.globalDbrPercentage(),
+            command.dbrCalculationMethod(), command.dbrExceptions()
         );
 
         advanceWizardIfNeeded(tenantId, productId, 3);

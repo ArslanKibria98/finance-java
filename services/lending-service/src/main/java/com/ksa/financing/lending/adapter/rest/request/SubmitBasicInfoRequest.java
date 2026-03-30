@@ -14,16 +14,6 @@ public record SubmitBasicInfoRequest(
         @NotBlank(message = "Product ID is required")
         String productId,
 
-        @NotBlank(message = "Product code is required")
-        String productCode,
-
-        @Schema(description = "Product name")
-        String productName,
-
-        @NotBlank(message = "Sharia structure is required")
-        @Schema(description = "MURABAHA, TAWARRUQ, IJARA")
-        String shariaStructure,
-
         @NotNull(message = "Requested amount is required")
         @DecimalMin(value = "0.01", message = "Requested amount must be positive")
         BigDecimal requestedAmount,
@@ -33,9 +23,6 @@ public record SubmitBasicInfoRequest(
 
         @Schema(description = "Purpose of finance")
         String purposeOfFinance,
-
-        @Schema(description = "Profit rate (annual)")
-        BigDecimal profitRate,
 
         @Schema(description = "Partner ID (optional)")
         String partnerId,

@@ -57,7 +57,7 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
             access.reactivate();
             var saved = clientAccessRepository.saveProviderAccess(access);
             log.info("Reactivated provider access: clientId={}, providerId={}, tenantId={}", clientId, request.targetId(), tenantId);
-            return toProviderAccessResponse(saved, provider.getName(), provider.getCode());
+            return toProviderAccessResponse(saved, provider.getNameEn(), provider.getCode());
         }
 
         var access = ClientProviderAccess.grant(
@@ -67,7 +67,7 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
 
         var saved = clientAccessRepository.saveProviderAccess(access);
         log.info("Granted provider access: clientId={}, providerId={}, tenantId={}", clientId, request.targetId(), tenantId);
-        return toProviderAccessResponse(saved, provider.getName(), provider.getCode());
+        return toProviderAccessResponse(saved, provider.getNameEn(), provider.getCode());
     }
 
     @Override
@@ -96,7 +96,7 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
             access.reactivate();
             var saved = clientAccessRepository.saveApiAccess(access);
             log.info("Reactivated API access: clientId={}, apiId={}, tenantId={}", clientId, request.targetId(), tenantId);
-            return toApiAccessResponse(saved, api.getName(), api.getCode(), provider.getId(), provider.getName());
+            return toApiAccessResponse(saved, api.getNameEn(), api.getCode(), provider.getId(), provider.getNameEn());
         }
 
         var access = ClientApiAccess.grant(
@@ -106,7 +106,7 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
 
         var saved = clientAccessRepository.saveApiAccess(access);
         log.info("Granted API access: clientId={}, apiId={}, tenantId={}", clientId, request.targetId(), tenantId);
-        return toApiAccessResponse(saved, api.getName(), api.getCode(), provider.getId(), provider.getName());
+        return toApiAccessResponse(saved, api.getNameEn(), api.getCode(), provider.getId(), provider.getNameEn());
     }
 
     @Override
@@ -174,7 +174,7 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
                 .stream().map(access -> {
                     var provider = providerRepository.findById(tenantId, access.getProviderId()).orElse(null);
                     return toProviderAccessResponse(access,
-                            provider != null ? provider.getName() : null,
+                            provider != null ? provider.getNameEn() : null,
                             provider != null ? provider.getCode() : null);
                 }).toList();
     }
@@ -197,10 +197,10 @@ public class ManageClientAccessService implements ManageClientAccessUseCase {
         var api = providerApiRepository.findById(tenantId, access.getApiId()).orElse(null);
         var provider = api != null ? providerRepository.findById(tenantId, api.getProviderId()).orElse(null) : null;
         return toApiAccessResponse(access,
-                api != null ? api.getName() : null,
+                api != null ? api.getNameEn() : null,
                 api != null ? api.getCode() : null,
                 provider != null ? provider.getId() : null,
-                provider != null ? provider.getName() : null);
+                provider != null ? provider.getNameEn() : null);
     }
 
     private ClientProviderAccessResponse toProviderAccessResponse(ClientProviderAccess access,

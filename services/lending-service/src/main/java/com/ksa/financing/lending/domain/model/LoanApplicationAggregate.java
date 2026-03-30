@@ -318,7 +318,8 @@ public class LoanApplicationAggregate {
                                  BigDecimal profitRate, BigDecimal apr,
                                  UUID partnerId, UUID leadId, UUID updatedBy) {
         assertTransition(ApplicationStatus.BASIC_INFO_SUBMITTED);
-        if (productId == null) throw new IllegalArgumentException("Product ID cannot be null");
+        if (productId == null && (productCode == null || productCode.isBlank()))
+            throw new IllegalArgumentException("Either Product ID or Product Code must be provided");
         if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0)
             throw new IllegalArgumentException("Requested amount must be positive");
         if (requestedTenureMonths <= 0)

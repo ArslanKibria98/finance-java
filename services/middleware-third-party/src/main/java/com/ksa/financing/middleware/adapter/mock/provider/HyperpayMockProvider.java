@@ -22,70 +22,122 @@ public class HyperpayMockProvider implements MockResponseProvider {
             case "HYPERPAY_CHECKOUT" -> checkoutResponse();
             case "HYPERPAY_STATUS" -> statusResponse();
             case "HYPERPAY_REFUND" -> refundResponse();
+            case "HYPERPAY_REGISTRATION" -> registrationResponse();
             default -> fallbackResponse();
         };
     }
 
     private MockResponseResult checkoutResponse() {
+        var checkoutId = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 32);
         var body = """
                 {
-                    "checkoutId": "CHK-%s",
-                    "status": "CREATED",
-                    "amount": 5000.00,
-                    "currency": "SAR",
-                    "paymentBrand": "MADA",
-                    "redirectUrl": "https://mock.hyperpay.com/checkout/%s",
-                    "expiresAt": "%s"
+                    "result": {
+                        "code": "000.200.100",
+                        "description": "successfully created checkout"
+                    },
+                    "buildNumber": "mock-build-1",
+                    "timestamp": "%s",
+                    "ndc": "%s",
+                    "id": "%s"
                 }
-                """.formatted(
-                UUID.randomUUID().toString().substring(0, 8),
-                UUID.randomUUID().toString().substring(0, 8),
-                Instant.now().toString());
+                """.formatted(Instant.now().toString(), checkoutId, checkoutId);
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult statusResponse() {
+        var paymentId = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 32);
         var body = """
                 {
-                    "checkoutId": "CHK-%s",
-                    "status": "COMPLETED",
-                    "amount": 5000.00,
-                    "currency": "SAR",
+                    "result": {
+                        "code": "000.100.110",
+                        "description": "Request successfully processed in 'Merchant in Integrator Test Mode'"
+                    },
+                    "buildNumber": "mock-build-1",
+                    "timestamp": "%s",
+                    "id": "%s",
+                    "paymentType": "DB",
                     "paymentBrand": "MADA",
-                    "transactionId": "TXN-%s",
-                    "completedAt": "%s"
+                    "amount": "5000.00",
+                    "currency": "SAR",
+                    "descriptor": "AWN Financing Payment",
+                    "merchantTransactionId": "TXN-%s",
+                    "resultDetails": {
+                        "ConnectorTxID1": "MADA%s",
+                        "AcquirerResponse": "00",
+                        "AuthCode": "123456"
+                    },
+                    "card": {
+                        "bin": "446404",
+                        "last4Digits": "1846",
+                        "holder": "FAISAL ALOTAIBI",
+                        "expiryMonth": "05",
+                        "expiryYear": "2028",
+                        "country": "SA",
+                        "type": "DEBIT"
+                    },
+                    "risk": {
+                        "score": "0"
+                    }
                 }
-                """.formatted(
+                """.formatted(Instant.now().toString(), paymentId,
                 UUID.randomUUID().toString().substring(0, 8),
-                UUID.randomUUID().toString().substring(0, 8),
-                Instant.now().toString());
+                UUID.randomUUID().toString().substring(0, 10).replaceAll("-", ""));
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult refundResponse() {
+        var refundId = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 32);
         var body = """
                 {
-                    "refundId": "RFD-%s",
-                    "status": "REFUNDED",
-                    "originalTransactionId": "TXN-%s",
-                    "amount": 5000.00,
+                    "result": {
+                        "code": "000.100.110",
+                        "description": "Request successfully processed in 'Merchant in Integrator Test Mode'"
+                    },
+                    "buildNumber": "mock-build-1",
+                    "timestamp": "%s",
+                    "id": "%s",
+                    "paymentType": "RF",
+                    "amount": "5000.00",
                     "currency": "SAR",
-                    "refundedAt": "%s"
+                    "descriptor": "AWN Financing Refund"
                 }
-                """.formatted(
-                UUID.randomUUID().toString().substring(0, 8),
-                UUID.randomUUID().toString().substring(0, 8),
-                Instant.now().toString());
+                """.formatted(Instant.now().toString(), refundId);
+        return new MockResponseResult(200, body, HEADERS);
+    }
+
+    private MockResponseResult registrationResponse() {
+        var registrationId = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 32);
+        var body = """
+                {
+                    "result": {
+                        "code": "000.100.110",
+                        "description": "Request successfully processed"
+                    },
+                    "buildNumber": "mock-build-1",
+                    "timestamp": "%s",
+                    "id": "%s",
+                    "card": {
+                        "bin": "446404",
+                        "last4Digits": "1846",
+                        "holder": "FAISAL ALOTAIBI",
+                        "expiryMonth": "05",
+                        "expiryYear": "2028"
+                    }
+                }
+                """.formatted(Instant.now().toString(), registrationId);
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult fallbackResponse() {
         var body = """
                 {
-                    "status": "Success",
-                    "message": "HYPERPAY request processed"
+                    "result": {
+                        "code": "000.200.100",
+                        "description": "Request processed successfully"
+                    },
+                    "timestamp": "%s"
                 }
-                """;
+                """.formatted(Instant.now().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 }

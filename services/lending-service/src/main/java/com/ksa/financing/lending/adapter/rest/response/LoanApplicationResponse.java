@@ -128,7 +128,26 @@ public record LoanApplicationResponse(
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime createdAt,
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        // Loan / Disbursement
+        @Schema(description = "Loan ID (null if not yet created)")
+        String loanId,
+        @Schema(description = "Loan number")
+        String loanNumber,
+        @Schema(description = "Loan status: PENDING_DISBURSEMENT, ACTIVE, CLOSED, etc.")
+        String loanStatus,
+        @Schema(description = "Disbursed principal amount")
+        BigDecimal principalAmount,
+        @Schema(description = "Total payable amount")
+        BigDecimal totalAmount,
+        @Schema(description = "Monthly installment amount")
+        BigDecimal installmentAmount,
+        @Schema(description = "Fineract loan ID")
+        String fineractLoanId,
+        @Schema(description = "Disbursement date")
+        @JsonFormat(pattern = "yyyy-MM-dd")
+        java.time.LocalDate disbursementDate
 ) {
     public static LoanApplicationResponse from(LoanApplicationDto dto) {
         return new LoanApplicationResponse(
@@ -208,7 +227,16 @@ public record LoanApplicationResponse(
                 dto.paymentGuardStatus(),
                 // Audit
                 dto.createdAt(),
-                dto.updatedAt()
+                dto.updatedAt(),
+                // Loan / Disbursement
+                dto.loanId(),
+                dto.loanNumber(),
+                dto.loanStatus(),
+                scale2(dto.principalAmount()),
+                scale2(dto.totalAmount()),
+                scale2(dto.installmentAmount()),
+                dto.fineractLoanId(),
+                dto.disbursementDate()
         );
     }
 

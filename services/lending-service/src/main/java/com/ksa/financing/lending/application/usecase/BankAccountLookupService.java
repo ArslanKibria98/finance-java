@@ -48,23 +48,61 @@ public class BankAccountLookupService {
      * @return response with source and list of bank accounts
      */
     public BankAccountInfoResponse lookupBankAccounts(String customerId, String nationalId, String tenantId, String bearerToken) {
+        // Resolve actual customer-service ID by NID (customerId from caller may be identity-service internalUserId)
+        String resolvedCustomerId = resolveCustomerIdByNid(nationalId, bearerToken);
+        String effectiveCustomerId = resolvedCustomerId != null ? resolvedCustomerId : customerId;
+        if (resolvedCustomerId != null && !resolvedCustomerId.equals(customerId)) {
+            log.info("Resolved customer-service ID: {} (caller sent: {})", resolvedCustomerId, customerId);
+        }
+
         // Stage 1: Check customer-service
-        List<BankAccountItem> accounts = fetchFromCustomerService(customerId, bearerToken);
+        List<BankAccountItem> accounts = fetchFromCustomerService(effectiveCustomerId, bearerToken);
         if (!accounts.isEmpty()) {
-            log.info("Found {} bank account(s) from customer-service for customer: {}", accounts.size(), customerId);
+            log.info("Found {} bank account(s) from customer-service for customer: {}", accounts.size(), effectiveCustomerId);
             return new BankAccountInfoResponse("CUSTOMER_SERVICE", accounts);
         }
 
         // Stage 2: Fallback to Tarabut Open Banking via middleware
-        log.info("No bank accounts in customer-service for customer: {}, fetching from Tarabut via NID", customerId);
+        log.info("No bank accounts in customer-service for customer: {}, fetching from Tarabut via NID", effectiveCustomerId);
         accounts = fetchFromTarabut(nationalId, tenantId, bearerToken);
         if (!accounts.isEmpty()) {
             log.info("Found {} bank account(s) from Tarabut for NID: ***{}", accounts.size(), nationalId.substring(nationalId.length() - 4));
             return new BankAccountInfoResponse("TARABUT", accounts);
         }
 
-        log.info("No bank accounts found from any source for customer: {}", customerId);
+        log.info("No bank accounts found from any source for customer: {}", effectiveCustomerId);
         return new BankAccountInfoResponse("NONE", List.of());
+    }
+
+    /**
+     * Resolve customer-service customer ID by National ID.
+     * GET /api/v1/customers/by-nid/{nationalId}
+     */
+    private String resolveCustomerIdByNid(String nationalId, String bearerToken) {
+        try {
+            String url = customerServiceUrl + "/api/v1/customers/by-nid/" + nationalId;
+
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            if (bearerToken != null) {
+                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken);
+            }
+
+            var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return null;
+            }
+
+            var body = objectMapper.readTree(response.getBody());
+            // Handle wrapped response: { "data": { "id": "..." } } or direct { "id": "..." }
+            JsonNode customerNode = body.has("data") ? body.get("data") : body;
+            return textOrNull(customerNode, "id");
+
+        } catch (Exception e) {
+            log.warn("Customer ID resolution by NID failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -175,6 +213,40 @@ public class BankAccountLookupService {
         } catch (Exception e) {
             log.warn("Tarabut bank account lookup failed: {}", e.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * Sync a bank account to customer-service so it appears in the list API.
+     * Called after bank account is submitted in loan application workflow.
+     */
+    public void syncBankAccountToCustomerService(String customerId, String bankName, String bankCode,
+                                                  String iban, String accountHolderName, String bearerToken) {
+        try {
+            String url = customerServiceUrl + "/internal/customers/" + customerId + "/bank-accounts";
+            log.info("Syncing bank account to customer-service for customer: {}", customerId);
+
+            var requestBody = objectMapper.writeValueAsString(Map.of(
+                    "bankName", bankName != null ? bankName : "",
+                    "bankCode", bankCode != null ? bankCode : "",
+                    "iban", iban != null ? iban : "",
+                    "accountHolderName", accountHolderName != null ? accountHolderName : "",
+                    "accountType", "CURRENT",
+                    "isPrimary", true,
+                    "isSalaryAccount", false
+            ));
+
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            if (bearerToken != null) {
+                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken);
+            }
+
+            var response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(requestBody, headers), String.class);
+            log.info("Bank account synced to customer-service: status={}", response.getStatusCode());
+
+        } catch (Exception e) {
+            log.warn("Failed to sync bank account to customer-service (non-blocking): {}", e.getMessage());
         }
     }
 

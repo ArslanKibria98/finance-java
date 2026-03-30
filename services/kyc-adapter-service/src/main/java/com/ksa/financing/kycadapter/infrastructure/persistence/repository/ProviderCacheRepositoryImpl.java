@@ -60,7 +60,10 @@ public class ProviderCacheRepositoryImpl implements ProviderCacheRepository {
                               Map<String, Object> response, int ttlHours) {
         log.debug("Caching response for cacheKey={}, provider={}, ttlHours={}", cacheKey, provider, ttlHours);
 
-        ProviderResponseCacheJpaEntity entity = new ProviderResponseCacheJpaEntity();
+        // Upsert: find existing entry or create new one to avoid duplicate key violations on retry
+        ProviderResponseCacheJpaEntity entity = jpaRepository.findByCacheKeyAndTenantId(cacheKey, null)
+                .orElseGet(ProviderResponseCacheJpaEntity::new);
+
         entity.setCacheKey(cacheKey);
         entity.setProvider(KycProviderEnum.valueOf(provider.name()));
         entity.setVerificationType(VerificationTypeEnum.NATIONAL_ID);
@@ -122,7 +125,10 @@ public class ProviderCacheRepositoryImpl implements ProviderCacheRepository {
         log.debug("Caching response for tenantId={}, cacheKey={}, provider={}, ttlHours={}",
                 tenantId, cacheKey, provider, ttlHours);
 
-        ProviderResponseCacheJpaEntity entity = new ProviderResponseCacheJpaEntity();
+        // Upsert: find existing entry or create new one to avoid duplicate key violations on retry
+        ProviderResponseCacheJpaEntity entity = jpaRepository.findByCacheKeyAndTenantId(cacheKey, tenantId)
+                .orElseGet(ProviderResponseCacheJpaEntity::new);
+
         entity.setTenantId(tenantId);
         entity.setCacheKey(cacheKey);
         entity.setProvider(KycProviderEnum.valueOf(provider.name()));

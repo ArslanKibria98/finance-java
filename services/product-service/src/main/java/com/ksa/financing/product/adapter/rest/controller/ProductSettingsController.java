@@ -88,8 +88,8 @@ public class ProductSettingsController {
         var command = new UpdateFeeSettingsCommand(
                 request.minFinancingAmount(), request.maxFinancingAmount(),
                 request.vatPercentage(), request.revenueEligibilityThreshold(),
-                request.maxDbrPercentage(), request.dbrCalculationMethod(),
-                request.dbrExceptions()
+                request.maxDbrPercentage(), request.globalDbrPercentage(),
+                request.dbrCalculationMethod(), request.dbrExceptions()
         );
 
         manageProductSettingsUseCase.updateFeeSettings(tenantId, productId, command);

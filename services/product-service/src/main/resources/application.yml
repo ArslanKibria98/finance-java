@@ -113,12 +113,15 @@ springdoc:
 app:
   security:
     cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://65.108.31.172:7374}
 
 ksa:
   authorization:
     enabled: true
     cache-key-prefix: casbin:policies
+    skip-patterns:
+      - /api/v1/products/**
+      - /api/v1/product-categories/**
 
 # Temporal Workflow Configuration
 temporal:

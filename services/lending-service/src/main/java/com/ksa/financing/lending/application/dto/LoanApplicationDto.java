@@ -101,5 +101,15 @@ public record LoanApplicationDto(
         // Audit
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        int version
+        int version,
+
+        // Loan / Disbursement (joined from loans table)
+        String loanId,
+        String loanNumber,
+        String loanStatus,
+        BigDecimal principalAmount,
+        BigDecimal totalAmount,
+        BigDecimal installmentAmount,
+        String fineractLoanId,
+        java.time.LocalDate disbursementDate
 ) {}

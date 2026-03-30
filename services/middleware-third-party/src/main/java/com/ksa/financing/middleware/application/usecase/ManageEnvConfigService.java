@@ -62,6 +62,13 @@ public class ManageEnvConfigService implements ManageEnvConfigUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<EnvConfigResponse> listAll(UUID tenantId) {
+        return envConfigRepository.findAllByTenant(tenantId)
+                .stream().map(mapper::toResponse).toList();
+    }
+
+    @Override
     public EnvConfigResponse update(UUID tenantId, UUID id, CreateEnvConfigRequest request) {
         var config = envConfigRepository.findById(tenantId, id)
                 .orElseThrow(() -> NotFoundException.forEntity("EnvConfig", id.toString()));

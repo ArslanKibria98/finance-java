@@ -6,8 +6,10 @@ import jakarta.validation.constraints.Size;
 
 public record CreateProviderRequest(
         @NotBlank @Size(max = 50) String code,
-        @NotBlank @Size(max = 200) String name,
-        String description,
+        @NotBlank @Size(max = 200) String nameEn,
+        @Size(max = 200) String nameAr,
+        String descriptionEn,
+        String descriptionAr,
         @NotNull String category,
         String baseUrlDev,
         String baseUrlProd,

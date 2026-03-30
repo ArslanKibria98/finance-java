@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface ManageProductUseCase {
     Product create(CreateProductCommand command);
     Product getById(UUID tenantId, UUID productId);
+    Product getById(UUID productId);
     List<Product> listByTenant(UUID tenantId);
     Product updateBasicInfo(UUID tenantId, UUID productId, UpdateBasicInfoCommand command);
     ActivationResultDto activate(UUID tenantId, UUID productId);

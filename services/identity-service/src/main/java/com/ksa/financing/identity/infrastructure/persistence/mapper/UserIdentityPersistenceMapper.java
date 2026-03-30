@@ -25,6 +25,7 @@ public class UserIdentityPersistenceMapper {
         entity.setInternalCustomerId(domain.getInternalCustomerId());
         entity.setInternalPartnerId(domain.getInternalPartnerId());
         entity.setGlobalUid(domain.getGlobalUid());
+        entity.setMobileNumber(domain.getMobileNumber());
         entity.setUserType(domain.getUserType());
         entity.setStatus(domain.getStatus());
         entity.setLastSyncedAt(toOffsetDateTime(domain.getLastSyncedAt()));
@@ -48,6 +49,7 @@ public class UserIdentityPersistenceMapper {
         domain.setInternalCustomerId(entity.getInternalCustomerId());
         domain.setInternalPartnerId(entity.getInternalPartnerId());
         domain.setGlobalUid(entity.getGlobalUid());
+        domain.setMobileNumber(entity.getMobileNumber());
         domain.setUserType(entity.getUserType());
         domain.setStatus(entity.getStatus());
         domain.setLastSyncedAt(toInstant(entity.getLastSyncedAt()));

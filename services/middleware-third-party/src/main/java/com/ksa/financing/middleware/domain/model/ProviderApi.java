@@ -8,8 +8,10 @@ public class ProviderApi {
     private UUID tenantId;
     private UUID providerId;
     private String code;
-    private String name;
-    private String description;
+    private String nameEn;
+    private String nameAr;
+    private String descriptionEn;
+    private String descriptionAr;
     private HttpMethod httpMethod;
     private String endpointPath;
     private ApiStatus status;
@@ -23,15 +25,18 @@ public class ProviderApi {
 
     public ProviderApi() {}
 
-    public static ProviderApi create(UUID tenantId, UUID providerId, String code, String name,
-                                      String description, HttpMethod httpMethod, String endpointPath,
+    public static ProviderApi create(UUID tenantId, UUID providerId, String code, String nameEn,
+                                      String nameAr, String descriptionEn, String descriptionAr,
+                                      HttpMethod httpMethod, String endpointPath,
                                       boolean async, Integer timeoutMs, UUID createdBy) {
         var api = new ProviderApi();
         api.tenantId = tenantId;
         api.providerId = providerId;
         api.code = code;
-        api.name = name;
-        api.description = description;
+        api.nameEn = nameEn;
+        api.nameAr = nameAr;
+        api.descriptionEn = descriptionEn;
+        api.descriptionAr = descriptionAr;
         api.httpMethod = httpMethod;
         api.endpointPath = endpointPath;
         api.status = ApiStatus.ACTIVE;
@@ -51,8 +56,10 @@ public class ProviderApi {
     public UUID getTenantId() { return tenantId; }
     public UUID getProviderId() { return providerId; }
     public String getCode() { return code; }
-    public String getName() { return name; }
-    public String getDescription() { return description; }
+    public String getNameEn() { return nameEn; }
+    public String getNameAr() { return nameAr; }
+    public String getDescriptionEn() { return descriptionEn; }
+    public String getDescriptionAr() { return descriptionAr; }
     public HttpMethod getHttpMethod() { return httpMethod; }
     public String getEndpointPath() { return endpointPath; }
     public ApiStatus getStatus() { return status; }
@@ -69,8 +76,10 @@ public class ProviderApi {
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
     public void setProviderId(UUID providerId) { this.providerId = providerId; }
     public void setCode(String code) { this.code = code; }
-    public void setName(String name) { this.name = name; }
-    public void setDescription(String description) { this.description = description; }
+    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
+    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
+    public void setDescriptionEn(String descriptionEn) { this.descriptionEn = descriptionEn; }
+    public void setDescriptionAr(String descriptionAr) { this.descriptionAr = descriptionAr; }
     public void setHttpMethod(HttpMethod httpMethod) { this.httpMethod = httpMethod; }
     public void setEndpointPath(String endpointPath) { this.endpointPath = endpointPath; }
     public void setStatus(ApiStatus status) { this.status = status; }

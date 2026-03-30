@@ -61,6 +61,16 @@ public interface ThirdPartyActivity {
     @ActivityMethod
     PaymentGuardResult checkPaymentGuard(PaymentGuardInput input);
 
+    // ══════════ EMDHA DIGITAL SIGNATURE (BRD V1.8 — Contract Signing) ══════════
+
+    @ActivityMethod
+    EmdhaSignResult signWithEmdha(EmdhaSignInput input);
+
+    // ══════════ DAKHLI INCOME VERIFICATION (BRD V1.8 — Rescheduling) ══════════
+
+    @ActivityMethod
+    DakhliResult fetchDakhliIncome(DakhliInput input);
+
     // ══════════ DTOs ══════════
 
     record IbanVerificationInput(
@@ -209,5 +219,40 @@ public interface ThirdPartyActivity {
             String status,
             boolean approved,
             String riskLevel
+    ) {}
+
+    // ══════════ EMDHA DTOs ══════════
+
+    record EmdhaSignInput(
+            String tenantId,
+            String applicationId,
+            String customerId,
+            String nationalId,
+            String contractType,
+            String documentContent
+    ) {}
+
+    record EmdhaSignResult(
+            String signatureId,
+            String signedDocumentId,
+            boolean signed,
+            String signatureStatus
+    ) {}
+
+    // ══════════ DAKHLI DTOs ══════════
+
+    record DakhliInput(
+            String tenantId,
+            String nationalId,
+            String applicationId
+    ) {}
+
+    record DakhliResult(
+            BigDecimal verifiedIncome,
+            String employerName,
+            String employmentStatus,
+            String sector,
+            boolean success,
+            String errorMessage
     ) {}
 }

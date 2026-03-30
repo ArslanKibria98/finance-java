@@ -10,6 +10,7 @@ public record FeeSettings(
     BigDecimal vatPercentage,
     BigDecimal revenueEligibilityThreshold,
     BigDecimal maxDbrPercentage,
+    BigDecimal globalDbrPercentage,
     String dbrCalculationMethod,
     String dbrExceptions
 ) {}

@@ -73,6 +73,9 @@ public interface LoanApplicationActivity {
     @ActivityMethod
     void generateAmortizationSchedule(AmortizationInput input);
 
+    @ActivityMethod
+    void markLoanDisbursed(MarkDisbursedInput input);
+
     // ══════════ DTOs ══════════
 
     record CreateDraftInput(
@@ -216,6 +219,12 @@ public interface LoanApplicationActivity {
             int tenureMonths,
             BigDecimal installmentAmount,
             String shariaStructure
+    ) {}
+
+    record MarkDisbursedInput(
+            String tenantId,
+            String loanId,
+            String fineractLoanId
     ) {}
 
     // ══════════ THIRD-PARTY PERSISTENCE DTOs ══════════

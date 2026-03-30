@@ -9,4 +9,8 @@ import java.util.UUID;
 public interface JpaBankAccountRepository extends JpaRepository<BankAccountJpaEntity, UUID> {
 
     List<BankAccountJpaEntity> findByCustomerIdAndTenantIdAndDeletedAtIsNull(UUID customerId, UUID tenantId);
+
+    List<BankAccountJpaEntity> findByCustomerIdAndDeletedAtIsNull(UUID customerId);
+
+    java.util.Optional<BankAccountJpaEntity> findByCustomerIdAndIbanAndDeletedAtIsNull(UUID customerId, String iban);
 }

@@ -61,6 +61,18 @@ public class ProductRepositoryImpl implements ProductRepository {
     }
 
     @Override
+    public Optional<Product> findById(UUID id) {
+        log.debug("Finding product by id={} (cross-tenant)", id);
+
+        return jpaProductRepository.findByIdAndDeletedAtIsNull(id)
+                .map(entity -> {
+                    var product = ProductPersistenceMapper.toDomain(entity);
+                    loadSettings(product, entity.getTenantId(), id);
+                    return product;
+                });
+    }
+
+    @Override
     public Optional<Product> findByProductCode(UUID tenantId, String productCode) {
         log.debug("Finding product by code={}, tenantId={}", productCode, tenantId);
 
@@ -131,8 +143,8 @@ public class ProductRepositoryImpl implements ProductRepository {
                 .ifPresent(fs -> product.setFeeSettings(new FeeSettings(
                         fs.getId(), fs.getMinFinancingAmount(), fs.getMaxFinancingAmount(),
                         fs.getVatPercentage(), fs.getRevenueEligibilityThreshold(),
-                        fs.getMaxDbrPercentage(), fs.getDbrCalculationMethod(),
-                        fs.getDbrExceptions())));
+                        fs.getMaxDbrPercentage(), fs.getGlobalDbrPercentage(),
+                        fs.getDbrCalculationMethod(), fs.getDbrExceptions())));
 
         // Application Steps
         var steps = jpaApplicationStepRepository

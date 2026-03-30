@@ -90,56 +90,175 @@ public class TarabutMockProvider implements MockResponseProvider {
     }
 
     private MockResponseResult accountsResponse() {
+        var now = Instant.now().toString();
         var body = """
                 {
                     "accounts": [
                         {
-                            "accountId": "ACC-%s",
-                            "iban": "SA0380000000608010167519",
-                            "currency": "SAR",
-                            "accountType": "CURRENT",
-                            "bankId": "RJHI"
+                            "accountId": "c0df3c2f-b304-31b1-ad67-f5ec726ebf37",
+                            "accountHolderName": "John Doe",
+                            "accountProductType": "CreditCard",
+                            "accountDescription": "Mustafa Khalid - SAR Credit Card (thin file)",
+                            "providerId": "BLUE",
+                            "lastUpdatedDateTime": "%s",
+                            "consents": [
+                                {
+                                    "id": "665f1f68-3fa0-463c-aff3-cbe57ac249b3",
+                                    "expiryDate": "2026-06-17T07:35:51Z",
+                                    "status": "ACTIVE"
+                                }
+                            ],
+                            "identifiers": [
+                                {"type": "maskedPAN", "value": "******************1846"}
+                            ],
+                            "balances": [
+                                {"type": "Unknown", "amount": {"value": 1.3, "currency": "SAR"}}
+                            ],
+                            "meta": {
+                                "lastAccountUpdateDatetime": "%s",
+                                "lastBalancesUpdateDatetime": "%s",
+                                "transactionsAvailability": "progressing"
+                            }
                         },
                         {
-                            "accountId": "ACC-%s",
-                            "iban": "SA4420000001234567891234",
-                            "currency": "SAR",
-                            "accountType": "SAVINGS",
-                            "bankId": "RJHI"
+                            "accountId": "5053cbd4-a32b-301d-b17f-aeb7ebc637aa",
+                            "accountHolderName": "John Doe",
+                            "accountProductType": "CreditCard",
+                            "accountDescription": "John Doe - SAR Credit Card",
+                            "providerId": "BLUE",
+                            "lastUpdatedDateTime": "%s",
+                            "consents": [
+                                {
+                                    "id": "665f1f68-3fa0-463c-aff3-cbe57ac249b3",
+                                    "expiryDate": "2026-06-17T07:35:51Z",
+                                    "status": "ACTIVE"
+                                }
+                            ],
+                            "identifiers": [
+                                {"type": "maskedPAN", "value": "******************4701"}
+                            ],
+                            "balances": [
+                                {"type": "Unknown", "amount": {"value": 100, "currency": "SAR"}}
+                            ],
+                            "meta": {
+                                "lastAccountUpdateDatetime": "%s",
+                                "lastBalancesUpdateDatetime": "%s",
+                                "transactionsAvailability": "progressing"
+                            }
+                        },
+                        {
+                            "accountId": "9f556dd9-43ff-3569-b701-357236b21ed9",
+                            "accountHolderName": "John Doe",
+                            "accountProductType": "Savings",
+                            "accountDescription": "John Doe - SAR Super Saver",
+                            "providerId": "BLUE",
+                            "lastUpdatedDateTime": "%s",
+                            "consents": [
+                                {
+                                    "id": "665f1f68-3fa0-463c-aff3-cbe57ac249b3",
+                                    "expiryDate": "2026-06-17T07:35:51Z",
+                                    "status": "ACTIVE"
+                                }
+                            ],
+                            "identifiers": [
+                                {"type": "maskedPAN", "value": "******************4942"}
+                            ],
+                            "balances": [
+                                {"type": "Unknown", "amount": {"value": 100, "currency": "SAR"}}
+                            ],
+                            "meta": {
+                                "lastAccountUpdateDatetime": "%s",
+                                "lastBalancesUpdateDatetime": "%s",
+                                "transactionsAvailability": "progressing"
+                            }
+                        },
+                        {
+                            "accountId": "ee229694-9a70-35da-ab0c-198fce6fe639",
+                            "accountHolderName": "John Doe",
+                            "accountProductType": "CurrentAccount",
+                            "accountDescription": "John Doe - SAR Current",
+                            "providerId": "BLUE",
+                            "lastUpdatedDateTime": "%s",
+                            "consents": [
+                                {
+                                    "id": "665f1f68-3fa0-463c-aff3-cbe57ac249b3",
+                                    "expiryDate": "2026-06-17T07:35:51Z",
+                                    "status": "ACTIVE"
+                                }
+                            ],
+                            "identifiers": [
+                                {"type": "IBAN", "value": "SA2999990000000000004621"}
+                            ],
+                            "balances": [
+                                {"type": "Unknown", "amount": {"value": 3270, "currency": "SAR"}}
+                            ],
+                            "meta": {
+                                "lastAccountUpdateDatetime": "%s",
+                                "lastBalancesUpdateDatetime": "%s",
+                                "transactionsAvailability": "progressing"
+                            }
+                        },
+                        {
+                            "accountId": "6549b0dd-27a1-3f5b-ab2a-9a83d8245d16",
+                            "accountHolderName": "John Doe",
+                            "accountProductType": "Savings",
+                            "accountDescription": "John Doe - SAR Savings",
+                            "providerId": "BLUE",
+                            "lastUpdatedDateTime": "%s",
+                            "consents": [
+                                {
+                                    "id": "665f1f68-3fa0-463c-aff3-cbe57ac249b3",
+                                    "expiryDate": "2026-06-17T07:35:51Z",
+                                    "status": "ACTIVE"
+                                }
+                            ],
+                            "identifiers": [
+                                {"type": "IBAN", "value": "BH62BLUE00200000008527"}
+                            ],
+                            "balances": [
+                                {"type": "Unknown", "amount": {"value": 1.3, "currency": "SAR"}}
+                            ],
+                            "meta": {
+                                "lastAccountUpdateDatetime": "%s",
+                                "lastBalancesUpdateDatetime": "%s",
+                                "transactionsAvailability": "progressing"
+                            }
                         }
                     ]
                 }
-                """.formatted(
-                UUID.randomUUID().toString().substring(0, 8),
-                UUID.randomUUID().toString().substring(0, 8));
+                """.formatted(now, now, now, now, now, now, now, now, now, now, now, now, now, now, now);
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult accountDetailsResponse() {
         var body = """
                 {
-                    "accountId": "ACC-%s",
-                    "accountHolderName": "Mohammed Al-Test",
-                    "iban": "SA0380000000608010167519",
-                    "currency": "SAR",
-                    "accountType": "CURRENT",
-                    "bankId": "RJHI",
-                    "status": "ACTIVE"
+                    "accountId": "ee229694-9a70-35da-ab0c-198fce6fe639",
+                    "accountHolderName": "John Doe",
+                    "accountProductType": "CurrentAccount",
+                    "accountDescription": "John Doe - SAR Current",
+                    "providerId": "BLUE",
+                    "identifiers": [
+                        {"type": "IBAN", "value": "SA2999990000000000004621"}
+                    ],
+                    "balances": [
+                        {"type": "Unknown", "amount": {"value": 3270, "currency": "SAR"}}
+                    ]
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8));
+                """;
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult balanceResponse() {
         var body = """
                 {
-                    "accountId": "ACC-%s",
-                    "balance": 25000.00,
-                    "currency": "SAR",
-                    "balanceType": "AVAILABLE",
+                    "accountId": "ee229694-9a70-35da-ab0c-198fce6fe639",
+                    "balances": [
+                        {"type": "Unknown", "amount": {"value": 3270, "currency": "SAR"}}
+                    ],
                     "lastUpdated": "%s"
                 }
-                """.formatted(UUID.randomUUID().toString().substring(0, 8), Instant.now().toString());
+                """.formatted(Instant.now().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 
@@ -206,12 +325,6 @@ public class TarabutMockProvider implements MockResponseProvider {
                             "category": "HOUSING",
                             "subCategory": "RENT",
                             "confidence": 0.90
-                        },
-                        {
-                            "transactionId": "TXN-%s",
-                            "category": "UTILITIES",
-                            "subCategory": "ELECTRICITY",
-                            "confidence": 0.85
                         }
                     ],
                     "summary": {
@@ -222,7 +335,6 @@ public class TarabutMockProvider implements MockResponseProvider {
                 }
                 """.formatted(
                 UUID.randomUUID().toString().substring(0, 8),
-                UUID.randomUUID().toString().substring(0, 8),
                 UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
     }
@@ -231,9 +343,9 @@ public class TarabutMockProvider implements MockResponseProvider {
         var body = """
                 {
                     "verified": true,
-                    "monthlySalary": 15000.00,
+                    "monthlySalary": 9259.00,
                     "currency": "SAR",
-                    "employerName": "Test Company Ltd",
+                    "employerName": "\u0634\u0631\u0643\u0629 \u0639\u0648\u0646 \u0627\u0644\u0631\u0627\u0626\u062f\u0629 \u0644\u0644\u062a\u0645\u0648\u064a\u0644 \u0627\u0644\u0627\u0633\u062a\u0647\u0644\u0627\u0643\u064a \u0627\u0644\u0645\u0635\u063a\u0631",
                     "lastSalaryDate": "2026-03-01",
                     "consecutiveMonths": 6
                 }
@@ -245,9 +357,9 @@ public class TarabutMockProvider implements MockResponseProvider {
         var body = """
                 {
                     "verified": true,
-                    "accountHolderName": "Mohammed Al-Test",
-                    "iban": "SA0380000000608010167519",
-                    "bankId": "RJHI",
+                    "accountHolderName": "John Doe",
+                    "iban": "SA2999990000000000004621",
+                    "bankId": "BLUE",
                     "verifiedAt": "%s"
                 }
                 """.formatted(Instant.now().toString());
@@ -258,8 +370,8 @@ public class TarabutMockProvider implements MockResponseProvider {
         var body = """
                 {
                     "matched": true,
-                    "iban": "SA0380000000608010167519",
-                    "accountHolderName": "Mohammed Al-Test",
+                    "iban": "SA2999990000000000004621",
+                    "accountHolderName": "John Doe",
                     "matchScore": 0.98,
                     "verifiedAt": "%s"
                 }

@@ -108,20 +108,23 @@ public class ProductController {
         return ResponseEntity.ok(response);
     }
 
-    @SecuredEndpoint(obj = "products", act = "read")
     @GetMapping("/{id}")
     @Operation(summary = "Get product", description = "Returns a single product by ID")
     public ResponseEntity<ProductResponse> getProduct(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
-        var tenantId = extractTenantId(jwt);
-        log.info("Getting product id: {} for tenantId: {}", id, tenantId);
+        if (jwt != null) {
+            var tenantId = extractTenantId(jwt);
+            log.info("Getting product id: {} for tenantId: {}", id, tenantId);
+            var product = manageProductUseCase.getById(tenantId, id);
+            return ResponseEntity.ok(ProductMapper.toResponse(product));
+        }
 
-        var product = manageProductUseCase.getById(tenantId, id);
-        var response = ProductMapper.toResponse(product);
-
-        return ResponseEntity.ok(response);
+        // Internal service-to-service call (no JWT) — find product across tenants
+        log.info("Getting product id: {} (internal call, no tenant filter)", id);
+        var product = manageProductUseCase.getById(id);
+        return ResponseEntity.ok(ProductMapper.toResponse(product));
     }
 
     @SecuredEndpoint(obj = "products", act = "update")

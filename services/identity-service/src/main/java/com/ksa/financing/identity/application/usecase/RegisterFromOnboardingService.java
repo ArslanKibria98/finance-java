@@ -39,6 +39,23 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
         log.info("Starting onboarding registration for NID ending in: {}",
                 maskNid(command.nationalId()));
 
+        // Check if user already exists - if so, authenticate and return tokens
+        var existing = userIdentityRepository.findByKeycloakUsername(command.nationalId());
+        if (existing.isPresent()) {
+            log.info("User already exists for NID: {}, generating tokens", maskNid(command.nationalId()));
+            UserIdentity identity = existing.get();
+            String tempPassword = UUID.randomUUID().toString();
+            keycloakAdapter.resetPassword(REALM, identity.getKeycloakUserId(), tempPassword);
+            KeycloakAdapterPort.TokenResponse tokenResponse = keycloakAdapter.authenticate(
+                    REALM, command.nationalId(), tempPassword);
+            return new RegisterFromOnboardingResult(
+                    tokenResponse.accessToken(),
+                    tokenResponse.refreshToken(),
+                    tokenResponse.expiresIn(),
+                    identity.getKeycloakUserId().toString()
+            );
+        }
+
         // Step 1: Generate random secure password (user never sees this - auth is OTP-based)
         String password = UUID.randomUUID().toString();
 
@@ -59,6 +76,7 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
         identity.setKeycloakUserId(keycloakUser.keycloakUserId());
         identity.setKeycloakRealm(REALM);
         identity.setKeycloakUsername(command.nationalId());
+        identity.setMobileNumber(command.mobileNumber());
         identity.setInternalUserId(UUID.randomUUID());
         if (command.globalUid() != null && !command.globalUid().isBlank()) {
             identity.setGlobalUid(UUID.fromString(command.globalUid()));

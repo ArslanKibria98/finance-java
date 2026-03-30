@@ -21,6 +21,11 @@ public interface DisbursementActivity {
     @ActivityMethod
     void sendCompletionNotification(NotificationInput input);
 
+    // ══════════ ANB B2B DISBURSEMENT (BRD V1.8 Step 64-69) ══════════
+
+    @ActivityMethod
+    AnbTransferResult transferViaAnb(AnbTransferInput input);
+
     // ══════════ DTOs ══════════
 
     record FineractInput(
@@ -28,6 +33,7 @@ public interface DisbursementActivity {
             String loanId,
             String customerId,
             String productCode,
+            String fineractProductId,
             BigDecimal principalAmount,
             BigDecimal profitRate,
             int tenureMonths,
@@ -68,5 +74,25 @@ public interface DisbursementActivity {
             String loanNumber,
             BigDecimal disbursedAmount,
             String notificationType      // SMS, PUSH, BOTH
+    ) {}
+
+    // ══════════ ANB B2B DTOs ══════════
+
+    record AnbTransferInput(
+            String tenantId,
+            String loanId,
+            String loanNumber,
+            BigDecimal amount,
+            String iban,
+            String bankCode,
+            String beneficiaryName,
+            String idempotencyKey
+    ) {}
+
+    record AnbTransferResult(
+            String transactionId,
+            String status,
+            boolean success,
+            String errorMessage
     ) {}
 }

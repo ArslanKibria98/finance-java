@@ -31,7 +31,7 @@ public class SimahMockProvider implements MockResponseProvider {
             case "SIMAH_MISCELLANEOUS" -> miscellaneous();
             default -> {
                 if (apiCode.startsWith("SIMAH_LOOKUP_")) {
-                    yield lookupResponse(apiCode);
+                    yield lookupResponse();
                 }
                 yield fallbackResponse();
             }
@@ -44,31 +44,54 @@ public class SimahMockProvider implements MockResponseProvider {
                     "isSuccess": true,
                     "data": {
                         "token": "mock-simah-token-%s"
-                    }
+                    },
+                    "message": null,
+                    "errorCode": null
                 }
                 """.formatted(UUID.randomUUID().toString());
         return new MockResponseResult(200, body, HEADERS);
     }
 
     private MockResponseResult consumerReport() {
+        var refNum = "ALAN-" + UUID.randomUUID().toString().substring(0, 10).replaceAll("-", "");
         var body = """
                 {
-                    "MESSAGE": {
-                        "ITEM": {
-                            "RSP_REPORT": {
-                                "RSP_CODE": "000",
-                                "RSP_MSG": "Success",
-                                "RSP_DATA": {
-                                    "CUSTOMER_NAME": "Test Customer",
-                                    "CUSTOMER_ID": "1234567890",
-                                    "SCORE": "750",
-                                    "RATING": "Good"
+                    "data": {
+                        "productType": 155,
+                        "amount": 1000,
+                        "applicants": [
+                            {
+                                "identityInfo": {
+                                    "idType": 1,
+                                    "idNumber": "1108149475"
+                                },
+                                "demographicInfo": {
+                                    "isHijriIDExpiryDate": false,
+                                    "idExpiryDate": "28/11/2028",
+                                    "nationality": 196,
+                                    "maritalStatus": 2,
+                                    "isHijriDateOfBirth": false,
+                                    "dateOfBirth": "29/09/1999",
+                                    "firstName": "FAISAL",
+                                    "gender": 1,
+                                    "secondName": "HULAYYIL",
+                                    "thirdName": "OBAID",
+                                    "familyName": "OBAID",
+                                    "applicantType": 1,
+                                    "totalMonthlyIncome": 9259,
+                                    "mobileNumber": "590933288",
+                                    "city": 333
                                 }
                             }
-                        }
-                    }
+                        ],
+                        "accept": true,
+                        "referenceNumber": "%s"
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200",
+                    "isSuccess": true
                 }
-                """;
+                """.formatted(refNum);
         return new MockResponseResult(200, body, HEADERS);
     }
 
@@ -77,11 +100,13 @@ public class SimahMockProvider implements MockResponseProvider {
                 {
                     "isSuccess": true,
                     "data": {
-                        "customerId": "1234567890",
+                        "customerId": "1108149475",
                         "score": 750,
                         "rating": "Good",
                         "reportDate": "%s"
-                    }
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """.formatted(LocalDate.now().toString());
         return new MockResponseResult(200, body, HEADERS);
@@ -90,9 +115,14 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult consumerReview() {
         var body = """
                 {
-                    "reviewId": "REV-%s",
-                    "status": "Reviewed",
-                    "score": 750
+                    "isSuccess": true,
+                    "data": {
+                        "reviewId": "REV-%s",
+                        "status": "Reviewed",
+                        "score": 750
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """.formatted(UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
@@ -101,9 +131,14 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult consumerScore() {
         var body = """
                 {
-                    "score": 750,
-                    "rating": "Good",
-                    "lastUpdated": "%s"
+                    "isSuccess": true,
+                    "data": {
+                        "score": 750,
+                        "rating": "Good",
+                        "lastUpdated": "%s"
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """.formatted(LocalDate.now().toString());
         return new MockResponseResult(200, body, HEADERS);
@@ -112,11 +147,16 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult salaryCertificate() {
         var body = """
                 {
-                    "certificateId": "CERT-%s",
-                    "status": "Generated",
-                    "basicSalary": 15000,
-                    "totalSalary": 18000,
-                    "employerName": "Test Company"
+                    "isSuccess": true,
+                    "data": {
+                        "certificateId": "CERT-%s",
+                        "status": "Generated",
+                        "basicSalary": 7408,
+                        "totalSalary": 9259,
+                        "employerName": "\u0634\u0631\u0643\u0629 \u0639\u0648\u0646 \u0627\u0644\u0631\u0627\u0626\u062f\u0629 \u0644\u0644\u062a\u0645\u0648\u064a\u0644 \u0627\u0644\u0627\u0633\u062a\u0647\u0644\u0627\u0643\u064a \u0627\u0644\u0645\u0635\u063a\u0631"
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """.formatted(UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
@@ -125,9 +165,14 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult negativeConsumer() {
         var body = """
                 {
-                    "hasNegativeRecords": false,
-                    "totalDefaults": 0,
-                    "status": "Clear"
+                    "isSuccess": true,
+                    "data": {
+                        "hasNegativeRecords": false,
+                        "totalDefaults": 0,
+                        "status": "Clear"
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """;
         return new MockResponseResult(200, body, HEADERS);
@@ -136,10 +181,15 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult consumerAffordability() {
         var body = """
                 {
-                    "affordabilityId": "AFF-%s",
-                    "status": "Assessed",
-                    "maxMonthlyInstallment": 5000,
-                    "dti": 35.5
+                    "isSuccess": true,
+                    "data": {
+                        "affordabilityId": "AFF-%s",
+                        "status": "Assessed",
+                        "maxMonthlyInstallment": 5000,
+                        "dti": 35.5
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """.formatted(UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
@@ -148,10 +198,15 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult creditCommitments() {
         var body = """
                 {
-                    "totalCommitments": 2,
-                    "totalMonthlyPayment": 3500,
-                    "totalOutstanding": 120000,
-                    "commitments": []
+                    "isSuccess": true,
+                    "data": {
+                        "totalCommitments": 2,
+                        "totalMonthlyPayment": 3500,
+                        "totalOutstanding": 120000,
+                        "commitments": []
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """;
         return new MockResponseResult(200, body, HEADERS);
@@ -160,22 +215,32 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult miscellaneous() {
         var body = """
                 {
-                    "enquiryId": "ENQ-%s",
-                    "status": "Completed",
-                    "result": "Processed"
+                    "isSuccess": true,
+                    "data": {
+                        "enquiryId": "ENQ-%s",
+                        "status": "Completed",
+                        "result": "Processed"
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """.formatted(UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
     }
 
-    private MockResponseResult lookupResponse(String apiCode) {
+    private MockResponseResult lookupResponse() {
         var body = """
                 {
-                    "items": [
-                        {"id": 1, "name": "Mock Item 1"},
-                        {"id": 2, "name": "Mock Item 2"},
-                        {"id": 3, "name": "Mock Item 3"}
-                    ]
+                    "isSuccess": true,
+                    "data": {
+                        "items": [
+                            {"id": 1, "name": "Mock Item 1"},
+                            {"id": 2, "name": "Mock Item 2"},
+                            {"id": 3, "name": "Mock Item 3"}
+                        ]
+                    },
+                    "message": "GEN_000",
+                    "errorCode": "200"
                 }
                 """;
         return new MockResponseResult(200, body, HEADERS);
@@ -184,8 +249,10 @@ public class SimahMockProvider implements MockResponseProvider {
     private MockResponseResult fallbackResponse() {
         var body = """
                 {
-                    "status": "Success",
-                    "message": "SIMAH request processed"
+                    "data": null,
+                    "message": "GEN_000",
+                    "errorCode": "200",
+                    "isSuccess": true
                 }
                 """;
         return new MockResponseResult(200, body, HEADERS);

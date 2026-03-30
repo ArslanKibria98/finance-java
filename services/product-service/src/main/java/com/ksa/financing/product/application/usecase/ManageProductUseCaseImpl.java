@@ -99,6 +99,13 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public Product getById(UUID productId) {
+        return productRepository.findById(productId)
+            .orElseThrow(() -> NotFoundException.forEntity("Product", productId.toString()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Product> listByTenant(UUID tenantId) {
         return productRepository.findAllByTenant(tenantId);
     }

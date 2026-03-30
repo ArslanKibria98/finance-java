@@ -21,6 +21,8 @@ public interface ManageLoanUseCase {
 
     List<LoanAggregate> listLoansByCustomer(UUID tenantId, UUID customerId);
 
+    LoanAggregate getLoanByApplicationId(UUID tenantId, UUID applicationId);
+
     // ==================== COMMANDS ====================
 
     record CreateLoanCommand(

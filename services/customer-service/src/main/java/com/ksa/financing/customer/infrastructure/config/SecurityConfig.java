@@ -48,7 +48,10 @@ public class SecurityConfig {
             .securityMatcher(
                 "/api/v1/reference-data/source-of-wealth/active",
                 "/api/v1/reference-data/source-of-funds/active",
+                "/api/v1/reference-data/source-of-income/active",
+                "/api/v1/reference-data/purpose-of-finance/active",
                 "/api/v1/reference-data/net-worth-ranges/active",
+                "/internal/**",
                 "/api/health/**",
                 "/actuator/health/**",
                 "/actuator/prometheus",

@@ -1,14 +1,17 @@
 package com.ksa.financing.lending.adapter.rest.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.ksa.financing.lending.domain.model.ApplicationStatus;
 import com.ksa.islamic.orchestration.activity.lending.LoanApplicationWorkflow.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
+
 /**
  * Rich response returned after each signal endpoint call.
- * Queries the Temporal workflow to return actual state after signal delivery.
+ * Includes tracker-style steps list, nextAction, and full workflow data.
  */
-@Schema(description = "Response after sending a workflow signal, includes current workflow state")
+@Schema(description = "Response after sending a workflow signal, includes tracker and workflow state")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record StepSignalResponse(
 
@@ -18,7 +21,25 @@ public record StepSignalResponse(
         @Schema(description = "Step that was signaled (e.g. BASIC_INFO, BANK_ACCOUNT)")
         String step,
 
-        @Schema(description = "Current workflow state after signal")
+        @Schema(description = "Application ID")
+        String applicationId,
+
+        @Schema(description = "Application number")
+        String applicationNumber,
+
+        @Schema(description = "Current application status")
+        String currentStep,
+
+        @Schema(description = "Overall status: active, approved, rejected, cancelled, expired")
+        String status,
+
+        @Schema(description = "Next action the client should take")
+        String nextAction,
+
+        @Schema(description = "Application steps with progress tracking")
+        List<LoanApplicationStepInfo> steps,
+
+        @Schema(description = "Current workflow state with all data")
         WorkflowState workflowState
 
 ) {
@@ -27,7 +48,7 @@ public record StepSignalResponse(
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record WorkflowState(
 
-            @Schema(description = "Current stepper index (1-5)")
+            @Schema(description = "Current stepper index (1-7)")
             int stepperIndex,
 
             @Schema(description = "Current step name")
@@ -127,17 +148,60 @@ public record StepSignalResponse(
         }
     }
 
+    /**
+     * Build full response with tracker steps from workflow status info.
+     */
     public static StepSignalResponse of(String step, ApplicationStatusInfo statusInfo) {
-        return new StepSignalResponse("SIGNAL_SENT", step,
-                WorkflowState.from(statusInfo));
+        var wfState = WorkflowState.from(statusInfo);
+        return buildWithSteps(step, statusInfo, wfState);
     }
 
     public static StepSignalResponse of(String step, StepInfo stepInfo, ApplicationStatusInfo statusInfo) {
-        return new StepSignalResponse("SIGNAL_SENT", step,
-                WorkflowState.from(stepInfo, statusInfo));
+        var wfState = WorkflowState.from(stepInfo, statusInfo);
+        return buildWithSteps(step, statusInfo, wfState);
     }
 
     public static StepSignalResponse signalOnly(String step) {
-        return new StepSignalResponse("SIGNAL_SENT", step, null);
+        return new StepSignalResponse("SIGNAL_SENT", step,
+                null, null, null, "active", null, null, null);
+    }
+
+    private static StepSignalResponse buildWithSteps(String step, ApplicationStatusInfo statusInfo,
+                                                     WorkflowState wfState) {
+        String currentStatusStr = statusInfo != null ? statusInfo.status() : null;
+        ApplicationStatus appStatus;
+        try {
+            appStatus = currentStatusStr != null ? ApplicationStatus.valueOf(currentStatusStr) : null;
+        } catch (IllegalArgumentException e) {
+            appStatus = null;
+        }
+
+        var trackerSteps = LoanApplicationStepInfo.buildSteps(appStatus);
+        var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
+        var overallStatus = resolveOverallStatus(appStatus);
+
+        return new StepSignalResponse(
+                "SIGNAL_SENT",
+                step,
+                statusInfo != null ? statusInfo.applicationId() : null,
+                statusInfo != null ? statusInfo.applicationNumber() : null,
+                currentStatusStr,
+                overallStatus,
+                nextAction,
+                trackerSteps,
+                wfState
+        );
+    }
+
+    private static String resolveOverallStatus(ApplicationStatus status) {
+        if (status == null) return "active";
+        return switch (status) {
+            case APPROVED -> "approved";
+            case REJECTED -> "rejected";
+            case CANCELLED -> "cancelled";
+            case EXPIRED -> "expired";
+            case EXPIRED_RESUMABLE -> "expired_resumable";
+            default -> "active";
+        };
     }
 }

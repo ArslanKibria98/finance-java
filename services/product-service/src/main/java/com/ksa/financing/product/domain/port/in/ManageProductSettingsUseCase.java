@@ -39,7 +39,8 @@ public interface ManageProductSettingsUseCase {
     record UpdateFeeSettingsCommand(
         BigDecimal minFinancingAmount, BigDecimal maxFinancingAmount,
         BigDecimal vatPercentage, BigDecimal revenueEligibilityThreshold,
-        BigDecimal maxDbrPercentage, String dbrCalculationMethod, String dbrExceptions
+        BigDecimal maxDbrPercentage, BigDecimal globalDbrPercentage,
+        String dbrCalculationMethod, String dbrExceptions
     ) {}
 
     record AdminFeeSlabCommand(
