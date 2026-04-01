@@ -1,0 +1,423 @@
+/* ============================================
+   FINOVA - KSA Islamic Financing Platform
+   Keycloak Login Theme (PatternFly v5)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --finova-dark: #1a1a2e;
+    --finova-dark-2: #16213e;
+    --finova-dark-3: #0f3460;
+    --finova-red: #e53935;
+    --finova-red-dark: #c62828;
+    --finova-red-glow: rgba(229, 57, 53, 0.25);
+    --finova-red-light: rgba(229, 57, 53, 0.08);
+    --finova-white: #ffffff;
+    --finova-g50: #fafbfc;
+    --finova-g100: #f1f3f5;
+    --finova-g200: #e5e7eb;
+    --finova-g400: #9ca3af;
+    --finova-g600: #4b5563;
+    --finova-g800: #1f2937;
+    --finova-radius: 16px;
+    --finova-radius-sm: 10px;
+    --finova-shadow: 0 25px 60px rgba(0,0,0,0.3);
+}
+
+/* ---- Full Page Background ---- */
+body,
+body#keycloak-bg,
+.login-pf body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.pf-v5-c-login {
+    background: var(--finova-dark) !important;
+    background-image:
+        radial-gradient(ellipse at 20% 80%, rgba(229, 57, 53, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(15, 52, 96, 0.25) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(22, 33, 62, 0.8) 0%, transparent 70%) !important;
+    min-height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* ---- Hide default header text ---- */
+.pf-v5-c-login__header,
+#kc-header,
+#kc-header-wrapper {
+    display: none !important;
+}
+
+/* ---- Login Container ---- */
+.pf-v5-c-login__container {
+    max-width: 460px !important;
+    width: 100% !important;
+    padding: 20px !important;
+}
+
+/* ---- Main Card ---- */
+.pf-v5-c-login__main {
+    background: var(--finova-white) !important;
+    border-radius: var(--finova-radius) !important;
+    box-shadow: var(--finova-shadow) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+}
+
+/* ---- Card Header (Logo + Title) ---- */
+.pf-v5-c-login__main-header {
+    padding: 48px 44px 0 !important;
+    text-align: center !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+
+/* FINOVA Logo */
+.pf-v5-c-login__main-header::before {
+    content: '';
+    display: block;
+    width: 180px;
+    height: 40px;
+    background: url('../img/finova-logo.svg') no-repeat center / contain;
+    margin-bottom: 28px;
+}
+
+/* No duplicate text */
+.pf-v5-c-login__main-header::after {
+    display: none;
+}
+
+/* Page Title */
+.pf-v5-c-login__main-header #kc-page-title,
+.pf-v5-c-login__main-header .pf-v5-c-title {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: var(--finova-g400) !important;
+    letter-spacing: 0.2px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    order: 2 !important;
+}
+
+/* ---- Card Body (Form) ---- */
+.pf-v5-c-login__main-body {
+    padding: 36px 44px 8px !important;
+}
+
+/* ---- Form Groups ---- */
+.pf-v5-c-form__group {
+    margin-bottom: 20px !important;
+}
+
+/* Labels */
+.pf-v5-c-form__label,
+.pf-v5-c-form__label-text {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: var(--finova-g600) !important;
+    letter-spacing: 0.4px !important;
+    text-transform: uppercase !important;
+}
+
+.pf-v5-c-form__group-label {
+    padding-bottom: 6px !important;
+}
+
+/* ---- Input Fields ---- */
+.pf-v5-c-form-control,
+.pf-v5-c-form-control > input {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 15px !important;
+    font-weight: 400 !important;
+    color: var(--finova-g800) !important;
+    background-color: var(--finova-g50) !important;
+    border: 2px solid var(--finova-g200) !important;
+    border-radius: var(--finova-radius-sm) !important;
+    padding: 0 16px !important;
+    height: 50px !important;
+    outline: none !important;
+    box-shadow: none !important;
+    transition: all 0.25s ease !important;
+    --pf-v5-c-form-control--after--BorderBottomWidth: 0 !important;
+    --pf-v5-c-form-control--before--BorderBottomWidth: 0 !important;
+}
+
+.pf-v5-c-form-control::before,
+.pf-v5-c-form-control::after {
+    display: none !important;
+}
+
+.pf-v5-c-form-control:hover,
+.pf-v5-c-form-control:hover > input {
+    border-color: var(--finova-g400) !important;
+    background-color: var(--finova-white) !important;
+}
+
+.pf-v5-c-form-control:focus-within,
+.pf-v5-c-form-control:focus-within > input {
+    border-color: var(--finova-red) !important;
+    background-color: var(--finova-white) !important;
+    box-shadow: 0 0 0 4px var(--finova-red-light) !important;
+}
+
+.pf-v5-c-form-control > input {
+    border: none !important;
+    background: transparent !important;
+    height: 100% !important;
+    padding: 0 !important;
+}
+
+/* ---- Input Group (password field with toggle) ---- */
+.pf-v5-c-input-group {
+    background: var(--finova-g50) !important;
+    border: 2px solid var(--finova-g200) !important;
+    border-radius: var(--finova-radius-sm) !important;
+    overflow: hidden !important;
+    transition: all 0.25s ease !important;
+    height: 50px !important;
+}
+
+.pf-v5-c-input-group:hover {
+    border-color: var(--finova-g400) !important;
+}
+
+.pf-v5-c-input-group:focus-within {
+    border-color: var(--finova-red) !important;
+    box-shadow: 0 0 0 4px var(--finova-red-light) !important;
+    background: var(--finova-white) !important;
+}
+
+.pf-v5-c-input-group .pf-v5-c-form-control {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    height: 100% !important;
+}
+
+.pf-v5-c-input-group .pf-v5-c-form-control:focus-within {
+    box-shadow: none !important;
+}
+
+.pf-v5-c-input-group .pf-v5-c-input-group__item {
+    border: none !important;
+}
+
+/* Password Toggle Button */
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control {
+    background: transparent !important;
+    border: none !important;
+    border-left: 1px solid var(--finova-g200) !important;
+    color: var(--finova-g400) !important;
+    padding: 0 14px !important;
+    transition: all 0.2s ease !important;
+    border-radius: 0 !important;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control:hover {
+    color: var(--finova-red) !important;
+    background: var(--finova-red-light) !important;
+}
+
+/* ---- Forgot Password Link ---- */
+.pf-v5-c-helper-text,
+.pf-v5-c-form__helper-text {
+    margin-top: 8px !important;
+}
+
+.pf-v5-c-helper-text__item-text a,
+.pf-v5-c-helper-text a {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: var(--finova-red) !important;
+    text-decoration: none !important;
+    transition: all 0.2s ease !important;
+}
+
+.pf-v5-c-helper-text__item-text a:hover,
+.pf-v5-c-helper-text a:hover {
+    color: var(--finova-red-dark) !important;
+}
+
+/* ---- Login Button ---- */
+.pf-v5-c-button.pf-m-primary {
+    font-family: 'Inter', sans-serif !important;
+    width: 100% !important;
+    height: 50px !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+    color: var(--finova-white) !important;
+    background: linear-gradient(135deg, var(--finova-red), var(--finova-red-dark)) !important;
+    border: none !important;
+    border-radius: var(--finova-radius-sm) !important;
+    cursor: pointer !important;
+    box-shadow: 0 6px 20px var(--finova-red-glow) !important;
+    transition: all 0.3s ease !important;
+    margin-top: 8px !important;
+}
+
+.pf-v5-c-button.pf-m-primary:hover {
+    background: linear-gradient(135deg, var(--finova-red-dark), #b71c1c) !important;
+    box-shadow: 0 8px 28px rgba(229, 57, 53, 0.4) !important;
+    transform: translateY(-2px) !important;
+}
+
+.pf-v5-c-button.pf-m-primary:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 4px 12px var(--finova-red-glow) !important;
+}
+
+/* ---- Footer ---- */
+.pf-v5-c-login__main-footer {
+    padding: 16px 44px 40px !important;
+    text-align: center !important;
+}
+
+.pf-v5-c-login__main-footer:last-child::after {
+    display: none;
+}
+
+/* ---- Links ---- */
+a {
+    color: var(--finova-red) !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+    transition: color 0.2s ease !important;
+}
+
+a:hover {
+    color: var(--finova-red-dark) !important;
+}
+
+/* ---- Error / Alert Messages ---- */
+.pf-v5-c-alert {
+    border-radius: var(--finova-radius-sm) !important;
+    border: none !important;
+    margin-bottom: 20px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+.pf-v5-c-alert.pf-m-danger,
+.pf-v5-c-alert.pf-m-warning {
+    background-color: #fef2f2 !important;
+    border-left: 4px solid var(--finova-red) !important;
+}
+
+.pf-v5-c-alert.pf-m-success {
+    background-color: #f0fdf4 !important;
+    border-left: 4px solid #22c55e !important;
+}
+
+.pf-v5-c-alert.pf-m-info {
+    background-color: #eff6ff !important;
+    border-left: 4px solid #3b82f6 !important;
+}
+
+.pf-v5-c-alert__title {
+    font-weight: 600 !important;
+    font-size: 14px !important;
+}
+
+/* ---- Remember Me Checkbox ---- */
+.pf-v5-c-check__input {
+    accent-color: var(--finova-red) !important;
+}
+
+.pf-v5-c-check__label {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    color: var(--finova-g600) !important;
+}
+
+/* ---- Social Login Buttons ---- */
+.pf-v5-c-login__main-footer-band {
+    padding: 0 44px 32px !important;
+}
+
+.pf-v5-c-button.pf-m-link,
+.pf-v5-c-login__main-footer-links-item a {
+    font-family: 'Inter', sans-serif !important;
+    color: var(--finova-red) !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+}
+
+/* ---- OTP / 2FA ---- */
+.pf-v5-c-form-control[type="text"]:only-child {
+    text-align: center;
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    letter-spacing: 8px !important;
+}
+
+/* ---- Hide Keycloak default footer ---- */
+.pf-v5-c-login__footer {
+    display: none !important;
+}
+
+/* ---- Dark Mode Override (force light) ---- */
+.pf-v5-theme-dark .pf-v5-c-login__main {
+    background: var(--finova-white) !important;
+    color: var(--finova-g800) !important;
+}
+
+.pf-v5-theme-dark .pf-v5-c-form__label-text,
+.pf-v5-theme-dark .pf-v5-c-form-control,
+.pf-v5-theme-dark .pf-v5-c-form-control > input,
+.pf-v5-theme-dark .pf-v5-c-title {
+    color: var(--finova-g800) !important;
+}
+
+.pf-v5-theme-dark .pf-v5-c-form-control,
+.pf-v5-theme-dark .pf-v5-c-input-group {
+    background-color: var(--finova-g50) !important;
+    border-color: var(--finova-g200) !important;
+}
+
+.pf-v5-theme-dark .pf-v5-c-login {
+    background: var(--finova-dark) !important;
+    background-image:
+        radial-gradient(ellipse at 20% 80%, rgba(229, 57, 53, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(15, 52, 96, 0.25) 0%, transparent 50%) !important;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 480px) {
+    .pf-v5-c-login__container {
+        padding: 12px !important;
+    }
+
+    .pf-v5-c-login__main-header {
+        padding: 36px 28px 0 !important;
+    }
+
+    .pf-v5-c-login__main-body {
+        padding: 28px 28px 8px !important;
+    }
+
+    .pf-v5-c-login__main-footer {
+        padding: 12px 28px 32px !important;
+    }
+
+    .pf-v5-c-login__main-header::before {
+        width: 48px;
+        height: 48px;
+        font-size: 24px;
+        border-radius: 12px;
+    }
+
+    .pf-v5-c-login__main-header::after {
+        font-size: 22px;
+    }
+}

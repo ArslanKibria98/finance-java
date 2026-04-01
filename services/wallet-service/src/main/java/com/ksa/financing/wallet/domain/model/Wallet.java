@@ -22,6 +22,7 @@ public class Wallet {
     private Long fineractSavingsAccountId;
     private boolean ledgerSynced;
     private Instant lastLedgerSyncAt;
+    private String iban;
     private boolean autoDebitEnabled;
     private Instant createdAt;
     private Instant updatedAt;
@@ -61,6 +62,8 @@ public class Wallet {
     public void setLedgerSynced(boolean ledgerSynced) { this.ledgerSynced = ledgerSynced; }
     public Instant getLastLedgerSyncAt() { return lastLedgerSyncAt; }
     public void setLastLedgerSyncAt(Instant lastLedgerSyncAt) { this.lastLedgerSyncAt = lastLedgerSyncAt; }
+    public String getIban() { return iban; }
+    public void setIban(String iban) { this.iban = iban; }
     public boolean isAutoDebitEnabled() { return autoDebitEnabled; }
     public void setAutoDebitEnabled(boolean autoDebitEnabled) { this.autoDebitEnabled = autoDebitEnabled; }
     public Instant getCreatedAt() { return createdAt; }

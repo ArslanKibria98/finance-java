@@ -35,6 +35,7 @@ public class WalletPersistenceMapper {
         entity.setFineractSavingsAccountId(domain.getFineractSavingsAccountId());
         entity.setLedgerSynced(domain.isLedgerSynced());
         entity.setLastLedgerSyncAt(toOffsetDateTime(domain.getLastLedgerSyncAt()));
+        entity.setIban(domain.getIban());
         entity.setAutoDebitEnabled(domain.isAutoDebitEnabled());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -63,6 +64,7 @@ public class WalletPersistenceMapper {
         domain.setFineractSavingsAccountId(entity.getFineractSavingsAccountId());
         domain.setLedgerSynced(entity.isLedgerSynced());
         domain.setLastLedgerSyncAt(toInstant(entity.getLastLedgerSyncAt()));
+        domain.setIban(entity.getIban());
         domain.setAutoDebitEnabled(entity.isAutoDebitEnabled());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));

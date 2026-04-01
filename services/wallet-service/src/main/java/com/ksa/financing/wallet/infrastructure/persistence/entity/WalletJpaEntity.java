@@ -64,6 +64,9 @@ public class WalletJpaEntity {
     @Column(name = "last_ledger_sync_at")
     private OffsetDateTime lastLedgerSyncAt;
 
+    @Column(name = "iban", length = 34)
+    private String iban;
+
     @Column(name = "auto_debit_enabled", nullable = false)
     private boolean autoDebitEnabled = true;
 
@@ -146,6 +149,9 @@ public class WalletJpaEntity {
 
     public OffsetDateTime getLastLedgerSyncAt() { return lastLedgerSyncAt; }
     public void setLastLedgerSyncAt(OffsetDateTime lastLedgerSyncAt) { this.lastLedgerSyncAt = lastLedgerSyncAt; }
+
+    public String getIban() { return iban; }
+    public void setIban(String iban) { this.iban = iban; }
 
     public boolean isAutoDebitEnabled() { return autoDebitEnabled; }
     public void setAutoDebitEnabled(boolean autoDebitEnabled) { this.autoDebitEnabled = autoDebitEnabled; }

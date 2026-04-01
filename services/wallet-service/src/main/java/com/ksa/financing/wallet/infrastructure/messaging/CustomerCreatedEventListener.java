@@ -56,7 +56,8 @@ public class CustomerCreatedEventListener {
             createWalletUseCase.create(new CreateWalletUseCase.CreateWalletCommand(
                     tenantId,
                     customerId,
-                    currency != null ? currency : "SAR"
+                    currency != null ? currency : "SAR",
+                    null
             ));
 
             log.info("Successfully processed wallet creation for customer: {}", customerId);

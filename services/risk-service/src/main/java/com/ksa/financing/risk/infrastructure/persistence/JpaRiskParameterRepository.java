@@ -13,6 +13,7 @@ public interface JpaRiskParameterRepository extends JpaRepository<RiskParameterJ
     Optional<RiskParameterJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
     List<RiskParameterJpaEntity> findAllByTenantIdAndRiskType(UUID tenantId, RiskParameterJpaEntity.RiskTypeEnum riskType);
     List<RiskParameterJpaEntity> findAllByTenantIdAndRiskTypeAndActiveTrue(UUID tenantId, RiskParameterJpaEntity.RiskTypeEnum riskType);
+    List<RiskParameterJpaEntity> findAllByRiskTypeAndActiveTrue(RiskParameterJpaEntity.RiskTypeEnum riskType);
     List<RiskParameterJpaEntity> findAllByTenantIdAndRiskTypeAndCategory(UUID tenantId, RiskParameterJpaEntity.RiskTypeEnum riskType, String category);
     List<RiskParameterJpaEntity> findAllByTenantIdAndParentParameterId(UUID tenantId, UUID parentParameterId);
 }

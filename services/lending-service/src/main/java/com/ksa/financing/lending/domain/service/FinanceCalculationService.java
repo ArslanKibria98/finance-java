@@ -162,6 +162,26 @@ public final class FinanceCalculationService {
                 .divide(rateFactor, MONEY_SCALE, RM);
     }
 
+    /**
+     * Reverse-calculate max loan amount from a given max affordable installment.
+     * principal = maxInstallment × tenureMonths / (1 + profitRate × months/12)
+     */
+    public static BigDecimal calculateMaxAmountFromInstallment(
+            BigDecimal maxInstallment,
+            BigDecimal profitRate,
+            int tenureMonths
+    ) {
+        if (maxInstallment == null || maxInstallment.compareTo(BigDecimal.ZERO) <= 0 || tenureMonths <= 0) {
+            return BigDecimal.ZERO;
+        }
+        var rateFactor = BigDecimal.ONE.add(
+                profitRate.multiply(BigDecimal.valueOf(tenureMonths)).divide(TWELVE, SCALE, RM)
+        );
+        return maxInstallment
+                .multiply(BigDecimal.valueOf(tenureMonths))
+                .divide(rateFactor, MONEY_SCALE, RM);
+    }
+
     private static void validate(BigDecimal principal, BigDecimal profitRate, int tenureMonths) {
         if (principal == null || principal.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Principal amount must be positive");

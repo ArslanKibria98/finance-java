@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface JpaAssessmentAnswerRepository extends JpaRepository<AssessmentAnswerJpaEntity, UUID> {
     Optional<AssessmentAnswerJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
     List<AssessmentAnswerJpaEntity> findAllByTenantIdAndSessionId(UUID tenantId, UUID sessionId);
+    List<AssessmentAnswerJpaEntity> findAllBySessionId(UUID sessionId);
     List<AssessmentAnswerJpaEntity> findAllByTenantIdAndSessionIdAndVersionStatus(UUID tenantId, UUID sessionId, AssessmentAnswerJpaEntity.VersionStatusEnum versionStatus);
+    List<AssessmentAnswerJpaEntity> findAllBySessionIdAndVersionStatus(UUID sessionId, AssessmentAnswerJpaEntity.VersionStatusEnum versionStatus);
     List<AssessmentAnswerJpaEntity> findAllByTenantIdAndSessionIdAndParameterId(UUID tenantId, UUID sessionId, UUID parameterId);
 }

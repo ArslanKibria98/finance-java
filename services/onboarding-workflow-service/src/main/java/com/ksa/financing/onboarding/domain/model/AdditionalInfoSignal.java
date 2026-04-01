@@ -15,5 +15,9 @@ public record AdditionalInfoSignal(
     String iban,
     String accountHolderName,
     DeviceInfo deviceInfo,
-    boolean isPep
+    boolean isPep,
+    // PEP fields (only used when isPep=true)
+    String sourceOfFunds,
+    String estimatedNetWorth,
+    String sourceOfIncome
 ) {}

@@ -48,7 +48,7 @@ public class LoanApplicationMapper {
                 agg.getShariaStructure() != null ? agg.getShariaStructure().name() : null,
                 agg.getRequestedAmount(),
                 agg.getRequestedTenureMonths(),
-                agg.getPurposeOfFinance() != null ? agg.getPurposeOfFinance().name() : null,
+                agg.getPurposeOfFinance(),
                 agg.getPurposeOfFinanceOther(),
                 agg.getProfitRate(),
                 agg.getApr(),

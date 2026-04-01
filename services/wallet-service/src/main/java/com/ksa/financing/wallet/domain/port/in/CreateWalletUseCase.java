@@ -9,6 +9,7 @@ public interface CreateWalletUseCase {
     record CreateWalletCommand(
         UUID tenantId,
         UUID customerId,
-        String currency
+        String currency,
+        String iban
     ) {}
 }

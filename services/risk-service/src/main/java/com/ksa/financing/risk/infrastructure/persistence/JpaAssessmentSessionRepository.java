@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface JpaAssessmentSessionRepository extends JpaRepository<AssessmentSessionJpaEntity, UUID> {
     Optional<AssessmentSessionJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
     List<AssessmentSessionJpaEntity> findAllByTenantIdAndEntityReference(UUID tenantId, String entityReference);
+    List<AssessmentSessionJpaEntity> findAllByEntityReference(String entityReference);
     Optional<AssessmentSessionJpaEntity> findByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
     Optional<AssessmentSessionJpaEntity> findFirstByTenantIdAndEntityReferenceOrderByCreatedAtDesc(UUID tenantId, String entityReference);
 }

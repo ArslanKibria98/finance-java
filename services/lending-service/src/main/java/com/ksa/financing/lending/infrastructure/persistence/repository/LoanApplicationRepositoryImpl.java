@@ -62,7 +62,7 @@ public class LoanApplicationRepositoryImpl implements LoanApplicationRepository 
     @Override
     @Transactional(readOnly = true)
     public List<LoanApplicationAggregate> findByCustomer(UUID tenantId, UUID customerId) {
-        return jpaRepository.findByTenantIdAndCustomerId(tenantId, customerId)
+        return jpaRepository.findByTenantIdAndCustomerIdOrderByCreatedAtDesc(tenantId, customerId)
                 .stream().map(mapper::toDomain).toList();
     }
 

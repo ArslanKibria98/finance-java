@@ -8,6 +8,7 @@ public record CustomerResponse(
     UUID id,
     String cifNumber,
     String customerType,
+    String nationalId,
     String nationalIdType,
     String firstName,
     String lastName,

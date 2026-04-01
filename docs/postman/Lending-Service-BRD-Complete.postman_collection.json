@@ -52,12 +52,12 @@
     },
     {
       "key": "productId",
-      "value": "dce7b4ea-e35c-49c0-a027-ecb4bdf8b925",
+      "value": "4210f18e-8c35-4b12-9b7f-c96de95767c7",
       "type": "string"
     },
     {
       "key": "nationalId",
-      "value": "1234567042",
+      "value": "1234567821",
       "type": "string"
     },
     {
@@ -690,7 +690,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"productCode\": \"FZA\",\n  \"productName\": \"Fazza Micro Finance\",\n  \"shariaStructure\": \"MURABAHA\",\n  \"requestedAmount\": 2000.00,\n  \"requestedTenureMonths\": 3,\n  \"purposeOfFinance\": \"PERSONAL\",\n  \"profitRate\": 0.0385,\n  \"partnerId\": null,\n  \"leadId\": null\n}"
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"productCode\": \"MICRO-001\",\n  \"productName\": \"Micro Financing\",\n  \"shariaStructure\": \"TAWARRUQ\",\n  \"requestedAmount\": 2000.00,\n  \"requestedTenureMonths\": 3,\n  \"purposeOfFinance\": \"PERSONAL\",\n  \"profitRate\": 0.0385,\n  \"partnerId\": null,\n  \"leadId\": null\n}"
             },
             "url": {
               "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{customerId}}/basic-info?applicationId={{applicationId}}",

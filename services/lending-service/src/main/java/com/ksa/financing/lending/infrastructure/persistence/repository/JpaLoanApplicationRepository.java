@@ -21,7 +21,7 @@ public interface JpaLoanApplicationRepository extends JpaRepository<LoanApplicat
 
     List<LoanApplicationJpaEntity> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
-    List<LoanApplicationJpaEntity> findByTenantIdAndCustomerId(UUID tenantId, UUID customerId);
+    List<LoanApplicationJpaEntity> findByTenantIdAndCustomerIdOrderByCreatedAtDesc(UUID tenantId, UUID customerId);
 
     List<LoanApplicationJpaEntity> findByTenantIdAndStatus(UUID tenantId, String status);
 

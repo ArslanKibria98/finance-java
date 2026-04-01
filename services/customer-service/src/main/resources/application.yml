@@ -104,6 +104,31 @@ app:
     header-name: X-Tenant-ID
     default: default
 
+wallet:
+  service:
+    url: ${WALLET_SERVICE_URL:http://wallet-service:8088}
+
+risk:
+  service:
+    url: ${RISK_SERVICE_URL:http://risk-service:8090}
+
+lending:
+  service:
+    url: ${LENDING_SERVICE_URL:http://lending-service:8097}
+
+kyc:
+  service:
+    url: ${KYC_SERVICE_URL:http://kyc-adapter-service:8087}
+
+onboarding:
+  service:
+    url: ${ONBOARDING_SERVICE_URL:http://onboarding-workflow-service:8089}
+
+pii:
+  vault:
+    url: ${PII_VAULT_URL:http://pii-vault-service:8086}
+    mock: ${PII_VAULT_MOCK:false}
+
 ksa:
   authorization:
     enabled: true

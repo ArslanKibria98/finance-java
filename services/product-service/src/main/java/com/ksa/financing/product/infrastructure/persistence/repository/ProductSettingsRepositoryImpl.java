@@ -80,8 +80,7 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
     // --- Tab 3: Fee Settings (upsert) ---
 
     @Override
-    public void saveFeeSettings(UUID tenantId, UUID productId, BigDecimal minAmount,
-                                BigDecimal maxAmount, BigDecimal vatPercentage,
+    public void saveFeeSettings(UUID tenantId, UUID productId,
                                 BigDecimal revenueThreshold, BigDecimal maxDbrPct,
                                 BigDecimal globalDbrPct,
                                 String dbrMethod, String dbrExceptions) {
@@ -97,9 +96,6 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
                     return newEntity;
                 });
 
-        entity.setMinFinancingAmount(minAmount);
-        entity.setMaxFinancingAmount(maxAmount);
-        entity.setVatPercentage(vatPercentage);
         entity.setRevenueEligibilityThreshold(revenueThreshold);
         entity.setMaxDbrPercentage(maxDbrPct);
         entity.setGlobalDbrPercentage(globalDbrPct);

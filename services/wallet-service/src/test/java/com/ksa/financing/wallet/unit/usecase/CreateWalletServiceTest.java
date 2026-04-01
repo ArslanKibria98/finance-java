@@ -60,7 +60,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should create wallet and publish event")
     void shouldCreateWalletAndPublishEvent() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, "SAR");
+        var command = new CreateWalletCommand(tenantId, customerId, "SAR", null);
         when(walletRepository.existsByCustomerId(tenantId, customerId)).thenReturn(false);
         when(walletRepository.save(any(Wallet.class))).thenAnswer(inv -> {
             Wallet w = inv.getArgument(0);
@@ -89,7 +89,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should return existing wallet if customer already has one")
     void shouldReturnExistingWallet() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, "SAR");
+        var command = new CreateWalletCommand(tenantId, customerId, "SAR", null);
         Wallet existing = new Wallet();
         existing.setId(UUID.randomUUID());
         existing.setCustomerId(customerId);
@@ -111,7 +111,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should default currency to SAR when null")
     void shouldDefaultCurrencyToSar() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, null);
+        var command = new CreateWalletCommand(tenantId, customerId, null, null);
         when(walletRepository.existsByCustomerId(tenantId, customerId)).thenReturn(false);
         when(walletRepository.save(any(Wallet.class))).thenAnswer(inv -> inv.getArgument(0));
         when(fineractConfig.isEnabled()).thenReturn(false);
@@ -127,7 +127,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should NOT schedule Fineract workflow when disabled")
     void shouldNotScheduleWorkflowWhenDisabled() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, "SAR");
+        var command = new CreateWalletCommand(tenantId, customerId, "SAR", null);
         when(walletRepository.existsByCustomerId(tenantId, customerId)).thenReturn(false);
         when(walletRepository.save(any(Wallet.class))).thenAnswer(inv -> inv.getArgument(0));
         when(fineractConfig.isEnabled()).thenReturn(false);
@@ -143,7 +143,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should schedule Fineract sync after commit when enabled")
     void shouldScheduleFineractSyncWhenEnabled() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, "SAR");
+        var command = new CreateWalletCommand(tenantId, customerId, "SAR", null);
         when(walletRepository.existsByCustomerId(tenantId, customerId)).thenReturn(false);
         when(walletRepository.save(any(Wallet.class))).thenAnswer(inv -> {
             Wallet w = inv.getArgument(0);
@@ -182,7 +182,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should set correct wallet limits")
     void shouldSetCorrectWalletLimits() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, "SAR");
+        var command = new CreateWalletCommand(tenantId, customerId, "SAR", null);
         when(walletRepository.existsByCustomerId(tenantId, customerId)).thenReturn(false);
         when(walletRepository.save(any(Wallet.class))).thenAnswer(inv -> inv.getArgument(0));
         when(fineractConfig.isEnabled()).thenReturn(false);
@@ -202,7 +202,7 @@ class CreateWalletServiceTest {
     @DisplayName("Should generate wallet number with WLT prefix")
     void shouldGenerateWalletNumberWithPrefix() {
         // Given
-        var command = new CreateWalletCommand(tenantId, customerId, "SAR");
+        var command = new CreateWalletCommand(tenantId, customerId, "SAR", null);
         when(walletRepository.existsByCustomerId(tenantId, customerId)).thenReturn(false);
         when(walletRepository.save(any(Wallet.class))).thenAnswer(inv -> inv.getArgument(0));
         when(fineractConfig.isEnabled()).thenReturn(false);

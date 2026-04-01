@@ -3,6 +3,7 @@ package com.ksa.financing.customer.application.usecase;
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.KycStatus;
 import com.ksa.financing.customer.domain.model.LifecycleStage;
+import com.ksa.financing.customer.domain.model.RiskGrade;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.out.CustomerRepository;
 import com.ksa.financing.customer.domain.port.out.EventPublisherPort;
@@ -60,6 +61,25 @@ public class UpdateCustomerService implements UpdateCustomerUseCase {
                     saved.getId(), e.getMessage());
         }
         return saved;
+    }
+
+    @Override
+    @Transactional
+    public Customer updateRiskGrade(UUID tenantId, UUID customerId, RiskGrade grade) {
+        Customer customer = customerRepository.findById(tenantId, customerId)
+            .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + customerId));
+        customer.setRiskGrade(grade);
+        customer.setRiskGradeUpdatedAt(java.time.Instant.now());
+        return customerRepository.save(customer);
+    }
+
+    @Override
+    @Transactional
+    public Customer updatePepFlag(UUID tenantId, UUID customerId, boolean pepFlag) {
+        Customer customer = customerRepository.findById(tenantId, customerId)
+            .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + customerId));
+        customer.setPepFlag(pepFlag);
+        return customerRepository.save(customer);
     }
 
     @Override

@@ -144,6 +144,9 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/ksa_financing
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: postgres
+      KC_SPI_THEME_DEFAULT: finova
+    volumes:
+      - ./infrastructure/keycloak/themes/finova:/opt/keycloak/themes/finova
     ports:
       - "8080:8080"
     depends_on:
@@ -423,6 +426,11 @@ services:
       TEMPORAL_SERVER_PORT: 7233
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      WALLET_SERVICE_URL: http://wallet-service:8088
+      RISK_SERVICE_URL: http://risk-service:8090
+      LENDING_SERVICE_URL: http://lending-service:8097
+      KYC_SERVICE_URL: http://kyc-adapter-service:8087
+      ONBOARDING_SERVICE_URL: http://onboarding-workflow-service:8089
     depends_on:
       postgres:
         condition: service_healthy

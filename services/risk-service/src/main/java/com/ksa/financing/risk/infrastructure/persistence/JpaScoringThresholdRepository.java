@@ -14,4 +14,5 @@ public interface JpaScoringThresholdRepository extends JpaRepository<ScoringThre
     Optional<ScoringThresholdJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
     List<ScoringThresholdJpaEntity> findAllByTenantIdAndRiskType(UUID tenantId, RiskParameterJpaEntity.RiskTypeEnum riskType);
     List<ScoringThresholdJpaEntity> findAllByTenantIdAndRiskTypeAndActiveTrue(UUID tenantId, RiskParameterJpaEntity.RiskTypeEnum riskType);
+    List<ScoringThresholdJpaEntity> findAllByRiskTypeAndActiveTrue(RiskParameterJpaEntity.RiskTypeEnum riskType);
 }

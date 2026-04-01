@@ -17,5 +17,9 @@ public record SubmitAdditionalInfoRequest(
     String bankCode,
     String iban,
     String accountHolderName,
-    Boolean isPep              // true = PEP → EDD required, false/null = normal flow
+    Boolean isPep,             // true = PEP → requires sourceOfFunds, estimatedNetWorth, sourceOfIncome
+    // PEP fields (required only when isPep=true)
+    String sourceOfFunds,
+    String estimatedNetWorth,
+    String sourceOfIncome
 ) {}

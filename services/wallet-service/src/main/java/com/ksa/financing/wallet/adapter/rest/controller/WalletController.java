@@ -100,7 +100,8 @@ public class WalletController {
         Wallet wallet = createWalletUseCase.create(new CreateWalletUseCase.CreateWalletCommand(
                 tenantId,
                 request.customerId(),
-                request.currency()
+                request.currency(),
+                request.iban()
         ));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(wallet));
@@ -150,6 +151,7 @@ public class WalletController {
 
     public record CreateWalletRequest(
             UUID customerId,
-            String currency
+            String currency,
+            String iban
     ) {}
 }

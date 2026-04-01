@@ -46,7 +46,7 @@ public class LoanApplicationAggregate {
     private ShariaStructure shariaStructure;
     private BigDecimal requestedAmount;
     private int requestedTenureMonths;
-    private PurposeOfFinance purposeOfFinance;
+    private String purposeOfFinance;
     private String purposeOfFinanceOther;
     private BigDecimal profitRate;
     private BigDecimal apr;
@@ -205,7 +205,7 @@ public class LoanApplicationAggregate {
             BigDecimal education, BigDecimal transportation,
             UUID productId, String productCode, String productName,
             ShariaStructure shariaStructure, BigDecimal requestedAmount, int requestedTenureMonths,
-            PurposeOfFinance purposeOfFinance, String purposeOfFinanceOther,
+            String purposeOfFinance, String purposeOfFinanceOther,
             BigDecimal profitRate, BigDecimal apr, UUID partnerId, UUID leadId,
             String safeWatchSessionId, String safeWatchStatus,
             String employerName, String employmentSector, String employmentStatus,
@@ -313,7 +313,7 @@ public class LoanApplicationAggregate {
 
     public void submitBasicInfo(UUID productId, String productCode, String productName,
                                  ShariaStructure shariaStructure, BigDecimal requestedAmount,
-                                 int requestedTenureMonths, PurposeOfFinance purposeOfFinance,
+                                 int requestedTenureMonths, String purposeOfFinance,
                                  String purposeOfFinanceOther,
                                  BigDecimal profitRate, BigDecimal apr,
                                  UUID partnerId, UUID leadId, UUID updatedBy) {
@@ -655,7 +655,7 @@ public class LoanApplicationAggregate {
     public ShariaStructure getShariaStructure() { return shariaStructure; }
     public BigDecimal getRequestedAmount() { return requestedAmount; }
     public int getRequestedTenureMonths() { return requestedTenureMonths; }
-    public PurposeOfFinance getPurposeOfFinance() { return purposeOfFinance; }
+    public String getPurposeOfFinance() { return purposeOfFinance; }
     public String getPurposeOfFinanceOther() { return purposeOfFinanceOther; }
     public BigDecimal getProfitRate() { return profitRate; }
     public BigDecimal getApr() { return apr; }

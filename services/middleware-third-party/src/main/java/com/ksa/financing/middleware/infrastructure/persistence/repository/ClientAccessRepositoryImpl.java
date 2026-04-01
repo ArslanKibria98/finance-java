@@ -76,7 +76,7 @@ public class ClientAccessRepositoryImpl implements ClientAccessRepository {
     @Override
     public List<ClientApiAccess> findApiAccessByClientAndProvider(UUID tenantId, UUID clientId, UUID providerId) {
         // Get all API IDs that belong to this provider
-        var apiIds = jpaProviderApiRepo.findByProviderIdAndTenantIdAndDeletedAtIsNullOrderByNameAsc(providerId, tenantId)
+        var apiIds = jpaProviderApiRepo.findByProviderIdAndTenantIdAndDeletedAtIsNullOrderByNameEnAsc(providerId, tenantId)
                 .stream().map(api -> api.getId()).toList();
 
         if (apiIds.isEmpty()) return List.of();

@@ -41,13 +41,13 @@ public class ProviderApiRepositoryImpl implements ProviderApiRepository {
 
     @Override
     public List<ProviderApi> findAllByProvider(UUID tenantId, UUID providerId) {
-        return jpaRepository.findByProviderIdAndTenantIdAndDeletedAtIsNullOrderByNameAsc(providerId, tenantId)
+        return jpaRepository.findByProviderIdAndTenantIdAndDeletedAtIsNullOrderByNameEnAsc(providerId, tenantId)
                 .stream().map(mapper::toDomain).toList();
     }
 
     @Override
     public List<ProviderApi> findAllByTenant(UUID tenantId) {
-        return jpaRepository.findByTenantIdAndDeletedAtIsNullOrderByNameAsc(tenantId)
+        return jpaRepository.findByTenantIdAndDeletedAtIsNullOrderByNameEnAsc(tenantId)
                 .stream().map(mapper::toDomain).toList();
     }
 

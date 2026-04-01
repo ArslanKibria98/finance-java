@@ -68,6 +68,19 @@ public record InitiateLoanApplicationRequest(
         @Schema(description = "Monthly transportation expense in SAR")
         BigDecimal transportation,
 
+        @NotNull(message = "Salary is required for eligibility check")
+        @Schema(description = "Monthly salary / total income in SAR (used for eligibility check)")
+        BigDecimal salary,
+
+        @Schema(description = "Total existing liabilities / obligations in SAR (used for eligibility check)")
+        BigDecimal liabilities,
+
+        @Schema(description = "Number of additional adults in household (default 0)")
+        int additionalAdults,
+
+        @Schema(description = "Number of children in household (default 0)")
+        int numberOfChildren,
+
         @NotNull(message = "Eligibility answers are required")
         @Schema(description = "Dynamic eligibility field answers: field_key → value (e.g., monthly_income → 15000)")
         Map<String, String> eligibilityAnswers

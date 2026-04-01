@@ -33,15 +33,6 @@ public class FeeSettingsJpaEntity {
     @Column(name = "product_id", nullable = false)
     private UUID productId;
 
-    @Column(name = "min_financing_amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal minFinancingAmount;
-
-    @Column(name = "max_financing_amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal maxFinancingAmount;
-
-    @Column(name = "vat_percentage", nullable = false, precision = 5, scale = 2)
-    private BigDecimal vatPercentage;
-
     @Column(name = "revenue_eligibility_threshold", precision = 19, scale = 4)
     private BigDecimal revenueEligibilityThreshold;
 

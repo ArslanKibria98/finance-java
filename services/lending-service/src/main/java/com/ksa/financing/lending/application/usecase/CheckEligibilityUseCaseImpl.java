@@ -14,6 +14,10 @@ import java.util.ArrayList;
 /**
  * BRD Steps 4-10: "Get Initial Offer" → "Congratulations!" flow.
  * Stateless pre-qualification — no DB, no workflow.
+ *
+ * <p>Uses dual-check affordability model:
+ * DTI capacity + Residual capacity with minimum expense floors,
+ * region multipliers, income bracket multipliers, and stress buffer.
  */
 @Slf4j
 @Service
@@ -24,8 +28,8 @@ public class CheckEligibilityUseCaseImpl implements CheckEligibilityUseCase {
 
     @Override
     public EligibilityCheckResult checkEligibility(CheckEligibilityCommand cmd) {
-        log.info("Checking eligibility: amount={}, salary={}, tenure={}",
-                cmd.amount(), cmd.salary(), cmd.tenureMonths());
+        log.info("Checking eligibility: amount={}, salary={}, tenure={}, adults={}, children={}",
+                cmd.amount(), cmd.salary(), cmd.tenureMonths(), cmd.adultDependents(), cmd.childDependents());
 
         // Fetch product config for rates and thresholds
         var config = productConfigPort.fetchProductConfig(
@@ -51,13 +55,17 @@ public class CheckEligibilityUseCaseImpl implements CheckEligibilityUseCase {
                 BigDecimal.ZERO
         );
 
-        // Sum expenses
+        // Sum expenses with minimum enforcement + dependents
         var totalExpenses = AffordabilityCalculationService.sumExpenses(
                 cmd.foodGroceries(), cmd.utilities(), cmd.healthcare(), cmd.communication(),
-                cmd.housingRent(), cmd.clothingEssentials(), cmd.education(), cmd.transportation()
+                cmd.housingRent(), cmd.clothingEssentials(), cmd.education(), cmd.transportation(),
+                cmd.adultDependents(), cmd.childDependents()
         );
 
-        // Check affordability (DBR)
+        log.info("Expenses after minimum enforcement: {} SAR (adults={}, children={})",
+                totalExpenses, cmd.adultDependents(), cmd.childDependents());
+
+        // Check affordability with dual constraint (DTI + Residual)
         var affordability = AffordabilityCalculationService.check(
                 cmd.salary(),
                 cmd.liabilities(),
@@ -66,18 +74,25 @@ public class CheckEligibilityUseCaseImpl implements CheckEligibilityUseCase {
                 config.maxDbrPercent()
         );
 
-        // If not eligible due to DBR, calculate max eligible amount
+        log.info("Affordability result: eligible={}, maxAffordable={}, reason={}",
+                affordability.eligible(), affordability.maxAffordableInstalment(), affordability.reason());
+
+        // If not eligible, calculate max eligible amount based on affordable installment
         BigDecimal maxEligible = cmd.amount();
         if (!affordability.eligible() && cmd.salary().compareTo(BigDecimal.ZERO) > 0) {
-            maxEligible = FinanceCalculationService.calculateMaxEligibleAmount(
-                    cmd.salary(),
-                    cmd.liabilities() != null ? cmd.liabilities() : BigDecimal.ZERO,
-                    config.maxDbrPercent(),
-                    config.profitRate(),
-                    cmd.tenureMonths()
-            );
+            // Use the max affordable installment to reverse-calculate max loan amount
+            if (affordability.maxAffordableInstalment() != null
+                    && affordability.maxAffordableInstalment().compareTo(BigDecimal.ZERO) > 0) {
+                maxEligible = FinanceCalculationService.calculateMaxAmountFromInstallment(
+                        affordability.maxAffordableInstalment(),
+                        config.profitRate(),
+                        cmd.tenureMonths()
+                );
+            } else {
+                maxEligible = BigDecimal.ZERO;
+            }
 
-            // If max eligible > 0, recalculate with reduced amount
+            // If max eligible > 0, offer reduced amount
             if (maxEligible.compareTo(BigDecimal.ZERO) > 0 && maxEligible.compareTo(cmd.amount()) < 0) {
                 var reducedCalc = FinanceCalculationService.calculate(
                         maxEligible, config.profitRate(), config.costOfTermPercent(),
@@ -96,7 +111,7 @@ public class CheckEligibilityUseCaseImpl implements CheckEligibilityUseCase {
                         affordability.disposableIncome(),
                         maxEligible,
                         reducedCalc.firstInstallmentDueDate(),
-                        "Eligible for reduced amount: " + maxEligible + " SAR"
+                        "Eligible for reduced amount: " + maxEligible + " SAR (max affordable instalment: " + affordability.maxAffordableInstalment() + " SAR)"
                 );
             }
         }

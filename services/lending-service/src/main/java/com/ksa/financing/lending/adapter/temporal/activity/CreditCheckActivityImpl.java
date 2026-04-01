@@ -275,7 +275,7 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
             log.info("No declared expenses provided, skipping affordability check (DBR-only mode)");
             BigDecimal disposable = salary.subtract(liabilities).subtract(proposedInstallment);
             return new AffordabilityCalculationService.AffordabilityResult(
-                    true, BigDecimal.ZERO, BigDecimal.ZERO, disposable, null);
+                    true, BigDecimal.ZERO, BigDecimal.ZERO, disposable, disposable, null);
         }
 
         var result = AffordabilityCalculationService.check(salary, liabilities, expenses, proposedInstallment, maxDbr);

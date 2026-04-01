@@ -6,11 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * BRD UC#03 — Application Tracker response.
- * Maps loan application status to 8 user-facing steps with proper progress tracking.
- * Follows the same pattern as onboarding status response for consistent UI/UX.
- */
 @Schema(description = "BRD UC#03 — Finance Application Tracker")
 public record ApplicationTrackerResponse(
 
@@ -41,6 +36,9 @@ public record ApplicationTrackerResponse(
         @Schema(description = "Application steps with progress tracking")
         List<LoanApplicationStepInfo> steps,
 
+        @Schema(description = "Pre-qualification / finance calculation data")
+        PreQualificationData preQualification,
+
         @Schema(description = "Application creation timestamp")
         String createdAt,
 
@@ -48,9 +46,6 @@ public record ApplicationTrackerResponse(
         String lastUpdatedAt
 ) {
 
-    /**
-     * Build tracker from ApplicationStatus enum (DB fallback path).
-     */
     public static ApplicationTrackerResponse build(
             String applicationId,
             String applicationNumber,
@@ -59,24 +54,24 @@ public record ApplicationTrackerResponse(
             String currentStatusStr,
             String failureReason,
             String createdAt,
-            String lastUpdatedAt
+            String lastUpdatedAt,
+            int tenureMonths,
+            BigDecimal profitRate
     ) {
         ApplicationStatus appStatus = parseStatus(currentStatusStr);
         var steps = LoanApplicationStepInfo.buildSteps(appStatus);
         var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
         var overallStatus = resolveOverallStatus(appStatus);
+        var preQual = PreQualificationData.calculate(requestedAmount, tenureMonths, profitRate);
 
         return new ApplicationTrackerResponse(
                 applicationId, applicationNumber,
                 requestedAmount, totalPayable,
                 currentStatusStr, overallStatus, nextAction,
-                failureReason, steps, createdAt, lastUpdatedAt
+                failureReason, steps, preQual, createdAt, lastUpdatedAt
         );
     }
 
-    /**
-     * Simplified build for cases with minimal data available.
-     */
     public static ApplicationTrackerResponse build(
             String applicationId,
             String applicationNumber,
@@ -85,7 +80,7 @@ public record ApplicationTrackerResponse(
             String currentStatusStr
     ) {
         return build(applicationId, applicationNumber, requestedAmount, totalPayable,
-                currentStatusStr, null, null, null);
+                currentStatusStr, null, null, null, 0, null);
     }
 
     private static ApplicationStatus parseStatus(String status) {

@@ -41,7 +41,7 @@ public class ProviderRepositoryImpl implements ProviderRepository {
 
     @Override
     public List<ThirdPartyProvider> findAllByTenant(UUID tenantId) {
-        return jpaRepository.findByTenantIdAndDeletedAtIsNullOrderByNameAsc(tenantId)
+        return jpaRepository.findByTenantIdAndDeletedAtIsNullOrderByNameEnAsc(tenantId)
                 .stream().map(mapper::toDomain).toList();
     }
 

@@ -54,8 +54,7 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
 
         settingsRepository.saveFeeSettings(
             tenantId, productId,
-            command.minFinancingAmount(), command.maxFinancingAmount(),
-            command.vatPercentage(), command.revenueEligibilityThreshold(),
+            command.revenueEligibilityThreshold(),
             command.maxDbrPercentage(), command.globalDbrPercentage(),
             command.dbrCalculationMethod(), command.dbrExceptions()
         );

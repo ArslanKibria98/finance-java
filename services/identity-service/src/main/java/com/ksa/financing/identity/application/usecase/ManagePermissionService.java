@@ -4,7 +4,9 @@ import com.ksa.financing.identity.domain.model.Permission;
 import com.ksa.financing.identity.domain.port.in.ManagePermissionUseCase;
 import com.ksa.financing.identity.domain.port.out.ModuleRepository;
 import com.ksa.financing.identity.domain.port.out.PermissionRepository;
+import com.ksa.financing.identity.domain.port.out.PolicyEnforcerPort;
 import com.ksa.financing.identity.domain.port.out.RoleRepository;
+import com.ksa.financing.identity.infrastructure.casbin.PolicyRedisSyncService;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
@@ -25,6 +27,8 @@ public class ManagePermissionService implements ManagePermissionUseCase {
     private final PermissionRepository permissionRepository;
     private final RoleRepository roleRepository;
     private final ModuleRepository moduleRepository;
+    private final PolicyEnforcerPort policyEnforcer;
+    private final PolicyRedisSyncService redisSyncService;
 
     @Override
     @Transactional
@@ -116,19 +120,180 @@ public class ManagePermissionService implements ManagePermissionUseCase {
     @Override
     @Transactional
     public void syncRolePermissions(UUID tenantId, UUID roleId, List<UUID> permissionIds) {
-        roleRepository.findById(tenantId, roleId)
+        var role = roleRepository.findById(tenantId, roleId)
                 .orElseThrow(() -> NotFoundException.forEntity("Role", roleId.toString()));
 
         // Remove all existing permissions for this role
         permissionRepository.removeAllFromRole(roleId);
 
+        // Collect resource types for Casbin policy generation
+        var resourceTypes = new java.util.HashSet<String>();
+
         // Assign new permissions
         for (var permissionId : permissionIds) {
-            permissionRepository.findById(tenantId, permissionId)
+            var perm = permissionRepository.findById(tenantId, permissionId)
                     .orElseThrow(() -> NotFoundException.forEntity("Permission", permissionId.toString()));
             permissionRepository.assignToRole(tenantId, roleId, permissionId);
+            resourceTypes.add(perm.getResourceType() + ":" + perm.getAction());
         }
 
         log.info("Synced {} permissions to role {} in tenant {}", permissionIds.size(), roleId, tenantId);
+
+        // Auto-generate Casbin policies from permissions
+        syncCasbinPoliciesFromPermissions(role.getRoleCode(), resourceTypes);
+    }
+
+    /**
+     * Maps permission resource types to Casbin obj+act policies and syncs to Redis.
+     * Called automatically when permissions are synced to a role.
+     */
+    private void syncCasbinPoliciesFromPermissions(String roleCode, java.util.Set<String> resourceTypes) {
+        // Permission resource type → Casbin obj+act mapping
+        var mapping = new java.util.HashMap<String, String[][]>();
+
+        // Customer
+        mapping.put("CUSTOMER:GET", new String[][]{
+                {"customers", "read"}, {"customers.bank-accounts", "read"},
+                {"customers.employment", "read"}, {"reference-data", "read"}});
+        mapping.put("CUSTOMER:POST", new String[][]{
+                {"customers", "*"}, {"customers.bank-accounts", "*"},
+                {"customers.employment", "*"}, {"customers.kyc-status", "*"},
+                {"reference-data", "*"}});
+
+        // Product
+        mapping.put("PRODUCT:GET", new String[][]{
+                {"products", "read"}, {"product-categories", "read"},
+                {"countries", "read"}, {"partners", "read"}});
+        mapping.put("PRODUCT:POST", new String[][]{
+                {"products", "*"}, {"product-categories", "*"},
+                {"product-settings", "*"}, {"product-partners", "*"},
+                {"product-documents", "*"}, {"partners", "*"}, {"countries", "*"}});
+
+        // Role / Permission / Policy (obj+act for other services + path-based for IDS)
+        mapping.put("ROLE:GET", new String[][]{{"roles", "read"}, {"/api/v1/roles/**", "GET"}, {"/api/v1/roles", "GET"}});
+        mapping.put("ROLE:POST", new String[][]{{"roles", "*"}, {"/api/v1/roles/**", "*"}, {"/api/v1/roles", "*"}});
+        mapping.put("PERMISSION:GET", new String[][]{{"permissions", "read"}, {"/api/v1/permissions/**", "GET"}, {"/api/v1/permissions", "GET"}});
+        mapping.put("PERMISSION:POST", new String[][]{{"permissions", "*"}, {"/api/v1/permissions/**", "*"}, {"/api/v1/permissions", "*"}});
+        mapping.put("POLICY:GET", new String[][]{{"policies", "read"}, {"/api/v1/policies/**", "GET"}, {"/api/v1/policies", "GET"}});
+        mapping.put("POLICY:POST", new String[][]{{"policies", "*"}, {"/api/v1/policies/**", "*"}, {"/api/v1/policies", "*"}});
+
+        // Wallet
+        mapping.put("WALLET:GET", new String[][]{{"wallets", "read"}});
+        mapping.put("WALLET:POST", new String[][]{{"wallets", "*"}});
+
+        // Risk
+        mapping.put("RISK:GET", new String[][]{
+                {"risk", "read"}, {"risk.blacklist", "read"},
+                {"risk.credit-scoring", "read"}, {"risk.credit-scoring.field-definitions", "read"},
+                {"fraud.rules", "read"}});
+        mapping.put("RISK:POST", new String[][]{
+                {"risk", "*"}, {"risk.blacklist", "*"},
+                {"risk.credit-scoring", "*"}, {"risk.credit-scoring.field-definitions", "*"},
+                {"fraud.rules", "*"}});
+
+        // Admin (obj+act for other services + path-based for IDS)
+        mapping.put("ADMIN:GET", new String[][]{
+                {"employees", "read"}, {"dashboard", "read"},
+                {"/api/v1/employees/**", "GET"}, {"/api/v1/employees", "GET"}});
+        mapping.put("ADMIN:POST", new String[][]{
+                {"employees", "*"}, {"dashboard", "read"},
+                {"/api/v1/employees/**", "*"}, {"/api/v1/employees", "*"}});
+
+        // Profile
+        mapping.put("PROFILE:GET", new String[][]{
+                {"profiles", "read"}, {"profiles.regional", "read"},
+                {"profiles.access-tokens", "read"}, {"profiles.me", "read"}});
+        mapping.put("PROFILE:POST", new String[][]{
+                {"profiles", "*"}, {"profiles.regional", "*"},
+                {"profiles.access-tokens", "*"}, {"profiles.me", "update"}});
+
+        // Workflow (legacy — covers onboarding + lending)
+        mapping.put("WORKFLOW:GET", new String[][]{
+                {"onboarding", "status"}, {"loan-applications", "read"},
+                {"loan-applications.tracker", "read"}, {"loans", "read"},
+                {"loans.overview", "read"}, {"loans.installments", "read"},
+                {"loans.contract", "read"}, {"loans.receipts", "read"},
+                {"banks", "read"}, {"purpose-of-finance", "read"},
+                {"finance.calculator", "read"}, {"finance.eligibility", "check"}});
+        mapping.put("WORKFLOW:POST", new String[][]{
+                {"onboarding", "*"}, {"loan-applications", "*"}, {"loans", "*"}});
+        mapping.put("WORKFLOW:DELETE", new String[][]{{"loan-applications", "delete"}});
+
+        // Dashboard
+        mapping.put("DASHBOARD:GET", new String[][]{{"dashboard", "read"}});
+
+        // KYC
+        mapping.put("KYC:GET", new String[][]{
+                {"kyc.tahakuk", "verify"}, {"kyc.nafath", "status"},
+                {"kyc.yakeen", "verify"}, {"kyc.screening", "check"},
+                {"kyc.gosi", "fetch"}});
+        mapping.put("KYC:POST", new String[][]{
+                {"kyc.tahakuk", "verify"}, {"kyc.nafath", "initiate"},
+                {"kyc.nafath", "status"}, {"kyc.yakeen", "verify"},
+                {"kyc.screening", "check"}, {"kyc.gosi", "fetch"}});
+
+        // Lending
+        mapping.put("LENDING:GET", new String[][]{
+                {"loan-applications", "read"}, {"loan-applications.tracker", "read"},
+                {"loans", "read"}, {"loans.overview", "read"},
+                {"loans.installments", "read"}, {"loans.contract", "read"},
+                {"loans.receipts", "read"}, {"banks", "read"},
+                {"purpose-of-finance", "read"}, {"finance.calculator", "read"},
+                {"finance.eligibility", "check"}, {"dashboard", "read"}});
+        mapping.put("LENDING:POST", new String[][]{
+                {"loan-applications", "*"}, {"loan-applications", "create"},
+                {"loan-applications", "manage"}, {"loans", "*"}});
+
+        // Onboarding
+        mapping.put("ONBOARDING:GET", new String[][]{
+                {"onboarding", "status"}});
+        mapping.put("ONBOARDING:POST", new String[][]{
+                {"onboarding", "*"}, {"onboarding", "create"},
+                {"onboarding", "update"}, {"onboarding", "manage"}});
+
+        // Middleware
+        mapping.put("MIDDLEWARE:GET", new String[][]{
+                {"middleware.providers", "read"}, {"middleware.provider-apis", "read"},
+                {"middleware.clients", "read"}, {"middleware.client-access", "read"},
+                {"middleware.env-configs", "read"}, {"middleware.callbacks", "read"},
+                {"middleware.logs", "read"}});
+        mapping.put("MIDDLEWARE:POST", new String[][]{
+                {"middleware.providers", "*"}, {"middleware.provider-apis", "*"},
+                {"middleware.clients", "*"}, {"middleware.client-access", "*"},
+                {"middleware.env-configs", "*"}, {"middleware.callbacks", "*"},
+                {"middleware.logs", "*"}});
+
+        // PII Vault
+        mapping.put("PII:GET", new String[][]{{"pii", "read"}});
+        mapping.put("PII:POST", new String[][]{{"pii", "*"}});
+
+        // Bank
+        mapping.put("BANK:GET", new String[][]{{"banks", "read"}});
+
+        // Partner
+        mapping.put("PARTNER:GET", new String[][]{{"partners", "read"}});
+        mapping.put("PARTNER:POST", new String[][]{{"partners", "*"}});
+
+        // Remove existing Casbin policies for this role first
+        var existing = policyEnforcer.getPoliciesForRole(roleCode);
+        for (var policy : existing) {
+            policyEnforcer.removePolicy(policy.get(0), policy.get(1), policy.get(2));
+        }
+
+        // Add new policies based on assigned permissions
+        int count = 0;
+        for (var resourceType : resourceTypes) {
+            var policies = mapping.get(resourceType);
+            if (policies != null) {
+                for (var p : policies) {
+                    policyEnforcer.addPolicy(roleCode, p[0], p[1]);
+                    count++;
+                }
+            }
+        }
+
+        redisSyncService.syncPoliciesToRedis();
+        log.info("Auto-synced {} Casbin policies for role '{}' from {} permissions",
+                count, roleCode, resourceTypes.size());
     }
 }

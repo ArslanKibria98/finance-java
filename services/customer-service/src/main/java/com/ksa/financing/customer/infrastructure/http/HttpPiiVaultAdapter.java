@@ -99,15 +99,32 @@ public class HttpPiiVaultAdapter implements PiiVaultPort {
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
 
         Map<String, Object> body = response.getBody();
-        if (body != null && body.containsKey("piiFields")) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> piiFields = (Map<String, String>) body.get("piiFields");
-            log.info("PII retrieved successfully for globalUid: {}", globalUid);
-            return piiFields;
+        if (body == null) {
+            log.warn("No PII response body for globalUid: {}", globalUid);
+            return Collections.emptyMap();
         }
 
-        log.warn("No PII fields found for globalUid: {}", globalUid);
-        return Collections.emptyMap();
+        // PII vault wraps response in "data" key
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = body.containsKey("data")
+                ? (Map<String, Object>) body.get("data")
+                : body;
+
+        if (data == null || data.isEmpty()) {
+            log.warn("No PII data found for globalUid: {}", globalUid);
+            return Collections.emptyMap();
+        }
+
+        // Convert all values to strings
+        Map<String, String> result = new HashMap<>();
+        for (var entry : data.entrySet()) {
+            if (entry.getValue() != null) {
+                result.put(entry.getKey(), entry.getValue().toString());
+            }
+        }
+
+        log.info("PII retrieved successfully for globalUid: {} ({} fields)", globalUid, result.size());
+        return result;
     }
 
     @Override

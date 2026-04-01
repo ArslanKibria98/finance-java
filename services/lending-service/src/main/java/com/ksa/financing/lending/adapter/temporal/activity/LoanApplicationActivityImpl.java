@@ -89,7 +89,7 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
                 input.shariaStructure() != null ? ShariaStructure.valueOf(input.shariaStructure()) : null,
                 input.requestedAmount(),
                 input.requestedTenureMonths(),
-                input.purposeOfFinance() != null ? PurposeOfFinance.valueOf(input.purposeOfFinance()) : null,
+                input.purposeOfFinance(),
                 null, // purposeOfFinanceOther
                 input.profitRate(),
                 null, // apr

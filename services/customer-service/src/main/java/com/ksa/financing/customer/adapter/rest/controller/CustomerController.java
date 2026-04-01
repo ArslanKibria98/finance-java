@@ -3,8 +3,10 @@ package com.ksa.financing.customer.adapter.rest.controller;
 import com.ksa.financing.customer.application.dto.AddBankAccountRequest;
 import com.ksa.financing.customer.application.dto.AddEmploymentRequest;
 import com.ksa.financing.customer.application.dto.CreateCustomerRequest;
+import com.ksa.financing.customer.application.dto.Customer360Response;
 import com.ksa.financing.customer.application.dto.CustomerResponse;
 import com.ksa.financing.customer.application.dto.UpdateCustomerRequest;
+import com.ksa.financing.customer.application.usecase.GetCustomer360Service;
 import com.ksa.financing.customer.domain.model.BankAccount;
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.EmploymentInfo;
@@ -16,6 +18,7 @@ import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.out.EmploymentInfoRepository;
+import com.ksa.financing.customer.domain.port.out.WalletPort;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,6 +55,9 @@ public class CustomerController {
     private final GetCustomerUseCase getCustomerUseCase;
     private final UpdateCustomerUseCase updateCustomerUseCase;
     private final ManageBankAccountsUseCase manageBankAccountsUseCase;
+    private final WalletPort walletPort;
+    private final com.ksa.financing.customer.domain.port.out.PiiVaultPort piiVaultPort;
+    private final GetCustomer360Service getCustomer360Service;
     // TODO: Refactor to use AddEmploymentUseCase instead of direct repository access (hexagonal violation)
     private final EmploymentInfoRepository employmentInfoRepository;
 
@@ -122,11 +128,121 @@ public class CustomerController {
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
-        UUID tenantId = extractTenantId(jwt);
-        log.info("Getting customer by ID: {} for tenant: {}", id, tenantId);
+        boolean superAdmin = isSuperAdmin(jwt);
+        log.info("Getting customer by ID: {} superAdmin: {}", id, superAdmin);
 
-        Customer customer = getCustomerUseCase.getById(tenantId, id);
+        Customer customer = superAdmin
+                ? getCustomerUseCase.getById(id)
+                : getCustomerUseCase.getById(extractTenantId(jwt), id);
         return ResponseEntity.ok(toResponse(customer));
+    }
+
+    @SecuredEndpoint(obj = "customers", act = "read")
+    @GetMapping("/{id}/detail")
+    @Operation(summary = "Get full customer detail", description = "Returns customer data enriched with PII vault, bank accounts, employment info, and wallet IBAN")
+    @ApiResponse(responseCode = "200", description = "Customer detail found")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<CustomerDetailResponse> getCustomerDetail(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        boolean superAdmin = isSuperAdmin(jwt);
+        log.info("Getting full customer detail for ID: {} superAdmin: {}", id, superAdmin);
+
+        Customer customer = superAdmin
+                ? getCustomerUseCase.getById(id)
+                : getCustomerUseCase.getById(extractTenantId(jwt), id);
+
+        // PII Vault data
+        java.util.Map<String, String> piiData = java.util.Collections.emptyMap();
+        if (customer.getGlobalUid() != null) {
+            try {
+                piiData = piiVaultPort.retrievePii(customer.getGlobalUid(), jwt.getTokenValue());
+            } catch (Exception e) {
+                log.warn("PII vault retrieval failed for globalUid={}: {}", customer.getGlobalUid(), e.getMessage());
+            }
+        }
+
+        // Bank accounts
+        List<BankAccountResponse> bankAccounts = List.of();
+        try {
+            bankAccounts = manageBankAccountsUseCase.getBankAccounts(customer.getTenantId(), id).stream()
+                    .map(this::toBankAccountResponse)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Bank accounts retrieval failed for customerId={}: {}", id, e.getMessage());
+        }
+
+        // Employment info
+        List<EmploymentInfoResponse> employments = List.of();
+        try {
+            employments = employmentInfoRepository.findAllByCustomerId(id).stream()
+                    .map(this::toEmploymentResponse)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Employment retrieval failed for customerId={}: {}", id, e.getMessage());
+        }
+
+        // Wallet IBAN
+        String iban = null;
+        try {
+            iban = walletPort.getIbanByCustomerId(customer.getTenantId(), id).orElse(null);
+        } catch (Exception e) {
+            log.warn("Wallet IBAN retrieval failed for customerId={}: {}", id, e.getMessage());
+        }
+
+        return ResponseEntity.ok(new CustomerDetailResponse(
+                toResponse(customer),
+                piiData,
+                bankAccounts,
+                employments,
+                iban
+        ));
+    }
+
+    @SecuredEndpoint(obj = "customers", act = "read")
+    @GetMapping("/{id}/360")
+    @Operation(summary = "Get Customer 360 view", description = "Returns comprehensive customer data aggregated from PII Vault, KYC Adapter, Risk Service, Lending Service, Onboarding Workflow, and Wallet Service")
+    @ApiResponse(responseCode = "200", description = "Customer 360 view retrieved")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<Customer360Response> getCustomer360(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        boolean superAdmin = isSuperAdmin(jwt);
+        UUID tenantId = superAdmin ? null : extractTenantId(jwt);
+        log.info("Getting Customer 360 view for ID: {} superAdmin: {}", id, superAdmin);
+
+        Customer360Response response = getCustomer360Service.get360View(
+                id, tenantId, superAdmin, jwt.getTokenValue());
+        return ResponseEntity.ok(response);
+    }
+
+    @SecuredEndpoint(obj = "customers", act = "read")
+    @GetMapping("/{id}/profile")
+    @Operation(summary = "Get customer profile summary", description = "Returns lightweight profile: firstName, lastName, email, and primary IBAN")
+    @ApiResponse(responseCode = "200", description = "Profile found")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<CustomerProfileResponse> getCustomerProfile(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Getting customer profile for ID: {} tenant: {}", id, tenantId);
+
+        Customer customer = getCustomerUseCase.getById(id);
+        String iban = walletPort.getIbanByCustomerId(customer.getTenantId(), id).orElse(null);
+
+        return ResponseEntity.ok(new CustomerProfileResponse(
+                customer.getId(),
+                customer.getFirstName(),
+                customer.getLastName(),
+                customer.getEmail(),
+                customer.getNationalId(),
+                customer.getMobileNumber(),
+                customer.getDateOfBirth() != null ? customer.getDateOfBirth().toString() : null,
+                iban
+        ));
     }
 
     @SecuredEndpoint(obj = "customers", act = "read")
@@ -188,6 +304,7 @@ public class CustomerController {
         }
 
         List<CustomerResponse> responses = customers.stream()
+                .sorted(java.util.Comparator.comparing(Customer::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
                 .map(this::toResponse)
                 .toList();
         return ResponseEntity.ok(responses);
@@ -385,6 +502,7 @@ public class CustomerController {
                 customer.getId(),
                 customer.getCifNumber(),
                 customer.getCustomerType() != null ? customer.getCustomerType().name() : null,
+                customer.getNationalId(),
                 customer.getNationalIdType(),
                 customer.getFirstName(),
                 customer.getLastName(),
@@ -460,6 +578,17 @@ public class CustomerController {
             java.time.Instant createdAt
     ) {}
 
+    public record CustomerProfileResponse(
+            UUID customerId,
+            String firstName,
+            String lastName,
+            String email,
+            String nationalId,
+            String mobileNumber,
+            String dateOfBirth,
+            String iban
+    ) {}
+
     public record EmploymentInfoResponse(
             UUID id,
             String employerName,
@@ -472,5 +601,13 @@ public class CustomerController {
             boolean verified,
             boolean isCurrent,
             java.time.Instant createdAt
+    ) {}
+
+    public record CustomerDetailResponse(
+            CustomerResponse customer,
+            java.util.Map<String, String> piiVault,
+            List<BankAccountResponse> bankAccounts,
+            List<EmploymentInfoResponse> employments,
+            String walletIban
     ) {}
 }

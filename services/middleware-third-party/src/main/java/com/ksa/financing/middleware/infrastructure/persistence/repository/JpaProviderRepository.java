@@ -15,7 +15,7 @@ public interface JpaProviderRepository extends JpaRepository<ThirdPartyProviderJ
 
     Optional<ThirdPartyProviderJpaEntity> findByCodeAndTenantIdAndDeletedAtIsNull(String code, UUID tenantId);
 
-    List<ThirdPartyProviderJpaEntity> findByTenantIdAndDeletedAtIsNullOrderByNameAsc(UUID tenantId);
+    List<ThirdPartyProviderJpaEntity> findByTenantIdAndDeletedAtIsNullOrderByNameEnAsc(UUID tenantId);
 
     boolean existsByCodeAndTenantIdAndDeletedAtIsNull(String code, UUID tenantId);
 }

@@ -21,10 +21,16 @@ public class AssessmentSessionRepositoryImpl implements AssessmentSessionReposit
     }
     @Override
     public Optional<AssessmentSession> findById(UUID tenantId, UUID id) {
+        if (tenantId == null) {
+            return jpa.findById(id).map(RiskPersistenceMapper::toDomain);
+        }
         return jpa.findByIdAndTenantId(id, tenantId).map(RiskPersistenceMapper::toDomain);
     }
     @Override
     public List<AssessmentSession> findByEntityReference(UUID tenantId, String entityReference) {
+        if (tenantId == null) {
+            return jpa.findAllByEntityReference(entityReference).stream().map(RiskPersistenceMapper::toDomain).toList();
+        }
         return jpa.findAllByTenantIdAndEntityReference(tenantId, entityReference).stream().map(RiskPersistenceMapper::toDomain).toList();
     }
     @Override

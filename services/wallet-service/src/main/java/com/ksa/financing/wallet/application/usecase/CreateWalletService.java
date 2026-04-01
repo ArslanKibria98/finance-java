@@ -63,6 +63,7 @@ public class CreateWalletService implements CreateWalletUseCase {
         wallet.setSingleTopUpLimit(new BigDecimal("10000"));
         wallet.setTodayTopUpAmount(BigDecimal.ZERO);
         wallet.setMonthTopUpAmount(BigDecimal.ZERO);
+        wallet.setIban(command.iban() != null ? command.iban() : generateIban());
         wallet.setAutoDebitEnabled(true);
 
         Wallet saved = walletRepository.save(wallet);
@@ -113,5 +114,14 @@ public class CreateWalletService implements CreateWalletUseCase {
             log.warn("Failed to start Fineract sync workflow for wallet={}: {}. Manual retry needed.",
                     wallet.getWalletNumber(), e.getMessage());
         }
+    }
+
+    private String generateIban() {
+        var rng = new java.util.Random();
+        var sb = new StringBuilder("SA");
+        sb.append(String.format("%02d", rng.nextInt(100)));
+        sb.append("80"); // bank code
+        for (int i = 0; i < 18; i++) sb.append(rng.nextInt(10));
+        return sb.toString();
     }
 }

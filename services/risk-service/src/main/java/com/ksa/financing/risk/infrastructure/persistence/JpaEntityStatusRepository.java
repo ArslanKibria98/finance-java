@@ -12,5 +12,7 @@ import java.util.UUID;
 public interface JpaEntityStatusRepository extends JpaRepository<EntityStatusJpaEntity, UUID> {
     Optional<EntityStatusJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
     Optional<EntityStatusJpaEntity> findFirstByTenantIdAndEntityReferenceOrderByCreatedAtDesc(UUID tenantId, String entityReference);
+    Optional<EntityStatusJpaEntity> findFirstByEntityReferenceOrderByCreatedAtDesc(String entityReference);
     List<EntityStatusJpaEntity> findAllByTenantIdAndEntityReferenceOrderByCreatedAtDesc(UUID tenantId, String entityReference);
+    List<EntityStatusJpaEntity> findAllByEntityReferenceOrderByCreatedAtDesc(String entityReference);
 }

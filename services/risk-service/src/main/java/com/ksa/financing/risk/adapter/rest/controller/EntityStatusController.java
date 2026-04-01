@@ -34,7 +34,7 @@ public class EntityStatusController {
     public EntityStatusRecord getCurrentStatus(
             @PathVariable String entityReference,
             @AuthenticationPrincipal Jwt jwt) {
-        UUID tenantId = extractTenantId(jwt);
+        UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
         return manageEntityStatusUseCase.getCurrentStatus(tenantId, entityReference);
     }
 
@@ -44,7 +44,7 @@ public class EntityStatusController {
     public List<EntityStatusRecord> getStatusHistory(
             @PathVariable String entityReference,
             @AuthenticationPrincipal Jwt jwt) {
-        UUID tenantId = extractTenantId(jwt);
+        UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
         return manageEntityStatusUseCase.getStatusHistory(tenantId, entityReference);
     }
 
@@ -89,6 +89,14 @@ public class EntityStatusController {
             String complianceStatus,
             String reason
     ) {}
+
+    @SuppressWarnings("unchecked")
+    private boolean isSuperAdmin(Jwt jwt) {
+        var realmAccess = jwt.getClaimAsMap("realm_access");
+        if (realmAccess == null) return false;
+        var roles = (java.util.Collection<String>) realmAccess.get("roles");
+        return roles != null && roles.contains("super_admin");
+    }
 
     private UUID extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");

@@ -32,6 +32,10 @@ public class RiskParameterRepositoryImpl implements RiskParameterRepository {
     }
     @Override
     public List<RiskParameter> findActiveByRiskType(UUID tenantId, RiskType riskType) {
+        if (tenantId == null) {
+            return jpa.findAllByRiskTypeAndActiveTrue(RiskParameterJpaEntity.RiskTypeEnum.valueOf(riskType.name()))
+                    .stream().map(RiskPersistenceMapper::toDomain).toList();
+        }
         return jpa.findAllByTenantIdAndRiskTypeAndActiveTrue(tenantId, RiskParameterJpaEntity.RiskTypeEnum.valueOf(riskType.name()))
                 .stream().map(RiskPersistenceMapper::toDomain).toList();
     }

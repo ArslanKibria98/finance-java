@@ -16,6 +16,7 @@ public class CustomerMapper {
             c.getId(),
             c.getCifNumber(),
             c.getCustomerType() != null ? c.getCustomerType().name() : null,
+            c.getNationalId(),
             c.getNationalIdType(),
             c.getFirstName(),
             c.getLastName(),

@@ -15,9 +15,9 @@ public interface JpaProviderApiRepository extends JpaRepository<ProviderApiJpaEn
 
     Optional<ProviderApiJpaEntity> findByCodeAndTenantIdAndDeletedAtIsNull(String code, UUID tenantId);
 
-    List<ProviderApiJpaEntity> findByProviderIdAndTenantIdAndDeletedAtIsNullOrderByNameAsc(UUID providerId, UUID tenantId);
+    List<ProviderApiJpaEntity> findByProviderIdAndTenantIdAndDeletedAtIsNullOrderByNameEnAsc(UUID providerId, UUID tenantId);
 
-    List<ProviderApiJpaEntity> findByTenantIdAndDeletedAtIsNullOrderByNameAsc(UUID tenantId);
+    List<ProviderApiJpaEntity> findByTenantIdAndDeletedAtIsNullOrderByNameEnAsc(UUID tenantId);
 
     boolean existsByCodeAndTenantIdAndDeletedAtIsNull(String code, UUID tenantId);
 }

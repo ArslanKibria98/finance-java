@@ -92,23 +92,23 @@ public class AssessmentController {
     }
 
     @SecuredEndpoint(obj = "risk.assessment", act = "read")
-    @GetMapping("/{sessionId}")
-    @Operation(summary = "Get an assessment session by ID")
-    public AssessmentSession getSession(
-            @PathVariable UUID sessionId,
-            @AuthenticationPrincipal Jwt jwt) {
-        UUID tenantId = extractTenantId(jwt);
-        return runAssessmentUseCase.getSession(tenantId, sessionId);
-    }
-
-    @SecuredEndpoint(obj = "risk.assessment", act = "read")
     @GetMapping("/entity/{entityReference}")
     @Operation(summary = "Get all assessment sessions for an entity")
     public List<AssessmentSession> getSessionsByEntity(
             @PathVariable String entityReference,
             @AuthenticationPrincipal Jwt jwt) {
-        UUID tenantId = extractTenantId(jwt);
+        UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
         return runAssessmentUseCase.getSessionsByEntity(tenantId, entityReference);
+    }
+
+    @SecuredEndpoint(obj = "risk.assessment", act = "read")
+    @GetMapping("/{sessionId}")
+    @Operation(summary = "Get an assessment session by ID")
+    public AssessmentSession getSession(
+            @PathVariable UUID sessionId,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
+        return runAssessmentUseCase.getSession(tenantId, sessionId);
     }
 
     @SecuredEndpoint(obj = "risk.assessment", act = "read")
@@ -117,7 +117,7 @@ public class AssessmentController {
     public List<AssessmentAnswer> getAnswersBySession(
             @PathVariable UUID sessionId,
             @AuthenticationPrincipal Jwt jwt) {
-        UUID tenantId = extractTenantId(jwt);
+        UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
         return runAssessmentUseCase.getAnswersBySession(tenantId, sessionId);
     }
 
@@ -127,7 +127,7 @@ public class AssessmentController {
     public List<ScoreBreakdown> getScoreBreakdown(
             @PathVariable UUID sessionId,
             @AuthenticationPrincipal Jwt jwt) {
-        UUID tenantId = extractTenantId(jwt);
+        UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
         return runAssessmentUseCase.getScoreBreakdown(tenantId, sessionId);
     }
 
@@ -160,6 +160,14 @@ public class AssessmentController {
             String answerValue,
             String languageCode
     ) {}
+
+    @SuppressWarnings("unchecked")
+    private boolean isSuperAdmin(Jwt jwt) {
+        var realmAccess = jwt.getClaimAsMap("realm_access");
+        if (realmAccess == null) return false;
+        var roles = (java.util.Collection<String>) realmAccess.get("roles");
+        return roles != null && roles.contains("super_admin");
+    }
 
     private UUID extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");

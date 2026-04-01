@@ -39,6 +39,13 @@ public class EnvConfigController {
         return ResponseEntity.ok(manageEnvConfigUseCase.listAll(tenantId));
     }
 
+    @SecuredEndpoint(obj = "middleware.env-configs", act = "read")
+    @GetMapping("/all")
+    public ResponseEntity<List<EnvConfigResponse>> listAllConfigs(@AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        return ResponseEntity.ok(manageEnvConfigUseCase.listAll(tenantId));
+    }
+
     @SecuredEndpoint(obj = "middleware.env-configs", act = "manage")
     @GetMapping("/{id}")
     public ResponseEntity<EnvConfigResponse> getById(@PathVariable UUID id,

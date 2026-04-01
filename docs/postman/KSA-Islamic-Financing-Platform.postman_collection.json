@@ -2223,6 +2223,33 @@
             "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}/employment",
             "description": "Kong -> customer-service:8084\nJWT REQUIRED — Add employment and salary information.\n@SecuredEndpoint(obj=\"customers.employment\", act=\"create\")\n\nemploymentType: PRIVATE | GOVERNMENT | SELF_EMPLOYED\n\nSalary fields used for:\n  - Debt Burden Ratio (DBR) calculation in credit decisioning\n  - GOSI salary verification cross-check\n  - SAMA affordability assessment"
           }
+        },
+        {
+          "name": "[customer-service] Get Customer Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('Customer profile retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(json.customerId).to.not.be.empty;",
+                  "    pm.expect(json.firstName).to.not.be.empty;",
+                  "    pm.expect(json.lastName).to.not.be.empty;",
+                  "});",
+                  "console.log('Name: ' + json.firstName + ' ' + json.lastName);",
+                  "console.log('Email: ' + json.email);",
+                  "console.log('IBAN: ' + json.iban);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}/profile",
+            "description": "Kong -> customer-service:8084\nJWT REQUIRED — Get lightweight customer profile (firstName, lastName, email, wallet IBAN).\n@SecuredEndpoint(obj=\"customers\", act=\"read\")\n\nIBAN comes from the customer's wallet (wallet-service), NOT from bank accounts.\nCustomer-service calls wallet-service internal API to fetch IBAN.\nIf wallet not found or wallet-service unavailable, iban is null (graceful fallback).\n\nResponse:\n{\n  \"customerId\": \"uuid\",\n  \"firstName\": \"Ahmed\",\n  \"lastName\": \"Al-Rashid\",\n  \"email\": \"ahmed@example.com\",\n  \"iban\": \"SA0380000000608010167519\"\n}"
+          }
         }
       ]
     },
@@ -9903,6 +9930,32 @@
                   ]
                 },
                 "description": "Delete an environment config.\n\nRoles: super_admin, admin\nReturns: 204 No Content"
+              }
+            },
+            {
+              "name": "[middleware] Get All Env Configs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/env-configs/all",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "middleware-third-party",
+                    "api",
+                    "v1",
+                    "env-configs",
+                    "all"
+                  ]
+                },
+                "description": "Get all environment configs across all APIs.\n\nRoles: super_admin, admin\nReturns: 200 OK with list of all env configs."
               }
             }
           ]

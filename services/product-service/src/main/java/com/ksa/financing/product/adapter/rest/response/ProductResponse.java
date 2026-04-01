@@ -87,14 +87,15 @@ public record ProductResponse(
 
     public record FeeSettingsResponse(
         UUID id,
-        BigDecimal minFinancingAmount,
-        BigDecimal maxFinancingAmount,
-        BigDecimal vatPercentage,
         BigDecimal revenueEligibilityThreshold,
         BigDecimal maxDbrPercentage,
         BigDecimal globalDbrPercentage,
         String dbrCalculationMethod,
-        String dbrExceptions
+        String dbrExceptions,
+        BigDecimal minFinancingAmount,
+        BigDecimal maxFinancingAmount,
+        Integer minTenure,
+        Integer maxTenure
     ) {}
 
     public record ApplicationStepResponse(

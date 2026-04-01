@@ -9,5 +9,9 @@ public enum PurposeOfFinance {
     EDUCATION,
     PERSONAL,
     MEDICAL_TREATMENT,
+    VEHICLE_PURCHASE,
+    HOME_RENOVATION,
+    DEBT_CONSOLIDATION,
+    BUSINESS,
     OTHER
 }

@@ -127,21 +127,40 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
 
         String adminToken = obtainAdminToken(realm);
 
-        String roleUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/roles/" + roleName;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
 
-        HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-        ResponseEntity<Map> roleResponse = restTemplate.exchange(
-                roleUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
-        );
+        // Try to get existing role from Keycloak
+        String roleUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/roles/" + roleName;
+        ResponseEntity<Map> roleResponse;
+        try {
+            HttpEntity<Void> getRequest = new HttpEntity<>(headers);
+            roleResponse = restTemplate.exchange(
+                    roleUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
+            );
+        } catch (Exception e) {
+            // Role doesn't exist in Keycloak — create it
+            log.info("Role '{}' not found in Keycloak, creating it in realm '{}'", roleName, realm);
+            String createRoleUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/roles";
+            Map<String, Object> newRole = Map.of("name", roleName);
+            HttpEntity<Map<String, Object>> createRequest = new HttpEntity<>(newRole, headers);
+            restTemplate.postForEntity(createRoleUrl, createRequest, Void.class);
+            log.info("Role '{}' created in Keycloak realm '{}'", roleName, realm);
+
+            // Now fetch the created role
+            HttpEntity<Void> getRequest = new HttpEntity<>(headers);
+            roleResponse = restTemplate.exchange(
+                    roleUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
+            );
+        }
 
         if (roleResponse.getBody() == null) {
-            log.warn("Role '{}' not found in realm '{}'", roleName, realm);
+            log.warn("Role '{}' not found in realm '{}' even after creation attempt", roleName, realm);
             return;
         }
 
+        // Assign role to user
         String assignUrl = keycloakBaseUrl + "/admin/realms/" + realm
                 + "/users/" + keycloakUserId + "/role-mappings/realm";
         HttpEntity<List<Map>> assignRequest = new HttpEntity<>(List.of(roleResponse.getBody()), headers);

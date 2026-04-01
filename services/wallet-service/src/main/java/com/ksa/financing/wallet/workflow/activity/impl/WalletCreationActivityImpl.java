@@ -30,7 +30,8 @@ public class WalletCreationActivityImpl implements WalletCreationActivity {
                     new CreateWalletUseCase.CreateWalletCommand(
                             tenantUuid,
                             UUID.fromString(input.customerId()),
-                            input.currency() != null ? input.currency() : "SAR"
+                            input.currency() != null ? input.currency() : "SAR",
+                            input.iban()
                     )
             );
 

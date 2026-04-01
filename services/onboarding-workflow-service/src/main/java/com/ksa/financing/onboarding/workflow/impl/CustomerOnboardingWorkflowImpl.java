@@ -500,36 +500,15 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                     }
                 }
 
-                // 6B: EDD Required path (isPep = true)
+                // 6B: PEP data (from submit-info, no separate EDD step)
                 if (isPep) {
-                    updateState(OnboardingStep.EDD_REQUIRED);
-                    state.setEddStatus("PENDING");
-                    log.info("EDD required for workflow: {} — waiting for EDD form submission", workflowId);
-
-                    boolean eddSignalReceived = Workflow.await(Duration.ofHours(24), () -> eddFormReceived);
-                    if (!eddSignalReceived) {
-                        return fail(workflowId, "EDD form submission timed out (24 hours)");
-                    }
-
-                    // Validate device trust for EDD signal — flag but don't hard-fail
-                    if (eddFormSignal.deviceId() != null && state.getInitialDeviceId() != null
-                            && !state.getInitialDeviceId().equals(eddFormSignal.deviceId())) {
-                        state.setDeviceTrusted(false);
-                        log.warn("Device changed during EDD: initial={}, current={} — flagged as untrusted (continuing)",
-                                state.getInitialDeviceId(), eddFormSignal.deviceId());
-                    }
-
                     state.setEddStatus("SUBMITTED");
-                    state.setEddPoliticalPosition(eddFormSignal.politicalPosition());
-                    state.setEddGovernmentBody(eddFormSignal.governmentBody());
-                    state.setEddCountryOfInfluence(eddFormSignal.countryOfInfluence());
-                    state.setEddSourceOfWealth(eddFormSignal.primarySourceOfWealth());
-                    state.setEddEstimatedNetWorth(eddFormSignal.estimatedNetWorth());
-                    state.setEddSourceOfFunds(eddFormSignal.sourceOfFunds());
-                    updateState(OnboardingStep.EDD_SUBMITTED);
-                    log.info("EDD form submitted for workflow: {} — position={}, country={}, wealth={}",
-                            workflowId, eddFormSignal.politicalPosition(),
-                            eddFormSignal.countryOfInfluence(), eddFormSignal.primarySourceOfWealth());
+                    state.setEddSourceOfWealth(additionalInfoSignal.sourceOfIncome());
+                    state.setEddEstimatedNetWorth(additionalInfoSignal.estimatedNetWorth());
+                    state.setEddSourceOfFunds(additionalInfoSignal.sourceOfFunds());
+                    log.info("PEP data captured from submit-info for workflow: {} — sourceOfFunds={}, netWorth={}, sourceOfIncome={}",
+                            workflowId, additionalInfoSignal.sourceOfFunds(),
+                            additionalInfoSignal.estimatedNetWorth(), additionalInfoSignal.sourceOfIncome());
                 }
 
                 // 6C: AML Risk Scoring — calls risk-service weighted scoring engine
@@ -578,10 +557,15 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                                 amlResult.riskLevel(), amlResult.dominantOverride());
 
                         // AML HIGH = auto-block during onboarding
-                        if ("HIGH".equals(amlResult.riskLevel())) {
+                        if ("HIGH".equals(amlResult.riskLevel()) && !isPep) {
+                            // Only block non-PEP customers with HIGH AML score
+                            // PEP customers are expected to have HIGH score — their EDD data was already captured
                             return fail(workflowId, "AML risk too high: score=" + amlResult.totalScore()
                                     + ", level=" + amlResult.riskLevel()
                                     + (amlResult.dominantOverride() ? ", dominantCategory=" + amlResult.dominantCategory() : ""));
+                        }
+                        if ("HIGH".equals(amlResult.riskLevel()) && isPep) {
+                            log.info("PEP customer with HIGH AML score (expected) — continuing with EDD data: workflow={}", workflowId);
                         }
                     } else {
                         log.warn("AML scoring failed (continuing): {}", amlResult.errorMessage());
@@ -609,6 +593,19 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                     state.setRiskDecision(riskResult.decision());
                     log.info("Risk decision: level={}, score={}, decision={}",
                             riskResult.riskLevel(), riskResult.riskScore(), riskResult.decision());
+
+                    // Update customer risk grade based on score
+                    if (state.getCustomerId() != null) {
+                        try {
+                            updateCustomerActivity.updateRiskGrade(
+                                    new UpdateCustomerActivity.UpdateRiskGradeInput(
+                                            state.getCustomerId(), riskResult.riskScore(), request.tenantId()
+                                    )
+                            );
+                        } catch (Exception e) {
+                            log.warn("Risk grade update failed (continuing): {}", e.getMessage());
+                        }
+                    }
 
                     // Block or Hold = fail
                     if ("BLOCK".equals(riskResult.decision())) {
@@ -659,6 +656,18 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                 log.warn("Customer update with additional info failed (continuing): {}", e.getMessage());
             }
 
+            // Update KYC status to VERIFIED (Nafath + Yakeen completed)
+            try {
+                updateCustomerActivity.updateKycStatus(
+                        new UpdateCustomerActivity.UpdateKycStatusInput(
+                                state.getCustomerId(), "VERIFIED", request.tenantId()
+                        )
+                );
+                log.info("KYC status updated to VERIFIED for customer: {}", state.getCustomerId());
+            } catch (Exception e) {
+                log.warn("KYC status update failed (continuing): {}", e.getMessage());
+            }
+
             // Salary fetch (non-critical)
             log.info("Step 5c: Salary fetch (GOSI) for workflow: {}", workflowId);
 
@@ -682,7 +691,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                 log.info("Step 5c: Wallet creation for workflow: {}", workflowId);
                 var walletResult = walletActivity.createWallet(
                         new WalletCreationActivity.WalletCreationInput(
-                                state.getCustomerId(), request.tenantId(), "SAR"
+                                state.getCustomerId(), request.tenantId(), "SAR",
+                                additionalInfoSignal != null ? additionalInfoSignal.iban() : null
                         )
                 );
                 if (walletResult.created()) {

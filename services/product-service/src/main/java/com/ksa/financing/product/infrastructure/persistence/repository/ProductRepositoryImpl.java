@@ -89,7 +89,7 @@ public class ProductRepositoryImpl implements ProductRepository {
                 .map(ProductPersistenceMapper::toDomain)
                 .toList();
 
-        // Enrich with country and category names for listing
+        // Enrich with country, category names, and admin fee slabs for listing
         products.forEach(product -> {
             if (product.getCountryId() != null) {
                 jpaCountryRepository.findById(product.getCountryId())
@@ -110,6 +110,16 @@ public class ProductRepositoryImpl implements ProductRepository {
                             product.setSubCategoryNameAr(sub.getNameAr());
                         });
             }
+            // Load admin fee slabs for deriving min/max financing and tenure
+            var slabs = jpaAdminFeeSlabRepository
+                    .findByProductIdAndTenantIdOrderBySortOrder(product.getId(), product.getTenantId())
+                    .stream()
+                    .map(s -> new AdminFeeSlab(s.getId(), s.getMinAmount(), s.getMaxAmount(),
+                            s.getProfitPercentage(), s.getProcessingFee(), s.getAdminFee(),
+                            s.getPartnerScope(), s.getStatus(), s.getSortOrder(),
+                            s.getMinTenure(), s.getMaxTenure()))
+                    .toList();
+            product.setAdminFeeSlabs(slabs);
         });
 
         return products;
@@ -141,8 +151,7 @@ public class ProductRepositoryImpl implements ProductRepository {
         // Fee Settings
         jpaFeeSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
                 .ifPresent(fs -> product.setFeeSettings(new FeeSettings(
-                        fs.getId(), fs.getMinFinancingAmount(), fs.getMaxFinancingAmount(),
-                        fs.getVatPercentage(), fs.getRevenueEligibilityThreshold(),
+                        fs.getId(), fs.getRevenueEligibilityThreshold(),
                         fs.getMaxDbrPercentage(), fs.getGlobalDbrPercentage(),
                         fs.getDbrCalculationMethod(), fs.getDbrExceptions())));
 

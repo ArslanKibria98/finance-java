@@ -37,8 +37,7 @@ public interface ManageProductSettingsUseCase {
     record UpdateTermsConditionsCommand(String termsEn, String termsAr) {}
 
     record UpdateFeeSettingsCommand(
-        BigDecimal minFinancingAmount, BigDecimal maxFinancingAmount,
-        BigDecimal vatPercentage, BigDecimal revenueEligibilityThreshold,
+        BigDecimal revenueEligibilityThreshold,
         BigDecimal maxDbrPercentage, BigDecimal globalDbrPercentage,
         String dbrCalculationMethod, String dbrExceptions
     ) {}

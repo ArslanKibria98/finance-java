@@ -21,10 +21,16 @@ public class EntityStatusRepositoryImpl implements EntityStatusRepository {
     }
     @Override
     public Optional<EntityStatusRecord> findLatestByEntityReference(UUID tenantId, String entityReference) {
+        if (tenantId == null) {
+            return jpa.findFirstByEntityReferenceOrderByCreatedAtDesc(entityReference).map(RiskPersistenceMapper::toDomain);
+        }
         return jpa.findFirstByTenantIdAndEntityReferenceOrderByCreatedAtDesc(tenantId, entityReference).map(RiskPersistenceMapper::toDomain);
     }
     @Override
     public List<EntityStatusRecord> findByEntityReference(UUID tenantId, String entityReference) {
+        if (tenantId == null) {
+            return jpa.findAllByEntityReferenceOrderByCreatedAtDesc(entityReference).stream().map(RiskPersistenceMapper::toDomain).toList();
+        }
         return jpa.findAllByTenantIdAndEntityReferenceOrderByCreatedAtDesc(tenantId, entityReference).stream().map(RiskPersistenceMapper::toDomain).toList();
     }
     @Override

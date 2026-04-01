@@ -519,17 +519,17 @@ public class OnboardingController {
                 request.iban(),
                 request.accountHolderName(),
                 deviceInfo,
-                Boolean.TRUE.equals(request.isPep())
+                Boolean.TRUE.equals(request.isPep()),
+                request.sourceOfFunds(),
+                request.estimatedNetWorth(),
+                request.sourceOfIncome()
         );
 
         SubmitAdditionalInfoUseCase.SubmitAdditionalInfoResult result =
                 submitAdditionalInfoUseCase.submit(workflowId, signal);
 
-        // Wait for the correct target step based on isPep flag:
-        //   isPep=true  -> workflow stops at EDD_REQUIRED (waiting for EDD form)
-        //   isPep=false -> workflow runs through to PIN_SETUP (waiting for PIN)
-        boolean isPep = Boolean.TRUE.equals(request.isPep());
-        OnboardingStep expectedStep = isPep ? OnboardingStep.EDD_REQUIRED : OnboardingStep.PIN_SETUP;
+        // Wait for workflow to reach PIN_SETUP (both isPep=true and false go to PIN_SETUP now)
+        OnboardingStep expectedStep = OnboardingStep.PIN_SETUP;
         OnboardingState updatedState = queryStateWithRetry(workflowId, expectedStep, 20, 500L);
         OnboardingStep currentStep = updatedState.getCurrentStep() != null
                 ? updatedState.getCurrentStep() : OnboardingStep.SCREENING;
@@ -781,15 +781,27 @@ public class OnboardingController {
         // If no workflow exists, check if customer is already registered
         if (currentStep == OnboardingStep.INITIATED && state.getCustomerId() == null) {
             if (isCustomerRegistered(nationalId)) {
+                var completedSteps = StepInfo.buildSteps(OnboardingStep.COMPLETED);
                 OnboardingStatusResponse completeResponse = new OnboardingStatusResponse(
-                        workflowId, "COMPLETE", "COMPLETE", "LOGIN",
+                        workflowId, "COMPLETED", "COMPLETED", "LOGIN",
                         null, null, null, null, null, 0, false, null,
-                        "An account already exists with this ID. Please log in.",
-                        null, null, List.of(),
+                        null,
+                        null, null, completedSteps,
                         null, null
                 );
                 return ResponseEntity.ok(completeResponse);
             }
+        }
+
+        // If failureReason exists and workflow didn't complete successfully, force FAILED
+        if (state.getFailureReason() != null && !state.getFailureReason().isBlank()
+                && currentStep != OnboardingStep.FAILED
+                && currentStep != OnboardingStep.COMPLETED) {
+            currentStep = OnboardingStep.FAILED;
+        }
+        // If workflow completed successfully, clear any leftover failure reason
+        if (currentStep == OnboardingStep.COMPLETED && state.getFailureReason() != null) {
+            state.setFailureReason(null);
         }
 
         // Infer which step failed from state data

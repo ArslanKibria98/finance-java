@@ -129,3 +129,5 @@ ksa:
   authorization:
     enabled: true
     cache-key-prefix: casbin:policies
+    skip-patterns:
+      - /internal/**

@@ -5,9 +5,6 @@ import java.util.UUID;
 
 public record FeeSettings(
     UUID id,
-    BigDecimal minFinancingAmount,
-    BigDecimal maxFinancingAmount,
-    BigDecimal vatPercentage,
     BigDecimal revenueEligibilityThreshold,
     BigDecimal maxDbrPercentage,
     BigDecimal globalDbrPercentage,

@@ -39,6 +39,9 @@ public record StepSignalResponse(
         @Schema(description = "Application steps with progress tracking")
         List<LoanApplicationStepInfo> steps,
 
+        @Schema(description = "Pre-qualification / finance calculation data")
+        PreQualificationData preQualification,
+
         @Schema(description = "Current workflow state with all data")
         WorkflowState workflowState
 
@@ -163,7 +166,7 @@ public record StepSignalResponse(
 
     public static StepSignalResponse signalOnly(String step) {
         return new StepSignalResponse("SIGNAL_SENT", step,
-                null, null, null, "active", null, null, null);
+                null, null, null, "active", null, null, null, null);
     }
 
     private static StepSignalResponse buildWithSteps(String step, ApplicationStatusInfo statusInfo,
@@ -180,6 +183,14 @@ public record StepSignalResponse(
         var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
         var overallStatus = resolveOverallStatus(appStatus);
 
+        // Calculate preQualification from workflow data
+        PreQualificationData preQual = null;
+        if (statusInfo != null && statusInfo.basicInfo() != null) {
+            var info = statusInfo.basicInfo();
+            preQual = PreQualificationData.calculate(
+                    info.requestedAmount(), info.requestedTenureMonths(), info.profitRate());
+        }
+
         return new StepSignalResponse(
                 "SIGNAL_SENT",
                 step,
@@ -189,6 +200,7 @@ public record StepSignalResponse(
                 overallStatus,
                 nextAction,
                 trackerSteps,
+                preQual,
                 wfState
         );
     }

@@ -43,7 +43,7 @@ public class LoanApplicationPersistenceMapper {
         entity.setShariaStructure(agg.getShariaStructure() != null ? agg.getShariaStructure().name() : null);
         entity.setRequestedAmount(agg.getRequestedAmount());
         entity.setRequestedTenureMonths(agg.getRequestedTenureMonths());
-        entity.setPurposeOfFinance(agg.getPurposeOfFinance() != null ? agg.getPurposeOfFinance().name() : null);
+        entity.setPurposeOfFinance(agg.getPurposeOfFinance());
         entity.setPurposeOfFinanceOther(agg.getPurposeOfFinanceOther());
         entity.setProfitRate(agg.getProfitRate());
         entity.setApr(agg.getApr());
@@ -155,7 +155,7 @@ public class LoanApplicationPersistenceMapper {
                 e.getShariaStructure() != null ? ShariaStructure.valueOf(e.getShariaStructure()) : null,
                 e.getRequestedAmount(),
                 e.getRequestedTenureMonths() != null ? e.getRequestedTenureMonths() : 0,
-                e.getPurposeOfFinance() != null ? PurposeOfFinance.valueOf(e.getPurposeOfFinance()) : null,
+                e.getPurposeOfFinance(),
                 e.getPurposeOfFinanceOther(),
                 e.getProfitRate(),
                 e.getApr(),

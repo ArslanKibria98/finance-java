@@ -23,6 +23,33 @@ public interface UpdateCustomerActivity {
     @ActivityMethod
     UpdateCustomerResult updateWithAdditionalInfo(UpdateCustomerInput input);
 
+    @ActivityMethod
+    UpdateKycStatusResult updateKycStatus(UpdateKycStatusInput input);
+
+    @ActivityMethod
+    UpdateRiskGradeResult updateRiskGrade(UpdateRiskGradeInput input);
+
+    record UpdateRiskGradeInput(
+        String customerId,
+        int riskScore,
+        String tenantId
+    ) {}
+
+    record UpdateRiskGradeResult(
+        boolean updated,
+        String riskGrade
+    ) {}
+
+    record UpdateKycStatusInput(
+        String customerId,
+        String kycStatus,
+        String tenantId
+    ) {}
+
+    record UpdateKycStatusResult(
+        boolean updated
+    ) {}
+
     record UpdateCustomerInput(
         String customerId,
         String email,

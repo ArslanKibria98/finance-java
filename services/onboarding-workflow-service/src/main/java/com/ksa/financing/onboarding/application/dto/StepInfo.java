@@ -131,7 +131,7 @@ public record StepInfo(
             case EDD_SUBMITTED -> "AWAIT_RISK_DECISION";
             case COMPLETING -> "AWAIT_COMPLETION";
             case PIN_SETUP -> "SET_PIN";
-            case COMPLETED -> "DONE";
+            case COMPLETED -> "LOGIN";
             case FAILED -> "RETRY_OR_CONTACT_SUPPORT";
         };
     }

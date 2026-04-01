@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -191,14 +192,17 @@ public class AuthController {
 
     @PostMapping("/logout")
     @Operation(summary = "Logout user", description = "Revokes all active Keycloak sessions for the authenticated user")
-    @ApiResponse(responseCode = "204", description = "Logged out successfully")
+    @ApiResponse(responseCode = "200", description = "Logged out successfully")
     @ApiResponse(responseCode = "401", description = "Not authenticated")
-    public ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Map<String, Object>> logout(@AuthenticationPrincipal Jwt jwt) {
         UUID keycloakUserId = UUID.fromString(jwt.getSubject());
         log.info("Logout request for Keycloak user: {}", keycloakUserId);
         logoutUseCase.logout(keycloakUserId);
         log.info("User logged out: {}", keycloakUserId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(Map.of(
+                "message", "Logged out successfully",
+                "loggedOut", true
+        ));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

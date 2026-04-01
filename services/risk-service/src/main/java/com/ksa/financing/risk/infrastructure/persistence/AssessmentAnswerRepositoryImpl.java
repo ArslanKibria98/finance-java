@@ -31,10 +31,17 @@ public class AssessmentAnswerRepositoryImpl implements AssessmentAnswerRepositor
     }
     @Override
     public List<AssessmentAnswer> findBySessionId(UUID tenantId, UUID sessionId) {
+        if (tenantId == null) {
+            return jpa.findAllBySessionId(sessionId).stream().map(RiskPersistenceMapper::toDomain).toList();
+        }
         return jpa.findAllByTenantIdAndSessionId(tenantId, sessionId).stream().map(RiskPersistenceMapper::toDomain).toList();
     }
     @Override
     public List<AssessmentAnswer> findActiveBySessionId(UUID tenantId, UUID sessionId) {
+        if (tenantId == null) {
+            return jpa.findAllBySessionIdAndVersionStatus(sessionId, AssessmentAnswerJpaEntity.VersionStatusEnum.ACTIVE)
+                    .stream().map(RiskPersistenceMapper::toDomain).toList();
+        }
         return jpa.findAllByTenantIdAndSessionIdAndVersionStatus(tenantId, sessionId, AssessmentAnswerJpaEntity.VersionStatusEnum.ACTIVE)
                 .stream().map(RiskPersistenceMapper::toDomain).toList();
     }

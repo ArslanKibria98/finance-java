@@ -49,6 +49,7 @@ public class LoanApplicationController {
 
     private final ManageLoanApplicationUseCase useCase;
     private final com.ksa.financing.lending.domain.port.in.ManageLoanUseCase loanUseCase;
+    private final com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase checkEligibilityUseCase;
     private final LoanApplicationMapper mapper;
     private final WorkflowClient workflowClient;
     private final BankAccountLookupService bankAccountLookupService;
@@ -59,12 +60,14 @@ public class LoanApplicationController {
 
     public LoanApplicationController(ManageLoanApplicationUseCase useCase,
                                       com.ksa.financing.lending.domain.port.in.ManageLoanUseCase loanUseCase,
+                                      com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase checkEligibilityUseCase,
                                       LoanApplicationMapper mapper,
                                       WorkflowClient workflowClient,
                                       BankAccountLookupService bankAccountLookupService,
                                       com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort) {
         this.useCase = useCase;
         this.loanUseCase = loanUseCase;
+        this.checkEligibilityUseCase = checkEligibilityUseCase;
         this.mapper = mapper;
         this.workflowClient = workflowClient;
         this.bankAccountLookupService = bankAccountLookupService;
@@ -125,6 +128,48 @@ public class LoanApplicationController {
         } catch (Exception e) {
             log.warn("Product/Fineract validation unavailable, proceeding: {}", e.getMessage());
         }
+
+        // ── ELIGIBILITY CHECK (affordability / DBR) before starting workflow ──
+        var eligibilityResult = checkEligibilityUseCase.checkEligibility(
+                new com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase.CheckEligibilityCommand(
+                        tenantId,
+                        request.requestedAmount(),
+                        request.requestedTenureMonths(),
+                        request.salary(),
+                        request.liabilities() != null ? request.liabilities() : BigDecimal.ZERO,
+                        request.additionalAdults(), request.numberOfChildren(),
+                        request.foodGroceries(),
+                        request.utilities(),
+                        request.healthcare(),
+                        request.communication(),
+                        request.housingRent(),
+                        request.clothingEssentials(),
+                        request.education(),
+                        request.transportation(),
+                        request.productId()
+                )
+        );
+
+        if (!eligibilityResult.eligible()) {
+            var reason = eligibilityResult.reason() != null ? eligibilityResult.reason() : "Does not meet eligibility criteria";
+            var maxAmountInfo = eligibilityResult.maxEligibleAmount() != null
+                    && eligibilityResult.maxEligibleAmount().compareTo(java.math.BigDecimal.ZERO) > 0
+                    ? ". Maximum eligible amount: " + eligibilityResult.maxEligibleAmount() + " SAR" : "";
+            var fullMessage = "Not eligible: " + reason + maxAmountInfo;
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, fullMessage, fullMessage);
+        }
+
+        // If eligible but with reduced amount, reject — user must re-apply with lower amount
+        if (eligibilityResult.maxEligibleAmount() != null
+                && eligibilityResult.maxEligibleAmount().compareTo(request.requestedAmount()) < 0) {
+            var fullMessage = "Requested amount " + request.requestedAmount() + " SAR exceeds your affordability. "
+                    + "Maximum eligible amount: " + eligibilityResult.maxEligibleAmount() + " SAR. "
+                    + "Monthly instalment capacity: " + eligibilityResult.monthlyInstallment() + " SAR/month";
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, fullMessage, fullMessage);
+        }
+
+        log.info("Eligibility check passed: DBR before={}, after={}, disposable={}",
+                eligibilityResult.dbrBefore(), eligibilityResult.dbrAfter(), eligibilityResult.disposableIncome());
 
         // Start Temporal workflow — all inter-service calls (eligibility, credit check,
         // product validation, etc.) happen inside workflow activities, NOT direct REST calls.
@@ -638,7 +683,10 @@ public class LoanApplicationController {
                         statusInfo.applicationNumber(),
                         statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedAmount() : null,
                         trackerTotalPayable,
-                        statusInfo.status()
+                        statusInfo.status(),
+                        null, null, null,
+                        statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedTenureMonths() : 0,
+                        statusInfo.basicInfo() != null ? statusInfo.basicInfo().profitRate() : null
                 ));
             }
         } catch (Exception e) {
@@ -666,7 +714,9 @@ public class LoanApplicationController {
                 latest.getStatus().name(),
                 null,
                 latest.getCreatedAt() != null ? latest.getCreatedAt().toString() : null,
-                latest.getUpdatedAt() != null ? latest.getUpdatedAt().toString() : null
+                latest.getUpdatedAt() != null ? latest.getUpdatedAt().toString() : null,
+                latest.getRequestedTenureMonths(),
+                latest.getProfitRate()
         ));
     }
 
@@ -692,7 +742,10 @@ public class LoanApplicationController {
                             statusInfo.applicationNumber(),
                             statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedAmount() : null,
                             resolveTotalPayable(statusInfo),
-                            statusInfo.status()
+                            statusInfo.status(),
+                            null, null, null,
+                            statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedTenureMonths() : 0,
+                            statusInfo.basicInfo() != null ? statusInfo.basicInfo().profitRate() : null
                     ));
                 }
             } catch (Exception e) {
@@ -714,7 +767,9 @@ public class LoanApplicationController {
                 aggregate.getStatus().name(),
                 null,
                 aggregate.getCreatedAt() != null ? aggregate.getCreatedAt().toString() : null,
-                aggregate.getUpdatedAt() != null ? aggregate.getUpdatedAt().toString() : null
+                aggregate.getUpdatedAt() != null ? aggregate.getUpdatedAt().toString() : null,
+                aggregate.getRequestedTenureMonths(),
+                aggregate.getProfitRate()
         ));
     }
 
@@ -876,7 +931,7 @@ public class LoanApplicationController {
         var info = statusInfo.basicInfo();
         if (info != null && info.requestedAmount() != null && info.requestedTenureMonths() > 0) {
             BigDecimal profitRate = info.profitRate();
-            if (profitRate == null) profitRate = new BigDecimal("0.0385");
+            if (profitRate == null) profitRate = new BigDecimal("0.025");
             else if (profitRate.compareTo(BigDecimal.ONE) > 0) profitRate = profitRate.movePointLeft(2);
             try {
                 var calc = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
@@ -885,27 +940,31 @@ public class LoanApplicationController {
             } catch (Exception e) {
                 log.debug("Preliminary totalPayable failed: {}", e.getMessage());
             }
+            return info.requestedAmount();
         }
         return null;
     }
 
     private BigDecimal calculatePreliminaryTotalPayable(UUID tenantId, BigDecimal amount, int tenureMonths, String productId) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || tenureMonths <= 0) {
+            return null;
+        }
+        BigDecimal profitRate = new BigDecimal("0.025");
         try {
-            BigDecimal profitRate = new BigDecimal("0.0385");
-            try {
-                var config = productConfigPort.fetchProductConfig(tenantId, productId, amount, tenureMonths);
-                if (config.profitRate() != null) {
-                    BigDecimal rate = config.profitRate();
-                    profitRate = rate.compareTo(BigDecimal.ONE) > 0 ? rate.movePointLeft(2) : rate;
-                }
-            } catch (Exception ignored) {}
+            var config = productConfigPort.fetchProductConfig(tenantId, productId, amount, tenureMonths);
+            if (config.profitRate() != null) {
+                BigDecimal rate = config.profitRate();
+                profitRate = rate.compareTo(BigDecimal.ONE) > 0 ? rate.movePointLeft(2) : rate;
+            }
+        } catch (Exception ignored) {}
 
+        try {
             var calc = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
                     amount, profitRate, null, tenureMonths, null, null);
-            return calc.hasErrors() ? null : calc.totalPayable();
+            return calc.hasErrors() ? amount : calc.totalPayable();
         } catch (Exception e) {
-            log.debug("Preliminary totalPayable calculation failed: {}", e.getMessage());
-            return null;
+            log.debug("Preliminary totalPayable calculation failed, returning amount: {}", e.getMessage());
+            return amount;
         }
     }
 
