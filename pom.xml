@@ -86,13 +86,14 @@
         <!--<module>ksa-financing-bom</module>-->
 
         <!-- Shared Libraries (SDKs) -->
+        <module>shared-libraries/file-storage-sdk</module>
         <module>shared-libraries/foundational-infra-sdk</module>
         <module>shared-libraries/domain-core-sdk</module>
         <module>shared-libraries/messaging-event-sdk</module>
         <module>shared-libraries/workflow-orchestration-sdk</module>
         <module>shared-libraries/lms-adapter-sdk</module>
         <!--<module>shared-libraries/compliance-localization-sdk</module>-->
-        <module>shared-libraries/reporting-projection-sdk</module>
+        <!--<module>shared-libraries/reporting-projection-sdk</module>-->
         <!--<module>shared-libraries/test-harness-sdk</module>-->
 
         <!-- Shared Activity API Modules -->
@@ -108,20 +109,20 @@
         <module>services/fraud-service</module>
         <module>services/product-service</module>
 
-        <!-- Microservices - commented out until created -->
-        <!--
-        <module>services/service-template</module>
-        <module>services/global-profile-index</module>
-        <module>services/pii-vault</module>
-        <module>services/kyc-orchestrator</module>
-        <module>services/identity-federation</module>
+        <!-- Microservices -->
+        <!--<module>services/service-template</module>-->
+        <!--<module>services/global-profile-index</module>-->
+        <!--<module>services/pii-vault</module>-->
+        <!--<module>services/kyc-orchestrator</module>-->
+        <!--<module>services/identity-federation</module>-->
         <module>services/lending-service</module>
-        <module>services/sharia-compliance</module>
+        <!--<module>services/sharia-compliance</module>-->
         <module>services/ledger-service</module>
         <module>services/customer-service</module>
         <module>services/wallet-service</module>
-        <module>services/credit-decisioning</module>
+        <!--<module>services/credit-decisioning</module>-->
         <module>services/collections-service</module>
+        <!--
         <module>services/document-service</module>
         <module>services/partner-service</module>
         <module>services/notification-service</module>
