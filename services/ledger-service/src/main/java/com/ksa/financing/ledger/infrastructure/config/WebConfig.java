@@ -68,29 +68,10 @@ public class WebConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:4200",
-                "http://46.62.226.94:3000",
-                "http://46.62.226.94:4200",
-                "http://65.108.31.172:7374",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:4200"
-        ));
+        configuration.setAllowedOriginPatterns("*");
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of(
-                "Content-Type",
-                "Authorization",
-                "X-Tenant-ID",
-                "X-Correlation-ID",
-                "X-Idempotency-Key",
-                "X-Device-Id",
-                "X-Device-Fingerprint",
-                "X-Client-Ip",
-                "X-Session-Id"
-        ));
-        configuration.setExposedHeaders(List.of("X-Correlation-ID"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("X-Correlation-ID", "Content-Type", "Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
