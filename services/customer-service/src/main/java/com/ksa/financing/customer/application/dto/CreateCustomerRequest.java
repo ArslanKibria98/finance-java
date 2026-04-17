@@ -1,9 +1,12 @@
 package com.ksa.financing.customer.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDate;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record CreateCustomerRequest(
     @NotBlank String nationalId,
     String nationalIdType,

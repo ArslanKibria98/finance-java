@@ -59,7 +59,7 @@ public class ReferenceDataController {
     // SOURCE OF WEALTH
     // ========================================================================
 
-    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "create")
     @PostMapping("/source-of-wealth")
     @Operation(summary = "Create source of wealth option", description = "Creates a new admin-managed source of wealth dropdown option")
     @ApiResponse(responseCode = "201", description = "Option created successfully")
@@ -79,7 +79,7 @@ public class ReferenceDataController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "read")
     @GetMapping("/source-of-wealth")
     @Operation(summary = "List all source of wealth options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
@@ -107,7 +107,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(responses);
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "read")
     @GetMapping("/source-of-wealth/{id}")
     @Operation(summary = "Get source of wealth option by ID")
     @ApiResponse(responseCode = "200", description = "Option found")
@@ -121,7 +121,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(option));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "update")
     @PutMapping("/source-of-wealth/{id}")
     @Operation(summary = "Update source of wealth option", description = "Updates an existing option (partial update supported)")
     @ApiResponse(responseCode = "200", description = "Option updated")
@@ -143,9 +143,38 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(updated));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "delete")
     @DeleteMapping("/source-of-wealth/{id}")
-    @Operation(summary = "Deactivate source of wealth option", description = "Soft-deactivates the option (sets is_active = false)")
+    @Operation(summary = "Permanently delete source of wealth option", description = "Soft-deletes the option permanently (is_deleted = true). Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deleteSourceOfWealth(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Soft-deleting source of wealth option: {} for tenant: {}", id, tenantId);
+        sourceOfWealthUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "update")
+    @PostMapping("/source-of-wealth/{id}/activate")
+    @Operation(summary = "Activate source of wealth option", description = "Sets is_active = true")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> activateSourceOfWealth(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        sourceOfWealthUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.source-of-wealth", act = "update")
+    @PostMapping("/source-of-wealth/{id}/deactivate")
+    @Operation(summary = "Deactivate source of wealth option", description = "Sets is_active = false")
     @ApiResponse(responseCode = "204", description = "Option deactivated")
     @ApiResponse(responseCode = "404", description = "Option not found")
     public ResponseEntity<Void> deactivateSourceOfWealth(
@@ -153,7 +182,6 @@ public class ReferenceDataController {
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        log.info("Deactivating source of wealth option: {} for tenant: {}", id, tenantId);
         sourceOfWealthUseCase.deactivate(tenantId, id);
         return ResponseEntity.noContent().build();
     }
@@ -162,7 +190,7 @@ public class ReferenceDataController {
     // SOURCE OF FUNDS
     // ========================================================================
 
-    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "create")
     @PostMapping("/source-of-funds")
     @Operation(summary = "Create source of funds option", description = "Creates a new admin-managed source of funds dropdown option")
     @ApiResponse(responseCode = "201", description = "Option created successfully")
@@ -182,7 +210,7 @@ public class ReferenceDataController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "read")
     @GetMapping("/source-of-funds")
     @Operation(summary = "List all source of funds options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
@@ -210,7 +238,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(responses);
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "read")
     @GetMapping("/source-of-funds/{id}")
     @Operation(summary = "Get source of funds option by ID")
     @ApiResponse(responseCode = "200", description = "Option found")
@@ -224,7 +252,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(option));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "update")
     @PutMapping("/source-of-funds/{id}")
     @Operation(summary = "Update source of funds option", description = "Updates an existing option (partial update supported)")
     @ApiResponse(responseCode = "200", description = "Option updated")
@@ -246,17 +274,42 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(updated));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "delete")
     @DeleteMapping("/source-of-funds/{id}")
-    @Operation(summary = "Deactivate source of funds option", description = "Soft-deactivates the option (sets is_active = false)")
-    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    @Operation(summary = "Permanently delete source of funds option", description = "Soft-deletes the option permanently. Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
     @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deleteSourceOfFunds(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        sourceOfFundsUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "update")
+    @PostMapping("/source-of-funds/{id}/activate")
+    @Operation(summary = "Activate source of funds option")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    public ResponseEntity<Void> activateSourceOfFunds(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        sourceOfFundsUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.source-of-funds", act = "update")
+    @PostMapping("/source-of-funds/{id}/deactivate")
+    @Operation(summary = "Deactivate source of funds option")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
     public ResponseEntity<Void> deactivateSourceOfFunds(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        log.info("Deactivating source of funds option: {} for tenant: {}", id, tenantId);
         sourceOfFundsUseCase.deactivate(tenantId, id);
         return ResponseEntity.noContent().build();
     }
@@ -265,7 +318,7 @@ public class ReferenceDataController {
     // SOURCE OF INCOME
     // ========================================================================
 
-    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "create")
     @PostMapping("/source-of-income")
     @Operation(summary = "Create source of income option", description = "Creates a new admin-managed source of income dropdown option")
     @ApiResponse(responseCode = "201", description = "Option created successfully")
@@ -285,7 +338,7 @@ public class ReferenceDataController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "read")
     @GetMapping("/source-of-income")
     @Operation(summary = "List all source of income options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
@@ -313,7 +366,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(responses);
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "read")
     @GetMapping("/source-of-income/{id}")
     @Operation(summary = "Get source of income option by ID")
     @ApiResponse(responseCode = "200", description = "Option found")
@@ -327,7 +380,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(option));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "update")
     @PutMapping("/source-of-income/{id}")
     @Operation(summary = "Update source of income option", description = "Updates an existing option (partial update supported)")
     @ApiResponse(responseCode = "200", description = "Option updated")
@@ -349,17 +402,42 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(updated));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "delete")
     @DeleteMapping("/source-of-income/{id}")
-    @Operation(summary = "Deactivate source of income option", description = "Soft-deactivates the option (sets is_active = false)")
-    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    @Operation(summary = "Permanently delete source of income option", description = "Soft-deletes the option permanently. Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
     @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deleteSourceOfIncome(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        sourceOfIncomeUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "update")
+    @PostMapping("/source-of-income/{id}/activate")
+    @Operation(summary = "Activate source of income option")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    public ResponseEntity<Void> activateSourceOfIncome(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        sourceOfIncomeUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.source-of-income", act = "update")
+    @PostMapping("/source-of-income/{id}/deactivate")
+    @Operation(summary = "Deactivate source of income option")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
     public ResponseEntity<Void> deactivateSourceOfIncome(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        log.info("Deactivating source of income option: {} for tenant: {}", id, tenantId);
         sourceOfIncomeUseCase.deactivate(tenantId, id);
         return ResponseEntity.noContent().build();
     }
@@ -368,7 +446,7 @@ public class ReferenceDataController {
     // PURPOSE OF FINANCE
     // ========================================================================
 
-    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "create")
     @PostMapping("/purpose-of-finance")
     @Operation(summary = "Create purpose of finance option", description = "Creates a new admin-managed purpose of finance dropdown option")
     @ApiResponse(responseCode = "201", description = "Option created successfully")
@@ -388,7 +466,7 @@ public class ReferenceDataController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "read")
     @GetMapping("/purpose-of-finance")
     @Operation(summary = "List all purpose of finance options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
@@ -416,7 +494,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(responses);
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "read")
     @GetMapping("/purpose-of-finance/{id}")
     @Operation(summary = "Get purpose of finance option by ID")
     @ApiResponse(responseCode = "200", description = "Option found")
@@ -430,7 +508,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(option));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "update")
     @PutMapping("/purpose-of-finance/{id}")
     @Operation(summary = "Update purpose of finance option", description = "Updates an existing option (partial update supported)")
     @ApiResponse(responseCode = "200", description = "Option updated")
@@ -452,17 +530,42 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toResponse(updated));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "delete")
     @DeleteMapping("/purpose-of-finance/{id}")
-    @Operation(summary = "Deactivate purpose of finance option", description = "Soft-deactivates the option (sets is_active = false)")
-    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    @Operation(summary = "Permanently delete purpose of finance option", description = "Soft-deletes the option permanently. Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
     @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deletePurposeOfFinance(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        purposeOfFinanceUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "update")
+    @PostMapping("/purpose-of-finance/{id}/activate")
+    @Operation(summary = "Activate purpose of finance option")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    public ResponseEntity<Void> activatePurposeOfFinance(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        purposeOfFinanceUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.purpose-of-finance", act = "update")
+    @PostMapping("/purpose-of-finance/{id}/deactivate")
+    @Operation(summary = "Deactivate purpose of finance option")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
     public ResponseEntity<Void> deactivatePurposeOfFinance(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        log.info("Deactivating purpose of finance option: {} for tenant: {}", id, tenantId);
         purposeOfFinanceUseCase.deactivate(tenantId, id);
         return ResponseEntity.noContent().build();
     }
@@ -471,7 +574,7 @@ public class ReferenceDataController {
     // NET WORTH RANGES
     // ========================================================================
 
-    @SecuredEndpoint(obj = "reference-data", act = "create")
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "create")
     @PostMapping("/net-worth-ranges")
     @Operation(summary = "Create net worth range option", description = "Creates a new admin-managed net worth range dropdown option")
     @ApiResponse(responseCode = "201", description = "Option created successfully")
@@ -492,7 +595,7 @@ public class ReferenceDataController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toNetWorthResponse(created));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "read")
     @GetMapping("/net-worth-ranges")
     @Operation(summary = "List all net worth range options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
@@ -520,7 +623,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(responses);
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "read")
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "read")
     @GetMapping("/net-worth-ranges/{id}")
     @Operation(summary = "Get net worth range option by ID")
     @ApiResponse(responseCode = "200", description = "Option found")
@@ -534,7 +637,7 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toNetWorthResponse(option));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "update")
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "update")
     @PutMapping("/net-worth-ranges/{id}")
     @Operation(summary = "Update net worth range option", description = "Updates an existing option (partial update supported)")
     @ApiResponse(responseCode = "200", description = "Option updated")
@@ -557,17 +660,42 @@ public class ReferenceDataController {
         return ResponseEntity.ok(toNetWorthResponse(updated));
     }
 
-    @SecuredEndpoint(obj = "reference-data", act = "delete")
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "delete")
     @DeleteMapping("/net-worth-ranges/{id}")
-    @Operation(summary = "Deactivate net worth range option", description = "Soft-deactivates the option (sets is_active = false)")
-    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    @Operation(summary = "Permanently delete net worth range option", description = "Soft-deletes the option permanently. Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
     @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deleteNetWorthRange(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        netWorthRangeUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "update")
+    @PostMapping("/net-worth-ranges/{id}/activate")
+    @Operation(summary = "Activate net worth range option")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    public ResponseEntity<Void> activateNetWorthRange(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        netWorthRangeUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.net-worth-ranges", act = "update")
+    @PostMapping("/net-worth-ranges/{id}/deactivate")
+    @Operation(summary = "Deactivate net worth range option")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
     public ResponseEntity<Void> deactivateNetWorthRange(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        log.info("Deactivating net worth range option: {} for tenant: {}", id, tenantId);
         netWorthRangeUseCase.deactivate(tenantId, id);
         return ResponseEntity.noContent().build();
     }

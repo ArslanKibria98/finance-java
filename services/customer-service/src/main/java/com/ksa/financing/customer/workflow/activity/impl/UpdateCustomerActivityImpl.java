@@ -33,13 +33,18 @@ public class UpdateCustomerActivityImpl implements UpdateCustomerActivity {
             String email = (input.email() != null && !input.email().isBlank()) ? input.email() : "customer@example.com";
             updateCustomerUseCase.update(tenantId, customerId,
                     new UpdateCustomerUseCase.UpdateCustomerCommand(
+                            null,
+                            null,
+                            null,
+                            null,
                             email,
                             null,
                             null,
                             null,
                             input.city(),
                             input.region(),
-                            null
+                            null,
+                            null  // profilePicture — not updated via workflow activity
                     )
             );
 

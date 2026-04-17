@@ -37,6 +37,9 @@ public class ModuleJpaEntity {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    @Column(name = "is_catalog_visible", nullable = false)
+    private boolean catalogVisible = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

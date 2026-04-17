@@ -18,6 +18,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,7 +58,7 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @Override
     @Retry(name = "keycloak")
     @CircuitBreaker(name = "keycloak", fallbackMethod = "createUserFallback")
-    public KeycloakUser createUser(String realm, String username, String email, String password) {
+    public KeycloakUser createUser(String realm, String username, String email, String password, String firstName) {
         log.info("Creating Keycloak user: {} in realm: {}", username, realm);
 
         String adminToken = obtainAdminToken(realm);
@@ -67,15 +69,15 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
 
-        Map<String, Object> userRepresentation = Map.of(
-                "username", username,
-                "email", email,
-                "enabled", true,
-                "emailVerified", true,
-                "firstName", "Customer",
-                "lastName", username,
-                "requiredActions", List.of()
-        );
+        java.util.Map<String, Object> userRepresentation = new java.util.HashMap<>();
+        userRepresentation.put("username", username);
+        userRepresentation.put("email", email);
+        userRepresentation.put("enabled", true);
+        userRepresentation.put("emailVerified", true);
+        userRepresentation.put("requiredActions", List.of());
+        if (firstName != null && !firstName.isBlank()) {
+            userRepresentation.put("firstName", firstName);
+        }
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(userRepresentation, headers);
         restTemplate.postForEntity(usersUrl, request, Void.class);
@@ -112,7 +114,7 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     }
 
     @SuppressWarnings("unused")
-    private KeycloakUser createUserFallback(String realm, String username, String email, String password, Throwable t) {
+    private KeycloakUser createUserFallback(String realm, String username, String email, String password, String firstName, Throwable t) {
         log.error("Keycloak unavailable for user creation after retries: {}", t.getMessage());
         UUID mockId = UUID.randomUUID();
         log.warn("Returning mock Keycloak user with ID: {} (circuit breaker fallback)", mockId);
@@ -204,8 +206,9 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
                 String accessToken = (String) body.get("access_token");
                 String refreshToken = (String) body.get("refresh_token");
                 Number expiresIn = (Number) body.get("expires_in");
+                String name = extractNameFromJwt(accessToken);
                 log.info("User authenticated successfully: {}", username);
-                return new TokenResponse(accessToken, refreshToken, expiresIn != null ? expiresIn.longValue() : 300L);
+                return new TokenResponse(accessToken, refreshToken, expiresIn != null ? expiresIn.longValue() : 300L, name);
             }
 
             throw new TechnicalException(
@@ -249,8 +252,9 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
             String newAccessToken = (String) body.get("access_token");
             String newRefreshToken = (String) body.get("refresh_token");
             Number expiresIn = (Number) body.get("expires_in");
+            String name = extractNameFromJwt(newAccessToken);
             log.info("Token refreshed successfully");
-            return new TokenResponse(newAccessToken, newRefreshToken, expiresIn != null ? expiresIn.longValue() : 300L);
+            return new TokenResponse(newAccessToken, newRefreshToken, expiresIn != null ? expiresIn.longValue() : 300L, name);
         }
 
         throw new TechnicalException(
@@ -331,6 +335,34 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @Retry(name = "keycloak")
     @CircuitBreaker(name = "keycloak")
     @SuppressWarnings("unchecked")
+    public void setUserAttributes(String realm, UUID keycloakUserId, Map<String, String> newAttributes) {
+        log.info("Setting {} attributes on user {} in realm {}", newAttributes.keySet(), keycloakUserId, realm);
+
+        String adminToken = obtainAdminToken(realm);
+        String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken);
+
+        // GET current user representation
+        ResponseEntity<Map> userResponse = restTemplate.exchange(
+                userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+        Map<String, Object> userRep = new java.util.HashMap<>(userResponse.getBody());
+
+        // Merge new attributes with existing ones (single GET-then-PUT avoids lost-update race condition)
+        Map<String, List<String>> existing = (Map<String, List<String>>) userRep.get("attributes");
+        Map<String, List<String>> merged = existing != null ? new java.util.HashMap<>(existing) : new java.util.HashMap<>();
+        newAttributes.forEach((k, v) -> merged.put(k, List.of(v)));
+        userRep.put("attributes", merged);
+
+        restTemplate.put(userUrl, new HttpEntity<>(userRep, headers));
+        log.info("Attributes {} set successfully on user {}", newAttributes.keySet(), keycloakUserId);
+    }
+
+    @Override
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
+    @SuppressWarnings("unchecked")
     public String getUserAttribute(String realm, UUID keycloakUserId, String attributeName) {
         log.info("Getting attribute '{}' for user {} in realm {}", attributeName, keycloakUserId, realm);
 
@@ -388,6 +420,34 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         log.info("Password reset successfully for user {}", keycloakUserId);
     }
 
+    @Override
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
+    @SuppressWarnings("unchecked")
+    public void updateUserFirstName(String realm, UUID keycloakUserId, String firstName) {
+        log.info("Updating firstName for user {} in realm {}", keycloakUserId, realm);
+
+        String adminToken = obtainAdminToken(realm);
+        String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken);
+
+        HttpEntity<Void> getRequest = new HttpEntity<>(headers);
+        ResponseEntity<Map> userResponse = restTemplate.exchange(
+                userUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class);
+
+        Map<String, Object> userRep = new java.util.HashMap<>(userResponse.getBody());
+        userRep.put("firstName", firstName != null ? firstName : "");
+        userRep.remove("lastName");
+
+        HttpEntity<Map<String, Object>> updateRequest = new HttpEntity<>(userRep, headers);
+        restTemplate.put(userUrl, updateRequest);
+
+        log.info("firstName updated successfully for user {}", keycloakUserId);
+    }
+
     /**
      * Obtains an admin access token using client credentials grant.
      */
@@ -413,5 +473,27 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         throw new TechnicalException(
                 ErrorCodes.TECHNICAL_ERROR,
                 "Failed to obtain admin token from Keycloak");
+    }
+
+    /**
+     * Decodes the JWT payload (base64url) and extracts the "name" claim.
+     * Returns null if the token is malformed or the claim is absent.
+     */
+    @SuppressWarnings("unchecked")
+    private String extractNameFromJwt(String accessToken) {
+        try {
+            if (accessToken == null) return null;
+            String[] parts = accessToken.split("\\.");
+            if (parts.length < 2) return null;
+            byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
+            String payload = new String(decoded, StandardCharsets.UTF_8);
+            Map<String, Object> claims = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(payload, Map.class);
+            Object name = claims.get("name");
+            return name != null ? name.toString() : null;
+        } catch (Exception e) {
+            log.warn("Could not extract name from JWT: {}", e.getMessage());
+            return null;
+        }
     }
 }

@@ -49,6 +49,7 @@ public class Customer {
     private boolean active;
     private Instant blockedAt;
     private String blockedReason;
+    private String profilePicture;
     private String idempotencyKey;
     private Instant createdAt;
     private Instant updatedAt;
@@ -143,6 +144,8 @@ public class Customer {
     public void setBlockedAt(Instant blockedAt) { this.blockedAt = blockedAt; }
     public String getBlockedReason() { return blockedReason; }
     public void setBlockedReason(String blockedReason) { this.blockedReason = blockedReason; }
+    public String getProfilePicture() { return profilePicture; }
+    public void setProfilePicture(String profilePicture) { this.profilePicture = profilePicture; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     public Instant getCreatedAt() { return createdAt; }

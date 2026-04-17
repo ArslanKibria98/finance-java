@@ -27,7 +27,8 @@ public class CategoryMapper {
                 category.getDescriptionEn(),
                 category.getDescriptionAr(),
                 category.getIconUrl(),
-                category.getSortOrder()
+                category.getSortOrder(),
+                category.isActive()
         );
     }
 
@@ -42,7 +43,8 @@ public class CategoryMapper {
                 subCategory.getCode(),
                 subCategory.getNameEn(),
                 subCategory.getNameAr(),
-                subCategory.getSortOrder()
+                subCategory.getSortOrder(),
+                subCategory.isActive()
         );
     }
 }

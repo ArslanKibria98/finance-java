@@ -5,7 +5,10 @@ import java.math.BigDecimal;
 public record UpdateFeeSettingsRequest(
     BigDecimal revenueEligibilityThreshold,
     BigDecimal maxDbrPercentage,
-    BigDecimal globalDbrPercentage,
     String dbrCalculationMethod,
-    String dbrExceptions
+    String dbrExceptions,
+    BigDecimal maxDti,
+    Integer minAge,
+    Integer maxAge,
+    BigDecimal gdbrPercentage
 ) {}

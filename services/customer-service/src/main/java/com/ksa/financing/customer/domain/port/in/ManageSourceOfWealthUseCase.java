@@ -13,6 +13,8 @@ public interface ManageSourceOfWealthUseCase {
     List<SourceOfWealthOption> getAll(UUID tenantId);
     List<SourceOfWealthOption> getActive(UUID tenantId);
     void deactivate(UUID tenantId, UUID id);
+    void activate(UUID tenantId, UUID id);
+    void delete(UUID tenantId, UUID id);
 
     record CreateSourceOfWealthCommand(
         String code,

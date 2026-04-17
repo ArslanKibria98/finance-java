@@ -7,7 +7,8 @@ public interface RegisterFromOnboardingUseCase {
     record RegisterFromOnboardingCommand(
         String nationalId,
         String mobileNumber,
-        String globalUid
+        String globalUid,
+        String firstName
     ) {}
 
     record RegisterFromOnboardingResult(

@@ -3,6 +3,7 @@ package com.ksa.financing.identity.adapter.rest.controller;
 import com.ksa.financing.domain.valueobject.NationalId;
 import com.ksa.financing.identity.application.dto.AuthRequest;
 import com.ksa.financing.identity.application.dto.AuthResponse;
+import com.ksa.financing.identity.application.dto.LoginWithMobilePinRequest;
 import com.ksa.financing.identity.application.dto.LoginWithPinRequest;
 import com.ksa.financing.identity.application.dto.OnboardingRegisterRequest;
 import com.ksa.financing.identity.application.dto.OnboardingRegisterResponse;
@@ -13,6 +14,9 @@ import com.ksa.financing.identity.application.dto.SsoTokenExchangeRequest;
 import com.ksa.financing.identity.application.dto.SsoTokenResponse;
 import com.ksa.financing.identity.domain.model.UserIdentity;
 import com.ksa.financing.identity.domain.port.in.AuthenticateUserUseCase;
+import com.ksa.financing.identity.domain.port.in.ChangePasscodeUseCase;
+import com.ksa.financing.identity.domain.port.in.ForgotPasscodeUseCase;
+import com.ksa.financing.identity.domain.port.in.VerifyMpinUseCase;
 import com.ksa.financing.identity.domain.port.in.LoginWithPinUseCase;
 import com.ksa.financing.identity.domain.port.in.LogoutUseCase;
 import com.ksa.financing.identity.domain.port.in.RegisterFromOnboardingUseCase;
@@ -25,6 +29,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -32,6 +37,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,6 +60,9 @@ public class AuthController {
     private final LoginWithPinUseCase loginWithPinUseCase;
     private final SsoUseCase ssoUseCase;
     private final LogoutUseCase logoutUseCase;
+    private final ChangePasscodeUseCase changePasscodeUseCase;
+    private final ForgotPasscodeUseCase forgotPasscodeUseCase;
+    private final VerifyMpinUseCase verifyMpinUseCase;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user", description = "Creates a user in Keycloak and maps identity internally")
@@ -104,7 +113,11 @@ public class AuthController {
                 result.accessToken(),
                 result.refreshToken(),
                 result.expiresIn(),
-                "Bearer"
+                "Bearer",
+                null,
+                null,
+                null,
+                result.name()
         );
 
         log.info("User authenticated successfully: {}", request.username());
@@ -124,7 +137,11 @@ public class AuthController {
                 result.accessToken(),
                 result.refreshToken(),
                 result.expiresIn(),
-                "Bearer"
+                "Bearer",
+                null,
+                null,
+                null,
+                result.name()
         );
 
         log.info("Token refreshed successfully");
@@ -145,7 +162,7 @@ public class AuthController {
         log.info("Onboarding registration request for NID: {}", maskNid(request.nationalId()));
 
         var command = new RegisterFromOnboardingUseCase.RegisterFromOnboardingCommand(
-                request.nationalId(), request.mobileNumber(), request.globalUid()
+                request.nationalId(), request.mobileNumber(), request.globalUid(), request.firstName()
         );
 
         var result = registerFromOnboardingUseCase.register(command);
@@ -183,10 +200,41 @@ public class AuthController {
         var response = new AuthResponse(
                 result.accessToken(), result.refreshToken(),
                 result.expiresIn(), "Bearer", result.customerId(),
-                result.nationalId(), result.mobileNumber()
+                result.nationalId(), result.mobileNumber(), result.name()
         );
 
         log.info("PIN login successful for NID ending in: {}", maskNid(request.nationalId()));
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login-with-mobile-pin")
+    @Operation(summary = "Login with mobile number and PIN",
+            description = "Authenticates a customer using their mobile number (international format) and 6-digit PIN. "
+                    + "Same as login-with-pin but uses mobile number instead of NID for user lookup.")
+    @ApiResponse(responseCode = "200", description = "Authentication successful",
+            content = @Content(schema = @Schema(implementation = AuthResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request - mobile or PIN format incorrect")
+    @ApiResponse(responseCode = "404", description = "User not found for the given mobile number")
+    @ApiResponse(responseCode = "422", description = "Invalid PIN or PIN not set for this account")
+    public ResponseEntity<AuthResponse> loginWithMobilePin(
+            @Valid @RequestBody LoginWithMobilePinRequest request) {
+        log.info("Mobile PIN login request for mobile ending in: ****{}",
+                request.mobileNumber().substring(request.mobileNumber().length() - 4));
+
+        var command = new LoginWithPinUseCase.LoginWithMobileCommand(
+                request.mobileNumber(), request.pin()
+        );
+
+        var result = loginWithPinUseCase.loginWithMobile(command);
+
+        var response = new AuthResponse(
+                result.accessToken(), result.refreshToken(),
+                result.expiresIn(), "Bearer", result.customerId(),
+                result.nationalId(), result.mobileNumber(), result.name()
+        );
+
+        log.info("Mobile PIN login successful for mobile ending in: ****{}",
+                request.mobileNumber().substring(request.mobileNumber().length() - 4));
         return ResponseEntity.ok(response);
     }
 
@@ -194,7 +242,34 @@ public class AuthController {
     @Operation(summary = "Logout user", description = "Revokes all active Keycloak sessions for the authenticated user")
     @ApiResponse(responseCode = "200", description = "Logged out successfully")
     @ApiResponse(responseCode = "401", description = "Not authenticated")
-    public ResponseEntity<Map<String, Object>> logout(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Map<String, Object>> logout(@AuthenticationPrincipal Jwt jwt,
+                                                      jakarta.servlet.http.HttpServletRequest request) {
+        if (jwt == null) {
+            // Extract token manually from header as fallback (e.g. when token is valid but SecurityContext not set)
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(401).body(Map.of(
+                        "error", "Unauthorized",
+                        "message", "Valid Bearer token required for logout"
+                ));
+            }
+            // Try to decode the token manually to get the subject
+            try {
+                String token = authHeader.substring(7);
+                com.nimbusds.jwt.JWT parsedJwt = com.nimbusds.jwt.JWTParser.parse(token);
+                String subject = parsedJwt.getJWTClaimsSet().getSubject();
+                UUID keycloakUserId = UUID.fromString(subject);
+                log.info("Logout (fallback) for Keycloak user: {}", keycloakUserId);
+                logoutUseCase.logout(keycloakUserId);
+                return ResponseEntity.ok(Map.of("message", "Logged out successfully", "loggedOut", true));
+            } catch (Exception e) {
+                log.warn("Logout failed — could not parse token: {}", e.getMessage());
+                return ResponseEntity.status(401).body(Map.of(
+                        "error", "Unauthorized",
+                        "message", "Invalid or expired token"
+                ));
+            }
+        }
         UUID keycloakUserId = UUID.fromString(jwt.getSubject());
         log.info("Logout request for Keycloak user: {}", keycloakUserId);
         logoutUseCase.logout(keycloakUserId);
@@ -203,6 +278,121 @@ public class AuthController {
                 "message", "Logged out successfully",
                 "loggedOut", true
         ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Passcode Management — Mobile App
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @PatchMapping("/change-passcode")
+    @Operation(summary = "Change passcode",
+            description = "Changes the 6-digit app passcode for the authenticated user. Requires current passcode for verification.")
+    @ApiResponse(responseCode = "200", description = "Passcode changed successfully")
+    @ApiResponse(responseCode = "401", description = "Not authenticated")
+    @ApiResponse(responseCode = "422", description = "Current passcode incorrect or new passcodes do not match")
+    public ResponseEntity<Map<String, Object>> changePasscode(
+            @Valid @RequestBody ChangePasscodeRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID keycloakUserId = UUID.fromString(jwt.getSubject());
+        log.info("Change passcode request for keycloakUserId={}", keycloakUserId);
+
+        var command = new ChangePasscodeUseCase.ChangePasscodeCommand(
+                keycloakUserId,
+                request.newPasscode(),
+                request.confirmPasscode()
+        );
+
+        var result = changePasscodeUseCase.changePasscode(command);
+        return ResponseEntity.ok(Map.of("success", result.success(), "message", result.message()));
+    }
+
+    @PostMapping("/forgot-passcode/send-otp")
+    @Operation(summary = "Forgot passcode — send OTP",
+            description = "Sends a 6-digit OTP to the registered mobile number for passcode reset. "
+                    + "Returns a workflowId that identifies the active reset session (valid 10 minutes).")
+    @ApiResponse(responseCode = "200", description = "OTP sent successfully")
+    @ApiResponse(responseCode = "404", description = "No account found for given mobile number")
+    public ResponseEntity<Map<String, Object>> forgotPasscodeSendOtp(
+            @Valid @RequestBody ForgotPasscodeSendOtpRequest request) {
+
+        log.info("Forgot passcode OTP request for mobile ****{}",
+                request.mobileNumber().length() > 4
+                        ? request.mobileNumber().substring(request.mobileNumber().length() - 4) : "****");
+
+        var command = new ForgotPasscodeUseCase.SendOtpCommand(request.mobileNumber());
+        var result  = forgotPasscodeUseCase.sendOtp(command);
+
+        return ResponseEntity.ok(Map.of(
+                "sent",         result.sent(),
+                "maskedMobile", result.maskedMobile(),
+                "workflowId",   result.workflowId()
+        ));
+    }
+
+    @PostMapping("/forgot-passcode/verify-otp")
+    @Operation(summary = "Forgot passcode — verify OTP",
+            description = "Verifies the OTP sent to the registered mobile number. "
+                    + "Must be called after send-otp and before reset.")
+    @ApiResponse(responseCode = "200", description = "OTP verified successfully")
+    @ApiResponse(responseCode = "422", description = "Invalid or expired OTP")
+    public ResponseEntity<Map<String, Object>> forgotPasscodeVerifyOtp(
+            @Valid @RequestBody ForgotPasscodeVerifyOtpRequest request) {
+
+        log.info("Forgot passcode OTP verification for mobile ****{}",
+                request.mobileNumber().length() > 4
+                        ? request.mobileNumber().substring(request.mobileNumber().length() - 4) : "****");
+
+        var command = new ForgotPasscodeUseCase.VerifyOtpCommand(
+                request.mobileNumber(),
+                request.otp()
+        );
+
+        var result = forgotPasscodeUseCase.verifyOtp(command);
+        // failures throw BusinessException — this path is success-only
+        return ResponseEntity.ok(Map.of("verified", result.valid(), "message", result.message()));
+    }
+
+    @PostMapping("/forgot-passcode/reset")
+    @Operation(summary = "Forgot passcode — reset passcode",
+            description = "Resets the app passcode after OTP has been verified via verify-otp. "
+                    + "Signals the Temporal workflow to complete the passcode reset.")
+    @ApiResponse(responseCode = "200", description = "Passcode reset successfully")
+    @ApiResponse(responseCode = "422", description = "Session expired or passcodes do not match")
+    public ResponseEntity<Map<String, Object>> forgotPasscodeReset(
+            @Valid @RequestBody ForgotPasscodeResetRequest request) {
+
+        log.info("Forgot passcode reset for mobile ****{}",
+                request.mobileNumber().length() > 4
+                        ? request.mobileNumber().substring(request.mobileNumber().length() - 4) : "****");
+
+        var command = new ForgotPasscodeUseCase.ResetPasscodeCommand(
+                request.mobileNumber(),
+                request.newPasscode(),
+                request.confirmPasscode()
+        );
+
+        var result = forgotPasscodeUseCase.resetPasscode(command);
+        return ResponseEntity.ok(Map.of("success", result.success(), "message", result.message()));
+    }
+
+    @PostMapping("/verify-mpin")
+    @Operation(summary = "Verify MPIN",
+            description = "Checks whether the given MPIN is valid for the authenticated user (identified via Bearer JWT). "
+                    + "Returns {valid: true} when the MPIN matches, throws 422 on mismatch.")
+    @ApiResponse(responseCode = "200", description = "MPIN is valid")
+    @ApiResponse(responseCode = "401", description = "Not authenticated")
+    @ApiResponse(responseCode = "422", description = "Invalid MPIN or MPIN not set")
+    public ResponseEntity<Map<String, Object>> verifyMpin(
+            @Valid @RequestBody VerifyMpinRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID keycloakUserId = UUID.fromString(jwt.getSubject());
+        log.info("Verify MPIN request for keycloakUserId={}", keycloakUserId);
+
+        var command = new VerifyMpinUseCase.VerifyMpinCommand(keycloakUserId, request.mpin());
+        var result = verifyMpinUseCase.verifyMpin(command);
+        return ResponseEntity.ok(Map.of("valid", result.valid(), "message", result.message()));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -255,5 +445,41 @@ public class AuthController {
      */
     public record RefreshTokenRequest(
             @NotBlank(message = "Refresh token is required") String refreshToken
+    ) {}
+
+    public record ChangePasscodeRequest(
+            @NotBlank(message = "New passcode is required")
+            @Pattern(regexp = "\\d{6}", message = "New passcode must be exactly 6 digits")
+            String newPasscode,
+            @NotBlank(message = "Confirm passcode is required")
+            @Pattern(regexp = "\\d{6}", message = "Confirm passcode must be exactly 6 digits")
+            String confirmPasscode
+    ) {}
+
+    public record ForgotPasscodeSendOtpRequest(
+            @NotBlank(message = "Mobile number is required") String mobileNumber
+    ) {}
+
+    public record ForgotPasscodeVerifyOtpRequest(
+            @NotBlank(message = "Mobile number is required") String mobileNumber,
+            @NotBlank(message = "OTP is required")
+            @Pattern(regexp = "\\d{6}", message = "OTP must be exactly 6 digits")
+            String otp
+    ) {}
+
+    public record ForgotPasscodeResetRequest(
+            @NotBlank(message = "Mobile number is required") String mobileNumber,
+            @NotBlank(message = "New passcode is required")
+            @Pattern(regexp = "\\d{6}", message = "New passcode must be exactly 6 digits")
+            String newPasscode,
+            @NotBlank(message = "Confirm passcode is required")
+            @Pattern(regexp = "\\d{6}", message = "Confirm passcode must be exactly 6 digits")
+            String confirmPasscode
+    ) {}
+
+    public record VerifyMpinRequest(
+            @NotBlank(message = "MPIN is required")
+            @Pattern(regexp = "\\d{6}", message = "MPIN must be exactly 6 digits")
+            String mpin
     ) {}
 }

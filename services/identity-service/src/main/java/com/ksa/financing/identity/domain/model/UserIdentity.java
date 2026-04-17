@@ -16,6 +16,8 @@ public class UserIdentity {
     private UserType userType;
     private String mobileNumber;
     private UserStatus status;
+    private String resetOtp;
+    private Instant resetOtpExpiry;
     private Instant lastSyncedAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -46,6 +48,10 @@ public class UserIdentity {
     public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
     public UserStatus getStatus() { return status; }
     public void setStatus(UserStatus status) { this.status = status; }
+    public String getResetOtp() { return resetOtp; }
+    public void setResetOtp(String resetOtp) { this.resetOtp = resetOtp; }
+    public Instant getResetOtpExpiry() { return resetOtpExpiry; }
+    public void setResetOtpExpiry(Instant resetOtpExpiry) { this.resetOtpExpiry = resetOtpExpiry; }
     public Instant getLastSyncedAt() { return lastSyncedAt; }
     public void setLastSyncedAt(Instant lastSyncedAt) { this.lastSyncedAt = lastSyncedAt; }
     public Instant getCreatedAt() { return createdAt; }

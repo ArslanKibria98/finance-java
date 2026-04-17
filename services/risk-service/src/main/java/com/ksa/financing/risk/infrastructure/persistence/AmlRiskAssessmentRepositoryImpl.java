@@ -104,6 +104,48 @@ public class AmlRiskAssessmentRepositoryImpl implements AmlRiskAssessmentReposit
         return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
     }
 
+    @Override
+    public List<AmlRiskScore> findAllByCustomerId(String customerId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, total_score, risk_level, dominant_override, dominant_category,
+                       score_breakdown, assessed_at
+                FROM aml_risk_assessments
+                WHERE customer_id = ?
+                ORDER BY assessed_at DESC
+                """,
+                (rs, rowNum) -> mapToAmlRiskScore(rs),
+                customerId
+        );
+    }
+
+    public List<java.util.Map<String, Object>> findAllWithInputDataByCustomerId(String customerId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, total_score, risk_level, dominant_override, dominant_category,
+                       score_breakdown, input_data, assessed_at
+                FROM aml_risk_assessments
+                WHERE customer_id = ?
+                ORDER BY assessed_at DESC
+                """,
+                (rs, rowNum) -> {
+                    AmlRiskScore score = mapToAmlRiskScore(rs);
+                    java.util.Map<String, Object> inputData = new java.util.HashMap<>();
+                    try {
+                        String inputDataJson = rs.getString("input_data");
+                        if (inputDataJson != null) {
+                            inputData = objectMapper.readValue(inputDataJson,
+                                    objectMapper.getTypeFactory().constructMapType(java.util.Map.class, String.class, Object.class));
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to deserialize input_data", e);
+                    }
+                    return java.util.Map.of("score", score, "inputData", inputData);
+                },
+                customerId
+        );
+    }
+
     private AmlRiskScore mapToAmlRiskScore(java.sql.ResultSet rs) throws java.sql.SQLException {
         List<AmlCategoryScoreBreakdown> breakdown;
         try {

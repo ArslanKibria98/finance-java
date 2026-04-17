@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -170,6 +172,29 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    // ── Spring MVC Exception Handlers ──────────────────────────────
+
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<ErrorResponse> handleNoResourceFoundException(Exception ex, WebRequest request) {
+        log.debug("Resource not found: {}", ex.getMessage());
+
+        Locale locale = resolveLocale(request);
+        String localizedMessage = resolveMessage(
+                ErrorCodes.NOT_FOUND, null,
+                "The requested resource was not found", locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
+                .code(ErrorCodes.NOT_FOUND)
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
     // ── JDK Exception Handlers ──────────────────────────────────────

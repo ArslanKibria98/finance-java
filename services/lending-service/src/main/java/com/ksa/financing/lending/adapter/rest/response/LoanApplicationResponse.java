@@ -17,6 +17,8 @@ public record LoanApplicationResponse(
         String customerId,
         String nationalId,
         String status,
+        @Schema(description = "Display status for list view: IN_PROGRESS for active applications, APPROVED/REJECTED/CANCELLED/EXPIRED for terminal ones")
+        String displayStatus,
         int stepperIndex,
         String stepperLabel,
         String workflowId,
@@ -150,12 +152,20 @@ public record LoanApplicationResponse(
         java.time.LocalDate disbursementDate
 ) {
     public static LoanApplicationResponse from(LoanApplicationDto dto) {
+        String displayStatus = switch (dto.status()) {
+            case "APPROVED"   -> "APPROVED";
+            case "REJECTED"   -> "REJECTED";
+            case "CANCELLED"  -> "CANCELLED";
+            case "EXPIRED"    -> "EXPIRED";
+            default           -> "IN_PROGRESS";
+        };
         return new LoanApplicationResponse(
                 dto.id(),
                 dto.applicationNumber(),
                 dto.customerId(),
                 dto.nationalId(),
                 dto.status(),
+                displayStatus,
                 dto.stepperIndex(),
                 dto.stepperLabel(),
                 dto.workflowId(),

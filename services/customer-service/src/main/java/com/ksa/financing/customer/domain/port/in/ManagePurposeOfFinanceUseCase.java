@@ -13,6 +13,8 @@ public interface ManagePurposeOfFinanceUseCase {
     List<PurposeOfFinanceOption> getAll(UUID tenantId);
     List<PurposeOfFinanceOption> getActive(UUID tenantId);
     void deactivate(UUID tenantId, UUID id);
+    void activate(UUID tenantId, UUID id);
+    void delete(UUID tenantId, UUID id);
 
     record CreatePurposeOfFinanceCommand(
         String code,

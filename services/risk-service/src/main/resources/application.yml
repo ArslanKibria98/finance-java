@@ -74,6 +74,7 @@ app:
     fraud-service-url: ${FRAUD_SERVICE_URL:http://localhost:8092}
     middleware-url: ${MIDDLEWARE_SERVICE_URL:http://localhost:8093}
     middleware-secret-key: ${MIDDLEWARE_SECRET_KEY:}
+    product-service-url: ${PRODUCT_SERVICE_URL:http://localhost:8091}
   risk:
     velocity:
       ip-max-per-hour: 10

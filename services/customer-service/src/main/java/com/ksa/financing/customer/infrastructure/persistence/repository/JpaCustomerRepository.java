@@ -25,6 +25,8 @@ public interface JpaCustomerRepository extends JpaRepository<CustomerJpaEntity, 
 
     boolean existsByNationalIdAndTenantIdAndDeletedAtIsNull(String nationalId, UUID tenantId);
 
+    Optional<CustomerJpaEntity> findByMobileNumberAndDeletedAtIsNull(String mobileNumber);
+
     List<CustomerJpaEntity> findByDeletedAtIsNull();
 
     List<CustomerJpaEntity> findByTenantIdAndDeletedAtIsNull(UUID tenantId);

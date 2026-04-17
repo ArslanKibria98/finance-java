@@ -95,7 +95,6 @@ public class Product {
     private TermsConditions termsConditions;
     private FeeSettings feeSettings;
     private List<ApplicationStep> applicationSteps;
-    private DurationSettings durationSettings;
     private List<EnvironmentConfigLink> environmentConfigs;
     private List<ApprovalWorkflow> approvalWorkflows;
 
@@ -394,8 +393,6 @@ public class Product {
     public List<ApplicationStep> getApplicationSteps() { return applicationSteps; }
     public void setApplicationSteps(List<ApplicationStep> applicationSteps) { this.applicationSteps = applicationSteps; }
 
-    public DurationSettings getDurationSettings() { return durationSettings; }
-    public void setDurationSettings(DurationSettings durationSettings) { this.durationSettings = durationSettings; }
 
     public List<EnvironmentConfigLink> getEnvironmentConfigs() { return environmentConfigs; }
     public void setEnvironmentConfigs(List<EnvironmentConfigLink> environmentConfigs) { this.environmentConfigs = environmentConfigs; }

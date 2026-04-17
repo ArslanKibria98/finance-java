@@ -99,4 +99,22 @@ public class ManageSourceOfIncomeService implements ManageSourceOfIncomeUseCase 
         option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
+
+    @Override
+    @Transactional
+    public void activate(UUID tenantId, UUID id) {
+        SourceOfIncomeOption option = repository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+        option.setActive(true);
+        option.setUpdatedAt(java.time.Instant.now());
+        repository.save(option);
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID tenantId, UUID id) {
+        repository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+        repository.softDelete(tenantId, id);
+    }
 }

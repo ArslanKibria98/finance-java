@@ -69,6 +69,12 @@ public class UserIdentityJpaEntity {
     @Column(name = "status", nullable = false)
     private UserStatus status;
 
+    @Column(name = "reset_otp", length = 10)
+    private String resetOtp;
+
+    @Column(name = "reset_otp_expiry")
+    private OffsetDateTime resetOtpExpiry;
+
     @Column(name = "last_synced_at")
     private OffsetDateTime lastSyncedAt;
 

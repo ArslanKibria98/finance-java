@@ -28,6 +28,8 @@ public class UserIdentityPersistenceMapper {
         entity.setMobileNumber(domain.getMobileNumber());
         entity.setUserType(domain.getUserType());
         entity.setStatus(domain.getStatus());
+        entity.setResetOtp(domain.getResetOtp());
+        entity.setResetOtpExpiry(toOffsetDateTime(domain.getResetOtpExpiry()));
         entity.setLastSyncedAt(toOffsetDateTime(domain.getLastSyncedAt()));
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -52,6 +54,8 @@ public class UserIdentityPersistenceMapper {
         domain.setMobileNumber(entity.getMobileNumber());
         domain.setUserType(entity.getUserType());
         domain.setStatus(entity.getStatus());
+        domain.setResetOtp(entity.getResetOtp());
+        domain.setResetOtpExpiry(toInstant(entity.getResetOtpExpiry()));
         domain.setLastSyncedAt(toInstant(entity.getLastSyncedAt()));
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));

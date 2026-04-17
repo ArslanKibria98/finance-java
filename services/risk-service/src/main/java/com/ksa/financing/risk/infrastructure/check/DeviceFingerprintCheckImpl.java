@@ -15,7 +15,8 @@ import java.time.OffsetDateTime;
 public class DeviceFingerprintCheckImpl implements DeviceFingerprintCheck {
 
     private static final int MAX_NID_PER_DEVICE = 3;
-    private static final int MAX_ATTEMPTS_PER_DAY = 5;
+    private static final int MAX_ATTEMPTS_SAME_ID_PER_DAY = 100;  // same NID/mobile retries allowed
+    private static final int MAX_ATTEMPTS_PER_DAY = 5;           // distinct NID/mobile combos per device
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -48,7 +49,15 @@ public class DeviceFingerprintCheckImpl implements DeviceFingerprintCheck {
             );
             int nidAssociationCount = nidCount != null ? nidCount : 0;
 
-            if (nidAssociationCount > MAX_NID_PER_DEVICE) {
+            // Check if admin has overridden the identity-farming block for this device
+            Boolean overrideFlag = jdbcTemplate.queryForObject(
+                "SELECT BOOL_OR(nid_farming_override) FROM device_registry WHERE device_id = ?",
+                Boolean.class,
+                input.deviceId()
+            );
+            boolean farmingOverride = Boolean.TRUE.equals(overrideFlag);
+
+            if (!farmingOverride && nidAssociationCount > MAX_NID_PER_DEVICE) {
                 log.warn("Identity farming detected: device {} has {} NID associations",
                     maskDeviceId(input.deviceId()), nidAssociationCount);
                 return new DeviceFingerprintResult(
@@ -57,11 +66,32 @@ public class DeviceFingerprintCheckImpl implements DeviceFingerprintCheck {
                 );
             }
 
-            // Count attempts in last 24 hours — SKIPPED (temporarily disabled for dev/testing)
-            // TODO: Re-enable device attempt velocity check before production
-            int attemptCount = 0;
+            // Determine the identity key for this attempt (nidHash takes priority over mobileHash)
+            String identityKey = (input.nidHash() != null && !input.nidHash().isBlank())
+                ? input.nidHash()
+                : (input.mobileHash() != null && !input.mobileHash().isBlank() ? input.mobileHash() : "pending");
 
-            // Register/update device entry (upsert)
+            // Count distinct identity combos (different NIDs/mobiles) from this device in last 24 hours
+            // Same NID/mobile retrying is NOT counted as a new combo — only fraud (different IDs) is penalised
+            Integer distinctCombos = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT nid_hash) FROM device_registry WHERE device_id = ? AND last_seen_at > ?",
+                Integer.class,
+                input.deviceId(),
+                OffsetDateTime.now().minusHours(24)
+            );
+            int attemptCount = distinctCombos != null ? distinctCombos : 0;
+
+            if (attemptCount >= MAX_ATTEMPTS_PER_DAY) {
+                log.warn("Device velocity exceeded: {} tried {} different identities in 24h (max {})",
+                    maskDeviceId(input.deviceId()), attemptCount, MAX_ATTEMPTS_PER_DAY);
+                return new DeviceFingerprintResult(
+                    CheckDecision.SOFT_BLOCK, nidAssociationCount, false, true, attemptCount,
+                    "Too many attempts from this device. Please try again later."
+                );
+            }
+
+            // Register/update device entry using actual identity key (not "pending")
+            // ON CONFLICT (device_id, nid_hash) ensures same NID/mobile just increments attempt_count on existing row
             jdbcTemplate.update(
                 """
                 INSERT INTO device_registry (device_id, device_fingerprint, nid_hash, attempt_count, last_seen_at, updated_at)
@@ -75,7 +105,7 @@ public class DeviceFingerprintCheckImpl implements DeviceFingerprintCheck {
                 """,
                 input.deviceId(),
                 input.deviceFingerprint(),
-                "pending"
+                identityKey
             );
 
             log.info("Device fingerprint check passed: {} NID associations, {} recent attempts",

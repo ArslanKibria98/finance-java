@@ -13,6 +13,8 @@ public interface GetCustomerUseCase {
     Customer getByCifNumber(UUID tenantId, String cifNumber);
     Customer getByNationalId(UUID tenantId, String nationalId);
     Customer getByNationalId(String nationalId);
+    Customer getByMobileNumber(String mobileNumber);
+    Customer getByKeycloakUserId(UUID keycloakUserId);
     List<Customer> getAll();
     List<Customer> getAllByTenant(UUID tenantId);
     List<Customer> getByLifecycleStage(UUID tenantId, LifecycleStage lifecycleStage);

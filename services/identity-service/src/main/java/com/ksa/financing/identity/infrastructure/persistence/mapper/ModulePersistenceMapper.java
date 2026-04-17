@@ -17,6 +17,7 @@ public final class ModulePersistenceMapper {
         module.setDescription(entity.getDescription());
         module.setActive(entity.isActive());
         module.setDisplayOrder(entity.getDisplayOrder());
+        module.setCatalogVisible(entity.isCatalogVisible());
         module.setCreatedAt(entity.getCreatedAt() != null ? entity.getCreatedAt().toInstant() : null);
         module.setUpdatedAt(entity.getUpdatedAt() != null ? entity.getUpdatedAt().toInstant() : null);
         return module;
@@ -31,6 +32,7 @@ public final class ModulePersistenceMapper {
         entity.setDescription(module.getDescription());
         entity.setActive(module.isActive());
         entity.setDisplayOrder(module.getDisplayOrder());
+        entity.setCatalogVisible(module.isCatalogVisible());
         entity.setCreatedAt(module.getCreatedAt() != null ? module.getCreatedAt().atOffset(ZoneOffset.UTC) : null);
         entity.setUpdatedAt(module.getUpdatedAt() != null ? module.getUpdatedAt().atOffset(ZoneOffset.UTC) : null);
         return entity;

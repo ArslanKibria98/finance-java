@@ -6,5 +6,6 @@ import java.util.List;
 
 public interface GetOnboardingStatusUseCase {
     OnboardingState getStatus(String workflowId);
+    OnboardingState getStatusByMobile(String mobileNumber);
     List<OnboardingState> listActiveOnboardings();
 }

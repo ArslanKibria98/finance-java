@@ -58,11 +58,13 @@ public class PermissionController {
 
     @SecuredEndpoint(obj = "permissions", act = "read")
     @GetMapping
-    @Operation(summary = "List permissions", description = "Returns all permissions grouped by module")
+    @Operation(summary = "List permissions", description = "Returns catalog-visible permissions grouped by module")
     public ResponseEntity<List<ModulePermissionsResponse>> listPermissions(@AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var perms = managePermissionUseCase.listByTenant(tenantId);
-        var modules = moduleRepository.findAllByTenant(tenantId);
+        var perms = managePermissionUseCase.listByTenant(tenantId).stream()
+                .filter(Permission::isCatalogVisible)
+                .toList();
+        var modules = moduleRepository.findCatalogByTenant(tenantId);
         return ResponseEntity.ok(groupByModule(perms, modules));
     }
 

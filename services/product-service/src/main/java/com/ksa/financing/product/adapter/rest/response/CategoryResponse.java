@@ -10,5 +10,6 @@ public record CategoryResponse(
     String descriptionEn,
     String descriptionAr,
     String iconUrl,
-    int sortOrder
+    int sortOrder,
+    boolean active
 ) {}

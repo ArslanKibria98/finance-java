@@ -7,7 +7,10 @@ public record FeeSettings(
     UUID id,
     BigDecimal revenueEligibilityThreshold,
     BigDecimal maxDbrPercentage,
-    BigDecimal globalDbrPercentage,
     String dbrCalculationMethod,
-    String dbrExceptions
+    String dbrExceptions,
+    BigDecimal maxDti,
+    Integer minAge,
+    Integer maxAge,
+    BigDecimal gdbrPercentage
 ) {}

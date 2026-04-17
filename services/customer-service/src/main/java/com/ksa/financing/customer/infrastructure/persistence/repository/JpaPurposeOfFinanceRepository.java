@@ -8,9 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface JpaPurposeOfFinanceRepository extends JpaRepository<PurposeOfFinanceOptionJpaEntity, UUID> {
-    Optional<PurposeOfFinanceOptionJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
-    List<PurposeOfFinanceOptionJpaEntity> findByTenantIdOrderByDisplayOrderAsc(UUID tenantId);
-    List<PurposeOfFinanceOptionJpaEntity> findByTenantIdAndActiveTrueOrderByDisplayOrderAsc(UUID tenantId);
-    boolean existsByTenantIdAndCode(UUID tenantId, String code);
-    void deleteByIdAndTenantId(UUID id, UUID tenantId);
+    Optional<PurposeOfFinanceOptionJpaEntity> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+    List<PurposeOfFinanceOptionJpaEntity> findByTenantIdAndDeletedFalseOrderByDisplayOrderAsc(UUID tenantId);
+    List<PurposeOfFinanceOptionJpaEntity> findByTenantIdAndActiveTrueAndDeletedFalseOrderByDisplayOrderAsc(UUID tenantId);
+    boolean existsByTenantIdAndCodeAndDeletedFalse(UUID tenantId, String code);
 }

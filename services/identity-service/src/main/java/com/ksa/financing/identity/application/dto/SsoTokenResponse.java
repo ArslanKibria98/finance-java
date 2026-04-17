@@ -16,5 +16,6 @@ public record SsoTokenResponse(
         int expiresIn,
         String tokenType,
         List<String> roles,
-        java.util.UUID roleId
+        java.util.UUID roleId,
+        String name
 ) {}

@@ -8,6 +8,7 @@ import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.EmploymentInfo;
 import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
+import com.ksa.financing.customer.domain.model.SupportedCountry;
 import com.ksa.financing.customer.domain.port.out.*;
 import com.ksa.financing.customer.infrastructure.http.HttpKycServiceAdapter;
 import com.ksa.financing.customer.infrastructure.http.HttpRiskServiceAdapter;
@@ -40,6 +41,7 @@ public class GetCustomer360Service {
     private final LendingServicePort lendingServicePort;
     private final KycServicePort kycServicePort;
     private final OnboardingServicePort onboardingServicePort;
+    private final CountryConfigRepository countryConfigRepository;
 
     public Customer360Response get360View(UUID customerId, UUID tenantId, boolean superAdmin, String accessToken) {
         log.info("Building Customer 360 view for customerId={}", customerId);
@@ -61,8 +63,8 @@ public class GetCustomer360Service {
         String dob = customer.getDateOfBirth() != null ? customer.getDateOfBirth().toString() : null;
         Map<String, Object> yakeenData = fetchYakeenData(nationalId, dob, accessToken);
 
-        // 4. Risk assessments
-        List<Map<String, Object>> riskAssessments = fetchRiskAssessments(nationalId, accessToken);
+        // 4. Risk assessments — merge session-based + AML-based
+        List<Map<String, Object>> riskAssessments = fetchRiskAssessments(nationalId, customerId, accessToken);
         Map<String, Object> entityStatus = fetchEntityStatus(nationalId, accessToken);
 
         // 5. Onboarding status & steps
@@ -86,16 +88,26 @@ public class GetCustomer360Service {
         boolean latestPepFlag = customer.isPepFlag();
         if (!riskAssessments.isEmpty()) {
             Map<String, Object> latest = riskAssessments.get(0);
+            // Support both session-based (riskLevel/riskGrade) and AML-based (riskLevel) field names
             latestRiskLevel = strVal(latest, "riskLevel", strVal(latest, "riskGrade", null));
             latestRiskScore = toInt(latest.get("totalScore") != null ? latest.get("totalScore") : latest.get("overallRiskScore"));
+            // For AML assessments, sessionId is stored as assessmentId
+            if (!latest.containsKey("sessionId") && latest.containsKey("assessmentId")) {
+                latest.put("sessionId", latest.get("assessmentId"));
+            }
             if (latest.get("pepFlag") != null) {
                 latestPepFlag = Boolean.TRUE.equals(latest.get("pepFlag"));
             }
         }
 
+        // 10. Country config
+        String countryCode = resolveCountryCode(customer.getCountry());
+        Customer360Response.CountryConfig countryConfig = buildCountryConfig(countryCode);
+
         // Build the response
         return new Customer360Response(
                 toCustomerResponse(customer, latestRiskLevel, latestPepFlag),
+                countryConfig,
                 buildPersonalInfo(customer, piiData, yakeenData),
                 buildAddressInfo(piiData, yakeenData),
                 buildKycInfo(customer, latestRiskLevel, latestRiskScore, latestPepFlag, entityStatus),
@@ -137,14 +149,30 @@ public class GetCustomer360Service {
         }
     }
 
-    private List<Map<String, Object>> fetchRiskAssessments(String nationalId, String accessToken) {
-        if (nationalId == null) return Collections.emptyList();
-        try {
-            return riskServicePort.getAssessmentsByEntity(nationalId, accessToken);
-        } catch (Exception e) {
-            log.warn("Risk assessments fetch failed: {}", e.getMessage());
-            return Collections.emptyList();
+    private List<Map<String, Object>> fetchRiskAssessments(String nationalId, UUID customerId, String accessToken) {
+        List<Map<String, Object>> sessionBased = Collections.emptyList();
+        if (nationalId != null) {
+            try {
+                sessionBased = riskServicePort.getAssessmentsByEntity(nationalId, accessToken);
+            } catch (Exception e) {
+                log.warn("Risk session assessments fetch failed: {}", e.getMessage());
+            }
         }
+
+        // Also fetch AML assessments (from aml_risk_assessments table) by customer UUID
+        List<Map<String, Object>> amlBased = Collections.emptyList();
+        if (customerId != null && riskServicePort instanceof HttpRiskServiceAdapter httpRisk) {
+            amlBased = httpRisk.getAmlAssessmentsByCustomerId(customerId.toString());
+        }
+
+        log.debug("fetchRiskAssessments: sessionBased.size={}, amlBased.size={}", sessionBased.size(), amlBased.size());
+        if (!amlBased.isEmpty() && sessionBased.isEmpty()) {
+            return amlBased;
+        }
+        if (!sessionBased.isEmpty()) {
+            return sessionBased;
+        }
+        return Collections.emptyList();
     }
 
     private Map<String, Object> fetchEntityStatus(String nationalId, String accessToken) {
@@ -298,9 +326,16 @@ public class GetCustomer360Service {
                 .toList();
     }
 
+    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetchBreakdownForLatestSession(List<Map<String, Object>> riskAssessments, String accessToken) {
         if (riskAssessments.isEmpty()) return Collections.emptyList();
         Map<String, Object> latest = riskAssessments.get(0);
+
+        // AML assessments embed breakdown directly — no need for separate API call
+        if (latest.containsKey("breakdown") && latest.get("breakdown") instanceof List) {
+            return (List<Map<String, Object>>) latest.get("breakdown");
+        }
+
         String sessionId = strVal(latest, "sessionId", strVal(latest, "id", null));
         if (sessionId == null) return Collections.emptyList();
         try {
@@ -318,16 +353,36 @@ public class GetCustomer360Service {
         List<Map<String, Object>> breakdown = fetchBreakdownForLatestSession(riskAssessments, accessToken);
         if (breakdown.isEmpty()) return Collections.emptyList();
 
+        String assessedAt = riskAssessments.isEmpty() ? "" :
+                strVal(riskAssessments.get(0), "assessedAt",
+                strVal(riskAssessments.get(0), "completedAt", ""));
+
         return breakdown.stream()
-                .map(item -> new KycWeightage(
-                        strVal(item, "category", "Kyc"),
-                        strVal(item, "factorCode", strVal(item, "answerValue", "")),
-                        strVal(item, "parameterId", ""),
-                        strVal(item, "factorWeight", "0"),
-                        strVal(item, "categoryWeight", "0"),
-                        strVal(item, "scoreContribution", "0"),
-                        strVal(item, "calculatedAt", "")
-                ))
+                .map(item -> {
+                    // Support both AML field names (categoryCode/factorWeightPct/rating)
+                    // and session field names (category/factorWeight/scoreContribution)
+                    String category     = strVal(item, "category", strVal(item, "categoryName", strVal(item, "categoryCode", "")));
+                    String lovType      = strVal(item, "factorCode", strVal(item, "matchedFactor", strVal(item, "answerValue", "")));
+                    String questionId   = strVal(item, "parameterId", strVal(item, "categoryCode", ""));
+                    String factorWtPct  = strVal(item, "factorWeight", strVal(item, "factorWeightPct", "0"));
+                    String categoryWt   = strVal(item, "categoryWeight", "0");
+                    // calculatedScore = categoryWeight × factorWeightPct / 100
+                    Object ratingRaw    = item.get("scoreContribution") != null ? item.get("scoreContribution") : item.get("rating");
+                    String calcScore;
+                    if (ratingRaw != null) {
+                        calcScore = ratingRaw.toString();
+                    } else {
+                        // Derive: categoryWeight × factorWeightPct / 100
+                        try {
+                            BigDecimal cw = new BigDecimal(categoryWt);
+                            BigDecimal fw = new BigDecimal(factorWtPct);
+                            calcScore = cw.multiply(fw).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP).toPlainString();
+                        } catch (Exception e) {
+                            calcScore = "0";
+                        }
+                    }
+                    return new KycWeightage(category, lovType, questionId, factorWtPct, categoryWt, calcScore, assessedAt);
+                })
                 .toList();
     }
 
@@ -335,36 +390,47 @@ public class GetCustomer360Service {
         if (riskAssessments.isEmpty()) return null;
 
         Map<String, Object> session = riskAssessments.get(0);
-        String sessionId = strVal(session, "sessionId", strVal(session, "id", null));
+        String sessionId = strVal(session, "sessionId", strVal(session, "assessmentId", strVal(session, "id", null)));
         BigDecimal totalScore = toBigDecimal(session.get("totalScore") != null ? session.get("totalScore") : session.get("overallRiskScore"));
         String riskLevel = strVal(session, "riskLevel", strVal(session, "riskGrade", ""));
         boolean pepFlag = Boolean.TRUE.equals(session.get("pepFlag"));
         boolean eddFlag = Boolean.TRUE.equals(session.get("eddFlag"));
         boolean dominantOverride = Boolean.TRUE.equals(session.get("dominantOverride"));
+        String dominantCategory = strVal(session, "dominantCategory", null);
 
-        // Fetch score breakdown components
+        // Fetch score breakdown components (embedded in AML or via separate API for sessions)
         List<Map<String, Object>> breakdown = fetchBreakdownForLatestSession(riskAssessments, accessToken);
 
         List<RiskCalculation.ScoreComponent> components = breakdown.stream()
                 .map(item -> {
-                    BigDecimal factorWt = toBigDecimal(item.get("factorWeight"));
-                    BigDecimal categoryWt = toBigDecimal(item.get("categoryWeight"));
-                    BigDecimal scoreCont = toBigDecimal(item.get("scoreContribution"));
+                    // Support both AML field names and session-based field names
+                    String category    = strVal(item, "category", strVal(item, "categoryCode", ""));
+                    String question    = strVal(item, "parameterQuestion", strVal(item, "categoryName", category));
+                    String answerValue = strVal(item, "answerValue", strVal(item, "matchedFactor", ""));
+                    String factorCode  = strVal(item, "factorCode", strVal(item, "matchedFactor", strVal(item, "categoryCode", "")));
+                    String paramId     = strVal(item, "parameterId", strVal(item, "categoryCode", ""));
 
-                    // Build human-readable calculation detail
-                    String detail = String.format("factorWeight(%s) × categoryWeight(%s) / 100 = %s",
-                            factorWt != null ? factorWt : "0",
-                            categoryWt != null ? categoryWt : "0",
-                            scoreCont != null ? scoreCont : "0");
+                    // factorWeightPct = what % of the category this factor represents
+                    BigDecimal factorWtPct = toBigDecimal(item.get("factorWeight") != null ? item.get("factorWeight") : item.get("factorWeightPct"));
+                    // categoryWeight = max points this category contributes
+                    BigDecimal categoryWt  = toBigDecimal(item.get("categoryWeight"));
+                    // rating = actual score earned = categoryWeight × factorWeightPct / 100
+                    BigDecimal scoreCont   = toBigDecimal(item.get("scoreContribution") != null ? item.get("scoreContribution") : item.get("rating"));
+
+                    // Derive missing values
+                    if (scoreCont == null && factorWtPct != null && categoryWt != null) {
+                        scoreCont = categoryWt.multiply(factorWtPct).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+                    }
+
+                    String detail = String.format("%s × %s%% / 100 = %s pts  [category=%s, factor=%s]",
+                            categoryWt != null ? categoryWt.toPlainString() : "?",
+                            factorWtPct != null ? factorWtPct.toPlainString() : "?",
+                            scoreCont != null ? scoreCont.toPlainString() : "?",
+                            category, answerValue);
 
                     return new RiskCalculation.ScoreComponent(
-                            strVal(item, "parameterId", ""),
-                            strVal(item, "parameterQuestion", ""),
-                            "",
-                            strVal(item, "category", ""),
-                            strVal(item, "answerValue", ""),
-                            strVal(item, "factorCode", ""),
-                            factorWt != null ? factorWt : BigDecimal.ZERO,
+                            paramId, question, "", category, answerValue, factorCode,
+                            factorWtPct != null ? factorWtPct : BigDecimal.ZERO,
                             categoryWt != null ? categoryWt : BigDecimal.ZERO,
                             scoreCont != null ? scoreCont : BigDecimal.ZERO,
                             detail,
@@ -373,31 +439,40 @@ public class GetCustomer360Service {
                 })
                 .toList();
 
-        // Build summary formula
-        String componentSum = components.stream()
-                .map(c -> c.scoreContribution().toPlainString())
+        // Build EastNets formula string
+        String componentTerms = components.stream()
+                .map(c -> String.format("(%s×%s%%/100=%s[%s])",
+                        c.categoryWeight().toPlainString(),
+                        c.factorWeight().toPlainString(),
+                        c.scoreContribution().toPlainString(),
+                        c.category()))
                 .reduce((a, b) -> a + " + " + b)
-                .orElse("0");
-        String formula = String.format(
-                "totalScore = SUM(factorWeight × categoryWeight / 100) = %s = %s | riskLevel = %s%s",
-                componentSum,
-                totalScore != null ? totalScore.toPlainString() : "0",
-                riskLevel,
-                pepFlag ? " (PEP OVERRIDE)" : dominantOverride ? " (DOMINANT OVERRIDE)" : "");
+                .orElse("N/A");
 
-        return new RiskCalculation(
-                sessionId,
-                strVal(session, "riskType", ""),
-                strVal(session, "status", ""),
-                totalScore,
-                riskLevel,
-                pepFlag,
-                eddFlag,
-                dominantOverride,
-                formula,
-                components,
-                strVal(session, "updatedAt", strVal(session, "completedAt", ""))
-        );
+        String formula;
+        if (dominantOverride && dominantCategory != null) {
+            formula = String.format(
+                    "EastNets AML Score = DOMINANT_OVERRIDE triggered by [%s] → totalScore forced to %s (riskLevel=%s). " +
+                    "Base formula: Σ(categoryWeight × factorWeightPct / 100). Components: %s",
+                    dominantCategory,
+                    totalScore != null ? totalScore.toPlainString() : "999",
+                    riskLevel,
+                    componentTerms);
+        } else {
+            BigDecimal sum = components.stream()
+                    .map(RiskCalculation.ScoreComponent::scoreContribution)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            formula = String.format(
+                    "EastNets AML Score = Σ(categoryWeight × factorWeightPct / 100) = %s = %s | riskLevel=%s",
+                    componentTerms, sum.toPlainString(), riskLevel);
+        }
+
+        String scoredAt = strVal(session, "assessedAt", strVal(session, "updatedAt", strVal(session, "completedAt", "")));
+        String riskType = strVal(session, "riskType", "AML_KYC");
+        String status   = strVal(session, "status", dominantOverride ? "DOMINANT_OVERRIDE" : "COMPLETED");
+
+        return new RiskCalculation(sessionId, riskType, status, totalScore, riskLevel,
+                pepFlag, eddFlag, dominantOverride, formula, components, scoredAt);
     }
 
     private RiskInfo buildRiskInfo(Customer customer, String riskLevel, Integer riskScore, boolean pepFlag, Map<String, Object> entityStatus) {
@@ -428,31 +503,64 @@ public class GetCustomer360Service {
                 .toList();
     }
 
+    @SuppressWarnings("unchecked")
     private List<ComplianceQuestionEntry> buildComplianceQuestionHistory(List<Map<String, Object>> riskAssessments, String accessToken) {
         if (riskAssessments.isEmpty()) return Collections.emptyList();
 
         List<ComplianceQuestionEntry> result = new ArrayList<>();
 
         for (Map<String, Object> assessment : riskAssessments) {
+            String date = strVal(assessment, "completedAt",
+                    strVal(assessment, "assessedAt", strVal(assessment, "createdAt", Instant.now().toString())));
+
+            // AML assessments embed inputData — build compliance Q&A + weightage from it
+            if (assessment.containsKey("inputData") && assessment.get("inputData") instanceof Map) {
+                Map<String, Object> inputData = (Map<String, Object>) assessment.get("inputData");
+
+                // Extract breakdown for weightage lookup
+                List<Map<String, Object>> breakdown = Collections.emptyList();
+                if (assessment.containsKey("breakdown") && assessment.get("breakdown") instanceof List) {
+                    breakdown = (List<Map<String, Object>>) assessment.get("breakdown");
+                }
+
+                // Build category → breakdown item index for O(1) lookup
+                Map<String, Map<String, Object>> breakdownByCategory = new HashMap<>();
+                for (Map<String, Object> item : breakdown) {
+                    String catCode = strVal(item, "categoryCode", strVal(item, "category", ""));
+                    if (!catCode.isBlank()) {
+                        breakdownByCategory.put(catCode, item);
+                    }
+                }
+
+                List<ComplianceQuestionEntry.ComplianceAnswer> answers =
+                        buildAnswersFromAmlInput(inputData, breakdownByCategory);
+                if (!answers.isEmpty()) {
+                    result.add(new ComplianceQuestionEntry(date, answers));
+                }
+                continue;
+            }
+
+            // Session-based assessments — fetch answers via API
             String sessionId = strVal(assessment, "sessionId", strVal(assessment, "id", null));
             if (sessionId == null) continue;
-
             try {
                 List<Map<String, Object>> answers = riskServicePort.getAssessmentAnswers(sessionId, accessToken);
                 if (answers.isEmpty()) continue;
-
-                String date = strVal(assessment, "completedAt",
-                        strVal(assessment, "createdAt", Instant.now().toString()));
-
                 List<ComplianceQuestionEntry.ComplianceAnswer> answerList = answers.stream()
-                        .map(a -> new ComplianceQuestionEntry.ComplianceAnswer(
-                                strVal(a, "questionTextEn", strVal(a, "questionText", "")),
-                                strVal(a, "questionTextAr", ""),
-                                strVal(a, "answerValue", strVal(a, "answer", "")),
-                                strVal(a, "category", "affordability")
-                        ))
+                        .map(a -> {
+                            String fwPct = strVal(a, "factorWeight", strVal(a, "factorWeightPct", null));
+                            String catWt = strVal(a, "categoryWeight", null);
+                            String scoreC = strVal(a, "scoreContribution", strVal(a, "rating", null));
+                            String calcDetail = buildCalcDetail(fwPct, catWt, scoreC);
+                            return new ComplianceQuestionEntry.ComplianceAnswer(
+                                    strVal(a, "questionTextEn", strVal(a, "questionText", "")),
+                                    strVal(a, "questionTextAr", ""),
+                                    strVal(a, "answerValue", strVal(a, "answer", "")),
+                                    strVal(a, "category", "affordability"),
+                                    fwPct, catWt, scoreC, calcDetail
+                            );
+                        })
                         .toList();
-
                 result.add(new ComplianceQuestionEntry(date, answerList));
             } catch (Exception e) {
                 log.warn("Compliance answers fetch failed for session {}: {}", sessionId, e.getMessage());
@@ -460,6 +568,77 @@ public class GetCustomer360Service {
         }
 
         return result;
+    }
+
+    // Maps inputData field → [questionEn, questionAr, categoryCode matching AML breakdown]
+    private static final Map<String, String[]> AML_FIELD_LABELS = new java.util.LinkedHashMap<>() {{
+        put("nationality",      new String[]{"Nationality", "\u0627\u0644\u062c\u0646\u0633\u064a\u0629", "NATIONALITY"});
+        put("cityName",         new String[]{"City of Residence", "\u0645\u062f\u064a\u0646\u0629 \u0627\u0644\u0625\u0642\u0627\u0645\u0629", "GEOGRAPHICAL_LOCATION"});
+        put("occupationCode",   new String[]{"Occupation / Employment", "\u0627\u0644\u0645\u0647\u0646\u0629 / \u0627\u0644\u0648\u0638\u064a\u0641\u0629", "OCCUPATIONS"});
+        put("monthlyIncome",    new String[]{"Monthly Income (SAR)", "\u0627\u0644\u062f\u062e\u0644 \u0627\u0644\u0634\u0647\u0631\u064a (\u0631.\u0633)", "INCOME_RANGE"});
+        put("sourceOfIncome",   new String[]{"Source of Income", "\u0645\u0635\u062f\u0631 \u0627\u0644\u062f\u062e\u0644", "SOURCE_OF_INCOME"});
+        put("productRiskTier",  new String[]{"Product Risk Tier", "\u0645\u0633\u062a\u0648\u0649 \u0645\u062e\u0627\u0637\u0631\u0629 \u0627\u0644\u0645\u0646\u062a\u062c", "PRODUCT_SERVICES"});
+        put("isPep",            new String[]{"Politically Exposed Person (PEP)?", "\u0647\u0644 \u0623\u0646\u062a \u0634\u062e\u0635 \u0628\u0627\u0631\u0632 \u0633\u064a\u0627\u0633\u064a\u0627\u064b\u061f", "PEP"});
+        put("isOnInternalList", new String[]{"On Internal Watchlist?", "\u0647\u0644 \u0623\u0646\u062a \u0639\u0644\u0649 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u062f\u0627\u062e\u0644\u064a\u0629\u061f", "AML_SCREENING"});
+    }};
+
+    private List<ComplianceQuestionEntry.ComplianceAnswer> buildAnswersFromAmlInput(
+            Map<String, Object> inputData,
+            Map<String, Map<String, Object>> breakdownByCategory) {
+
+        List<ComplianceQuestionEntry.ComplianceAnswer> answers = new ArrayList<>();
+        // Use a stable order (insertion order via LinkedHashMap-compatible iteration)
+        String[] orderedFields = {"nationality","cityName","occupationCode","monthlyIncome",
+                                  "sourceOfIncome","productRiskTier","isPep","isOnInternalList"};
+        for (String field : orderedFields) {
+            if (!AML_FIELD_LABELS.containsKey(field)) continue;
+            Object val = inputData.get(field);
+            if (val == null) continue;
+
+            String[] labels = AML_FIELD_LABELS.get(field);
+            String category = labels[2];
+
+            // Look up breakdown weightage for this category
+            Map<String, Object> bItem = breakdownByCategory.get(category);
+            String fwPct   = null;
+            String catWt   = null;
+            String scoreC  = null;
+            String calcDetail = null;
+
+            if (bItem != null) {
+                fwPct  = strVal(bItem, "factorWeightPct", strVal(bItem, "factorWeight", null));
+                catWt  = strVal(bItem, "categoryWeight", null);
+                Object ratingRaw = bItem.get("rating") != null ? bItem.get("rating") : bItem.get("scoreContribution");
+                if (ratingRaw != null) {
+                    scoreC = ratingRaw.toString();
+                } else if (fwPct != null && catWt != null) {
+                    // Derive: categoryWeight × factorWeightPct / 100
+                    try {
+                        BigDecimal cw = new BigDecimal(catWt);
+                        BigDecimal fw = new BigDecimal(fwPct);
+                        scoreC = cw.multiply(fw)
+                                   .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP)
+                                   .toPlainString();
+                    } catch (Exception ignored) {}
+                }
+                calcDetail = buildCalcDetail(fwPct, catWt, scoreC);
+            }
+
+            answers.add(new ComplianceQuestionEntry.ComplianceAnswer(
+                    labels[0], labels[1], val.toString(), category,
+                    fwPct, catWt, scoreC, calcDetail
+            ));
+        }
+        return answers;
+    }
+
+    /** Builds a human-readable formula string: "catWt × fwPct% / 100 = score pts" */
+    private String buildCalcDetail(String fwPct, String catWt, String scoreC) {
+        if (fwPct == null && catWt == null) return null;
+        return String.format("%s × %s%% / 100 = %s pts",
+                catWt  != null ? catWt  : "?",
+                fwPct  != null ? fwPct  : "?",
+                scoreC != null ? scoreC : "?");
     }
 
     @SuppressWarnings("unchecked")
@@ -518,6 +697,9 @@ public class GetCustomer360Service {
         // Use latest risk assessment values over stale customer DB values
         String riskGrade = latestRiskLevel != null ? latestRiskLevel :
                 (customer.getRiskGrade() != null ? customer.getRiskGrade().name() : null);
+        String profilePictureUrl = customer.getProfilePicture() != null
+                ? "/api/v1/customers/" + customer.getId() + "/profile-picture"
+                : null;
         return new CustomerResponse(
                 customer.getId(),
                 customer.getCifNumber(),
@@ -541,9 +723,51 @@ public class GetCustomer360Service {
                 latestPepFlag,
                 customer.isSanctionsFlag(),
                 customer.getGlobalUid(),
+                profilePictureUrl,
                 customer.getCreatedAt(),
                 customer.getUpdatedAt()
         );
+    }
+
+    private Customer360Response.CountryConfig buildCountryConfig(String countryCode) {
+        try {
+            var country = countryConfigRepository.findCountryByCode(countryCode).orElse(null);
+            int totalSteps = countryConfigRepository.findStepsByCountryCode(countryCode).size();
+            if (country != null) {
+                return new Customer360Response.CountryConfig(
+                        country.countryCode(),
+                        country.countryName(),
+                        country.countryNameAr(),
+                        country.currencyCode(),
+                        country.flagEmoji(),
+                        country.dialCode(),
+                        country.nationalityEn(),
+                        country.nationalityAr(),
+                        List.of(country.idTypes().split(",")),
+                        country.defaultIdType(),
+                        List.of(country.kycProviders().split(",")),
+                        totalSteps
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Country config fetch failed for {}: {}", countryCode, e.getMessage());
+        }
+        return new Customer360Response.CountryConfig(countryCode, countryCode, null, "SAR", null, null, null, null, List.of(), "", List.of(), 0);
+    }
+
+    // ISO alpha-2 to alpha-3 mapping for common countries
+    private static final Map<String, String> COUNTRY_CODE_MAP = Map.of(
+            "SA", "SAU", "AE", "ARE", "PK", "PAK", "EG", "EGY", "MY", "MYS",
+            "BH", "BHR", "KW", "KWT", "OM", "OMN", "QA", "QAT", "JO", "JOR"
+    );
+
+    private String resolveCountryCode(String rawCode) {
+        if (rawCode == null || rawCode.isBlank()) return "SAU";
+        String upper = rawCode.toUpperCase().trim();
+        if (upper.length() == 2) {
+            return COUNTRY_CODE_MAP.getOrDefault(upper, upper);
+        }
+        return upper;
     }
 
     // ==================== Utility helpers ====================

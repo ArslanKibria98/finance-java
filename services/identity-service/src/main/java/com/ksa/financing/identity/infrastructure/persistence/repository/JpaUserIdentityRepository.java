@@ -19,4 +19,6 @@ public interface JpaUserIdentityRepository extends JpaRepository<UserIdentityJpa
     boolean existsByKeycloakUserIdAndTenantId(UUID keycloakUserId, UUID tenantId);
 
     Optional<UserIdentityJpaEntity> findByKeycloakUsername(String keycloakUsername);
+
+    Optional<UserIdentityJpaEntity> findByMobileNumber(String mobileNumber);
 }

@@ -5,5 +5,5 @@ public interface AuthenticateUserUseCase {
     AuthResult refreshToken(String refreshToken);
 
     record AuthCommand(String username, String password, String realm) {}
-    record AuthResult(String accessToken, String refreshToken, long expiresIn) {}
+    record AuthResult(String accessToken, String refreshToken, long expiresIn, String name) {}
 }

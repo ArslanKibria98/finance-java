@@ -14,6 +14,8 @@ public interface ManageNetWorthRangeUseCase {
     List<NetWorthRangeOption> getAll(UUID tenantId);
     List<NetWorthRangeOption> getActive(UUID tenantId);
     void deactivate(UUID tenantId, UUID id);
+    void activate(UUID tenantId, UUID id);
+    void delete(UUID tenantId, UUID id);
 
     record CreateNetWorthRangeCommand(
         String code,

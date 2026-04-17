@@ -13,14 +13,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
-import java.util.Base64;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 /**
- * REST client for product-service + Fineract loan product validation.
- * Merges product-service config with Fineract loan product limits
- * to ensure amounts/tenures are valid in both systems before processing.
+ * REST client for product-service.
+ * Product-service is the single source of truth for all product limits
+ * (min/max amount, min/max tenure). These are derived from admin fee slabs
+ * configured per product. Fineract is NOT consulted for limit validation.
  */
 @Slf4j
 @Component
@@ -29,27 +30,15 @@ public class ProductServiceClient implements ProductConfigPort {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final String productServiceUrl;
-    private final String fineractBaseUrl;
-    private final String fineractUsername;
-    private final String fineractPassword;
-    private final String fineractTenantId;
 
     public ProductServiceClient(
             RestTemplate restTemplate,
             ObjectMapper objectMapper,
-            @Value("${app.services.product-service-url:http://localhost:8091}") String productServiceUrl,
-            @Value("${app.services.fineract-base-url:https://localhost:8443/fineract-provider/api/v1}") String fineractBaseUrl,
-            @Value("${fineract.username:mifos}") String fineractUsername,
-            @Value("${fineract.password:password}") String fineractPassword,
-            @Value("${fineract.tenant-id:default}") String fineractTenantId
+            @Value("${app.services.product-service-url:http://localhost:8091}") String productServiceUrl
     ) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.productServiceUrl = productServiceUrl;
-        this.fineractBaseUrl = fineractBaseUrl;
-        this.fineractUsername = fineractUsername;
-        this.fineractPassword = fineractPassword;
-        this.fineractTenantId = fineractTenantId;
     }
 
     @Override
@@ -59,7 +48,6 @@ public class ProductServiceClient implements ProductConfigPort {
             return defaultConfig();
         }
 
-        ProductConfig config;
         try {
             var headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -71,156 +59,71 @@ public class ProductServiceClient implements ProductConfigPort {
             var rawRoot = objectMapper.readTree(response.getBody());
             // Unwrap {"data": {...}} wrapper if present
             var root = rawRoot.has("data") && rawRoot.get("data").isObject() ? rawRoot.get("data") : rawRoot;
-            config = parseProductConfig(root, amount, tenureMonths);
 
-            // Extract fineractProductId from product-service response
-            var fineractProdId = textOrNull(root, "fineractProductId");
-            if (fineractProdId == null) {
-                // Also check nested data wrapper
-                var dataNode = root.path("data");
-                if (!dataNode.isMissingNode()) {
-                    fineractProdId = textOrNull(dataNode, "fineractProductId");
-                }
-            }
-
-            // Merge with Fineract limits using direct product ID
-            return mergeWithFineractLimits(config, fineractProdId);
+            return parseProductConfig(root);
 
         } catch (Exception e) {
             log.warn("Product-service unavailable ({}), using default config", e.getMessage());
-            config = defaultConfig();
+            return defaultConfig();
         }
-
-        return mergeWithFineractLimits(config, null);
     }
 
     /**
-     * Fetches Fineract loan product limits and merges with product-service config.
-     * Uses fineractProductId for direct lookup if available, otherwise falls back to sharia structure matching.
+     * Parses product-service response into ProductConfig.
+     * min/max amount and tenure come from slab-derived fields in the response —
+     * product-service already aggregates all admin fee slabs into these top-level values.
+     * If slabs are present in the response, we re-derive from them for accuracy.
      */
-    private ProductConfig mergeWithFineractLimits(ProductConfig config, String fineractProductId) {
-        try {
-            // Only match by fineractProductId — no guessing/fallback
-            if (fineractProductId == null || fineractProductId.isBlank()) {
-                log.warn("Product '{}' has no fineractProductId — not linked to Fineract", config.productName());
-                return new ProductConfig(
-                        config.productId(), config.productName(), config.productCode(), config.shariaStructure(),
-                        config.profitRate(), config.costOfTermPercent(),
-                        config.processingFeePercent(), config.processingFeeAmount(),
-                        config.adminFeeAmount(), config.vatPercent(),
-                        config.minAmount(), config.maxAmount(),
-                        config.minTenureMonths(), config.maxTenureMonths(),
-                        config.allowedTenures(), config.defaultTenureMonths(),
-                        config.minSalary(), config.minAge(), config.maxAge(), config.minEmploymentMonths(),
-                        config.maxDbrPercent(), false
-                );
+    private ProductConfig parseProductConfig(JsonNode root) {
+        // Try to derive limits from slabs if present (most accurate)
+        var slabsNode = root.path("adminFeeSlabs");
+        BigDecimal minAmount = null;
+        BigDecimal maxAmount = null;
+        int minTenure = 0;
+        int maxTenure = 0;
+        List<Integer> allowedTenures = List.of();
+
+        if (slabsNode.isArray() && slabsNode.size() > 0) {
+            for (var slab : slabsNode) {
+                var slabMin = decimalOrNull(slab, "minAmount");
+                var slabMax = decimalOrNull(slab, "maxAmount");
+                var slabMinT = intOrNull(slab, "minTenure");
+                var slabMaxT = intOrNull(slab, "maxTenure");
+
+                if (slabMin != null) minAmount = minAmount == null ? slabMin : minAmount.min(slabMin);
+                if (slabMax != null) maxAmount = maxAmount == null ? slabMax : maxAmount.max(slabMax);
+                if (slabMinT != null) minTenure = minTenure == 0 ? slabMinT : Math.min(minTenure, slabMinT);
+                if (slabMaxT != null) maxTenure = Math.max(maxTenure, slabMaxT);
             }
 
-            JsonNode matched = fetchFineractLoanProductById(fineractProductId);
-            if (matched != null) {
-                log.info("Fineract product matched by ID: {} → {}", fineractProductId, matched.path("name").asText());
+            if (minTenure > 0 && maxTenure > 0) {
+                var tenureList = new ArrayList<Integer>();
+                for (int i = minTenure; i <= maxTenure; i++) tenureList.add(i);
+                allowedTenures = List.copyOf(tenureList);
             }
 
-            if (matched == null) {
-                log.warn("No matching Fineract loan product found for product: {} (sharia: {}, fineractId: {})",
-                        config.productName(), config.shariaStructure(), fineractProductId);
-                return new ProductConfig(
-                        config.productId(), config.productName(), config.productCode(), config.shariaStructure(),
-                        config.profitRate(), config.costOfTermPercent(),
-                        config.processingFeePercent(), config.processingFeeAmount(),
-                        config.adminFeeAmount(), config.vatPercent(),
-                        config.minAmount(), config.maxAmount(),
-                        config.minTenureMonths(), config.maxTenureMonths(),
-                        config.allowedTenures(), config.defaultTenureMonths(),
-                        config.minSalary(), config.minAge(), config.maxAge(), config.minEmploymentMonths(),
-                        config.maxDbrPercent(), false  // NOT linked to Fineract
-                );
-            }
-
-            var fMinPrincipal = decimalOrNull(matched, "minPrincipal");
-            var fMaxPrincipal = decimalOrNull(matched, "maxPrincipal");
-            var fMinTenure = intOrNull(matched, "minNumberOfRepayments");
-            var fMaxTenure = intOrNull(matched, "maxNumberOfRepayments");
-
-            log.info("Fineract limits for {}: principal [{} - {}], tenure [{} - {}]",
-                    matched.path("name").asText(), fMinPrincipal, fMaxPrincipal, fMinTenure, fMaxTenure);
-
-            // Merge: take stricter limits
-            var mergedMinAmount = stricterMin(config.minAmount(), fMinPrincipal);
-            var mergedMaxAmount = stricterMax(config.maxAmount(), fMaxPrincipal);
-            var mergedMinTenure = Math.max(config.minTenureMonths(), fMinTenure != null ? fMinTenure : 0);
-            int mergedMaxTenure;
-            if (config.maxTenureMonths() > 0 && fMaxTenure != null) {
-                mergedMaxTenure = Math.min(config.maxTenureMonths(), fMaxTenure);
-            } else if (fMaxTenure != null) {
-                mergedMaxTenure = fMaxTenure;
-            } else {
-                mergedMaxTenure = config.maxTenureMonths();
-            }
-
-            return new ProductConfig(
-                    config.productId(), config.productName(), config.productCode(), config.shariaStructure(),
-                    config.profitRate(), config.costOfTermPercent(),
-                    config.processingFeePercent(), config.processingFeeAmount(),
-                    config.adminFeeAmount(), config.vatPercent(),
-                    mergedMinAmount, mergedMaxAmount,
-                    mergedMinTenure, mergedMaxTenure,
-                    config.allowedTenures(), config.defaultTenureMonths(),
-                    config.minSalary(), config.minAge(), config.maxAge(), config.minEmploymentMonths(),
-                    config.maxDbrPercent()
-            );
-        } catch (Exception e) {
-            log.error("Fineract unavailable for limit merge: {} ({})", e.getMessage(), e.getClass().getSimpleName());
-            // Fineract is down — cannot validate, mark as not linked
-            return new ProductConfig(
-                    config.productId(), config.productName(), config.productCode(), config.shariaStructure(),
-                    config.profitRate(), config.costOfTermPercent(),
-                    config.processingFeePercent(), config.processingFeeAmount(),
-                    config.adminFeeAmount(), config.vatPercent(),
-                    config.minAmount(), config.maxAmount(),
-                    config.minTenureMonths(), config.maxTenureMonths(),
-                    config.allowedTenures(), config.defaultTenureMonths(),
-                    config.minSalary(), config.minAge(), config.maxAge(), config.minEmploymentMonths(),
-                    config.maxDbrPercent(), false
-            );
+            log.info("Product limits derived from {} slabs: amount [{} - {}], tenure [{} - {}]",
+                    slabsNode.size(), minAmount, maxAmount, minTenure, maxTenure);
         }
-    }
 
-    private JsonNode fetchFineractLoanProductById(String fineractProductId) {
-        try {
-            var headers = new HttpHeaders();
-            headers.set("Fineract-Platform-TenantId", fineractTenantId);
-            headers.set("Authorization", "Basic " +
-                    Base64.getEncoder().encodeToString((fineractUsername + ":" + fineractPassword).getBytes()));
-
-            var response = restTemplate.exchange(
-                    fineractBaseUrl + "/loanproducts/" + fineractProductId,
-                    HttpMethod.GET, new HttpEntity<>(headers), String.class);
-
-            return objectMapper.readTree(response.getBody());
-        } catch (Exception e) {
-            log.warn("Failed to fetch Fineract loan product {}: {}", fineractProductId, e.getMessage());
-            return null;
+        // Fallback to top-level fields if slabs not present or incomplete
+        if (minAmount == null) minAmount = decimalOrDefault(root, "minAmount", null);
+        if (maxAmount == null) maxAmount = decimalOrDefault(root, "maxAmount", null);
+        if (minTenure == 0) minTenure = intOrDefault(root, "minTenureMonths", 0);
+        if (maxTenure == 0) maxTenure = intOrDefault(root, "maxTenureMonths", 0);
+        if (allowedTenures.isEmpty()) {
+            var at = root.path("allowedTenures");
+            if (at.isArray() && at.size() > 0) {
+                var list = new ArrayList<Integer>();
+                for (var t : at) list.add(t.asInt());
+                allowedTenures = List.copyOf(list);
+            }
         }
-    }
 
-    private BigDecimal stricterMin(BigDecimal a, BigDecimal b) {
-        if (a == null) return b;
-        if (b == null) return a;
-        return a.compareTo(b) > 0 ? a : b; // higher min = stricter
-    }
-
-    private BigDecimal stricterMax(BigDecimal a, BigDecimal b) {
-        if (a == null) return b;
-        if (b == null) return a;
-        return a.compareTo(b) < 0 ? a : b; // lower max = stricter
-    }
-
-    private ProductConfig parseProductConfig(JsonNode root, BigDecimal amount, int tenureMonths) {
         return new ProductConfig(
                 textOrNull(root, "id"),
                 textOrNull(root, "nameEn"),
-                textOrNull(root, "code"),
+                textOrNull(root, "productCode"),
                 textOrNull(root, "shariaStructure"),
                 decimalOrDefault(root, "baseProfitRate", new BigDecimal("0.0385")),
                 decimalOrDefault(root, "costOfTermPercent", null),
@@ -228,11 +131,11 @@ public class ProductServiceClient implements ProductConfigPort {
                 decimalOrDefault(root, "processingFeeAmount", BigDecimal.ZERO),
                 decimalOrDefault(root, "adminFeeAmount", BigDecimal.ZERO),
                 decimalOrDefault(root, "vatPercent", new BigDecimal("15")),
-                decimalOrDefault(root, "minAmount", null),
-                decimalOrDefault(root, "maxAmount", null),
-                intOrDefault(root, "minTenureMonths", 0),
-                intOrDefault(root, "maxTenureMonths", 0),
-                List.of(),
+                minAmount,
+                maxAmount,
+                minTenure,
+                maxTenure,
+                allowedTenures,
                 0,
                 decimalOrDefault(root, "minSalary", new BigDecimal("4000")),
                 intOrDefault(root, "minAge", 18),
@@ -251,8 +154,7 @@ public class ProductServiceClient implements ProductConfigPort {
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 new BigDecimal("15"),
-                null,  // min/max from Fineract only
-                null,
+                null, null,
                 0, 0,
                 List.of(),
                 0,

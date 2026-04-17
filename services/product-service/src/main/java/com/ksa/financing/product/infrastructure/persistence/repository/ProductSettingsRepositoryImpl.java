@@ -18,8 +18,7 @@ import java.util.UUID;
 public class ProductSettingsRepositoryImpl implements ProductSettingsRepository {
 
     private final JpaFeeSettingsRepository jpaFeeSettingsRepository;
-    private final JpaDurationSettingsRepository jpaDurationSettingsRepository;
-    private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
+private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
     private final JpaApplicationStepRepository jpaApplicationStepRepository;
     private final JpaAdminFeeSlabRepository jpaAdminFeeSlabRepository;
     private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigRepository;
@@ -82,8 +81,9 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
     @Override
     public void saveFeeSettings(UUID tenantId, UUID productId,
                                 BigDecimal revenueThreshold, BigDecimal maxDbrPct,
-                                BigDecimal globalDbrPct,
-                                String dbrMethod, String dbrExceptions) {
+                                String dbrMethod, String dbrExceptions,
+                                BigDecimal maxDti, Integer minAge, Integer maxAge,
+                                BigDecimal gdbrPercentage) {
         log.debug("Saving fee settings for productId={}", productId);
         var now = OffsetDateTime.now(ZoneOffset.UTC);
 
@@ -98,9 +98,12 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
 
         entity.setRevenueEligibilityThreshold(revenueThreshold);
         entity.setMaxDbrPercentage(maxDbrPct);
-        entity.setGlobalDbrPercentage(globalDbrPct);
         entity.setDbrCalculationMethod(dbrMethod);
         entity.setDbrExceptions(dbrExceptions);
+        entity.setMaxDti(maxDti);
+        entity.setMinAge(minAge);
+        entity.setMaxAge(maxAge);
+        entity.setGdbrPercentage(gdbrPercentage);
         entity.setUpdatedAt(now);
 
         jpaFeeSettingsRepository.save(entity);
@@ -160,33 +163,6 @@ public class ProductSettingsRepositoryImpl implements ProductSettingsRepository 
             jpaProductEnvironmentConfigRepository.save(entity);
         }
         log.debug("Environment configs saved for productId={}", productId);
-    }
-
-    // --- Tab 6: Duration Settings (upsert) ---
-
-    @Override
-    public void saveDurationSettings(UUID tenantId, UUID productId, int requestDays,
-                                     int approvalDays, int disbursementDays, int repaymentDays) {
-        log.debug("Saving duration settings for productId={}", productId);
-        var now = OffsetDateTime.now(ZoneOffset.UTC);
-
-        var entity = jpaDurationSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
-                .orElseGet(() -> {
-                    var newEntity = new DurationSettingsJpaEntity();
-                    newEntity.setTenantId(tenantId);
-                    newEntity.setProductId(productId);
-                    newEntity.setCreatedAt(now);
-                    return newEntity;
-                });
-
-        entity.setRequestDurationDays(requestDays);
-        entity.setApprovalDurationDays(approvalDays);
-        entity.setDisbursementDurationDays(disbursementDays);
-        entity.setRepaymentDurationDays(repaymentDays);
-        entity.setUpdatedAt(now);
-
-        jpaDurationSettingsRepository.save(entity);
-        log.debug("Duration settings saved for productId={}", productId);
     }
 
     // --- Tab 7: Approval Workflows (replace-all with children) ---

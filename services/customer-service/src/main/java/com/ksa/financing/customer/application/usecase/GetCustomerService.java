@@ -5,6 +5,7 @@ import com.ksa.financing.customer.domain.model.KycStatus;
 import com.ksa.financing.customer.domain.model.LifecycleStage;
 import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.out.CustomerRepository;
+import com.ksa.financing.infra.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -47,6 +48,18 @@ public class GetCustomerService implements GetCustomerUseCase {
     public Customer getByNationalId(String nationalId) {
         return customerRepository.findByNationalId(nationalId)
             .orElseThrow(() -> new IllegalArgumentException("Customer not found with national ID"));
+    }
+
+    @Override
+    public Customer getByMobileNumber(String mobileNumber) {
+        return customerRepository.findByMobileNumber(mobileNumber)
+            .orElseThrow(() -> new IllegalArgumentException("Customer not found with mobile number"));
+    }
+
+    @Override
+    public Customer getByKeycloakUserId(UUID keycloakUserId) {
+        return customerRepository.findByKeycloakUserId(keycloakUserId)
+            .orElseThrow(() -> NotFoundException.forEntity("Customer", keycloakUserId.toString()));
     }
 
     @Override

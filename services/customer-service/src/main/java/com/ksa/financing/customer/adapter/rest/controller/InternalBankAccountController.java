@@ -39,6 +39,31 @@ public class InternalBankAccountController {
         }
     }
 
+    @GetMapping("/exists/mobile")
+    public ResponseEntity<java.util.Map<String, Boolean>> existsByMobileNumber(
+            @RequestParam String mobileNumber) {
+        try {
+            getCustomerUseCase.getByMobileNumber(mobileNumber);
+            return ResponseEntity.ok(java.util.Map.of("exists", true));
+        } catch (Exception e) {
+            return ResponseEntity.ok(java.util.Map.of("exists", false));
+        }
+    }
+
+    @GetMapping("/find-by-mobile")
+    public ResponseEntity<java.util.Map<String, Object>> findNationalIdByMobile(
+            @RequestParam String mobileNumber) {
+        try {
+            var customer = getCustomerUseCase.getByMobileNumber(mobileNumber);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "found", true,
+                    "nationalId", customer.getNationalId()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.ok(java.util.Map.of("found", false));
+        }
+    }
+
     @PostMapping("/{customerId}/bank-accounts")
     public ResponseEntity<BankAccountResponse> addBankAccount(
             @PathVariable UUID customerId,

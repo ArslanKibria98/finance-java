@@ -88,6 +88,8 @@ public interface CreditCheckActivity {
             BigDecimal totalPayable,
             BigDecimal sellingPrice,
             BigDecimal processingFee,
-            BigDecimal adminFee
+            BigDecimal adminFee,
+            BigDecimal apr,
+            java.time.LocalDate firstInstallmentDueDate
     ) {}
 }

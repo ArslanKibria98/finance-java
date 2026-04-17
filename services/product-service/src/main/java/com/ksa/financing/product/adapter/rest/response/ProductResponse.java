@@ -55,7 +55,6 @@ public record ProductResponse(
     TermsConditionsResponse termsConditions,
     FeeSettingsResponse feeSettings,
     List<ApplicationStepResponse> applicationSteps,
-    DurationSettingsResponse durationSettings,
     List<EnvironmentConfigResponse> environmentConfigs,
     List<ApprovalWorkflowResponse> approvalWorkflows,
     List<DocumentResponse> documents,
@@ -89,13 +88,12 @@ public record ProductResponse(
         UUID id,
         BigDecimal revenueEligibilityThreshold,
         BigDecimal maxDbrPercentage,
-        BigDecimal globalDbrPercentage,
         String dbrCalculationMethod,
         String dbrExceptions,
-        BigDecimal minFinancingAmount,
-        BigDecimal maxFinancingAmount,
-        Integer minTenure,
-        Integer maxTenure
+        BigDecimal maxDti,
+        Integer minAge,
+        Integer maxAge,
+        BigDecimal gdbrPercentage
     ) {}
 
     public record ApplicationStepResponse(
@@ -108,13 +106,6 @@ public record ProductResponse(
         int sortOrder
     ) {}
 
-    public record DurationSettingsResponse(
-        UUID id,
-        int requestDurationDays,
-        int approvalDurationDays,
-        int disbursementDurationDays,
-        int repaymentDurationDays
-    ) {}
 
     public record EnvironmentConfigResponse(
         UUID id,

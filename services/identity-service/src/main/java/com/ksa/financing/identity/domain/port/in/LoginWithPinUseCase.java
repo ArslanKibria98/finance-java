@@ -4,8 +4,15 @@ public interface LoginWithPinUseCase {
 
     LoginWithPinResult login(LoginWithPinCommand command);
 
+    LoginWithPinResult loginWithMobile(LoginWithMobileCommand command);
+
     record LoginWithPinCommand(
         String nationalId,
+        String pin
+    ) {}
+
+    record LoginWithMobileCommand(
+        String mobileNumber,
         String pin
     ) {}
 
@@ -15,6 +22,7 @@ public interface LoginWithPinUseCase {
         long expiresIn,
         String customerId,
         String nationalId,
-        String mobileNumber
+        String mobileNumber,
+        String name
     ) {}
 }

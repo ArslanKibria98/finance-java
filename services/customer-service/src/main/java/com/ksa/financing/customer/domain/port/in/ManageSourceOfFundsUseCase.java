@@ -13,6 +13,8 @@ public interface ManageSourceOfFundsUseCase {
     List<SourceOfFundsOption> getAll(UUID tenantId);
     List<SourceOfFundsOption> getActive(UUID tenantId);
     void deactivate(UUID tenantId, UUID id);
+    void activate(UUID tenantId, UUID id);
+    void delete(UUID tenantId, UUID id);
 
     record CreateSourceOfFundsCommand(
         String code,

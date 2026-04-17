@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.IntStream;
 
 @Component
 public class ProductMapper {
@@ -54,11 +55,11 @@ public class ProductMapper {
                 product.getEndDate(),
                 product.isVisibleToCustomers(),
                 product.isVisibleToPartners(),
-                product.getMinAmount(),
-                product.getMaxAmount(),
-                product.getMinTenureMonths(),
-                product.getMaxTenureMonths(),
-                product.getAllowedTenures(),
+                deriveMinAmount(product),
+                deriveMaxAmount(product),
+                deriveMinTenure(product),
+                deriveMaxTenure(product),
+                deriveAllowedTenures(product),
                 product.getBaseProfitRate(),
                 product.getRateType(),
                 product.getRepaymentFrequency(),
@@ -100,14 +101,6 @@ public class ProductMapper {
                                 s.description(), s.required(), s.sortOrder()))
                         .toList()
                     : Collections.emptyList(),
-                product.getDurationSettings() != null
-                    ? new DurationSettingsResponse(
-                            product.getDurationSettings().id(),
-                            product.getDurationSettings().requestDurationDays(),
-                            product.getDurationSettings().approvalDurationDays(),
-                            product.getDurationSettings().disbursementDurationDays(),
-                            product.getDurationSettings().repaymentDurationDays())
-                    : null,
                 product.getEnvironmentConfigs() != null
                     ? product.getEnvironmentConfigs().stream()
                         .map(ec -> new EnvironmentConfigResponse(
@@ -152,98 +145,24 @@ public class ProductMapper {
 
     private static FeeSettingsResponse mapFeeSettingsWithSlabDerived(Product product) {
         var fs = product.getFeeSettings();
-        var slabs = product.getAdminFeeSlabs();
-
-        BigDecimal slabMinAmount = null;
-        BigDecimal slabMaxAmount = null;
-        Integer slabMinTenure = null;
-        Integer slabMaxTenure = null;
-
-        if (slabs != null && !slabs.isEmpty()) {
-            slabMinAmount = slabs.stream()
-                    .map(AdminFeeSlab::minAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal::min)
-                    .orElse(null);
-
-            slabMaxAmount = slabs.stream()
-                    .map(AdminFeeSlab::maxAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal::max)
-                    .orElse(null);
-
-            slabMinTenure = slabs.stream()
-                    .map(AdminFeeSlab::minTenure)
-                    .filter(Objects::nonNull)
-                    .reduce(Integer::min)
-                    .orElse(null);
-
-            slabMaxTenure = slabs.stream()
-                    .map(AdminFeeSlab::maxTenure)
-                    .filter(Objects::nonNull)
-                    .reduce(Integer::max)
-                    .orElse(null);
+        if (fs == null) {
+            return null;
         }
-
-        if (fs != null) {
-            return new FeeSettingsResponse(
-                    fs.id(),
-                    fs.revenueEligibilityThreshold(),
-                    fs.maxDbrPercentage(),
-                    fs.globalDbrPercentage(),
-                    fs.dbrCalculationMethod(),
-                    fs.dbrExceptions(),
-                    slabMinAmount,
-                    slabMaxAmount,
-                    slabMinTenure,
-                    slabMaxTenure);
-        }
-
-        if (slabMinAmount != null || slabMaxAmount != null || slabMinTenure != null || slabMaxTenure != null) {
-            return new FeeSettingsResponse(
-                    null, null, null, null, null, null,
-                    slabMinAmount, slabMaxAmount, slabMinTenure, slabMaxTenure);
-        }
-
-        return null;
+        return new FeeSettingsResponse(
+                fs.id(),
+                fs.revenueEligibilityThreshold(),
+                fs.maxDbrPercentage(),
+                fs.dbrCalculationMethod(),
+                fs.dbrExceptions(),
+                fs.maxDti(),
+                fs.minAge(),
+                fs.maxAge(),
+                fs.gdbrPercentage());
     }
 
     public static ProductSummaryResponse toSummaryResponse(Product product) {
         if (product == null) {
             return null;
-        }
-
-        var slabs = product.getAdminFeeSlabs();
-
-        BigDecimal minAmount = product.getMinAmount();
-        BigDecimal maxAmount = product.getMaxAmount();
-        int minTenure = product.getMinTenureMonths();
-        int maxTenure = product.getMaxTenureMonths();
-
-        if (slabs != null && !slabs.isEmpty()) {
-            minAmount = slabs.stream()
-                    .map(AdminFeeSlab::minAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal::min)
-                    .orElse(minAmount);
-
-            maxAmount = slabs.stream()
-                    .map(AdminFeeSlab::maxAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal::max)
-                    .orElse(maxAmount);
-
-            minTenure = slabs.stream()
-                    .map(AdminFeeSlab::minTenure)
-                    .filter(Objects::nonNull)
-                    .reduce(Integer::min)
-                    .orElse(minTenure);
-
-            maxTenure = slabs.stream()
-                    .map(AdminFeeSlab::maxTenure)
-                    .filter(Objects::nonNull)
-                    .reduce(Integer::max)
-                    .orElse(maxTenure);
         }
 
         return new ProductSummaryResponse(
@@ -268,11 +187,11 @@ public class ProductMapper {
                 product.getCountry() != null ? product.getCountry().getNameAr() : null,
                 product.getWizardStep(),
                 product.isWizardCompleted(),
-                minAmount,
-                maxAmount,
-                minTenure,
-                maxTenure,
-                product.getAllowedTenures(),
+                deriveMinAmount(product),
+                deriveMaxAmount(product),
+                deriveMinTenure(product),
+                deriveMaxTenure(product),
+                deriveAllowedTenures(product),
                 product.getBaseProfitRate(),
                 product.getRateType(),
                 product.getRepaymentFrequency(),
@@ -282,5 +201,75 @@ public class ProductMapper {
                 product.isVisibleToPartners(),
                 product.getCreatedAt()
         );
+    }
+
+    // === Slab-derived helper methods ===
+
+    private static BigDecimal deriveMinAmount(Product product) {
+        var slabs = product.getAdminFeeSlabs();
+        if (slabs != null && !slabs.isEmpty()) {
+            return slabs.stream()
+                    .map(AdminFeeSlab::minAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal::min)
+                    .orElse(product.getMinAmount());
+        }
+        return product.getMinAmount();
+    }
+
+    private static BigDecimal deriveMaxAmount(Product product) {
+        var slabs = product.getAdminFeeSlabs();
+        if (slabs != null && !slabs.isEmpty()) {
+            return slabs.stream()
+                    .map(AdminFeeSlab::maxAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal::max)
+                    .orElse(product.getMaxAmount());
+        }
+        return product.getMaxAmount();
+    }
+
+    private static int deriveMinTenure(Product product) {
+        var slabs = product.getAdminFeeSlabs();
+        if (slabs != null && !slabs.isEmpty()) {
+            return slabs.stream()
+                    .map(AdminFeeSlab::minTenure)
+                    .filter(Objects::nonNull)
+                    .reduce(Integer::min)
+                    .orElse(product.getMinTenureMonths());
+        }
+        return product.getMinTenureMonths();
+    }
+
+    private static int deriveMaxTenure(Product product) {
+        var slabs = product.getAdminFeeSlabs();
+        if (slabs != null && !slabs.isEmpty()) {
+            return slabs.stream()
+                    .map(AdminFeeSlab::maxTenure)
+                    .filter(Objects::nonNull)
+                    .reduce(Integer::max)
+                    .orElse(product.getMaxTenureMonths());
+        }
+        return product.getMaxTenureMonths();
+    }
+
+    private static List<Integer> deriveAllowedTenures(Product product) {
+        var slabs = product.getAdminFeeSlabs();
+        if (slabs != null && !slabs.isEmpty()) {
+            var min = slabs.stream()
+                    .map(AdminFeeSlab::minTenure)
+                    .filter(Objects::nonNull)
+                    .reduce(Integer::min)
+                    .orElse(null);
+            var max = slabs.stream()
+                    .map(AdminFeeSlab::maxTenure)
+                    .filter(Objects::nonNull)
+                    .reduce(Integer::max)
+                    .orElse(null);
+            if (min != null && max != null) {
+                return IntStream.rangeClosed(min, max).boxed().toList();
+            }
+        }
+        return product.getAllowedTenures();
     }
 }

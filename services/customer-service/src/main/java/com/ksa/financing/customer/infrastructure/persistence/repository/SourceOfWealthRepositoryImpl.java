@@ -6,7 +6,6 @@ import com.ksa.financing.customer.infrastructure.persistence.mapper.ReferenceDat
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,33 +29,35 @@ public class SourceOfWealthRepositoryImpl implements SourceOfWealthRepository {
     @Override
     public Optional<SourceOfWealthOption> findById(UUID tenantId, UUID id) {
         log.debug("Finding source of wealth option by ID: {} for tenant: {}", id, tenantId);
-        return jpaRepository.findByIdAndTenantId(id, tenantId)
+        return jpaRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId)
                 .map(ReferenceDataPersistenceMapper::toDomain);
     }
 
     @Override
     public List<SourceOfWealthOption> findAllByTenantId(UUID tenantId) {
         log.debug("Finding all source of wealth options for tenant: {}", tenantId);
-        return jpaRepository.findByTenantIdOrderByDisplayOrderAsc(tenantId)
+        return jpaRepository.findByTenantIdAndDeletedFalseOrderByDisplayOrderAsc(tenantId)
                 .stream().map(ReferenceDataPersistenceMapper::toDomain).toList();
     }
 
     @Override
     public List<SourceOfWealthOption> findActiveByTenantId(UUID tenantId) {
         log.debug("Finding active source of wealth options for tenant: {}", tenantId);
-        return jpaRepository.findByTenantIdAndActiveTrueOrderByDisplayOrderAsc(tenantId)
+        return jpaRepository.findByTenantIdAndActiveTrueAndDeletedFalseOrderByDisplayOrderAsc(tenantId)
                 .stream().map(ReferenceDataPersistenceMapper::toDomain).toList();
     }
 
     @Override
     public boolean existsByCode(UUID tenantId, String code) {
-        return jpaRepository.existsByTenantIdAndCode(tenantId, code);
+        return jpaRepository.existsByTenantIdAndCodeAndDeletedFalse(tenantId, code);
     }
 
     @Override
-    @Transactional
-    public void deleteById(UUID tenantId, UUID id) {
-        log.debug("Deleting source of wealth option: {} for tenant: {}", id, tenantId);
-        jpaRepository.deleteByIdAndTenantId(id, tenantId);
+    public void softDelete(UUID tenantId, UUID id) {
+        jpaRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId).ifPresent(entity -> {
+            entity.setDeleted(true);
+            entity.setActive(false);
+            jpaRepository.save(entity);
+        });
     }
 }

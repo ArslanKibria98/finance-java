@@ -77,6 +77,13 @@ public class CustomerRepositoryImpl implements CustomerRepository {
     }
 
     @Override
+    public Optional<Customer> findByMobileNumber(String mobileNumber) {
+        log.debug("Finding customer by mobile number (cross-tenant)");
+        return jpaRepository.findByMobileNumberAndDeletedAtIsNull(mobileNumber)
+                .map(CustomerPersistenceMapper::toDomain);
+    }
+
+    @Override
     public boolean existsByNationalId(UUID tenantId, String nationalId) {
         return jpaRepository.existsByNationalIdAndTenantIdAndDeletedAtIsNull(nationalId, tenantId);
     }

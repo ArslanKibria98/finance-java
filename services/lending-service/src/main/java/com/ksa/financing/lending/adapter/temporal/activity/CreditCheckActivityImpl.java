@@ -244,7 +244,9 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
                 calcResult.totalPayable(),
                 calcResult.totalPayable(),  // sellingPrice = totalPayable
                 processingFee,
-                adminFee
+                adminFee,
+                calcResult.apr(),
+                calcResult.firstInstallmentDueDate()
         );
     }
 

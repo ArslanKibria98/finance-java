@@ -27,6 +27,7 @@ public record CustomerResponse(
     boolean pepFlag,
     boolean sanctionsFlag,
     UUID globalUid,
+    String profilePicture,
     Instant createdAt,
     Instant updatedAt
 ) {}

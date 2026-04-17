@@ -6,6 +6,7 @@ import com.ksa.financing.customer.application.dto.CreateCustomerRequest;
 import com.ksa.financing.customer.application.dto.Customer360Response;
 import com.ksa.financing.customer.application.dto.CustomerResponse;
 import com.ksa.financing.customer.application.dto.UpdateCustomerRequest;
+import com.ksa.financing.customer.application.dto.UpdateMyProfileRequest;
 import com.ksa.financing.customer.application.usecase.GetCustomer360Service;
 import com.ksa.financing.customer.domain.model.BankAccount;
 import com.ksa.financing.customer.domain.model.Customer;
@@ -28,6 +29,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -38,7 +40,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.Base64;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -233,6 +240,8 @@ public class CustomerController {
         Customer customer = getCustomerUseCase.getById(id);
         String iban = walletPort.getIbanByCustomerId(customer.getTenantId(), id).orElse(null);
 
+        String profilePictureUrl = customer.getProfilePicture() != null
+                ? "/api/v1/customers/" + customer.getId() + "/profile-picture" : null;
         return ResponseEntity.ok(new CustomerProfileResponse(
                 customer.getId(),
                 customer.getFirstName(),
@@ -241,8 +250,76 @@ public class CustomerController {
                 customer.getNationalId(),
                 customer.getMobileNumber(),
                 customer.getDateOfBirth() != null ? customer.getDateOfBirth().toString() : null,
-                iban
+                iban,
+                profilePictureUrl
         ));
+    }
+
+    @SecuredEndpoint(obj = "profiles.me", act = "read")
+    @GetMapping("/my-profile")
+    @Operation(summary = "Get my profile (mobile app)", description = "Returns the authenticated customer's own profile summary")
+    @ApiResponse(responseCode = "200", description = "Profile found")
+    public ResponseEntity<CustomerProfileResponse> getMyProfile(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID keycloakUserId = UUID.fromString(jwt.getSubject());
+        Customer self = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+
+        String iban = null;
+        try {
+            iban = walletPort.getIbanByCustomerId(self.getTenantId(), self.getId()).orElse(null);
+        } catch (Exception e) {
+            log.warn("Wallet IBAN lookup failed for customerId={}: {}", self.getId(), e.getMessage());
+        }
+
+        String profilePictureUrl = self.getProfilePicture() != null
+                ? "/api/v1/customers/" + self.getId() + "/profile-picture" : null;
+
+        return ResponseEntity.ok(new CustomerProfileResponse(
+                self.getId(),
+                self.getFirstName(),
+                self.getLastName(),
+                self.getEmail(),
+                self.getNationalId(),
+                self.getMobileNumber(),
+                self.getDateOfBirth() != null ? self.getDateOfBirth().toString() : null,
+                iban,
+                profilePictureUrl
+        ));
+    }
+
+    @SecuredEndpoint(obj = "customers", act = "read")
+    @GetMapping("/{id}/profile-picture")
+    @Operation(summary = "Get customer profile picture", description = "Returns the raw image bytes for a customer's profile picture")
+    @ApiResponse(responseCode = "200", description = "Image returned")
+    @ApiResponse(responseCode = "404", description = "Customer or picture not found")
+    public ResponseEntity<byte[]> getProfilePicture(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        Customer customer = getCustomerUseCase.getById(id);
+        String raw = customer.getProfilePicture();
+        if (raw == null || raw.isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Parse "data:{contentType};base64,{data}"
+        String contentType = "image/jpeg";
+        String base64Data = raw;
+        if (raw.startsWith("data:")) {
+            int semicolon = raw.indexOf(';');
+            int comma = raw.indexOf(',');
+            if (semicolon > 5 && comma > semicolon) {
+                contentType = raw.substring(5, semicolon);
+                base64Data = raw.substring(comma + 1);
+            }
+        }
+
+        byte[] imageBytes = Base64.getDecoder().decode(base64Data);
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                .contentLength(imageBytes.length)
+                .body(imageBytes);
     }
 
     @SecuredEndpoint(obj = "customers", act = "read")
@@ -310,6 +387,76 @@ public class CustomerController {
         return ResponseEntity.ok(responses);
     }
 
+    @SecuredEndpoint(obj = "profiles.me", act = "update")
+    @PatchMapping("/my-profile")
+    @Operation(summary = "Update my profile (mobile app)",
+            description = "Allows the authenticated customer to update their email and/or profile picture. "
+                    + "Send as multipart/form-data: 'email' (text, optional) and 'profilePicture' (file, optional). "
+                    + "Both fields are optional — send only what you want to update. "
+                    + "Name, mobile, and address changes must be done via CSA.")
+    @ApiResponse(responseCode = "200", description = "Profile updated successfully")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<CustomerProfileResponse> updateMyProfile(
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) MultipartFile profilePicture,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        // Resolve customer by keycloak user ID (JWT sub) — avoids tenant mismatch
+        UUID keycloakUserId = UUID.fromString(jwt.getSubject());
+        Customer self = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+        UUID customerId = self.getId();
+        UUID tenantId   = self.getTenantId();
+
+        log.info("Updating own profile for customerId={} tenant={} hasEmail={} hasPicture={}",
+                customerId, tenantId, email != null, profilePicture != null && !profilePicture.isEmpty());
+
+        // Convert uploaded file → Base64 data URL for storage (only when file is present)
+        String profilePictureData = null;
+        if (profilePicture != null && !profilePicture.isEmpty()) {
+            try {
+                byte[] bytes = profilePicture.getBytes();
+                String contentType = profilePicture.getContentType() != null
+                        ? profilePicture.getContentType() : "image/jpeg";
+                profilePictureData = "data:" + contentType + ";base64,"
+                        + Base64.getEncoder().encodeToString(bytes);
+                log.info("Profile picture uploaded: {} bytes, type={}", bytes.length, contentType);
+            } catch (IOException e) {
+                throw new BusinessException(ErrorCodes.BAD_REQUEST, "Failed to process profile picture: " + e.getMessage());
+            }
+        }
+
+        UpdateCustomerUseCase.UpdateCustomerCommand command = new UpdateCustomerUseCase.UpdateCustomerCommand(
+                null, null, null, null,  // name fields — not updatable by customer
+                email,
+                null,  // mobileNumber — requires OTP verification
+                null, null, null, null, null,  // address fields — not updatable by customer
+                profilePictureData
+        );
+
+        Customer customer = updateCustomerUseCase.update(tenantId, customerId, command);
+
+        String iban = null;
+        try {
+            iban = walletPort.getIbanByCustomerId(customer.getTenantId(), customer.getId()).orElse(null);
+        } catch (Exception e) {
+            log.warn("Wallet IBAN lookup failed for customerId={}: {}", customer.getId(), e.getMessage());
+        }
+        String profilePictureUrl = customer.getProfilePicture() != null
+                ? "/api/v1/customers/" + customer.getId() + "/profile-picture" : null;
+
+        return ResponseEntity.ok(new CustomerProfileResponse(
+                customer.getId(),
+                customer.getFirstName(),
+                customer.getLastName(),
+                customer.getEmail(),
+                customer.getNationalId(),
+                customer.getMobileNumber(),
+                customer.getDateOfBirth() != null ? customer.getDateOfBirth().toString() : null,
+                iban,
+                profilePictureUrl
+        ));
+    }
+
     @SecuredEndpoint(obj = "customers", act = "update")
     @PatchMapping("/{id}")
     @Operation(summary = "Update customer details", description = "Updates mutable customer fields (contact info, address)")
@@ -324,13 +471,18 @@ public class CustomerController {
         log.info("Updating customer: {} for tenant: {}", id, tenantId);
 
         UpdateCustomerUseCase.UpdateCustomerCommand command = new UpdateCustomerUseCase.UpdateCustomerCommand(
+                request.firstName(),
+                request.lastName(),
+                request.firstNameAr(),
+                request.lastNameAr(),
                 request.email(),
                 request.mobileNumber(),
                 request.addressLine1(),
                 request.addressLine2(),
                 request.city(),
                 request.region(),
-                request.postalCode()
+                request.postalCode(),
+                request.profilePicture()
         );
 
         Customer customer = updateCustomerUseCase.update(tenantId, id, command);
@@ -498,6 +650,9 @@ public class CustomerController {
     }
 
     private CustomerResponse toResponse(Customer customer) {
+        String profilePictureUrl = customer.getProfilePicture() != null
+                ? "/api/v1/customers/" + customer.getId() + "/profile-picture"
+                : null;
         return new CustomerResponse(
                 customer.getId(),
                 customer.getCifNumber(),
@@ -521,6 +676,7 @@ public class CustomerController {
                 customer.isPepFlag(),
                 customer.isSanctionsFlag(),
                 customer.getGlobalUid(),
+                profilePictureUrl,
                 customer.getCreatedAt(),
                 customer.getUpdatedAt()
         );
@@ -586,7 +742,8 @@ public class CustomerController {
             String nationalId,
             String mobileNumber,
             String dateOfBirth,
-            String iban
+            String iban,
+            String profilePicture
     ) {}
 
     public record EmploymentInfoResponse(

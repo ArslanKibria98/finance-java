@@ -48,10 +48,14 @@ public class OnboardingState implements Serializable {
     private boolean amlDominantOverride;// true if PEP/Internal List triggers auto-HIGH
     private String amlDominantCategory; // PEP or INTERNAL_LIST if dominant override
     private boolean pinSet;             // true when customer has set their app PIN
+    private String countryCode;         // ISO 3166-1 alpha-3 (SAU, ARE, PAK)
     private Instant startedAt;
     private Instant lastUpdatedAt;
 
     public OnboardingState() {}
+
+    public String getCountryCode() { return countryCode; }
+    public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
 
     // --- Getters and Setters ---
 

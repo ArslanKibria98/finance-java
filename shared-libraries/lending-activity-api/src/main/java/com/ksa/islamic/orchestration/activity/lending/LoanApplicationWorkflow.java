@@ -228,11 +228,13 @@ public interface LoanApplicationWorkflow {
             BigDecimal selectedAmount,
             BigDecimal monthlyInstallment,
             BigDecimal annualProfitRate,
+            BigDecimal apr,
             int tenureMonths,
             BigDecimal totalPayable,
             BigDecimal totalProfit,
             BigDecimal processingFee,
-            BigDecimal adminFee
+            BigDecimal adminFee,
+            String firstInstallmentDate
     ) {}
 
     record ContractInfo(

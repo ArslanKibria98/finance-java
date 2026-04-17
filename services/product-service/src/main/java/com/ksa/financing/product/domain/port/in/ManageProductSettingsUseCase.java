@@ -21,8 +21,6 @@ public interface ManageProductSettingsUseCase {
     // Tab 5: Environment Configs
     void updateEnvironmentConfigs(UUID tenantId, UUID productId, List<EnvironmentConfigLinkCommand> configs);
 
-    // Tab 6: Duration Settings
-    void updateDurationSettings(UUID tenantId, UUID productId, UpdateDurationSettingsCommand command);
 
     // Tab 7: Approval Workflows
     void updateApprovalWorkflows(UUID tenantId, UUID productId, List<ApprovalWorkflowCommand> workflows);
@@ -38,8 +36,10 @@ public interface ManageProductSettingsUseCase {
 
     record UpdateFeeSettingsCommand(
         BigDecimal revenueEligibilityThreshold,
-        BigDecimal maxDbrPercentage, BigDecimal globalDbrPercentage,
-        String dbrCalculationMethod, String dbrExceptions
+        BigDecimal maxDbrPercentage,
+        String dbrCalculationMethod, String dbrExceptions,
+        BigDecimal maxDti, Integer minAge, Integer maxAge,
+        BigDecimal gdbrPercentage
     ) {}
 
     record AdminFeeSlabCommand(
@@ -51,10 +51,6 @@ public interface ManageProductSettingsUseCase {
 
     record EnvironmentConfigLinkCommand(UUID environmentConfigId, boolean active, int sortOrder) {}
 
-    record UpdateDurationSettingsCommand(
-        int requestDurationDays, int approvalDurationDays,
-        int disbursementDurationDays, int repaymentDurationDays
-    ) {}
 
     record ApprovalWorkflowCommand(
         String workflowType, String nameEn, String nameAr, String description,

@@ -27,8 +27,7 @@ public class ProductRepositoryImpl implements ProductRepository {
     private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
     private final JpaFeeSettingsRepository jpaFeeSettingsRepository;
     private final JpaApplicationStepRepository jpaApplicationStepRepository;
-    private final JpaDurationSettingsRepository jpaDurationSettingsRepository;
-    private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigRepository;
+private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigRepository;
     private final JpaApprovalWorkflowRepository jpaApprovalWorkflowRepository;
     private final JpaApprovalConditionRepository jpaApprovalConditionRepository;
     private final JpaApprovalActionRepository jpaApprovalActionRepository;
@@ -152,8 +151,10 @@ public class ProductRepositoryImpl implements ProductRepository {
         jpaFeeSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
                 .ifPresent(fs -> product.setFeeSettings(new FeeSettings(
                         fs.getId(), fs.getRevenueEligibilityThreshold(),
-                        fs.getMaxDbrPercentage(), fs.getGlobalDbrPercentage(),
-                        fs.getDbrCalculationMethod(), fs.getDbrExceptions())));
+                        fs.getMaxDbrPercentage(),
+                        fs.getDbrCalculationMethod(), fs.getDbrExceptions(),
+                        fs.getMaxDti(), fs.getMinAge(), fs.getMaxAge(),
+                        fs.getGdbrPercentage())));
 
         // Application Steps
         var steps = jpaApplicationStepRepository
@@ -164,12 +165,6 @@ public class ProductRepositoryImpl implements ProductRepository {
                         s.getDescription(), s.isRequired(), s.getSortOrder()))
                 .toList();
         product.setApplicationSteps(steps);
-
-        // Duration Settings
-        jpaDurationSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
-                .ifPresent(ds -> product.setDurationSettings(new DurationSettings(
-                        ds.getId(), ds.getRequestDurationDays(), ds.getApprovalDurationDays(),
-                        ds.getDisbursementDurationDays(), ds.getRepaymentDurationDays())));
 
         // Environment Configs
         var envConfigs = jpaProductEnvironmentConfigRepository

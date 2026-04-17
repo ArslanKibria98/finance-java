@@ -12,6 +12,9 @@ public class CustomerMapper {
     private CustomerMapper() {}
 
     public static CustomerResponse toResponse(Customer c) {
+        String profilePictureUrl = c.getProfilePicture() != null
+                ? "/api/v1/customers/" + c.getId() + "/profile-picture"
+                : null;
         return new CustomerResponse(
             c.getId(),
             c.getCifNumber(),
@@ -35,6 +38,7 @@ public class CustomerMapper {
             c.isPepFlag(),
             c.isSanctionsFlag(),
             c.getGlobalUid(),
+            profilePictureUrl,
             c.getCreatedAt(),
             c.getUpdatedAt()
         );

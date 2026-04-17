@@ -49,16 +49,27 @@ public class VelocityCheckImpl implements VelocityCheck {
                 }
             }
 
-            // Check 2: Device rate limit (max per day)
+            // Check 2: Device rate limit — only count DISTINCT NID/mobile combos per device per day.
+            // Same NID/mobile retrying from same device is legitimate and must NOT increment the counter.
             if (input.deviceId() != null && !input.deviceId().isBlank()) {
-                String deviceKey = KEY_PREFIX + "device:" + input.deviceId() + ":" + dayWindow;
-                long deviceCount = incrementWithExpiry(deviceKey, Duration.ofDays(1));
-                if (deviceCount > DEVICE_MAX_PER_DAY) {
-                    log.warn("Velocity EXCEEDED: Device {} has {} requests/day (max={})",
-                            input.deviceId(), deviceCount, DEVICE_MAX_PER_DAY);
-                    return new VelocityResult(CheckDecision.SOFT_BLOCK, true,
-                            "Device rate limit exceeded: " + deviceCount + "/" + DEVICE_MAX_PER_DAY + " per day",
-                            (int) deviceCount, "DEVICE_DAILY");
+                String identityValue = (input.nidHash() != null && !input.nidHash().isBlank())
+                    ? "nid:" + input.nidHash()
+                    : (input.mobileHash() != null && !input.mobileHash().isBlank() ? "mob:" + input.mobileHash() : null);
+
+                if (identityValue != null) {
+                    String deviceSetKey = KEY_PREFIX + "device:unique_ids:" + input.deviceId() + ":" + dayWindow;
+                    redisTemplate.opsForSet().add(deviceSetKey, identityValue);
+                    redisTemplate.expire(deviceSetKey, Duration.ofDays(1));
+                    Long uniqueIdCount = redisTemplate.opsForSet().size(deviceSetKey);
+                    long deviceCount = uniqueIdCount != null ? uniqueIdCount : 0;
+
+                    if (deviceCount > DEVICE_MAX_PER_DAY) {
+                        log.warn("Velocity EXCEEDED: Device {} used {} different identities/day (max={})",
+                                input.deviceId(), deviceCount, DEVICE_MAX_PER_DAY);
+                        return new VelocityResult(CheckDecision.SOFT_BLOCK, true,
+                                "Device rate limit exceeded: " + deviceCount + "/" + DEVICE_MAX_PER_DAY + " unique identities per day",
+                                (int) deviceCount, "DEVICE_DAILY");
+                    }
                 }
             }
 

@@ -99,6 +99,8 @@ public final class ErrorCodes {
         public static final String AUTHORIZATION_DENIED = "IDENTITY.AUTHORIZATION.DENIED";
         public static final String EMPLOYEE_NOT_FOUND  = "IDENTITY.EMPLOYEE.NOT_FOUND";
         public static final String EMPLOYEE_DUPLICATE  = "IDENTITY.EMPLOYEE.DUPLICATE_EMAIL";
+        public static final String PASSCODE_MISMATCH   = "IDENTITY.PASSCODE.MISMATCH";
+        public static final String RESET_FAILED        = "IDENTITY.PASSCODE.RESET_FAILED";
     }
 
     // ── Product ────────────────────────────────────────────────────

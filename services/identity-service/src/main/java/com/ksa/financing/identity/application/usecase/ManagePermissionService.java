@@ -156,18 +156,39 @@ public class ManagePermissionService implements ManagePermissionUseCase {
                 {"customers", "read"}, {"customers.bank-accounts", "read"},
                 {"customers.employment", "read"}, {"reference-data", "read"}});
         mapping.put("CUSTOMER:POST", new String[][]{
-                {"customers", "*"}, {"customers.bank-accounts", "*"},
-                {"customers.employment", "*"}, {"customers.kyc-status", "*"},
-                {"reference-data", "*"}});
+                {"customers", "create"}, {"customers.bank-accounts", "create"},
+                {"customers.employment", "create"}, {"reference-data", "create"}});
+        mapping.put("CUSTOMER:PUT", new String[][]{
+                {"customers", "update"}, {"customers.kyc-status", "update"},
+                {"reference-data", "update"}});
+        mapping.put("CUSTOMER:DELETE", new String[][]{
+                {"reference-data", "delete"}});
 
         // Product
         mapping.put("PRODUCT:GET", new String[][]{
                 {"products", "read"}, {"product-categories", "read"},
-                {"countries", "read"}, {"partners", "read"}});
+                {"product-documents", "read"}, {"countries", "read"},
+                {"partners", "read"}, {"contract-templates", "read"},
+                {"template-types", "read"}, {"approval-condition-fields", "read"},
+                {"credit-scoring-fields", "read"}});
         mapping.put("PRODUCT:POST", new String[][]{
-                {"products", "*"}, {"product-categories", "*"},
-                {"product-settings", "*"}, {"product-partners", "*"},
-                {"product-documents", "*"}, {"partners", "*"}, {"countries", "*"}});
+                {"products", "create"}, {"products", "manage"},
+                {"product-categories", "create"}, {"product-documents", "create"},
+                {"product-partners", "create"}, {"partners", "create"},
+                {"partners", "manage"}, {"countries", "create"},
+                {"contract-templates", "create"}, {"template-types", "create"},
+                {"approval-condition-fields", "create"}});
+        mapping.put("PRODUCT:PUT", new String[][]{
+                {"products", "update"}, {"product-categories", "update"},
+                {"product-documents", "update"}, {"product-settings", "update"},
+                {"partners", "update"}, {"countries", "update"},
+                {"contract-templates", "update"}, {"template-types", "update"},
+                {"approval-condition-fields", "update"}});
+        mapping.put("PRODUCT:DELETE", new String[][]{
+                {"products", "delete"}, {"product-categories", "delete"},
+                {"product-documents", "delete"}, {"product-partners", "delete"},
+                {"countries", "delete"}, {"contract-templates", "delete"},
+                {"template-types", "delete"}, {"approval-condition-fields", "delete"}});
 
         // Role / Permission / Policy (obj+act for other services + path-based for IDS)
         mapping.put("ROLE:GET", new String[][]{{"roles", "read"}, {"/api/v1/roles/**", "GET"}, {"/api/v1/roles", "GET"}});
@@ -183,13 +204,33 @@ public class ManagePermissionService implements ManagePermissionUseCase {
 
         // Risk
         mapping.put("RISK:GET", new String[][]{
-                {"risk", "read"}, {"risk.blacklist", "read"},
+                {"risk", "read"}, {"risk.assessment", "read"},
+                {"risk.audit", "read"}, {"risk.blacklist", "read"},
                 {"risk.credit-scoring", "read"}, {"risk.credit-scoring.field-definitions", "read"},
-                {"fraud.rules", "read"}});
+                {"risk.devices", "read"}, {"risk.entity-status", "read"},
+                {"risk.fraud-rules", "read"}, {"risk.lov", "read"},
+                {"risk.parameters", "read"}, {"risk.reviews", "read"},
+                {"risk.scenarios", "read"}, {"risk.tenant-config", "read"},
+                {"risk.thresholds", "read"}, {"fraud.rules", "read"}});
         mapping.put("RISK:POST", new String[][]{
-                {"risk", "*"}, {"risk.blacklist", "*"},
-                {"risk.credit-scoring", "*"}, {"risk.credit-scoring.field-definitions", "*"},
-                {"fraud.rules", "*"}});
+                {"risk", "create"}, {"risk.assessment", "create"}, {"risk.assessment", "manage"},
+                {"risk.blacklist", "create"}, {"risk.blacklist", "check"},
+                {"risk.credit-scoring", "create"}, {"risk.credit-scoring.field-definitions", "create"},
+                {"risk.devices", "create"}, {"risk.entity-status", "manage"},
+                {"risk.fraud-rules", "create"}, {"risk.lov", "create"}, {"risk.lov", "manage"},
+                {"risk.parameters", "create"}, {"risk.parameters", "manage"},
+                {"risk.reviews", "manage"}, {"risk.scenarios", "create"}, {"risk.scenarios", "manage"},
+                {"risk.tenant-config", "create"}, {"risk.tenant-config", "manage"},
+                {"risk.thresholds", "create"}, {"risk.thresholds", "manage"}});
+        mapping.put("RISK:PUT", new String[][]{
+                {"risk.credit-scoring.field-definitions", "update"}, {"risk.devices", "update"},
+                {"risk.fraud-rules", "update"}, {"risk.lov", "update"},
+                {"risk.parameters", "update"}, {"risk.scenarios", "update"},
+                {"risk.tenant-config", "update"}, {"risk.thresholds", "update"}});
+        mapping.put("RISK:DELETE", new String[][]{
+                {"risk.blacklist", "delete"}, {"risk.credit-scoring", "delete"},
+                {"risk.credit-scoring.field-definitions", "delete"}, {"risk.devices", "delete"},
+                {"risk.fraud-rules", "delete"}});
 
         // Admin (obj+act for other services + path-based for IDS)
         mapping.put("ADMIN:GET", new String[][]{
@@ -238,11 +279,20 @@ public class ManagePermissionService implements ManagePermissionUseCase {
                 {"loans", "read"}, {"loans.overview", "read"},
                 {"loans.installments", "read"}, {"loans.contract", "read"},
                 {"loans.receipts", "read"}, {"banks", "read"},
-                {"purpose-of-finance", "read"}, {"finance.calculator", "read"},
-                {"finance.eligibility", "check"}, {"dashboard", "read"}});
+                {"purpose-of-finance", "read"}, {"eligibility-fields", "read"},
+                {"finance.calculator", "read"}, {"finance.eligibility", "check"},
+                {"dashboard", "read"}});
         mapping.put("LENDING:POST", new String[][]{
                 {"loan-applications", "*"}, {"loan-applications", "create"},
-                {"loan-applications", "manage"}, {"loans", "*"}});
+                {"loan-applications", "manage"}, {"loans", "*"},
+                {"purpose-of-finance", "create"}, {"eligibility-fields", "create"},
+                {"eligibility-fields", "manage"}});
+        mapping.put("LENDING:PUT", new String[][]{
+                {"loan-applications", "manage"}, {"purpose-of-finance", "update"},
+                {"eligibility-fields", "update"}, {"eligibility-fields", "manage"}});
+        mapping.put("LENDING:DELETE", new String[][]{
+                {"purpose-of-finance", "delete"}, {"eligibility-fields", "delete"},
+                {"eligibility-fields", "manage"}});
 
         // Onboarding
         mapping.put("ONBOARDING:GET", new String[][]{
@@ -272,7 +322,57 @@ public class ManagePermissionService implements ManagePermissionUseCase {
 
         // Partner
         mapping.put("PARTNER:GET", new String[][]{{"partners", "read"}});
-        mapping.put("PARTNER:POST", new String[][]{{"partners", "*"}});
+        mapping.put("PARTNER:POST", new String[][]{{"partners", "create"}, {"partners", "manage"}});
+        mapping.put("PARTNER:PUT", new String[][]{{"partners", "update"}});
+
+        // Employee
+        mapping.put("EMPLOYEE:GET", new String[][]{
+                {"employees", "read"}, {"/api/v1/employees/**", "GET"}, {"/api/v1/employees", "GET"}});
+        mapping.put("EMPLOYEE:POST", new String[][]{
+                {"employees", "create"}, {"/api/v1/employees/**", "POST"}, {"/api/v1/employees", "POST"}});
+        mapping.put("EMPLOYEE:PUT", new String[][]{
+                {"employees", "update"}, {"/api/v1/employees/**", "PUT"}});
+        mapping.put("EMPLOYEE:DELETE", new String[][]{
+                {"employees", "delete"}, {"/api/v1/employees/**", "DELETE"}});
+
+        // Fraud
+        mapping.put("FRAUD:GET", new String[][]{{"fraud.rules", "read"}});
+        mapping.put("FRAUD:PUT", new String[][]{{"fraud.rules", "update"}});
+
+        // LOV — Source of Wealth, Funds, Income, Purpose of Finance, Net Worth Ranges,
+        //        Credit Scoring Field Definitions, Approval Condition Fields
+        mapping.put("LOV:GET", new String[][]{
+                {"reference-data.source-of-wealth", "read"},
+                {"reference-data.source-of-funds", "read"},
+                {"reference-data.source-of-income", "read"},
+                {"reference-data.purpose-of-finance", "read"},
+                {"reference-data.net-worth-ranges", "read"},
+                {"risk.credit-scoring.field-definitions", "read"},
+                {"approval-condition-fields", "read"}});
+        mapping.put("LOV:POST", new String[][]{
+                {"reference-data.source-of-wealth", "create"},
+                {"reference-data.source-of-funds", "create"},
+                {"reference-data.source-of-income", "create"},
+                {"reference-data.purpose-of-finance", "create"},
+                {"reference-data.net-worth-ranges", "create"},
+                {"risk.credit-scoring.field-definitions", "create"},
+                {"approval-condition-fields", "create"}});
+        mapping.put("LOV:PUT", new String[][]{
+                {"reference-data.source-of-wealth", "update"},
+                {"reference-data.source-of-funds", "update"},
+                {"reference-data.source-of-income", "update"},
+                {"reference-data.purpose-of-finance", "update"},
+                {"reference-data.net-worth-ranges", "update"},
+                {"risk.credit-scoring.field-definitions", "update"},
+                {"approval-condition-fields", "update"}});
+        mapping.put("LOV:DELETE", new String[][]{
+                {"reference-data.source-of-wealth", "delete"},
+                {"reference-data.source-of-funds", "delete"},
+                {"reference-data.source-of-income", "delete"},
+                {"reference-data.purpose-of-finance", "delete"},
+                {"reference-data.net-worth-ranges", "delete"},
+                {"risk.credit-scoring.field-definitions", "delete"},
+                {"approval-condition-fields", "delete"}});
 
         // Remove existing Casbin policies for this role first
         var existing = policyEnforcer.getPoliciesForRole(roleCode);

@@ -8,9 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface JpaNetWorthRangeRepository extends JpaRepository<NetWorthRangeOptionJpaEntity, UUID> {
-    Optional<NetWorthRangeOptionJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
-    List<NetWorthRangeOptionJpaEntity> findByTenantIdOrderByDisplayOrderAsc(UUID tenantId);
-    List<NetWorthRangeOptionJpaEntity> findByTenantIdAndActiveTrueOrderByDisplayOrderAsc(UUID tenantId);
-    boolean existsByTenantIdAndCode(UUID tenantId, String code);
-    void deleteByIdAndTenantId(UUID id, UUID tenantId);
+    Optional<NetWorthRangeOptionJpaEntity> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+    List<NetWorthRangeOptionJpaEntity> findByTenantIdAndDeletedFalseOrderByDisplayOrderAsc(UUID tenantId);
+    List<NetWorthRangeOptionJpaEntity> findByTenantIdAndActiveTrueAndDeletedFalseOrderByDisplayOrderAsc(UUID tenantId);
+    boolean existsByTenantIdAndCodeAndDeletedFalse(UUID tenantId, String code);
 }

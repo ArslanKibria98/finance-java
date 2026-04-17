@@ -662,6 +662,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       FRAUD_SERVICE_URL: http://fraud-service:8092
+      PRODUCT_SERVICE_URL: http://product-service:8091
     depends_on:
       postgres:
         condition: service_healthy

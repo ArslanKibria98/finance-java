@@ -19,12 +19,12 @@ public class AuthenticateUserService implements AuthenticateUserUseCase {
         KeycloakAdapterPort.TokenResponse token = keycloakAdapter.authenticate(
             realm, command.username(), command.password()
         );
-        return new AuthResult(token.accessToken(), token.refreshToken(), token.expiresIn());
+        return new AuthResult(token.accessToken(), token.refreshToken(), token.expiresIn(), token.name());
     }
 
     @Override
     public AuthResult refreshToken(String refreshToken) {
         KeycloakAdapterPort.TokenResponse token = keycloakAdapter.refreshToken("CompanyRealm", refreshToken);
-        return new AuthResult(token.accessToken(), token.refreshToken(), token.expiresIn());
+        return new AuthResult(token.accessToken(), token.refreshToken(), token.expiresIn(), token.name());
     }
 }

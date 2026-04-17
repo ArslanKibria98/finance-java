@@ -40,6 +40,23 @@ public class HttpRiskServiceAdapter implements RiskServicePort {
         return extractDataAsList(response.getBody());
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public List<Map<String, Object>> getAmlAssessmentsByCustomerId(String customerId) {
+        try {
+            log.debug("Fetching AML assessments for customerId: {}", customerId);
+            String url = riskServiceBaseUrl + "/api/v1/risk/aml-score/customer/" + customerId;
+            // Risk service returns {"data": [...]} wrapped format
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(new HttpHeaders()), Map.class);
+            List<Map<String, Object>> result = extractDataAsList(response.getBody());
+            log.debug("AML assessments returned {} records for customerId={}", result.size(), customerId);
+            return result;
+        } catch (Exception e) {
+            log.warn("AML assessments fetch failed for customerId={}: {}", customerId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
     @Override
     @Retry(name = "internal-rest")
     @CircuitBreaker(name = "internal-rest", fallbackMethod = "getEntityStatusFallback")

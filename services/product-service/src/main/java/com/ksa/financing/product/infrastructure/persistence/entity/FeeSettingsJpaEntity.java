@@ -39,14 +39,23 @@ public class FeeSettingsJpaEntity {
     @Column(name = "max_dbr_percentage", precision = 5, scale = 2)
     private BigDecimal maxDbrPercentage;
 
-    @Column(name = "global_dbr_percentage", precision = 5, scale = 2)
-    private BigDecimal globalDbrPercentage;
-
     @Column(name = "dbr_calculation_method", length = 50)
     private String dbrCalculationMethod;
 
     @Column(name = "dbr_exceptions", columnDefinition = "TEXT")
     private String dbrExceptions;
+
+    @Column(name = "max_dti", precision = 5, scale = 2)
+    private BigDecimal maxDti;
+
+    @Column(name = "min_age")
+    private Integer minAge;
+
+    @Column(name = "max_age")
+    private Integer maxAge;
+
+    @Column(name = "gdbr_percentage", precision = 5, scale = 2)
+    private BigDecimal gdbrPercentage;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

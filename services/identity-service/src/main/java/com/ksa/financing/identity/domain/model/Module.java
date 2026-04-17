@@ -11,6 +11,7 @@ public class Module {
     private String description;
     private boolean active;
     private int displayOrder;
+    private boolean catalogVisible = true;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -28,6 +29,8 @@ public class Module {
     public void setActive(boolean active) { this.active = active; }
     public int getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(int displayOrder) { this.displayOrder = displayOrder; }
+    public boolean isCatalogVisible() { return catalogVisible; }
+    public void setCatalogVisible(boolean catalogVisible) { this.catalogVisible = catalogVisible; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

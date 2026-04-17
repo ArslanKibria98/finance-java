@@ -8,9 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface JpaSourceOfWealthRepository extends JpaRepository<SourceOfWealthOptionJpaEntity, UUID> {
-    Optional<SourceOfWealthOptionJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
-    List<SourceOfWealthOptionJpaEntity> findByTenantIdOrderByDisplayOrderAsc(UUID tenantId);
-    List<SourceOfWealthOptionJpaEntity> findByTenantIdAndActiveTrueOrderByDisplayOrderAsc(UUID tenantId);
-    boolean existsByTenantIdAndCode(UUID tenantId, String code);
-    void deleteByIdAndTenantId(UUID id, UUID tenantId);
+    Optional<SourceOfWealthOptionJpaEntity> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+    List<SourceOfWealthOptionJpaEntity> findByTenantIdAndDeletedFalseOrderByDisplayOrderAsc(UUID tenantId);
+    List<SourceOfWealthOptionJpaEntity> findByTenantIdAndActiveTrueAndDeletedFalseOrderByDisplayOrderAsc(UUID tenantId);
+    boolean existsByTenantIdAndCodeAndDeletedFalse(UUID tenantId, String code);
 }

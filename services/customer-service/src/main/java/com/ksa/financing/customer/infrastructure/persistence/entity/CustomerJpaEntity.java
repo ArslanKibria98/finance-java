@@ -157,6 +157,9 @@ public class CustomerJpaEntity {
     @Column(name = "blocked_reason", length = 500)
     private String blockedReason;
 
+    @Column(name = "profile_picture", length = 500)
+    private String profilePicture;
+
     @Column(name = "idempotency_key", length = 100)
     private String idempotencyKey;
 

@@ -20,10 +20,19 @@ public interface KeycloakUserCreationActivity {
     @ActivityMethod
     KeycloakCreationResult createKeycloakUser(KeycloakCreationInput input);
 
+    @ActivityMethod
+    void updateKeycloakUserName(UpdateNameInput input);
+
+    record UpdateNameInput(
+        String keycloakUserId,
+        String firstName
+    ) {}
+
     record KeycloakCreationInput(
         String nationalId,
         String mobileNumber,
-        String globalUid
+        String globalUid,
+        String firstName
     ) {}
 
     record KeycloakCreationResult(

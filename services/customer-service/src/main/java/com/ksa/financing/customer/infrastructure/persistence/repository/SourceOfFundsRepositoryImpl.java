@@ -6,7 +6,6 @@ import com.ksa.financing.customer.infrastructure.persistence.mapper.ReferenceDat
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,7 +20,6 @@ public class SourceOfFundsRepositoryImpl implements SourceOfFundsRepository {
 
     @Override
     public SourceOfFundsOption save(SourceOfFundsOption option) {
-        log.debug("Saving source of funds option: {}", option.getCode());
         var entity = ReferenceDataPersistenceMapper.toSofEntity(option);
         var saved = jpaRepository.save(entity);
         return ReferenceDataPersistenceMapper.toDomain(saved);
@@ -29,34 +27,33 @@ public class SourceOfFundsRepositoryImpl implements SourceOfFundsRepository {
 
     @Override
     public Optional<SourceOfFundsOption> findById(UUID tenantId, UUID id) {
-        log.debug("Finding source of funds option by ID: {} for tenant: {}", id, tenantId);
-        return jpaRepository.findByIdAndTenantId(id, tenantId)
+        return jpaRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId)
                 .map(ReferenceDataPersistenceMapper::toDomain);
     }
 
     @Override
     public List<SourceOfFundsOption> findAllByTenantId(UUID tenantId) {
-        log.debug("Finding all source of funds options for tenant: {}", tenantId);
-        return jpaRepository.findByTenantIdOrderByDisplayOrderAsc(tenantId)
+        return jpaRepository.findByTenantIdAndDeletedFalseOrderByDisplayOrderAsc(tenantId)
                 .stream().map(ReferenceDataPersistenceMapper::toDomain).toList();
     }
 
     @Override
     public List<SourceOfFundsOption> findActiveByTenantId(UUID tenantId) {
-        log.debug("Finding active source of funds options for tenant: {}", tenantId);
-        return jpaRepository.findByTenantIdAndActiveTrueOrderByDisplayOrderAsc(tenantId)
+        return jpaRepository.findByTenantIdAndActiveTrueAndDeletedFalseOrderByDisplayOrderAsc(tenantId)
                 .stream().map(ReferenceDataPersistenceMapper::toDomain).toList();
     }
 
     @Override
     public boolean existsByCode(UUID tenantId, String code) {
-        return jpaRepository.existsByTenantIdAndCode(tenantId, code);
+        return jpaRepository.existsByTenantIdAndCodeAndDeletedFalse(tenantId, code);
     }
 
     @Override
-    @Transactional
-    public void deleteById(UUID tenantId, UUID id) {
-        log.debug("Deleting source of funds option: {} for tenant: {}", id, tenantId);
-        jpaRepository.deleteByIdAndTenantId(id, tenantId);
+    public void softDelete(UUID tenantId, UUID id) {
+        jpaRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId).ifPresent(entity -> {
+            entity.setDeleted(true);
+            entity.setActive(false);
+            jpaRepository.save(entity);
+        });
     }
 }

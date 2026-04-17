@@ -55,8 +55,10 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
         settingsRepository.saveFeeSettings(
             tenantId, productId,
             command.revenueEligibilityThreshold(),
-            command.maxDbrPercentage(), command.globalDbrPercentage(),
-            command.dbrCalculationMethod(), command.dbrExceptions()
+            command.maxDbrPercentage(),
+            command.dbrCalculationMethod(), command.dbrExceptions(),
+            command.maxDti(), command.minAge(), command.maxAge(),
+            command.gdbrPercentage()
         );
 
         advanceWizardIfNeeded(tenantId, productId, 3);
@@ -92,20 +94,6 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
         advanceWizardIfNeeded(tenantId, productId, 3);
     }
 
-    @Override
-    @Transactional
-    public void updateDurationSettings(UUID tenantId, UUID productId, UpdateDurationSettingsCommand command) {
-        log.info("Updating duration settings for product: {}", productId);
-        ensureProductExists(tenantId, productId);
-
-        settingsRepository.saveDurationSettings(
-            tenantId, productId,
-            command.requestDurationDays(), command.approvalDurationDays(),
-            command.disbursementDurationDays(), command.repaymentDurationDays()
-        );
-
-        advanceWizardIfNeeded(tenantId, productId, 3);
-    }
 
     @Override
     @Transactional

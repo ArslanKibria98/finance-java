@@ -52,17 +52,21 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
 
         try {
             // =================================================================
-            // CHECK 1: NID Format Validation
+            // CHECK 1: NID Format Validation (skip if NID not provided)
             // =================================================================
-            log.info("Check 1: NID Format Validation for assessment: {}", assessmentId);
-
-            var nidResult = nidFormatValidator.validate(
-                new NidFormatValidator.NidValidationInput(request.nationalId())
-            );
-            if (!nidResult.valid()) {
-                return blockResult(assessmentId, state, nidResult.failureReason());
+            if (request.hasNationalId()) {
+                log.info("Check 1: NID Format Validation for assessment: {}", assessmentId);
+                var nidResult = nidFormatValidator.validate(
+                    new NidFormatValidator.NidValidationInput(request.nationalId())
+                );
+                if (!nidResult.valid()) {
+                    return blockResult(assessmentId, state, nidResult.failureReason());
+                }
+                addCheckResult(state, "NID_FORMAT", CheckDecision.PASS, nidResult.idType(), 0);
+            } else {
+                log.info("Check 1: NID Format Validation SKIPPED (no NID provided) for assessment: {}", assessmentId);
+                addCheckResult(state, "NID_FORMAT", CheckDecision.PASS, "SKIPPED_NO_NID", 0);
             }
-            addCheckResult(state, "NID_FORMAT", CheckDecision.PASS, nidResult.idType(), 0);
             updateState(state, InternalCheckStep.NID_VALIDATED);
 
             // =================================================================
@@ -77,7 +81,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
                 )
             );
             if (blacklistResult.decision() == CheckDecision.HARD_BLOCK) {
-                return silentBlock(assessmentId, state);
+                return silentBlock(assessmentId, state, "BLACKLIST_WATCHLIST (" + blacklistResult.matchType() + ")");
             }
             if (blacklistResult.watchlisted()) {
                 state.getFlags().add("ENHANCED_MONITORING");
@@ -98,7 +102,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
                 )
             );
             if (fraudResult.decision() == CheckDecision.HARD_BLOCK) {
-                return silentBlock(assessmentId, state);
+                return silentBlock(assessmentId, state, "FRAUD_HISTORY (incidents=" + fraudResult.incidentCount() + ")");
             }
             if (fraudResult.suspectedFraud()) {
                 state.getFlags().add("HIGH_RISK");
@@ -114,7 +118,8 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
 
             var deviceResult = deviceFingerprintCheck.check(
                 new DeviceFingerprintCheck.DeviceFingerprintInput(
-                    request.deviceId(), request.deviceFingerprint()
+                    request.deviceId(), request.deviceFingerprint(),
+                    request.nidHash(), request.mobileHash()
                 )
             );
             if (deviceResult.decision() == CheckDecision.HARD_BLOCK) {
@@ -156,7 +161,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
                 new InternalSanctionsCheck.InternalSanctionsInput(request.nidHash(), request.tenantId())
             );
             if (sanctionsResult.sanctionsMatch()) {
-                return silentBlock(assessmentId, state);
+                return silentBlock(assessmentId, state, "INTERNAL_SANCTIONS");
             }
             addCheckResult(state, "INTERNAL_SANCTIONS", CheckDecision.PASS, "No match", 0);
             updateState(state, InternalCheckStep.SANCTIONS_CHECKED);
@@ -215,22 +220,23 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
             updateState(state, InternalCheckStep.RISK_SCORED);
 
             // =================================================================
-            // CHECK 9: CIF/NID Lookup (existing customer check)
+            // CHECK 9: CIF/NID Lookup (existing customer check — skip if no NID)
             // =================================================================
-            log.info("Check 9: CIF/NID Lookup for assessment: {}", assessmentId);
+            if (request.hasNationalId()) {
+                log.info("Check 9: CIF/NID Lookup for assessment: {}", assessmentId);
 
-            var cifResult = cifLookupCheck.lookup(
-                new CifLookupCheck.CifLookupInput(request.nidHash())
-            );
+                var cifResult = cifLookupCheck.lookup(
+                    new CifLookupCheck.CifLookupInput(request.nidHash())
+                );
 
-            state.setCifStatus(cifResult.status());
+                state.setCifStatus(cifResult.status());
 
-            switch (cifResult.status()) {
+                switch (cifResult.status()) {
                 case BLOCKED -> {
                     // Do NOT reveal reason — silent block
                     addCheckResult(state, "CIF_LOOKUP", CheckDecision.HARD_BLOCK, "BLOCKED", 0);
                     updateState(state, InternalCheckStep.CIF_CHECKED);
-                    return silentBlock(assessmentId, state);
+                    return silentBlock(assessmentId, state, "CIF_LOOKUP (account blocked)");
                 }
                 case EXISTING_ACTIVE -> {
                     // Fully onboarded — route to Login
@@ -261,46 +267,74 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
                     addCheckResult(state, "CIF_LOOKUP", CheckDecision.PASS, "NEW", 0);
                     updateState(state, InternalCheckStep.CIF_CHECKED);
                 }
+                }
+            } else {
+                log.info("Check 9: CIF/NID Lookup SKIPPED (no NID provided) for assessment: {}", assessmentId);
+                addCheckResult(state, "CIF_LOOKUP", CheckDecision.PASS, "SKIPPED_NO_NID", 0);
+                updateState(state, InternalCheckStep.CIF_CHECKED);
             }
 
             // =================================================================
-            // CHECK 10: Duplicate Mobile Number
+            // CHECK 10: Duplicate Mobile Number (skip if no mobile)
             // =================================================================
-            log.info("Check 10: Duplicate Mobile Check for assessment: {}", assessmentId);
+            if (request.hasMobileNumber()) {
+                log.info("Check 10: Duplicate Mobile Check for assessment: {}", assessmentId);
 
-            var mobileResult = duplicateMobileCheck.check(
-                new DuplicateMobileCheck.DuplicateMobileInput(
-                    request.mobileHash(), request.mobileNumber(), request.sessionId()
-                )
-            );
-            if (mobileResult.duplicate()) {
-                addCheckResult(state, "DUPLICATE_MOBILE", CheckDecision.ROUTE_LOGIN,
-                    "This mobile number is already registered. Please log in or use a different number.", 0);
-                updateState(state, InternalCheckStep.MOBILE_CHECKED);
-                return alreadyExistsResult(assessmentId, state,
-                    "This mobile number is already registered. Please log in or use a different number.");
+                var mobileResult = duplicateMobileCheck.check(
+                    new DuplicateMobileCheck.DuplicateMobileInput(
+                        request.mobileHash(), request.mobileNumber(), request.sessionId()
+                    )
+                );
+                if (mobileResult.duplicate()) {
+                    addCheckResult(state, "DUPLICATE_MOBILE", CheckDecision.ROUTE_LOGIN,
+                        "This mobile number is already registered. Please log in or use a different number.", 0);
+                    updateState(state, InternalCheckStep.MOBILE_CHECKED);
+                    return alreadyExistsResult(assessmentId, state,
+                        "This mobile number is already registered. Please log in or use a different number.");
+                }
+                newMobile = true;
+            } else {
+                log.info("Check 10: Duplicate Mobile SKIPPED (no mobile provided) for assessment: {}", assessmentId);
+                addCheckResult(state, "DUPLICATE_MOBILE", CheckDecision.PASS, "SKIPPED_NO_MOBILE", 0);
             }
-            newMobile = true;
             addCheckResult(state, "DUPLICATE_MOBILE", CheckDecision.PASS, "Mobile not registered", 0);
             updateState(state, InternalCheckStep.MOBILE_CHECKED);
 
             // =================================================================
-            // SUCCESS - All 10 checks passed
+            // SUCCESS - All 10 checks passed — determine routing
             // =================================================================
-            state.setOverallDecision(CheckDecision.PASS);
+            CheckDecision finalDecision;
+            String routeTo;
+
+            if (request.hasNationalId() && request.hasMobileNumber()) {
+                // Both NID + mobile provided and both are new → full onboarding
+                finalDecision = CheckDecision.ROUTE_ONBOARD;
+                routeTo = "ONBOARD";
+            } else if (request.hasMobileNumber() && !request.hasNationalId()) {
+                // Only mobile provided, user is new → register (collect NID next)
+                finalDecision = CheckDecision.ROUTE_REGISTER;
+                routeTo = "REGISTER";
+            } else {
+                // NID only (no mobile) — proceed with onboarding
+                finalDecision = CheckDecision.ROUTE_ONBOARD;
+                routeTo = "ONBOARD";
+            }
+
+            state.setOverallDecision(finalDecision);
+            state.setRouteTo(routeTo);
             updateState(state, InternalCheckStep.COMPLETED);
-            log.info("Internal Checks COMPLETED for assessment: {} riskScore={} riskLevel={} flags={}",
-                assessmentId, state.getAccumulatedRiskScore(), state.getRiskLevel(), state.getFlags());
+            log.info("Internal Checks COMPLETED for assessment: {} riskScore={} riskLevel={} flags={} routeTo={}",
+                assessmentId, state.getAccumulatedRiskScore(), state.getRiskLevel(), state.getFlags(), routeTo);
 
             return new InternalCheckResult(
                 assessmentId,
                 RiskAssessmentStatus.COMPLETED,
-                CheckDecision.PASS,
+                finalDecision,
                 state.getAccumulatedRiskScore(),
                 state.getRiskLevel(),
                 state.getFlags(),
                 null,
-                state.getRouteTo(),
+                routeTo,
                 state.getCompletedChecks(),
                 null
             );
@@ -367,11 +401,12 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
         );
     }
 
-    private InternalCheckResult silentBlock(String assessmentId, InternalCheckState state) {
+    private InternalCheckResult silentBlock(String assessmentId, InternalCheckState state, String checkName) {
+        String reason = "Blocked at " + checkName + ": Unable to proceed with registration at this time.";
         state.setOverallDecision(CheckDecision.HARD_BLOCK);
-        state.setBlockReason("Unable to proceed with registration at this time.");
+        state.setBlockReason(reason);
         updateState(state, InternalCheckStep.BLOCKED);
-        log.warn("Silent hard block for assessment: {}", assessmentId);
+        log.warn("Hard block for assessment: {} at check: {}", assessmentId, checkName);
 
         return new InternalCheckResult(
             assessmentId,
@@ -380,7 +415,7 @@ public class RunInternalChecksService implements RunInternalChecksUseCase {
             state.getAccumulatedRiskScore(),
             state.getRiskLevel(),
             state.getFlags(),
-            "Unable to proceed with registration at this time.",
+            reason,
             null,
             state.getCompletedChecks(),
             null

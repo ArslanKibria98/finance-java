@@ -18,7 +18,8 @@ public record AmlRiskScoreResponseDto(
     boolean dominantOverride,
     String dominantCategory,
     List<AmlCategoryScoreBreakdown> breakdown,
-    Instant assessedAt
+    Instant assessedAt,
+    java.util.Map<String, Object> inputData
 ) {
     public static AmlRiskScoreResponseDto from(AmlRiskScore score) {
         return new AmlRiskScoreResponseDto(
@@ -28,7 +29,21 @@ public record AmlRiskScoreResponseDto(
                 score.dominantOverride(),
                 score.dominantCategory(),
                 score.breakdown(),
-                score.assessedAt()
+                score.assessedAt(),
+                null
+        );
+    }
+
+    public static AmlRiskScoreResponseDto fromWithInputData(AmlRiskScore score, java.util.Map<String, Object> inputData) {
+        return new AmlRiskScoreResponseDto(
+                score.assessmentId(),
+                score.totalScore(),
+                score.riskLevel().name(),
+                score.dominantOverride(),
+                score.dominantCategory(),
+                score.breakdown(),
+                score.assessedAt(),
+                inputData
         );
     }
 }

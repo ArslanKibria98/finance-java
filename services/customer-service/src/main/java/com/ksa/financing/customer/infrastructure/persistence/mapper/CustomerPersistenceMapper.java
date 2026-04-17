@@ -73,6 +73,7 @@ public class CustomerPersistenceMapper {
         entity.setActive(domain.isActive());
         entity.setBlockedAt(toOffsetDateTime(domain.getBlockedAt()));
         entity.setBlockedReason(domain.getBlockedReason());
+        entity.setProfilePicture(domain.getProfilePicture());
         entity.setIdempotencyKey(domain.getIdempotencyKey());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -128,6 +129,7 @@ public class CustomerPersistenceMapper {
         domain.setActive(entity.isActive());
         domain.setBlockedAt(toInstant(entity.getBlockedAt()));
         domain.setBlockedReason(entity.getBlockedReason());
+        domain.setProfilePicture(entity.getProfilePicture());
         domain.setIdempotencyKey(entity.getIdempotencyKey());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));

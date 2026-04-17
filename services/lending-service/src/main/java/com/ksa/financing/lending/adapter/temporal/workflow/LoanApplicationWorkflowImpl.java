@@ -803,11 +803,13 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 null,
                 offerCalc.monthlyInstallment(),
                 resolvedProfitRate,
+                offerCalc.apr(),
                 basicInfoSignal.requestedTenureMonths(),
                 offerCalc.totalPayable(),
                 offerCalc.totalProfit(),
                 offerCalc.processingFee(),
-                offerCalc.adminFee()
+                offerCalc.adminFee(),
+                offerCalc.firstInstallmentDueDate() != null ? offerCalc.firstInstallmentDueDate().toString() : null
         );
 
         errorMessage = null;
@@ -862,11 +864,13 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 selectedAmount,
                 recalc.monthlyInstallment(),
                 resolvedProfitRate,
+                recalc.apr(),
                 basicInfoSignal.requestedTenureMonths(),
                 recalc.totalPayable(),
                 recalc.totalProfit(),
                 recalc.processingFee(),
-                recalc.adminFee()
+                recalc.adminFee(),
+                recalc.firstInstallmentDueDate() != null ? recalc.firstInstallmentDueDate().toString() : null
         );
 
         errorMessage = null;

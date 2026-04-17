@@ -19,6 +19,7 @@ public final class PermissionPersistenceMapper {
         perm.setModuleId(entity.getModuleId());
         perm.setAction(entity.getAction());
         perm.setActive(entity.isActive());
+        perm.setCatalogVisible(entity.isCatalogVisible());
         perm.setCreatedAt(entity.getCreatedAt() != null ? entity.getCreatedAt().toInstant() : null);
         perm.setUpdatedAt(entity.getUpdatedAt() != null ? entity.getUpdatedAt().toInstant() : null);
         return perm;

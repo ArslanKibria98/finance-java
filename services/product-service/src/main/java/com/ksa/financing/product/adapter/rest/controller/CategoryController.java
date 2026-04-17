@@ -105,7 +105,7 @@ public class CategoryController {
 
     // --- Sub-Categories ---
 
-    @SecuredEndpoint(obj = "product-categories", act = "read")
+    @SecuredEndpoint(obj = "product-sub-categories", act = "read")
     @GetMapping("/{id}/sub-categories")
     @Operation(summary = "List sub-categories", description = "Returns all active sub-categories for a given master category")
     public ResponseEntity<List<SubCategoryResponse>> listSubCategories(
@@ -123,7 +123,7 @@ public class CategoryController {
         return ResponseEntity.ok(response);
     }
 
-    @SecuredEndpoint(obj = "product-categories", act = "create")
+    @SecuredEndpoint(obj = "product-sub-categories", act = "create")
     @PostMapping("/sub-categories")
     @Operation(summary = "Create sub-category", description = "Creates a new sub-category under a master category")
     public ResponseEntity<SubCategoryResponse> createSubCategory(
@@ -140,7 +140,7 @@ public class CategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(CategoryMapper.toSubCategoryResponse(subCategory));
     }
 
-    @SecuredEndpoint(obj = "product-categories", act = "update")
+    @SecuredEndpoint(obj = "product-sub-categories", act = "update")
     @PutMapping("/sub-categories/{id}")
     @Operation(summary = "Update sub-category", description = "Updates an existing sub-category")
     public ResponseEntity<SubCategoryResponse> updateSubCategory(
@@ -158,7 +158,7 @@ public class CategoryController {
         return ResponseEntity.ok(CategoryMapper.toSubCategoryResponse(subCategory));
     }
 
-    @SecuredEndpoint(obj = "product-categories", act = "delete")
+    @SecuredEndpoint(obj = "product-sub-categories", act = "delete")
     @DeleteMapping("/sub-categories/{id}")
     @Operation(summary = "Delete sub-category", description = "Deletes a sub-category")
     public ResponseEntity<Void> deleteSubCategory(
@@ -170,6 +170,66 @@ public class CategoryController {
 
         manageCategoryUseCase.deleteSubCategory(tenantId, id);
         return ResponseEntity.noContent().build();
+    }
+
+    // --- Master Category Activate / Deactivate ---
+
+    @SecuredEndpoint(obj = "product-categories", act = "update")
+    @PatchMapping("/{id}/activate")
+    @Operation(summary = "Activate master category", description = "Activates a master product category")
+    public ResponseEntity<CategoryResponse> activateMasterCategory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        log.info("Activating master category id={} for tenantId={}", id, tenantId);
+
+        var category = manageCategoryUseCase.activateMasterCategory(tenantId, id);
+        return ResponseEntity.ok(CategoryMapper.toResponse(category));
+    }
+
+    @SecuredEndpoint(obj = "product-categories", act = "update")
+    @PatchMapping("/{id}/deactivate")
+    @Operation(summary = "Deactivate master category", description = "Deactivates a master product category")
+    public ResponseEntity<CategoryResponse> deactivateMasterCategory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        log.info("Deactivating master category id={} for tenantId={}", id, tenantId);
+
+        var category = manageCategoryUseCase.deactivateMasterCategory(tenantId, id);
+        return ResponseEntity.ok(CategoryMapper.toResponse(category));
+    }
+
+    // --- Sub-Category Activate / Deactivate ---
+
+    @SecuredEndpoint(obj = "product-sub-categories", act = "update")
+    @PatchMapping("/sub-categories/{id}/activate")
+    @Operation(summary = "Activate sub-category", description = "Activates a sub-category")
+    public ResponseEntity<SubCategoryResponse> activateSubCategory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        log.info("Activating sub-category id={} for tenantId={}", id, tenantId);
+
+        var subCategory = manageCategoryUseCase.activateSubCategory(tenantId, id);
+        return ResponseEntity.ok(CategoryMapper.toSubCategoryResponse(subCategory));
+    }
+
+    @SecuredEndpoint(obj = "product-sub-categories", act = "update")
+    @PatchMapping("/sub-categories/{id}/deactivate")
+    @Operation(summary = "Deactivate sub-category", description = "Deactivates a sub-category")
+    public ResponseEntity<SubCategoryResponse> deactivateSubCategory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        log.info("Deactivating sub-category id={} for tenantId={}", id, tenantId);
+
+        var subCategory = manageCategoryUseCase.deactivateSubCategory(tenantId, id);
+        return ResponseEntity.ok(CategoryMapper.toSubCategoryResponse(subCategory));
     }
 
     private UUID extractTenantId(Jwt jwt) {

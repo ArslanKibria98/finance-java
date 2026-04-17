@@ -8,5 +8,6 @@ public record SubCategoryResponse(
     String code,
     String nameEn,
     String nameAr,
-    int sortOrder
+    int sortOrder,
+    boolean active
 ) {}

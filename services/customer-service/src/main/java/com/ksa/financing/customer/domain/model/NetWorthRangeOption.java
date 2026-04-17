@@ -15,6 +15,7 @@ public class NetWorthRangeOption {
     private BigDecimal minValue;
     private BigDecimal maxValue;
     private boolean active;
+    private boolean deleted;
     private int displayOrder;
     private Instant createdAt;
     private Instant updatedAt;
@@ -40,6 +41,8 @@ public class NetWorthRangeOption {
     public void setMaxValue(BigDecimal maxValue) { this.maxValue = maxValue; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
     public int getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(int displayOrder) { this.displayOrder = displayOrder; }
     public Instant getCreatedAt() { return createdAt; }

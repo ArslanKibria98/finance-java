@@ -201,6 +201,7 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
         state.setWorkflowId(workflowId);
         state.setNationalId(request.nationalId());
         state.setMobileNumber(request.mobileNumber());
+        state.setCountryCode(request.countryCode() != null ? request.countryCode() : "SAU");
         state.setCurrentStep(OnboardingStep.INITIATED);
         state.setStartedAt(Instant.now());
         state.setLastUpdatedAt(Instant.now());
@@ -373,6 +374,22 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                     yakeenData.put("addressCity", yakeenResult.addressCity());
                     yakeenData.put("addressRegion", yakeenResult.addressRegion());
                     state.setYakeenData(yakeenData);
+
+                    // Update Keycloak user's firstName with real name from Yakeen
+                    if (state.getKeycloakUserId() != null && yakeenResult.fullNameEn() != null
+                            && !yakeenResult.fullNameEn().isBlank()) {
+                        try {
+                            keycloakActivity.updateKeycloakUserName(
+                                    new KeycloakUserCreationActivity.UpdateNameInput(
+                                            state.getKeycloakUserId(),
+                                            yakeenResult.fullNameEn()
+                                    )
+                            );
+                            log.info("Keycloak user name updated from Yakeen for workflow: {}", workflowId);
+                        } catch (Exception e) {
+                            log.warn("Keycloak name update failed (non-blocking): {}", e.getMessage());
+                        }
+                    }
                 } else {
                     log.warn("Yakeen verification returned not-verified (continuing): {}", workflowId);
                     yakeenResult = null;

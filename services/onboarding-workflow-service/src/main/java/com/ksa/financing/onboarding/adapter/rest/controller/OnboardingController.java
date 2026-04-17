@@ -118,7 +118,8 @@ public class OnboardingController {
                 deviceInfo.deviceId(),
                 deviceInfo.latitude(),
                 deviceInfo.longitude(),
-                null
+                null,
+                request.resolvedCountryCode()
         );
 
         StartOnboardingUseCase.StartOnboardingResult result = startOnboardingUseCase.start(domainRequest);
@@ -231,10 +232,15 @@ public class OnboardingController {
         long expiresIn = 0;
 
         try {
-            Map<String, String> registerPayload = new LinkedHashMap<>();
+            Map<String, Object> registerPayload = new LinkedHashMap<>();
             registerPayload.put("nationalId", nationalId);
             registerPayload.put("mobileNumber", state.getMobileNumber());
             registerPayload.put("globalUid", state.getGlobalUid());
+            // Pass Nafath/Yakeen name to IDS so Keycloak user gets the real name
+            if (state.getYakeenData() != null) {
+                Object nameEn = state.getYakeenData().get("fullNameEn");
+                registerPayload.put("firstName", nameEn != null && !nameEn.toString().isBlank() ? nameEn.toString() : null);
+            }
 
             ResponseEntity<Map> idsResponse = restTemplate.postForEntity(
                     identityUrl + "/api/v1/auth/onboarding-register",
@@ -769,18 +775,65 @@ public class OnboardingController {
     // ==================== Status Query (PUBLIC) ====================
 
     @GetMapping("/status")
-    @Operation(summary = "Get onboarding status", description = "Query full onboarding state including Yakeen data", tags = "8. Status")
+    @Operation(summary = "Get onboarding status", description = "Query full onboarding state by nationalId or mobileNumber", tags = "8. Status")
     public ResponseEntity<OnboardingStatusResponse> getStatus(
-            @RequestParam @NotBlank String nationalId) {
-        String workflowId = "onboarding-" + nationalId;
-        log.debug("Status query for workflow: {}", workflowId);
+            @RequestParam(required = false) String nationalId,
+            @RequestParam(required = false) String mobileNumber) {
 
-        OnboardingState state = getOnboardingStatusUseCase.getStatus(workflowId);
+        // URL query param '+' is decoded as space — normalize back to '+'
+        if (mobileNumber != null && !mobileNumber.isBlank() && !mobileNumber.startsWith("+")) {
+            mobileNumber = "+" + mobileNumber.trim();
+        }
+
+        if ((nationalId == null || nationalId.isBlank()) && (mobileNumber == null || mobileNumber.isBlank())) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Either nationalId or mobileNumber is required");
+        }
+
+        OnboardingState state;
+        String workflowId;
+        String resolvedNid = null; // track NID resolved from mobile — used in registration fallback
+
+        if (nationalId != null && !nationalId.isBlank()) {
+            workflowId = "onboarding-" + nationalId;
+            log.debug("Status query by nationalId for workflow: {}", workflowId);
+            state = getOnboardingStatusUseCase.getStatus(workflowId);
+        } else {
+            log.debug("Status query by mobileNumber: ****{}", mobileNumber.substring(Math.max(0, mobileNumber.length() - 4)));
+            state = getOnboardingStatusUseCase.getStatusByMobile(mobileNumber);
+            workflowId = state.getWorkflowId() != null ? state.getWorkflowId() : "unknown";
+
+            // If mobile scan returned INITIATED (no running workflow found), resolve via customer service
+            log.info("Mobile scan result: step={}, customerId={}", state.getCurrentStep(), state.getCustomerId());
+            if (state.getCurrentStep() == OnboardingStep.INITIATED && state.getCustomerId() == null) {
+                log.info("Resolving nationalId from customer service for mobile ****{}", mobileNumber.substring(Math.max(0, mobileNumber.length() - 4)));
+                resolvedNid = resolveNationalIdByMobile(mobileNumber);
+                log.info("Resolved nationalId: {}", resolvedNid);
+                if (resolvedNid != null) {
+                    workflowId = "onboarding-" + resolvedNid;
+                    state = getOnboardingStatusUseCase.getStatus(workflowId);
+                    log.info("Workflow state after nationalId lookup: step={}, customerId={}", state.getCurrentStep(), state.getCustomerId());
+                }
+            }
+        }
+
         OnboardingStep currentStep = state.getCurrentStep();
 
         // If no workflow exists, check if customer is already registered
         if (currentStep == OnboardingStep.INITIATED && state.getCustomerId() == null) {
-            if (isCustomerRegistered(nationalId)) {
+            boolean registered = false;
+            if (nationalId != null && !nationalId.isBlank()) {
+                // NID path: direct NID lookup
+                registered = isCustomerRegistered(nationalId);
+            } else if (resolvedNid != null) {
+                // Mobile path: NID was resolved — use NID lookup (avoids +/format mismatch)
+                log.info("Using resolved NID for registration check: ****{}", resolvedNid.substring(Math.max(0, resolvedNid.length() - 4)));
+                registered = isCustomerRegistered(resolvedNid);
+            } else if (mobileNumber != null && !mobileNumber.isBlank()) {
+                // Mobile path fallback: NID not resolved — try mobile lookup
+                registered = isCustomerRegisteredByMobile(mobileNumber);
+            }
+            if (registered) {
                 var completedSteps = StepInfo.buildSteps(OnboardingStep.COMPLETED);
                 OnboardingStatusResponse completeResponse = new OnboardingStatusResponse(
                         workflowId, "COMPLETED", "COMPLETED", "LOGIN",
@@ -841,11 +894,30 @@ public class OnboardingController {
             tags = "8. Status",
             security = @SecurityRequirement(name = "bearer-jwt"))
     public ResponseEntity<List<Map<String, Object>>> listActiveOnboardings(
+            @RequestParam(required = false) String lifecycleStage,
+            @RequestParam(required = false) String currentStep,
             @AuthenticationPrincipal Jwt jwt) {
 
-        log.info("Listing active onboardings requested by: {}", jwt.getSubject());
+        log.info("Listing active onboardings requested by: {} (filter: lifecycleStage={}, currentStep={})",
+                jwt.getSubject(), lifecycleStage, currentStep);
 
         List<OnboardingState> activeWorkflows = getOnboardingStatusUseCase.listActiveOnboardings();
+
+        // Filter by lifecycleStage if provided
+        if (lifecycleStage != null && !lifecycleStage.isBlank()) {
+            String filter = lifecycleStage.toUpperCase().trim();
+            activeWorkflows = activeWorkflows.stream()
+                    .filter(s -> filter.equals(s.getLifecycleStage()))
+                    .toList();
+        }
+
+        // Filter by currentStep if provided
+        if (currentStep != null && !currentStep.isBlank()) {
+            String filter = currentStep.toUpperCase().trim();
+            activeWorkflows = activeWorkflows.stream()
+                    .filter(s -> s.getCurrentStep() != null && filter.equals(s.getCurrentStep().name()))
+                    .toList();
+        }
 
         List<Map<String, Object>> results = activeWorkflows.stream().map(state -> {
             Map<String, Object> entry = new LinkedHashMap<>();
@@ -1088,12 +1160,12 @@ public class OnboardingController {
 
             log.info("Risk gate result: assessmentId={}, decision={}", assessmentId, decision);
 
-            if ("PASS".equals(decision)) {
+            if ("PASS".equals(decision) || "ROUTE_ONBOARD".equals(decision) || "ROUTE_REGISTER".equals(decision)) {
                 // All checks passed — proceed with onboarding
                 return null;
             }
 
-            // Not PASS — block the onboarding
+            // Not PASS/ROUTE_ONBOARD/ROUTE_REGISTER — block the onboarding
             if ("HARD_BLOCK".equals(decision)) {
                 log.warn("Onboarding BLOCKED by internal checks: assessmentId={}", assessmentId);
                 return buildRiskGateBlockResponse("BLOCKED",
@@ -1147,6 +1219,47 @@ public class OnboardingController {
                     nationalId.substring(nationalId.length() - 4), e.getMessage());
         }
         return false;
+    }
+
+    private boolean isCustomerRegisteredByMobile(String mobileNumber) {
+        try {
+            String encoded = java.net.URLEncoder.encode(mobileNumber, java.nio.charset.StandardCharsets.UTF_8);
+            String url = customerServiceUrl + "/internal/customers/exists/mobile?mobileNumber=" + encoded;
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            if (response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                if (body.containsKey("data") && body.get("data") instanceof Map) {
+                    body = (Map<String, Object>) body.get("data");
+                }
+                return Boolean.TRUE.equals(body.get("exists"));
+            }
+        } catch (Exception e) {
+            log.warn("Customer existence check by mobile failed: {}", e.getMessage());
+        }
+        return false;
+    }
+
+    private String resolveNationalIdByMobile(String mobileNumber) {
+        try {
+            String encoded = java.net.URLEncoder.encode(mobileNumber, java.nio.charset.StandardCharsets.UTF_8);
+            // Use URI object to prevent Apache HttpClient from re-decoding %2B to +
+            java.net.URI uri = new java.net.URI(
+                    customerServiceUrl + "/internal/customers/find-by-mobile?mobileNumber=" + encoded);
+            log.info("Calling customer service URI: {}", uri);
+            ResponseEntity<Map> response = restTemplate.getForEntity(uri, Map.class);
+            if (response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                if (body.containsKey("data") && body.get("data") instanceof Map) {
+                    body = (Map<String, Object>) body.get("data");
+                }
+                if (Boolean.TRUE.equals(body.get("found"))) {
+                    return (String) body.get("nationalId");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("NationalId resolution by mobile failed: {}", e.getMessage());
+        }
+        return null;
     }
 
     private ResponseEntity<InitiateOnboardingResponse> buildRiskGateBlockResponse(

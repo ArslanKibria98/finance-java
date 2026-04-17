@@ -33,6 +33,7 @@ public class ReferenceDataPersistenceMapper {
         entity.setDescriptionEn(domain.getDescriptionEn());
         entity.setDescriptionAr(domain.getDescriptionAr());
         entity.setActive(domain.isActive());
+        entity.setDeleted(domain.isDeleted());
         entity.setDisplayOrder(domain.getDisplayOrder());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -52,6 +53,7 @@ public class ReferenceDataPersistenceMapper {
         domain.setDescriptionEn(entity.getDescriptionEn());
         domain.setDescriptionAr(entity.getDescriptionAr());
         domain.setActive(entity.isActive());
+        domain.setDeleted(entity.isDeleted());
         domain.setDisplayOrder(entity.getDisplayOrder());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));
@@ -73,6 +75,7 @@ public class ReferenceDataPersistenceMapper {
         entity.setDescriptionEn(domain.getDescriptionEn());
         entity.setDescriptionAr(domain.getDescriptionAr());
         entity.setActive(domain.isActive());
+        entity.setDeleted(domain.isDeleted());
         entity.setDisplayOrder(domain.getDisplayOrder());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -92,6 +95,7 @@ public class ReferenceDataPersistenceMapper {
         domain.setDescriptionEn(entity.getDescriptionEn());
         domain.setDescriptionAr(entity.getDescriptionAr());
         domain.setActive(entity.isActive());
+        domain.setDeleted(entity.isDeleted());
         domain.setDisplayOrder(entity.getDisplayOrder());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));
@@ -115,6 +119,7 @@ public class ReferenceDataPersistenceMapper {
         entity.setMinValue(domain.getMinValue());
         entity.setMaxValue(domain.getMaxValue());
         entity.setActive(domain.isActive());
+        entity.setDeleted(domain.isDeleted());
         entity.setDisplayOrder(domain.getDisplayOrder());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -136,6 +141,7 @@ public class ReferenceDataPersistenceMapper {
         domain.setMinValue(entity.getMinValue());
         domain.setMaxValue(entity.getMaxValue());
         domain.setActive(entity.isActive());
+        domain.setDeleted(entity.isDeleted());
         domain.setDisplayOrder(entity.getDisplayOrder());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));
@@ -157,6 +163,7 @@ public class ReferenceDataPersistenceMapper {
         entity.setDescriptionEn(domain.getDescriptionEn());
         entity.setDescriptionAr(domain.getDescriptionAr());
         entity.setActive(domain.isActive());
+        entity.setDeleted(domain.isDeleted());
         entity.setDisplayOrder(domain.getDisplayOrder());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -176,6 +183,7 @@ public class ReferenceDataPersistenceMapper {
         domain.setDescriptionEn(entity.getDescriptionEn());
         domain.setDescriptionAr(entity.getDescriptionAr());
         domain.setActive(entity.isActive());
+        domain.setDeleted(entity.isDeleted());
         domain.setDisplayOrder(entity.getDisplayOrder());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));
@@ -197,6 +205,7 @@ public class ReferenceDataPersistenceMapper {
         entity.setDescriptionEn(domain.getDescriptionEn());
         entity.setDescriptionAr(domain.getDescriptionAr());
         entity.setActive(domain.isActive());
+        entity.setDeleted(domain.isDeleted());
         entity.setDisplayOrder(domain.getDisplayOrder());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -216,6 +225,7 @@ public class ReferenceDataPersistenceMapper {
         domain.setDescriptionEn(entity.getDescriptionEn());
         domain.setDescriptionAr(entity.getDescriptionAr());
         domain.setActive(entity.isActive());
+        domain.setDeleted(entity.isDeleted());
         domain.setDisplayOrder(entity.getDisplayOrder());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));

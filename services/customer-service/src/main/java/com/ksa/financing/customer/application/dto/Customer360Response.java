@@ -13,6 +13,7 @@ import java.util.UUID;
  */
 public record Customer360Response(
         CustomerResponse customer,
+        CountryConfig countryConfig,
         PersonalInfo personalInfo,
         AddressInfo addressInfo,
         KycInfo kycInfo,
@@ -27,6 +28,23 @@ public record Customer360Response(
         List<EmploymentEntry> employments,
         String walletIban
 ) {
+
+    // ==================== Country Configuration ====================
+    public record CountryConfig(
+            String countryCode,
+            String countryName,
+            String countryNameAr,
+            String currencyCode,
+            String flagEmoji,
+            String dialCode,
+            String nationalityEn,
+            String nationalityAr,
+            List<String> supportedIdTypes,
+            String defaultIdType,
+            List<String> kycProviders,
+            int totalOnboardingSteps
+    ) {}
+
 
     // ==================== Personal Information (PII Vault + Yakeen) ====================
     public record PersonalInfo(
@@ -165,7 +183,11 @@ public record Customer360Response(
                 String questionEn,
                 String questionAr,
                 String answer,
-                String category
+                String category,
+                String factorWeightPct,   // % of category this factor represents
+                String categoryWeight,    // max points this category contributes
+                String scoreContribution, // actual score earned = categoryWeight × factorWeightPct / 100
+                String calculationDetail  // human-readable formula e.g. "16 × 25% / 100 = 4.00 pts"
         ) {}
     }
 

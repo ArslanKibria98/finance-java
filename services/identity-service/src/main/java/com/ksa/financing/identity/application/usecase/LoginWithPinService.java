@@ -95,8 +95,83 @@ public class LoginWithPinService implements LoginWithPinUseCase {
                 tokenResponse.expiresIn(),
                 customerId,
                 identity.getKeycloakUsername(),
-                identity.getMobileNumber()
+                identity.getMobileNumber(),
+                tokenResponse.name()
         );
+    }
+
+    @Override
+    public LoginWithPinResult loginWithMobile(LoginWithMobileCommand command) {
+        log.info("Mobile PIN login attempt for mobile ending in: {}", maskMobile(command.mobileNumber()));
+
+        // Step 1: Find user by mobile number
+        UserIdentity identity = userIdentityRepository.findByMobileNumber(command.mobileNumber())
+                .orElseThrow(() -> {
+                    log.warn("No user found for mobile ending in: {}", maskMobile(command.mobileNumber()));
+                    return new NotFoundException("User", command.mobileNumber());
+                });
+
+        // Step 2: Verify account is active
+        if (identity.getStatus() != UserStatus.ACTIVE) {
+            log.warn("Login attempt for inactive account. Mobile: {}, Status: {}",
+                    maskMobile(command.mobileNumber()), identity.getStatus());
+            throw new BusinessException(
+                    ErrorCodes.Identity.ACCOUNT_INACTIVE,
+                    "Account is not active. Current status: " + identity.getStatus());
+        }
+
+        // Step 3: Get stored PIN from Keycloak
+        String storedPin = keycloakAdapter.getUserAttribute(
+                realm, identity.getKeycloakUserId(), PIN_ATTRIBUTE);
+
+        if (storedPin == null || storedPin.isBlank()) {
+            log.warn("PIN not set for user. Mobile: {}", maskMobile(command.mobileNumber()));
+            throw new BusinessException(
+                    ErrorCodes.Identity.PIN_NOT_SET,
+                    "PIN has not been set for this account");
+        }
+
+        // Step 4: Verify PIN
+        if (!storedPin.equals(command.pin())) {
+            log.warn("Invalid PIN attempt for mobile: {}", maskMobile(command.mobileNumber()));
+            throw new BusinessException(
+                    ErrorCodes.Identity.PIN_INVALID,
+                    "Invalid PIN provided");
+        }
+
+        // Step 5: Generate temp password, reset in Keycloak, and authenticate
+        String tempPassword = UUID.randomUUID().toString();
+        keycloakAdapter.resetPassword(realm, identity.getKeycloakUserId(), tempPassword);
+
+        // keycloakUsername = nationalId (used as Keycloak username)
+        KeycloakAdapterPort.TokenResponse tokenResponse = keycloakAdapter.authenticate(
+                realm, identity.getKeycloakUsername(), tempPassword);
+
+        log.info("Mobile PIN login successful for mobile ending in: {}", maskMobile(command.mobileNumber()));
+
+        // Resolve customer ID
+        String customerId = null;
+        if (identity.getKeycloakUsername() != null) {
+            customerId = customerLookupPort
+                    .resolveCustomerIdByNationalId(identity.getKeycloakUsername(), tokenResponse.accessToken())
+                    .orElseGet(() -> identity.getInternalUserId() != null
+                            ? identity.getInternalUserId().toString() : null);
+        }
+
+        return new LoginWithPinResult(
+                tokenResponse.accessToken(),
+                tokenResponse.refreshToken(),
+                tokenResponse.expiresIn(),
+                customerId,
+                identity.getKeycloakUsername(),
+                identity.getMobileNumber(),
+                tokenResponse.name()
+        );
+    }
+
+    private String maskMobile(String mobile) {
+        if (mobile == null || mobile.length() < 4) return "****";
+        return "****" + mobile.substring(mobile.length() - 4);
     }
 
     private String maskNid(String nid) {

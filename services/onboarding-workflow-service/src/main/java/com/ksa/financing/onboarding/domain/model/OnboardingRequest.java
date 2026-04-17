@@ -10,5 +10,6 @@ public record OnboardingRequest(
     String deviceId,
     String latitude,
     String longitude,
-    String dateOfBirth
+    String dateOfBirth,
+    String countryCode
 ) {}

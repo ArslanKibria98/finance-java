@@ -25,6 +25,14 @@ public class ModuleRepositoryImpl implements ModuleRepository {
     }
 
     @Override
+    public List<Module> findCatalogByTenant(UUID tenantId) {
+        return jpaModuleRepository.findByTenantIdAndCatalogVisibleTrueOrderByDisplayOrder(tenantId)
+                .stream()
+                .map(ModulePersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<Module> findById(UUID tenantId, UUID id) {
         return jpaModuleRepository.findByTenantIdAndId(tenantId, id)
                 .map(ModulePersistenceMapper::toDomain);

@@ -53,6 +53,9 @@ public class NetWorthRangeOptionJpaEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    @Column(name = "is_deleted", nullable = false)
+    private boolean deleted;
+
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 

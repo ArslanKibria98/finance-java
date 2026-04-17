@@ -23,12 +23,15 @@ public record AuthResponse(
     String nationalId,
 
     @Schema(description = "Mobile number (only present for customer PIN login)", example = "+966501234567")
-    String mobileNumber
+    String mobileNumber,
+
+    @Schema(description = "Full name of the authenticated user", example = "Super Admin")
+    String name
 ) {
     /**
      * Constructor without customer-specific fields — used by admin login and token refresh.
      */
     public AuthResponse(String accessToken, String refreshToken, long expiresIn, String tokenType) {
-        this(accessToken, refreshToken, expiresIn, tokenType, null, null, null);
+        this(accessToken, refreshToken, expiresIn, tokenType, null, null, null, null);
     }
 }

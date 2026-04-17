@@ -62,7 +62,7 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
         // Step 2: Create Keycloak user with NID as username
         String email = command.nationalId() + "@onboarding.local";
         KeycloakAdapterPort.KeycloakUser keycloakUser = keycloakAdapter.createUser(
-                REALM, command.nationalId(), email, password
+                REALM, command.nationalId(), email, password, command.firstName()
         );
         log.info("Keycloak user created with ID: {}", keycloakUser.keycloakUserId());
 

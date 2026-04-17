@@ -12,6 +12,7 @@ public class PurposeOfFinanceOption {
     private String descriptionEn;
     private String descriptionAr;
     private boolean active;
+    private boolean deleted;
     private int displayOrder;
     private Instant createdAt;
     private Instant updatedAt;
@@ -33,6 +34,8 @@ public class PurposeOfFinanceOption {
     public void setDescriptionAr(String descriptionAr) { this.descriptionAr = descriptionAr; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
     public int getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(int displayOrder) { this.displayOrder = displayOrder; }
     public Instant getCreatedAt() { return createdAt; }

@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
@@ -25,30 +24,22 @@ public class FineractProductActivityImpl implements FineractProductActivity {
         log.info("Creating loan product in Fineract: productCode={} tenant={}", input.productCode(), input.tenantId());
 
         try {
-            BigDecimal defaultPrincipal = input.minAmount().add(input.maxAmount())
-                    .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
-
-            int defaultTenure = (input.minTenureMonths() + input.maxTenureMonths()) / 2;
-            if (defaultTenure <= 0) defaultTenure = input.minTenureMonths();
-
             String shortName = generateUniqueShortName(input.productCode());
-
             int interestType = "FLAT".equalsIgnoreCase(input.rateType()) ? 1 : 0;
 
             // Ensure unique Fineract product name by appending product code
             String fineractName = input.nameEn() + " (" + input.productCode() + ")";
 
+            // Fineract stores only product identity — all limits (amount, tenure) are
+            // governed by product-service slabs and must NOT be duplicated here.
+            // Placeholder values satisfy Fineract's required fields only.
             var request = FineractLoanProductRequest.builder()
                     .name(fineractName)
                     .shortName(shortName)
                     .description(input.nameEn() + " - " + input.shariaStructure())
                     .currencyCode(input.currency() != null ? input.currency() : "SAR")
-                    .principal(defaultPrincipal)
-                    .minPrincipal(input.minAmount())
-                    .maxPrincipal(input.maxAmount())
-                    .numberOfRepayments(defaultTenure)
-                    .minNumberOfRepayments(input.minTenureMonths())
-                    .maxNumberOfRepayments(input.maxTenureMonths())
+                    .principal(new BigDecimal("10000"))
+                    .numberOfRepayments(12)
                     .interestRatePerPeriod(input.baseProfitRate())
                     .interestType(interestType)
                     .graceOnPrincipalPayment(input.gracePeriodDays() > 0 ? 1 : null)

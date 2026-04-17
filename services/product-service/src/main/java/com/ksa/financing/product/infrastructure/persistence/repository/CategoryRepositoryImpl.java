@@ -3,6 +3,8 @@ package com.ksa.financing.product.infrastructure.persistence.repository;
 import com.ksa.financing.product.domain.model.MasterCategory;
 import com.ksa.financing.product.domain.model.SubCategory;
 import com.ksa.financing.product.domain.port.out.CategoryRepository;
+import com.ksa.financing.product.infrastructure.persistence.entity.MasterCategoryJpaEntity;
+import com.ksa.financing.product.infrastructure.persistence.entity.SubCategoryJpaEntity;
 import com.ksa.financing.product.infrastructure.persistence.mapper.CategoryPersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +27,7 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     @Override
     public List<MasterCategory> findAllMasterCategories(UUID tenantId) {
         log.debug("Listing active master categories for tenantId={}", tenantId);
-        return jpaMasterCategoryRepository.findAllByTenantIdAndIsActiveTrue(tenantId)
+        return jpaMasterCategoryRepository.findAllByTenantId(tenantId)
                 .stream()
                 .map(CategoryPersistenceMapper::toDomain)
                 .toList();
@@ -48,7 +50,26 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     @Override
     public MasterCategory saveMasterCategory(MasterCategory category) {
         log.debug("Saving master category: code={}", category.getCode());
-        var entity = CategoryPersistenceMapper.toEntity(category);
+        MasterCategoryJpaEntity entity;
+        if (category.getId() != null) {
+            entity = jpaMasterCategoryRepository.findById(category.getId())
+                    .orElseGet(MasterCategoryJpaEntity::new);
+        } else {
+            entity = new MasterCategoryJpaEntity();
+        }
+        entity.setTenantId(category.getTenantId());
+        entity.setCode(category.getCode());
+        entity.setNameEn(category.getNameEn());
+        entity.setNameAr(category.getNameAr());
+        entity.setDescriptionEn(category.getDescriptionEn());
+        entity.setDescriptionAr(category.getDescriptionAr());
+        entity.setIconUrl(category.getIconUrl());
+        entity.setSortOrder(category.getSortOrder());
+        entity.setActive(category.isActive());
+        entity.setCreatedAt(category.getCreatedAt() != null
+                ? category.getCreatedAt().atOffset(java.time.ZoneOffset.UTC) : java.time.OffsetDateTime.now());
+        entity.setUpdatedAt(category.getUpdatedAt() != null
+                ? category.getUpdatedAt().atOffset(java.time.ZoneOffset.UTC) : java.time.OffsetDateTime.now());
         var saved = jpaMasterCategoryRepository.save(entity);
         return CategoryPersistenceMapper.toDomain(saved);
     }
@@ -65,7 +86,7 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     public List<SubCategory> findSubCategoriesByMaster(UUID tenantId, UUID masterCategoryId) {
         log.debug("Listing active sub-categories for masterCategoryId={}, tenantId={}", masterCategoryId, tenantId);
         return jpaSubCategoryRepository
-                .findAllByMasterCategoryIdAndTenantIdAndIsActiveTrue(masterCategoryId, tenantId)
+                .findAllByMasterCategoryIdAndTenantId(masterCategoryId, tenantId)
                 .stream()
                 .map(CategoryPersistenceMapper::toDomain)
                 .toList();
@@ -88,7 +109,24 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     @Override
     public SubCategory saveSubCategory(SubCategory subCategory) {
         log.debug("Saving sub-category: code={}", subCategory.getCode());
-        var entity = CategoryPersistenceMapper.toEntity(subCategory);
+        SubCategoryJpaEntity entity;
+        if (subCategory.getId() != null) {
+            entity = jpaSubCategoryRepository.findById(subCategory.getId())
+                    .orElseGet(SubCategoryJpaEntity::new);
+        } else {
+            entity = new SubCategoryJpaEntity();
+        }
+        entity.setTenantId(subCategory.getTenantId());
+        entity.setMasterCategoryId(subCategory.getMasterCategoryId());
+        entity.setCode(subCategory.getCode());
+        entity.setNameEn(subCategory.getNameEn());
+        entity.setNameAr(subCategory.getNameAr());
+        entity.setSortOrder(subCategory.getSortOrder());
+        entity.setActive(subCategory.isActive());
+        entity.setCreatedAt(subCategory.getCreatedAt() != null
+                ? subCategory.getCreatedAt().atOffset(java.time.ZoneOffset.UTC) : java.time.OffsetDateTime.now());
+        entity.setUpdatedAt(subCategory.getUpdatedAt() != null
+                ? subCategory.getUpdatedAt().atOffset(java.time.ZoneOffset.UTC) : java.time.OffsetDateTime.now());
         var saved = jpaSubCategoryRepository.save(entity);
         return CategoryPersistenceMapper.toDomain(saved);
     }

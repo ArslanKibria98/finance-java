@@ -13,6 +13,7 @@ public class Permission {
     private UUID moduleId;
     private String action;
     private boolean active;
+    private boolean catalogVisible = true;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -34,6 +35,8 @@ public class Permission {
     public void setAction(String action) { this.action = action; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public boolean isCatalogVisible() { return catalogVisible; }
+    public void setCatalogVisible(boolean catalogVisible) { this.catalogVisible = catalogVisible; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

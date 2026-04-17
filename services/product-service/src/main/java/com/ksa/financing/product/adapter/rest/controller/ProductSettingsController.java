@@ -87,8 +87,10 @@ public class ProductSettingsController {
 
         var command = new UpdateFeeSettingsCommand(
                 request.revenueEligibilityThreshold(),
-                request.maxDbrPercentage(), request.globalDbrPercentage(),
-                request.dbrCalculationMethod(), request.dbrExceptions()
+                request.maxDbrPercentage(),
+                request.dbrCalculationMethod(), request.dbrExceptions(),
+                request.maxDti(), request.minAge(), request.maxAge(),
+                request.gdbrPercentage()
         );
 
         manageProductSettingsUseCase.updateFeeSettings(tenantId, productId, command);
@@ -138,28 +140,6 @@ public class ProductSettingsController {
                 .toList();
 
         manageProductSettingsUseCase.updateEnvironmentConfigs(tenantId, productId, commands);
-        return ResponseEntity.ok().build();
-    }
-
-    // --- Tab 6: Duration Settings ---
-
-    @SecuredEndpoint(obj = "product-settings", act = "update")
-    @PutMapping("/duration-settings")
-    @Operation(summary = "Update duration settings", description = "Updates product lifecycle duration configuration")
-    public ResponseEntity<Void> updateDurationSettings(
-            @PathVariable UUID productId,
-            @Valid @RequestBody UpdateDurationSettingsRequest request,
-            @AuthenticationPrincipal Jwt jwt) {
-
-        var tenantId = extractTenantId(jwt);
-        log.info("Updating duration settings for product: {} tenant: {}", productId, tenantId);
-
-        var command = new UpdateDurationSettingsCommand(
-                request.requestDurationDays(), request.approvalDurationDays(),
-                request.disbursementDurationDays(), request.repaymentDurationDays()
-        );
-
-        manageProductSettingsUseCase.updateDurationSettings(tenantId, productId, command);
         return ResponseEntity.ok().build();
     }
 

@@ -192,6 +192,41 @@
       "key": "contractTemplateId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "scheduleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "settlementId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "settlementAmount",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "hyperPayCheckoutId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hyperPayTransactionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hyperPayRegistrationId",
+      "value": "",
+      "type": "string"
     }
   ],
   "auth": {
@@ -401,6 +436,57 @@
             },
             "url": "{{kongUrl}}/identity-service/api/v1/auth/login-with-pin",
             "description": "Kong -> identity-service:8083\nPUBLIC — Login using National ID + 6-digit PIN (set during onboarding).\nReturns JWT tokens. Auto-sets accessToken and refreshToken variables."
+          }
+        },
+        {
+          "name": "[identity-service] Login with Mobile PIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var data = json.data || json;",
+                  "if (data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "    console.log('accessToken set (Mobile PIN login)');",
+                  "}",
+                  "if (data.refreshToken) {",
+                  "    pm.collectionVariables.set('refreshToken', data.refreshToken);",
+                  "    console.log('refreshToken set');",
+                  "}",
+                  "if (data.customerId) {",
+                  "    pm.collectionVariables.set('customerId', data.customerId);",
+                  "    console.log('customerId set: ' + data.customerId);",
+                  "}",
+                  "pm.test('Mobile PIN login successful', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data.accessToken).to.not.be.empty;",
+                  "    pm.expect(data.refreshToken).to.not.be.empty;",
+                  "    pm.expect(data.tokenType).to.equal('Bearer');",
+                  "    pm.expect(data.customerId).to.not.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"+966501234567\",\n  \"pin\": \"482956\"\n}"
+            },
+            "url": "{{kongUrl}}/identity-service/api/v1/auth/login-with-mobile-pin",
+            "description": "Kong -> identity-service:8083\nPUBLIC — Login using mobile number (international format) + 6-digit PIN.\nSame as Login with PIN but uses mobile number instead of National ID for user lookup.\nAuto-sets accessToken, refreshToken and customerId variables."
           }
         },
         {
@@ -8371,7 +8457,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"nameEn\": \"Promissory Note\",\n    \"nameAr\": \"\u0633\u0646\u062f \u0644\u0623\u0645\u0631\",\n    \"category\": \"contract_type\"\n}"
+                  "raw": "{\n    \"nameEn\": \"Promissory Note\",\n    \"nameAr\": \"سند لأمر\",\n    \"category\": \"contract_type\"\n}"
                 }
               },
               "event": [
@@ -8420,7 +8506,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"nameEn\": \"Promissory Note (Updated)\",\n    \"nameAr\": \"\u0633\u0646\u062f \u0644\u0623\u0645\u0631 (\u0645\u062d\u062f\u062b)\",\n    \"category\": \"contract_type\",\n    \"active\": true\n}"
+                  "raw": "{\n    \"nameEn\": \"Promissory Note (Updated)\",\n    \"nameAr\": \"سند لأمر (محدث)\",\n    \"category\": \"contract_type\",\n    \"active\": true\n}"
                 }
               }
             },
@@ -8579,7 +8665,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"nameEn\": \"Murabaha Financing Agreement\",\n    \"nameAr\": \"\u0627\u062a\u0641\u0627\u0642\u064a\u0629 \u062a\u0645\u0648\u064a\u0644 \u0627\u0644\u0645\u0631\u0627\u0628\u062d\u0629\",\n    \"productId\": \"{{productId}}\",\n    \"typeId\": \"{{templateTypeId}}\",\n    \"language\": \"en\",\n    \"message\": \"<p>This is a <strong>Murabaha Financing Agreement</strong> between the Bank and the Customer.</p><p>Terms and conditions apply as per SAMA regulations.</p>\"\n}"
+                  "raw": "{\n    \"nameEn\": \"Murabaha Financing Agreement\",\n    \"nameAr\": \"اتفاقية تمويل المرابحة\",\n    \"productId\": \"{{productId}}\",\n    \"typeId\": \"{{templateTypeId}}\",\n    \"language\": \"en\",\n    \"message\": \"<p>This is a <strong>Murabaha Financing Agreement</strong> between the Bank and the Customer.</p><p>Terms and conditions apply as per SAMA regulations.</p>\"\n}"
                 }
               },
               "event": [
@@ -8656,7 +8742,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"nameEn\": \"Murabaha Financing Agreement (v2)\",\n    \"nameAr\": \"\u0627\u062a\u0641\u0627\u0642\u064a\u0629 \u062a\u0645\u0648\u064a\u0644 \u0627\u0644\u0645\u0631\u0627\u0628\u062d\u0629 (\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2)\",\n    \"productId\": \"{{productId}}\",\n    \"typeId\": \"{{templateTypeId}}\",\n    \"language\": \"en\",\n    \"message\": \"<p>Updated <strong>Murabaha Financing Agreement</strong> with revised terms.</p>\"\n}"
+                  "raw": "{\n    \"nameEn\": \"Murabaha Financing Agreement (v2)\",\n    \"nameAr\": \"اتفاقية تمويل المرابحة (الإصدار 2)\",\n    \"productId\": \"{{productId}}\",\n    \"typeId\": \"{{templateTypeId}}\",\n    \"language\": \"en\",\n    \"message\": \"<p>Updated <strong>Murabaha Financing Agreement</strong> with revised terms.</p>\"\n}"
                 }
               }
             },
@@ -8941,6 +9027,63 @@
                 },
                 "description": "Step 2 helper: Look up bank accounts for a customer.\n\n1. First checks customer-service for existing bank accounts (by customerId)\n2. If none found, fetches from Tarabut Open Banking via middleware (by NID)\n\nSource values: CUSTOMER_SERVICE | TARABUT | NONE\n\nRoles: customer, admin"
               }
+            },
+            {
+              "name": "[lending] Get Application Full Detail (All Tabs)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loan-applications/{{applicationId}}/full-detail",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loan-applications",
+                    "{{applicationId}}",
+                    "full-detail"
+                  ]
+                },
+                "description": "Aggregate API — returns all data needed for the Financing Application detail screen in one call.\n\nTabs covered:\n  stepper              → Top progress bar (Finance → Verification → ... → PAID)\n  personalInformation  → Customer name, DOB, nationality, address (from Customer360)\n  loanInformation      → Requested/offered/accepted amounts, product, active loan\n  employmentSalary     → GOSI/Masdar verified salary + employment history + expense breakdown\n  documents            → Contract flags, AML declaration, SafeWatch screening\n  simahCheck           → Credit score, Simah consent, KYC info, KYC steps\n  openBankingCheck     → Disbursement IBAN, bank account list\n  complianceCheck      → Compliance Q&A history, KYC weightage data\n  creditCheck          → Risk calculation formula, score components, risk history\n  approval             → Final status, loan number, disbursement date\n  reschedulingRequest  → All reschedule requests for this application\n\nSource: lending-service DB + customer-service Customer360\nRoles: admin, partner_admin, customer"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Full detail returned', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json).to.have.property('stepper');",
+                      "    pm.expect(json).to.have.property('personalInformation');",
+                      "    pm.expect(json).to.have.property('loanInformation');",
+                      "    pm.expect(json).to.have.property('employmentSalary');",
+                      "    pm.expect(json).to.have.property('simahCheck');",
+                      "    pm.expect(json).to.have.property('openBankingCheck');",
+                      "    pm.expect(json).to.have.property('complianceCheck');",
+                      "    pm.expect(json).to.have.property('creditCheck');",
+                      "    pm.expect(json).to.have.property('approval');",
+                      "    pm.expect(json).to.have.property('reschedulingRequest');",
+                      "});",
+                      "console.log('Stage:', json.stepper && json.stepper.currentStage);",
+                      "console.log('Status:', json.approval && json.approval.applicationStatus);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
             }
           ]
         },
@@ -9374,6 +9517,484 @@
                 "description": "APPLY mode — Evaluates eligibility via risk-service decision engine, then starts Temporal workflow.\n\nFlow:\n  1. Lending-service calls risk-service evaluate with eligibilityAnswers\n  2. If eligible=false → returns ELIGIBILITY_FAILED (no workflow started)\n  3. If eligible=true → starts Temporal LoanApplicationWorkflow\n  4. Returns workflowId, applicationId, preQualification result\n\nRisk-service scoring:\n  - Evaluates answers against product-specific criteria and rules\n  - Returns eligible/not based on scored weight percentage vs minimum pass threshold"
               },
               "response": []
+            }
+          ]
+        },
+        {
+          "name": "Loan Rescheduling",
+          "description": "Rescheduling APIs — Blueprint 17 compliant.\n\nTypes:\n  SKIP_PAYMENT      — Move one installment to end (self-service, max 2 skips)\n  TENURE_EXTENSION  — Extend tenure up to 12 months (ops head approval)\n  PAYMENT_HOLIDAY   — Pause payments up to 3 months (ops head approval)\n  RESTRUCTURING     — Full restructure for distress DPD>90 (credit committee)\n\nFlow: GET options → POST request → (if approval needed) POST approve/reject → GET status",
+          "item": [
+            {
+              "name": "[lending] GET Reschedule Options (Mobile-Ready)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/options",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules",
+                    "options"
+                  ]
+                },
+                "description": "Returns all reschedule types available for this loan with:\n  - availability status + unavailableReasons (gray-out logic for mobile)\n  - per-type field definitions (name, type, label, labelAr, required)\n  - per-field validation rules (min, max, minLength, maxLength, format)\n  - conditional fields (showWhen) for RESTRUCTURING option\n  - Arabic labels for RTL support\n  - current loan summary (outstanding, installment, DPD, tenure)\n\nTypes returned:\n  SKIP_PAYMENT      fields: requestedSkipMonth (DATE), justification (optional TEXT)\n  TENURE_EXTENSION  fields: extensionMonths (1-12), justification (required), hardshipDeclaration\n  PAYMENT_HOLIDAY   fields: holidayMonths (1-3), justification (required)\n  RESTRUCTURING     fields: restructuringOption (SELECT), extensionMonths (conditional),\n                            newProfitRate (conditional), justification (50-1000 chars), hardshipDeclaration\n\nNote: applicationId path variable is used to resolve the loanId internally.\nRoles: customer, admin"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Reschedule options returned', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json).to.have.property('rescheduleOptions');",
+                      "    pm.expect(json.rescheduleOptions).to.be.an('array').with.lengthOf(4);",
+                      "});",
+                      "json.rescheduleOptions && json.rescheduleOptions.forEach(function(opt) {",
+                      "    console.log(opt.type, '| available:', opt.available, '| fields:', opt.fields && opt.fields.length);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] POST Reschedule — Skip Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules"
+                  ]
+                },
+                "description": "Submit a SKIP_PAYMENT reschedule request.\nMoves one installment to end of tenure. No extra profit charged (Sharia-compliant).\n\nEligibility:\n  - Loan age >= 3 months\n  - No arrears (DPD = 0)\n  - Max 2 skips lifetime\n  - Min 6 months between skips\n\nApproval: Not required (self-service)\nResponse: rescheduleId + status PENDING → auto-processes via Temporal workflow\n\nRoles: customer, admin",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rescheduleType\": \"SKIP_PAYMENT\",\n  \"requestedSkipMonth\": \"2026-06-01\",\n  \"justification\": \"Temporary cash flow issue this month\",\n  \"idempotencyKey\": \"skip-{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Reschedule submitted', function() {",
+                      "    pm.response.to.have.status(202);",
+                      "    pm.expect(json).to.have.property('rescheduleId');",
+                      "});",
+                      "if (json.rescheduleId) {",
+                      "    pm.collectionVariables.set('rescheduleId', json.rescheduleId);",
+                      "    console.log('rescheduleId:', json.rescheduleId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] POST Reschedule — Tenure Extension",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules"
+                  ]
+                },
+                "description": "Submit a TENURE_EXTENSION reschedule request.\nExtends loan tenure to reduce monthly installment.\n\nEligibility:\n  - Loan age >= 6 months\n  - DPD <= 30 days\n  - Risk grade A/B/C only (not D/E)\n  - Max 12 months extension\n  - Max total tenure 72 months\n\nApproval: Operations Head required\nRoles: customer, admin",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rescheduleType\": \"TENURE_EXTENSION\",\n  \"extensionMonths\": 6,\n  \"justification\": \"Due to reduction in monthly income from job change, requesting tenure extension to reduce installment burden.\",\n  \"idempotencyKey\": \"ext-{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Tenure extension submitted', function() {",
+                      "    pm.response.to.have.status(202);",
+                      "    pm.expect(json).to.have.property('rescheduleId');",
+                      "    pm.expect(json.rescheduleId).to.not.be.empty;",
+                      "});",
+                      "if (json.rescheduleId) {",
+                      "    pm.collectionVariables.set('rescheduleId', json.rescheduleId);",
+                      "    console.log('rescheduleId:', json.rescheduleId, '| status:', json.status);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] POST Reschedule — Payment Holiday",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules"
+                  ]
+                },
+                "description": "Submit a PAYMENT_HOLIDAY reschedule request.\nPauses payments for up to 3 months. No extra profit accrues (Sharia-compliant).\n\nEligibility:\n  - Loan age >= 3 months\n  - Max 3 months holiday\n\nApproval: Operations Head + justification required\nRoles: customer, admin",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rescheduleType\": \"PAYMENT_HOLIDAY\",\n  \"holidayMonths\": 2,\n  \"justification\": \"Medical emergency requiring significant financial outlay for the next 2 months.\",\n  \"idempotencyKey\": \"holiday-{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Payment holiday submitted', function() {",
+                      "    pm.response.to.have.status(202);",
+                      "    pm.expect(json).to.have.property('rescheduleId');",
+                      "});",
+                      "if (json.rescheduleId) {",
+                      "    pm.collectionVariables.set('rescheduleId', json.rescheduleId);",
+                      "    console.log('rescheduleId:', json.rescheduleId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] POST Reschedule — Full Restructuring",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules"
+                  ]
+                },
+                "description": "Submit a FULL RESTRUCTURING request.\n\nTrigger conditions (any one):\n  - DPD > 90 days\n  - Documented financial hardship\n  - Legal proceedings initiated\n\nOptions (restructuringOption field):\n  REDUCE_PRINCIPAL   → Principal write-off (DR Provision / CR Loan Receivable)\n  REDUCE_PROFIT_RATE → New profit rate (must be less than current)\n  EXTEND_TENURE      → Extend tenure (max 12 months, max total 72)\n  COMBINATION        → Mix of above options\n\nApproval: Credit Committee required\nRoles: customer, admin",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rescheduleType\": \"RESTRUCTURING\",\n  \"restructuringOption\": \"COMBINATION\",\n  \"extensionMonths\": 12,\n  \"newProfitRate\": 9.5,\n  \"justification\": \"Lost employment due to company closure. Currently seeking new employment. Unable to maintain current installment level. Requesting reduction in profit rate and tenure extension to manage obligations during this difficult period.\",\n  \"idempotencyKey\": \"restructure-{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Restructuring submitted', function() {",
+                      "    pm.response.to.have.status(202);",
+                      "    pm.expect(json).to.have.property('rescheduleId');",
+                      "});",
+                      "if (json.rescheduleId) {",
+                      "    pm.collectionVariables.set('rescheduleId', json.rescheduleId);",
+                      "    console.log('rescheduleId:', json.rescheduleId, '| Awaiting credit committee');",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] GET All Reschedules for Loan",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules"
+                  ]
+                },
+                "description": "List all reschedule requests for a loan application.\nReturns history with type, status, dates.\nRoles: customer, admin"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Reschedules listed', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json).to.have.property('reschedules');",
+                      "});",
+                      "console.log('Total reschedules:', json.total);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] GET Reschedule Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/{{rescheduleId}}/status",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules",
+                    "{{rescheduleId}}",
+                    "status"
+                  ]
+                },
+                "description": "Get real-time status of a specific reschedule request.\nAlso queries Temporal workflow for live status (if still in-flight).\n\nStatuses: SUBMITTED → PENDING → PROCESSING → APPROVED | REJECTED | CANCELLED\n\nApproved response includes:\n  newTenureMonths, newInstallmentAmount, newMaturityDate\n\nRoles: customer, admin"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Status returned', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json).to.have.property('status');",
+                      "});",
+                      "console.log('Reschedule status:', json.status, '| type:', json.rescheduleType);",
+                      "if (json.newInstallmentAmount) console.log('New installment:', json.newInstallmentAmount);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] POST Approve Reschedule (ops_head / credit_committee)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/{{rescheduleId}}/approve",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules",
+                    "{{rescheduleId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Approve a pending reschedule request.\n\nWho can approve:\n  TENURE_EXTENSION / PAYMENT_HOLIDAY → ops_head\n  RESTRUCTURING                      → credit_committee\n\nSends signal to running Temporal workflow → triggers schedule recalculation.\nResponse includes newTenureMonths, newInstallmentAmount, newMaturityDate.\n\nRoles: ops_head, credit_committee, admin",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"approverRole\": \"ops_head\",\n  \"approvalNotes\": \"Reviewed customer financials. Approve tenure extension.\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Reschedule approved', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json.status).to.be.oneOf(['APPROVED', 'PROCESSING']);",
+                      "});",
+                      "console.log('Final status:', json.status);",
+                      "if (json.newInstallmentAmount) console.log('New installment:', json.newInstallmentAmount, 'SAR');"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[lending] POST Reject Reschedule",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/{{rescheduleId}}/reject",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "lending-service",
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{applicationId}}",
+                    "reschedules",
+                    "{{rescheduleId}}",
+                    "reject"
+                  ]
+                },
+                "description": "Reject a pending reschedule request.\n\nSends signal to Temporal workflow → marks request as REJECTED.\nCustomer will be notified.\n\nRoles: ops_head, credit_committee, admin",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rejectionReason\": \"Customer does not meet eligibility criteria for tenure extension at this time. Current DPD exceeds allowed threshold.\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('Reschedule rejected', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(json.status).to.equal('REJECTED');",
+                      "});",
+                      "console.log('Rejection confirmed for rescheduleId:', json.rescheduleId);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
             }
           ]
         }
@@ -10929,7 +11550,6 @@
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"id\": \"1049938507\",\n  \"mobile\": \"966504488024\"\n}"
- 
                 },
                 "url": {
                   "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/TAHAQUQ_VERIFY_MOBILE",
@@ -11380,6 +12000,181 @@
                   ]
                 },
                 "description": "Execute HyperPay Checkout API via mock provider."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    var json = pm.response.json();",
+                      "    if (json.responseBody && json.responseBody.id) {",
+                      "        pm.collectionVariables.set('hyperPayCheckoutId', json.responseBody.id);",
+                      "        console.log('HyperPay checkoutId set: ' + json.responseBody.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "description": "Create HyperPay checkout session via mock provider.\n\nSaves checkoutId to hyperPayCheckoutId variable.\nUse checkoutId to render payment widget on frontend."
+            },
+            {
+              "name": "Execute - HYPERPAY Payment Status",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    var json = pm.response.json();",
+                      "    if (json.responseBody && json.responseBody.id) {",
+                      "        pm.collectionVariables.set('hyperPayTransactionId', json.responseBody.id);",
+                      "        console.log('HyperPay transactionId set: ' + json.responseBody.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "test-mock-secret-key-2026",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "collections-service",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"checkoutId\": \"{{hyperPayCheckoutId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/HYPERPAY_STATUS",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "middleware-third-party",
+                    "api",
+                    "v1",
+                    "execute",
+                    "HYPERPAY_STATUS"
+                  ]
+                },
+                "description": "Get HyperPay payment status via mock provider.\n\nReturns result.code: 000.100.110 = success.\nSaves transactionId to hyperPayTransactionId variable."
+              }
+            },
+            {
+              "name": "Execute - HYPERPAY Refund",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "test-mock-secret-key-2026",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "collections-service",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paymentId\": \"{{hyperPayTransactionId}}\",\n  \"amount\": 5000,\n  \"currency\": \"SAR\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/HYPERPAY_REFUND",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "middleware-third-party",
+                    "api",
+                    "v1",
+                    "execute",
+                    "HYPERPAY_REFUND"
+                  ]
+                },
+                "description": "Refund a HyperPay payment via mock provider.\n\npaymentType: RF = Refund"
+              }
+            },
+            {
+              "name": "Execute - HYPERPAY Card Registration (Tokenization)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    var json = pm.response.json();",
+                      "    if (json.responseBody && json.responseBody.id) {",
+                      "        pm.collectionVariables.set('hyperPayRegistrationId', json.responseBody.id);",
+                      "        console.log('HyperPay registrationId set: ' + json.responseBody.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "test-mock-secret-key-2026",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "collections-service",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"registrationId\": \"{{hyperPayCheckoutId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/middleware-third-party/api/v1/execute/HYPERPAY_REGISTRATION",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "middleware-third-party",
+                    "api",
+                    "v1",
+                    "execute",
+                    "HYPERPAY_REGISTRATION"
+                  ]
+                },
+                "description": "Register/tokenize a card via HyperPay mock.\n\nReturns a card token for recurring payments (auto-debit)."
               }
             },
             {
@@ -11465,6 +12260,1417 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "13 - Mobile App Profile",
+      "description": "Mobile app customer profile endpoints — passcode management and profile updates.",
+      "item": [
+        {
+          "name": "1 - Passcode",
+          "description": "Passcode (PIN) management for mobile app users.",
+          "item": [
+            {
+              "name": "Change Passcode",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"newPasscode\": \"654321\",\n  \"confirmPasscode\": \"654321\"\n}"
+                },
+                "url": "{{kongUrl}}/identity-service/api/v1/auth/change-passcode",
+                "description": "JWT REQUIRED — Authenticated customer changes their own passcode (PIN).\nOnly newPasscode + confirmPasscode required (no currentPasscode needed).\nEndpoint: PATCH /api/v1/auth/change-passcode"
+              }
+            },
+            {
+              "name": "Forgot Passcode - Send OTP",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "pm.test('OTP sent', function() { pm.response.to.have.status(200); });",
+                      "if (json.workflowId) { pm.collectionVariables.set('forgotPasscodeWorkflowId', json.workflowId); }",
+                      "console.log('workflowId: ' + json.workflowId);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobileNumber\": \"966555687010\"\n}"
+                },
+                "url": "{{kongUrl}}/identity-service/api/v1/auth/forgot-passcode/send-otp",
+                "description": "NO TOKEN REQUIRED — Starts the forgot passcode Temporal workflow.\nSends a static OTP (469310 in dev) to the registered mobile number.\nReturns workflowId used to correlate the reset request.\n\nMobile number formats accepted:\n  - 966XXXXXXXXX\n  - +966XXXXXXXXX\n  - 05XXXXXXXX\n\nEndpoint: POST /api/v1/auth/forgot-passcode/send-otp"
+              }
+            },
+            {
+              "name": "Forgot Passcode - Verify OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobileNumber\": \"966555687010\",\n  \"otp\": \"469310\"\n}"
+                },
+                "url": "{{kongUrl}}/identity-service/api/v1/auth/forgot-passcode/verify-otp",
+                "description": "NO TOKEN REQUIRED — Screen 2: Verifies the OTP entered by the user.\nMust call Send OTP first. Dev/test OTP: 469310\nOn success, returns { valid: true } and the workflow moves to WAITING_FOR_RESET.\nThen call Forgot Passcode - Reset to set the new passcode.\n\nEndpoint: POST /api/v1/auth/forgot-passcode/verify-otp"
+              }
+            },
+            {
+              "name": "Forgot Passcode - Reset",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobileNumber\": \"966555687010\",\n  \"newPasscode\": \"654321\",\n  \"confirmPasscode\": \"654321\"\n}"
+                },
+                "url": "{{kongUrl}}/identity-service/api/v1/auth/forgot-passcode/reset",
+                "description": "NO TOKEN REQUIRED — Screen 3: Resets the passcode after OTP has been verified.\nMust call Verify OTP first (no OTP field here).\nCompletes the Temporal workflow.\n\nEndpoint: POST /api/v1/auth/forgot-passcode/reset"
+              }
+            },
+            {
+              "name": "Verify MPIN",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mpin\": \"123456\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{kongUrl}}/identity-service/api/v1/auth/verify-mpin",
+                "description": "BEARER TOKEN REQUIRED — Verifies whether the given 6-digit MPIN is valid for the authenticated user.\nUser is identified via the Bearer JWT (sub claim = keycloakUserId). No mobile number needed in body.\nReturns {valid: true} on success.\nThrows 422 if MPIN is wrong or not set, 401 if no valid token.\nEndpoint: POST /api/v1/auth/verify-mpin"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 - Update Profile",
+          "description": "Profile update endpoints for mobile app and admin.",
+          "item": [
+            {
+              "name": "Update My Profile (Mobile App)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newemail@example.com\"\n}"
+                },
+                "url": "{{kongUrl}}/customer-service/api/v1/customers/my-profile",
+                "description": "JWT REQUIRED — Mobile app customer updates their own email address.\nCustomer is identified from the JWT token (customer_id claim).\n\nOnly email is updatable by the customer themselves.\nName, mobile number, and address changes must be done via CSA (Admin endpoint).\n\nEndpoint: PATCH /api/v1/customers/my-profile\n@SecuredEndpoint(obj=\"customers\", act=\"update\")"
+              }
+            },
+            {
+              "name": "Update Customer Profile (Admin / by ID)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Ahmed\",\n  \"lastName\": \"Al-Rashidi\",\n  \"firstNameAr\": \"\\u0623\\u062d\\u0645\\u062f\",\n  \"lastNameAr\": \"\\u0627\\u0644\\u0631\\u0627\\u0634\\u062f\\u064a\",\n  \"email\": \"ahmed@example.com\",\n  \"addressLine1\": \"123 King Fahd Road\",\n  \"addressLine2\": \"Apt 4B\",\n  \"city\": \"Riyadh\",\n  \"region\": \"Riyadh Region\",\n  \"postalCode\": \"12345\"\n}"
+                },
+                "url": "{{kongUrl}}/customer-service/api/v1/customers/{{customerId}}",
+                "description": "JWT REQUIRED (Admin/CSA role) — Updates any customer's profile by ID.\nAll fields are optional (partial update supported).\n\nEndpoint: PATCH /api/v1/customers/{id}\n@SecuredEndpoint(obj=\"customers\", act=\"update\")"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "14 - Collections Service (collections-service)",
+      "description": "Kong -> collections-service:8099\nURL: {{kongUrl}}/collections-service/api/v1/...\n\nRepayment tracking, payment processing with HyperPay/SADAD/Wallet,\nwaterfall allocation (fees→profit→principal), dunning, and Sharia Ibra settlement.\n\nAll endpoints require JWT Bearer token with tenant_id claim.",
+      "item": [
+        {
+          "name": "Repayment Schedules",
+          "description": "Manage loan repayment schedules and installments.",
+          "item": [
+            {
+              "name": "[collections] Create Repayment Schedule",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/repayment-schedules",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "repayment-schedules"
+                  ]
+                },
+                "description": "Create a repayment schedule for a disbursed loan.\n\nSaves scheduleId to collection variable.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"scheduleNumber\": \"SCH-{{loanNumber}}-001\",\n  \"totalPrincipal\": 100000,\n  \"totalProfit\": 5000,\n  \"firstDueDate\": \"2026-05-01\",\n  \"lastDueDate\": \"2027-04-01\",\n  \"installments\": [\n    {\n      \"installmentNumber\": 1,\n      \"dueDate\": \"2026-05-01\",\n      \"principalAmount\": 8500,\n      \"profitAmount\": 420,\n      \"feeAmount\": 0\n    },\n    {\n      \"installmentNumber\": 2,\n      \"dueDate\": \"2026-06-01\",\n      \"principalAmount\": 8500,\n      \"profitAmount\": 415,\n      \"feeAmount\": 0\n    },\n    {\n      \"installmentNumber\": 3,\n      \"dueDate\": \"2026-07-01\",\n      \"principalAmount\": 8500,\n      \"profitAmount\": 410,\n      \"feeAmount\": 0\n    }\n  ]\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "    var json = pm.response.json();",
+                      "    pm.collectionVariables.set('scheduleId', json.id);",
+                      "    console.log('Schedule ID set: ' + json.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[collections] Get Repayment Schedule",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/repayment-schedules/{{scheduleId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "repayment-schedules",
+                    "{{scheduleId}}"
+                  ]
+                },
+                "description": "Get a repayment schedule by ID with all installments.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[collections] Get Schedule by Loan",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/repayment-schedules/by-loan/{{loanId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "repayment-schedules",
+                    "by-loan",
+                    "{{loanId}}"
+                  ]
+                },
+                "description": "Get the active repayment schedule for a loan.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[collections] Get Installments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/repayment-schedules/{{scheduleId}}/installments",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "repayment-schedules",
+                    "{{scheduleId}}",
+                    "installments"
+                  ]
+                },
+                "description": "Get all installments for a repayment schedule.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payments (Wallet / SADAD)",
+          "description": "Process loan repayment payments via Wallet or SADAD.",
+          "item": [
+            {
+              "name": "[collections] Initiate Payment (Wallet)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments"
+                  ]
+                },
+                "description": "Initiate a wallet payment. Waterfall allocation: fees→profit→principal.\n\nSaves paymentId to collection variable.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"amount\": 8920,\n  \"paymentMethod\": \"WALLET_MANUAL\",\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"notes\": \"Monthly installment payment\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "    var json = pm.response.json();",
+                      "    pm.collectionVariables.set('paymentId', json.id);",
+                      "    console.log('Payment ID set: ' + json.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[collections] Complete Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId}}/complete",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{paymentId}}",
+                    "complete"
+                  ]
+                },
+                "description": "Complete a PENDING/PROCESSING payment and apply waterfall allocation to installments.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"providerTransactionId\": \"TXN-WALLET-{{$guid}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "[collections] Fail Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId}}/fail",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{paymentId}}",
+                    "fail"
+                  ]
+                },
+                "description": "Mark a payment as failed.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"failureCode\": \"INSUFFICIENT_FUNDS\",\n  \"failureMessage\": \"Wallet balance insufficient for payment\"\n}"
+                }
+              }
+            },
+            {
+              "name": "[collections] Reverse Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId}}/reverse",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{paymentId}}",
+                    "reverse"
+                  ],
+                  "query": [
+                    {
+                      "key": "reason",
+                      "value": "Customer dispute - reversed per request"
+                    }
+                  ]
+                },
+                "description": "Reverse a COMPLETED payment.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[collections] Get Payment",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{paymentId}}"
+                  ]
+                },
+                "description": "Get payment details by ID.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payments (HyperPay - via Middleware)",
+          "description": "HyperPay payment flow via middleware-third-party mock.\n\nFlow:\n1. POST /checkout → creates payment + calls HYPERPAY_CHECKOUT via middleware → returns checkoutId\n2. Frontend renders HyperPay widget with checkoutId\n3. POST /callback → calls HYPERPAY_STATUS via middleware → completes/fails payment",
+          "item": [
+            {
+              "name": "[collections] HyperPay Checkout (Mada)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/hyperpay/checkout",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "hyperpay",
+                    "checkout"
+                  ]
+                },
+                "description": "Step 1: Initiate HyperPay Mada payment.\n\nCollections-service creates payment record, calls middleware → HYPERPAY_CHECKOUT.\nReturns checkoutId for widget rendering.\n\nSaves paymentId and hyperPayCheckoutId.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"amount\": 8920,\n  \"paymentMethod\": \"HYPERPAY_MADA\",\n  \"idempotencyKey\": \"{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "    var json = pm.response.json();",
+                      "    pm.collectionVariables.set('paymentId', json.paymentId);",
+                      "    pm.collectionVariables.set('hyperPayCheckoutId', json.checkoutId);",
+                      "    console.log('Payment ID: ' + json.paymentId);",
+                      "    console.log('HyperPay checkoutId: ' + json.checkoutId);",
+                      "    console.log('Widget URL: ' + json.widgetUrl);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[collections] HyperPay Checkout (Visa)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/hyperpay/checkout",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "hyperpay",
+                    "checkout"
+                  ]
+                },
+                "description": "Step 1: Initiate HyperPay Visa payment.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"amount\": 8920,\n  \"paymentMethod\": \"HYPERPAY_VISA\",\n  \"idempotencyKey\": \"{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "    var json = pm.response.json();",
+                      "    pm.collectionVariables.set('paymentId', json.paymentId);",
+                      "    pm.collectionVariables.set('hyperPayCheckoutId', json.checkoutId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[collections] HyperPay Checkout (Apple Pay)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/hyperpay/checkout",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "hyperpay",
+                    "checkout"
+                  ]
+                },
+                "description": "Step 1: Initiate HyperPay Apple Pay payment.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"amount\": 8920,\n  \"paymentMethod\": \"HYPERPAY_APPLE_PAY\",\n  \"idempotencyKey\": \"{{$guid}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "[collections] HyperPay Callback (Verify & Complete)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/hyperpay/callback",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "hyperpay",
+                    "callback"
+                  ],
+                  "query": [
+                    {
+                      "key": "paymentId",
+                      "value": "{{paymentId}}"
+                    }
+                  ]
+                },
+                "description": "Step 3: Verify HyperPay payment after widget redirect.\n\nCalls HYPERPAY_STATUS via middleware. If result.code = 000.100.110 → completes payment and applies waterfall allocation.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"checkoutId\": \"{{hyperPayCheckoutId}}\",\n  \"resourcePath\": \"/v1/checkouts/{{hyperPayCheckoutId}}/payment\"\n}"
+                }
+              }
+            },
+            {
+              "name": "[collections] HyperPay Refund",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/payments/hyperpay/refund",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "payments",
+                    "hyperpay",
+                    "refund"
+                  ],
+                  "query": [
+                    {
+                      "key": "paymentId",
+                      "value": "{{paymentId}}"
+                    },
+                    {
+                      "key": "reason",
+                      "value": "Customer request refund"
+                    }
+                  ]
+                },
+                "description": "Refund a completed HyperPay payment via middleware → HYPERPAY_REFUND.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Settlements (Early / Partial with Ibra)",
+          "description": "Sharia-compliant early and partial settlement.\n\nIbra: 100% unearned (future) profit is waived on early settlement.\nSettlement Amount = Outstanding Principal + Accrued Profit + Fees (no unearned profit).",
+          "item": [
+            {
+              "name": "[collections] Get Settlement Quote",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/settlements/quote/{{loanId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "settlements",
+                    "quote",
+                    "{{loanId}}"
+                  ]
+                },
+                "description": "Get settlement quote with Ibra calculation.\n\nReturns:\n- outstandingPrincipal: remaining capital\n- accruedProfit: profit already due (must pay)\n- ibraWaiver: unearned future profit (100% waived per Sharia)\n- totalSettlementAmount = principal + accrued profit + fees",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    var json = pm.response.json();",
+                      "    pm.collectionVariables.set('settlementAmount', json.totalSettlementAmount);",
+                      "    console.log('Settlement amount: SAR ' + json.totalSettlementAmount);",
+                      "    console.log('Ibra waiver (saved): SAR ' + json.ibraWaiver);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[collections] Initiate Early Settlement",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/settlements",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "settlements"
+                  ]
+                },
+                "description": "Initiate early settlement. settlementAmount from quote.\n\nSaves settlementId to collection variable.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"settlementType\": \"EARLY_SETTLEMENT\",\n  \"settlementAmount\": {{settlementAmount}},\n  \"paymentMethod\": \"WALLET_MANUAL\",\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"notes\": \"Customer requested early settlement\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "    var json = pm.response.json();",
+                      "    pm.collectionVariables.set('settlementId', json.settlementId);",
+                      "    console.log('Settlement ID set: ' + json.settlementId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[collections] Initiate Partial Settlement",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/settlements",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "settlements"
+                  ]
+                },
+                "description": "Initiate partial settlement (reduce outstanding principal).",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"settlementType\": \"PARTIAL_SETTLEMENT\",\n  \"settlementAmount\": 50000,\n  \"paymentMethod\": \"HYPERPAY_MADA\",\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"notes\": \"Partial payment to reduce outstanding balance\"\n}"
+                }
+              }
+            },
+            {
+              "name": "[collections] Confirm Settlement",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/settlements/{{settlementId}}/confirm",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "settlements",
+                    "{{settlementId}}",
+                    "confirm"
+                  ],
+                  "query": [
+                    {
+                      "key": "paymentId",
+                      "value": "{{paymentId}}"
+                    }
+                  ]
+                },
+                "description": "Confirm settlement after payment is completed.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[collections] Get Settlement",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/collections-service/api/v1/settlements/{{settlementId}}",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "collections-service",
+                    "api",
+                    "v1",
+                    "settlements",
+                    "{{settlementId}}"
+                  ]
+                },
+                "description": "Get settlement details by ID.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12 - GL Reports (ledger-service)",
+      "description": "✅ WORKING - Kong -> ledger-service:8095\nURL: {{kongUrl}}/ledger-service/api/v1/reports/...\n\n📊 Financial Reports generated from GL transaction data.\nAll endpoints require JWT authentication (Bearer token).\n\n🧪 TEST DATA AVAILABLE:\n  Date: 2026-03-30\n  Tenant ID: 00000000-0000-0000-0000-000000000001 (from JWT)\n  GL Accounts: Bank (1,455,000 SAR), Loans (450,000 SAR), Profit (5,000 SAR), Equity (1,000,000 SAR)\n  Transactions: 1 loan disbursement entry\n\n📋 8 Reports Available:\n  1. Trial Balance — GL account balances (debits = credits) ✅\n  2. Portfolio Summary — Loan portfolio health metrics ✅\n  3. DPD Buckets — Loan delinquency analysis ✅\n  4. Collections — Payment collections analysis ✅\n  5. Profit & Revenue — Profit earned vs collected by product ✅\n  6. Write-off & Provisions — Bad debt provisions tracking ✅\n  7. Cash Flow — Bank account inflows/outflows ✅\n  8. Reconciliation — GL reconciliation with Fineract ✅\n\n🔐 All endpoints use: Bearer {{accessToken}}\n📅 Use date=2026-03-30 for test data\n⚙️  Set {{kongUrl}} = http://46.62.226.94:8000 or http://localhost:8000",
+      "item": [
+        {
+          "name": "[GL Reports] Trial Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/trial-balance?date=2026-03-30",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "trial-balance"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-03-30",
+                  "description": "Report date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "Trial Balance Report — All GL accounts with opening balance, debits, credits, and closing balance.\nVerifies that total debits equal total credits.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] Portfolio Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/portfolio-summary?from=2026-01-01&to=2026-03-30",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "portfolio-summary"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "description": "From date (YYYY-MM-DD)"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-03-30",
+                  "description": "To date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "Loan Portfolio Summary — Total disbursed, outstanding principal, collections, and portfolio health metrics.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] DPD Buckets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/dpd-buckets?date=2026-03-30",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "dpd-buckets"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-03-30",
+                  "description": "Report date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "DPD Bucket Report — Loans bucketed by days past due (0, 1-30, 31-60, 61-90, >90) with trend analysis.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] Collections",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/collections?from=2026-03-01&to=2026-03-30",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "collections"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-03-01",
+                  "description": "From date (YYYY-MM-DD)"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-03-30",
+                  "description": "To date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "Collections & Repayment Report — Payment collections by method, on-time performance, and collection rate.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] Profit & Revenue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/profit-revenue?period=2026-03",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "profit-revenue"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "2026-03",
+                  "description": "Year-Month (YYYY-MM)"
+                }
+              ]
+            },
+            "description": "Profit & Revenue Report — Profit earned vs collected by product type (Murabaha, Ijara, Tawarruq) with quality metrics.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] Write-off & Provisions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/write-off-provisions?period=2026-03",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "write-off-provisions"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "2026-03",
+                  "description": "Year-Month (YYYY-MM)"
+                }
+              ]
+            },
+            "description": "Write-off & Provisions Report — Bad debt provisions, write-offs, and restructured loans with coverage ratio.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] Cash Flow",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/cash-flow?date=2026-03-30",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "cash-flow"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-03-30",
+                  "description": "Report date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "Cash Flow Report — Bank account inflows and outflows categorized by transaction type with liquidity position.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[GL Reports] Reconciliation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/reports/reconciliation-detail?date=2026-03-30",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "reports",
+                "reconciliation-detail"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-03-30",
+                  "description": "Report date (YYYY-MM-DD)"
+                }
+              ]
+            },
+            "description": "Reconciliation Report — Compares our GL entries with Fineract GL entries to identify discrepancies and variances.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
         }
       ]
     }

@@ -16,6 +16,8 @@ public interface ManageCategoryUseCase {
                                         String descriptionEn, String descriptionAr, String iconUrl,
                                         int sortOrder, boolean active);
     void deleteMasterCategory(UUID tenantId, UUID id);
+    MasterCategory activateMasterCategory(UUID tenantId, UUID id);
+    MasterCategory deactivateMasterCategory(UUID tenantId, UUID id);
 
     // Sub-Categories
     List<SubCategory> listSubCategories(UUID tenantId, UUID masterCategoryId);
@@ -24,4 +26,6 @@ public interface ManageCategoryUseCase {
     SubCategory updateSubCategory(UUID tenantId, UUID id, String nameEn, String nameAr,
                                   int sortOrder, boolean active);
     void deleteSubCategory(UUID tenantId, UUID id);
+    SubCategory activateSubCategory(UUID tenantId, UUID id);
+    SubCategory deactivateSubCategory(UUID tenantId, UUID id);
 }

@@ -15,6 +15,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -53,7 +55,16 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    "/api/v1/auth/**",
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/login-with-pin",
+                    "/api/v1/auth/login-with-mobile-pin",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/onboarding-register",
+                    "/api/v1/auth/forgot-passcode/send-otp",
+                    "/api/v1/auth/forgot-passcode/verify-otp",
+                    "/api/v1/auth/forgot-passcode/reset",
+                    "/api/v1/auth/sso/**",
                     "/internal/**",
                     "/api/health/**",
                     "/actuator/**",
@@ -62,6 +73,7 @@ public class SecurityConfig {
                     "/swagger-ui.html",
                     "/error"
                 ).permitAll()
+                .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
             )
@@ -71,6 +83,7 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler)
+                .bearerTokenResolver(publicEndpointAwareBearerTokenResolver())
                 .jwt(jwt -> jwt
                     .decoder(jwtDecoder())
                     .jwtAuthenticationConverter(jwtAuthenticationConverter())
@@ -78,6 +91,29 @@ public class SecurityConfig {
             )
             .addFilterAfter(casbinAuthorizationFilter, BearerTokenAuthenticationFilter.class)
             .build();
+    }
+
+    /**
+     * Custom BearerTokenResolver that skips token extraction for public endpoints.
+     * Prevents Spring Security from validating (and rejecting) tokens sent to login/auth endpoints.
+     */
+    @Bean
+    public BearerTokenResolver publicEndpointAwareBearerTokenResolver() {
+        var defaultResolver = new DefaultBearerTokenResolver();
+        return request -> {
+            String path = request.getRequestURI();
+            // These /api/v1/auth/** endpoints require JWT — do NOT skip them
+            if (path.equals("/api/v1/auth/logout")
+                    || path.equals("/api/v1/auth/change-passcode")
+                    || path.equals("/api/v1/auth/verify-mpin")) {
+                return defaultResolver.resolve(request);
+            }
+            if (path.startsWith("/api/v1/auth/") || path.startsWith("/internal/")
+                    || path.startsWith("/actuator/") || path.startsWith("/api/health/")) {
+                return null; // ignore any token on public/auth endpoints
+            }
+            return defaultResolver.resolve(request);
+        };
     }
 
     @Bean

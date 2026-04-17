@@ -43,6 +43,9 @@ public class PermissionJpaEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "is_catalog_visible", nullable = false)
+    private boolean catalogVisible = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

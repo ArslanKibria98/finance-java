@@ -49,7 +49,7 @@ public class ManageEmployeeService implements ManageEmployeeUseCase {
 
         // Create user in Keycloak
         var keycloakUser = keycloakAdapter.createUser(
-                keycloakRealm, command.email(), command.email(), command.password());
+                keycloakRealm, command.email(), command.email(), command.password(), command.name());
 
         // Assign role in Keycloak if provided
         if (command.roleId() != null) {

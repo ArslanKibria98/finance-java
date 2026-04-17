@@ -99,4 +99,26 @@ public class ManageSourceOfWealthService implements ManageSourceOfWealthUseCase 
         option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
+
+    @Override
+    @Transactional
+    public void activate(UUID tenantId, UUID id) {
+        SourceOfWealthOption option = repository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("Source of wealth option", id.toString()));
+
+        log.info("Activating source of wealth option: {} for tenant: {}", id, tenantId);
+        option.setActive(true);
+        option.setUpdatedAt(Instant.now());
+        repository.save(option);
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID tenantId, UUID id) {
+        repository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("Source of wealth option", id.toString()));
+
+        log.info("Soft-deleting source of wealth option: {} for tenant: {}", id, tenantId);
+        repository.softDelete(tenantId, id);
+    }
 }

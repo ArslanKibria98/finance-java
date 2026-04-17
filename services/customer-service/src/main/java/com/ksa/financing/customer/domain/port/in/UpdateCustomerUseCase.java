@@ -14,12 +14,17 @@ public interface UpdateCustomerUseCase {
     Customer update(UUID tenantId, UUID customerId, UpdateCustomerCommand command);
 
     record UpdateCustomerCommand(
+        String firstName,
+        String lastName,
+        String firstNameAr,
+        String lastNameAr,
         String email,
         String mobileNumber,
         String addressLine1,
         String addressLine2,
         String city,
         String region,
-        String postalCode
+        String postalCode,
+        String profilePicture
     ) {}
 }

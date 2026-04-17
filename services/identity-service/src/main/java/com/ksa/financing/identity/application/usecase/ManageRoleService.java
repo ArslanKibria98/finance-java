@@ -76,13 +76,6 @@ public class ManageRoleService implements ManageRoleUseCase {
         var role = roleRepository.findById(tenantId, roleId)
                 .orElseThrow(() -> NotFoundException.forEntity("Role", roleId.toString()));
 
-        if (role.isSystem()) {
-            throw new BusinessException(
-                    ErrorCodes.Identity.ROLE_SYSTEM_IMMUTABLE,
-                    "System role cannot be modified: " + role.getRoleCode(),
-                    role.getRoleCode());
-        }
-
         if (command.roleName() != null) role.setRoleName(command.roleName());
         if (command.roleNameAr() != null) role.setRoleNameAr(command.roleNameAr());
         if (command.description() != null) role.setDescription(command.description());

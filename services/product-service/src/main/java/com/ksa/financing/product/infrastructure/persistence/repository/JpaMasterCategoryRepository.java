@@ -14,7 +14,7 @@ import java.util.UUID;
 @Repository
 public interface JpaMasterCategoryRepository extends JpaRepository<MasterCategoryJpaEntity, UUID> {
 
-    List<MasterCategoryJpaEntity> findAllByTenantIdAndIsActiveTrue(UUID tenantId);
+    List<MasterCategoryJpaEntity> findAllByTenantId(UUID tenantId);
 
     Optional<MasterCategoryJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 

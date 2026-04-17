@@ -5,5 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 public record OnboardingRegisterRequest(
     @NotBlank String nationalId,
     @NotBlank String mobileNumber,
-    String globalUid
+    String globalUid,
+    String firstName
 ) {}

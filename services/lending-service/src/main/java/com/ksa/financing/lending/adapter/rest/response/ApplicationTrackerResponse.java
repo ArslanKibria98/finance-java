@@ -1,12 +1,15 @@
 package com.ksa.financing.lending.adapter.rest.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ksa.financing.lending.domain.model.ApplicationStatus;
+import com.ksa.islamic.orchestration.activity.lending.LoanApplicationWorkflow.ApplicationStatusInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 @Schema(description = "BRD UC#03 — Finance Application Tracker")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApplicationTrackerResponse(
 
         @Schema(description = "Application ID")
@@ -43,8 +46,40 @@ public record ApplicationTrackerResponse(
         String createdAt,
 
         @Schema(description = "Last status update timestamp")
-        String lastUpdatedAt
+        String lastUpdatedAt,
+
+        @Schema(description = "Full workflow state with all step data (basicInfo, bankAccount, eligibility, offer, contract, loan)")
+        StepSignalResponse.WorkflowState workflowState
 ) {
+
+    public static ApplicationTrackerResponse build(
+            String applicationId,
+            String applicationNumber,
+            BigDecimal requestedAmount,
+            BigDecimal totalPayable,
+            String currentStatusStr,
+            String failureReason,
+            String createdAt,
+            String lastUpdatedAt,
+            int tenureMonths,
+            BigDecimal profitRate,
+            ApplicationStatusInfo statusInfo
+    ) {
+        ApplicationStatus appStatus = parseStatus(currentStatusStr);
+        var steps = LoanApplicationStepInfo.buildSteps(appStatus);
+        var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
+        var overallStatus = resolveOverallStatus(appStatus);
+        var preQual = PreQualificationData.calculate(requestedAmount, tenureMonths, profitRate);
+        var workflowState = statusInfo != null ? StepSignalResponse.WorkflowState.from(statusInfo) : null;
+
+        return new ApplicationTrackerResponse(
+                applicationId, applicationNumber,
+                requestedAmount, totalPayable,
+                currentStatusStr, overallStatus, nextAction,
+                failureReason, steps, preQual, createdAt, lastUpdatedAt,
+                workflowState
+        );
+    }
 
     public static ApplicationTrackerResponse build(
             String applicationId,
@@ -58,18 +93,8 @@ public record ApplicationTrackerResponse(
             int tenureMonths,
             BigDecimal profitRate
     ) {
-        ApplicationStatus appStatus = parseStatus(currentStatusStr);
-        var steps = LoanApplicationStepInfo.buildSteps(appStatus);
-        var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
-        var overallStatus = resolveOverallStatus(appStatus);
-        var preQual = PreQualificationData.calculate(requestedAmount, tenureMonths, profitRate);
-
-        return new ApplicationTrackerResponse(
-                applicationId, applicationNumber,
-                requestedAmount, totalPayable,
-                currentStatusStr, overallStatus, nextAction,
-                failureReason, steps, preQual, createdAt, lastUpdatedAt
-        );
+        return build(applicationId, applicationNumber, requestedAmount, totalPayable,
+                currentStatusStr, failureReason, createdAt, lastUpdatedAt, tenureMonths, profitRate, null);
     }
 
     public static ApplicationTrackerResponse build(
@@ -80,7 +105,7 @@ public record ApplicationTrackerResponse(
             String currentStatusStr
     ) {
         return build(applicationId, applicationNumber, requestedAmount, totalPayable,
-                currentStatusStr, null, null, null, 0, null);
+                currentStatusStr, null, null, null, 0, null, null);
     }
 
     private static ApplicationStatus parseStatus(String status) {

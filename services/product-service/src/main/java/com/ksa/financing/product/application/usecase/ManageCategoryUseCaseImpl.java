@@ -99,6 +99,28 @@ public class ManageCategoryUseCaseImpl implements ManageCategoryUseCase {
         categoryRepository.deleteMasterCategory(id);
     }
 
+    @Override
+    @Transactional
+    public MasterCategory activateMasterCategory(UUID tenantId, UUID id) {
+        log.info("Activating master category id={} for tenant={}", id, tenantId);
+        var category = categoryRepository.findMasterCategoryById(id)
+                .orElseThrow(() -> NotFoundException.forEntity("MasterCategory", id.toString()));
+        category.setActive(true);
+        category.setUpdatedAt(Instant.now());
+        return categoryRepository.saveMasterCategory(category);
+    }
+
+    @Override
+    @Transactional
+    public MasterCategory deactivateMasterCategory(UUID tenantId, UUID id) {
+        log.info("Deactivating master category id={} for tenant={}", id, tenantId);
+        var category = categoryRepository.findMasterCategoryById(id)
+                .orElseThrow(() -> NotFoundException.forEntity("MasterCategory", id.toString()));
+        category.setActive(false);
+        category.setUpdatedAt(Instant.now());
+        return categoryRepository.saveMasterCategory(category);
+    }
+
     // --- Sub-Categories ---
 
     @Override
@@ -162,5 +184,27 @@ public class ManageCategoryUseCaseImpl implements ManageCategoryUseCase {
         categoryRepository.findSubCategoryById(id)
                 .orElseThrow(() -> NotFoundException.forEntity("SubCategory", id.toString()));
         categoryRepository.deleteSubCategory(id);
+    }
+
+    @Override
+    @Transactional
+    public SubCategory activateSubCategory(UUID tenantId, UUID id) {
+        log.info("Activating sub-category id={} for tenant={}", id, tenantId);
+        var subCategory = categoryRepository.findSubCategoryById(id)
+                .orElseThrow(() -> NotFoundException.forEntity("SubCategory", id.toString()));
+        subCategory.setActive(true);
+        subCategory.setUpdatedAt(Instant.now());
+        return categoryRepository.saveSubCategory(subCategory);
+    }
+
+    @Override
+    @Transactional
+    public SubCategory deactivateSubCategory(UUID tenantId, UUID id) {
+        log.info("Deactivating sub-category id={} for tenant={}", id, tenantId);
+        var subCategory = categoryRepository.findSubCategoryById(id)
+                .orElseThrow(() -> NotFoundException.forEntity("SubCategory", id.toString()));
+        subCategory.setActive(false);
+        subCategory.setUpdatedAt(Instant.now());
+        return categoryRepository.saveSubCategory(subCategory);
     }
 }

@@ -8,6 +8,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
+import jakarta.transaction.Transactional;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -61,5 +65,34 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
         log.debug("Finding user identity by Keycloak username: {}", keycloakUsername);
         return jpaRepository.findByKeycloakUsername(keycloakUsername)
                 .map(mapper::toDomain);
+    }
+
+    @Override
+    public Optional<UserIdentity> findByMobileNumber(String mobileNumber) {
+        log.debug("Finding user identity by mobile number: ****{}", mobileNumber != null && mobileNumber.length() > 4 ? mobileNumber.substring(mobileNumber.length() - 4) : "****");
+        return jpaRepository.findByMobileNumber(mobileNumber)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional
+    public void saveOtp(UUID id, String otp, Instant expiry) {
+        log.info("Saving OTP in DB for identity id={}", id);
+        jpaRepository.findById(id).ifPresent(entity -> {
+            entity.setResetOtp(otp);
+            entity.setResetOtpExpiry(expiry.atOffset(ZoneOffset.UTC));
+            jpaRepository.save(entity);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void clearOtp(UUID id) {
+        log.info("Clearing OTP in DB for identity id={}", id);
+        jpaRepository.findById(id).ifPresent(entity -> {
+            entity.setResetOtp(null);
+            entity.setResetOtpExpiry(null);
+            jpaRepository.save(entity);
+        });
     }
 }

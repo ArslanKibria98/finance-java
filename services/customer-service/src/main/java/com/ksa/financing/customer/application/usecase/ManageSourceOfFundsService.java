@@ -99,4 +99,22 @@ public class ManageSourceOfFundsService implements ManageSourceOfFundsUseCase {
         option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
+
+    @Override
+    @Transactional
+    public void activate(UUID tenantId, UUID id) {
+        SourceOfFundsOption option = repository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+        option.setActive(true);
+        option.setUpdatedAt(java.time.Instant.now());
+        repository.save(option);
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID tenantId, UUID id) {
+        repository.findById(tenantId, id)
+                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+        repository.softDelete(tenantId, id);
+    }
 }

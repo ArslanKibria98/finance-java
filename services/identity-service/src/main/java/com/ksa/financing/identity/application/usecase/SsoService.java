@@ -184,6 +184,9 @@ public class SsoService implements SsoUseCase {
                         .orElse(null);
             }
 
+            // 2f. Name JWT se nikalo
+            String name = extractNameFromJwt(accessToken);
+
             log.info("SSO token exchange successful. Roles: {}, roleId: {}", roles, roleId);
 
             return new SsoTokenResponse(
@@ -192,7 +195,8 @@ public class SsoService implements SsoUseCase {
                     (Integer) tokenData.getOrDefault("expires_in", 3600),
                     "Bearer",
                     roles,
-                    roleId
+                    roleId,
+                    name
             );
 
         } catch (HttpClientErrorException e) {
@@ -233,6 +237,20 @@ public class SsoService implements SsoUseCase {
      * JWT se sub (Keycloak user ID) extract karo.
      */
     @SuppressWarnings("unchecked")
+    private String extractNameFromJwt(String accessToken) {
+        try {
+            String[] parts = accessToken.split("\\.");
+            if (parts.length < 2) return null;
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
+            Map<String, Object> claims = objectMapper.readValue(payloadBytes, Map.class);
+            Object name = claims.get("name");
+            return name != null ? name.toString() : null;
+        } catch (Exception e) {
+            log.warn("Could not extract name from JWT: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private UUID extractSubFromJwt(String accessToken) {
         try {
             String[] parts = accessToken.split("\\.");

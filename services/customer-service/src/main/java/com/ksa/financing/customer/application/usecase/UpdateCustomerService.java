@@ -88,6 +88,10 @@ public class UpdateCustomerService implements UpdateCustomerUseCase {
         Customer customer = customerRepository.findById(tenantId, customerId)
             .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + customerId));
 
+        if (command.firstName() != null) customer.setFirstName(command.firstName());
+        if (command.lastName() != null) customer.setLastName(command.lastName());
+        if (command.firstNameAr() != null) customer.setFirstNameAr(command.firstNameAr());
+        if (command.lastNameAr() != null) customer.setLastNameAr(command.lastNameAr());
         if (command.email() != null) customer.setEmail(command.email());
         if (command.mobileNumber() != null) customer.setMobileNumber(command.mobileNumber());
         if (command.addressLine1() != null) customer.setAddressLine1(command.addressLine1());
@@ -95,6 +99,7 @@ public class UpdateCustomerService implements UpdateCustomerUseCase {
         if (command.city() != null) customer.setCity(command.city());
         if (command.region() != null) customer.setRegion(command.region());
         if (command.postalCode() != null) customer.setPostalCode(command.postalCode());
+        if (command.profilePicture() != null) customer.setProfilePicture(command.profilePicture());
 
         Customer saved = customerRepository.save(customer);
         try {

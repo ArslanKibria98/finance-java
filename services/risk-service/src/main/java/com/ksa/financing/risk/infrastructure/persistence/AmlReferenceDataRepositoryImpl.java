@@ -178,15 +178,14 @@ public class AmlReferenceDataRepositoryImpl implements AmlReferenceDataRepositor
 
         var results = jdbcTemplate.query(
                 """
-                SELECT irs.label_en, cf.factor_code
+                SELECT cf.factor_code
                 FROM aml_income_range_scores irs
                 JOIN aml_risk_category_factors cf ON cf.tenant_id = irs.tenant_id
-                  AND cf.factor_code LIKE 'INCOME_%'
+                  AND cf.sort_order = irs.sort_order
                 JOIN aml_risk_categories c ON c.id = cf.category_id AND c.category_code = 'INCOME_RANGE'
                 WHERE irs.tenant_id = ?::uuid AND irs.is_active = true
                   AND ? >= irs.range_min
                   AND (irs.range_max IS NULL OR ? <= irs.range_max)
-                ORDER BY irs.sort_order
                 LIMIT 1
                 """,
                 (rs, rowNum) -> rs.getString("factor_code"),

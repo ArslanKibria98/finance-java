@@ -322,7 +322,65 @@ public class LoanApplicationController {
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        var workflowId = resolveWorkflowId(tenantId, customerId, applicationId);
+
+        // Fetch existing application to reuse saved salary + expenses from initiate
+        LoanApplicationAggregate existingApp;
+        if (applicationId != null && !applicationId.isBlank()) {
+            existingApp = useCase.getApplication(tenantId, UUID.fromString(applicationId));
+        } else {
+            existingApp = useCase.listApplicationsByCustomer(tenantId, UUID.fromString(customerId))
+                    .stream()
+                    .filter(app -> !app.getStatus().isTerminal())
+                    .reduce((first, second) -> second)
+                    .orElseThrow(() -> NotFoundException.forEntity("Active LoanApplication for customer", customerId));
+        }
+
+        // Re-run eligibility check using saved financial data + new amount/product from request
+        var eligibilityResult = checkEligibilityUseCase.checkEligibility(
+                new com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase.CheckEligibilityCommand(
+                        tenantId,
+                        request.requestedAmount(),
+                        request.requestedTenureMonths(),
+                        existingApp.getMonthlyIncome(),
+                        existingApp.getExistingLiabilities() != null ? existingApp.getExistingLiabilities() : BigDecimal.ZERO,
+                        existingApp.getAdultDependents(),
+                        existingApp.getChildDependents(),
+                        existingApp.getFoodGroceries(),
+                        existingApp.getUtilities(),
+                        existingApp.getHealthcare(),
+                        existingApp.getCommunication(),
+                        existingApp.getHousingRent(),
+                        existingApp.getClothingEssentials(),
+                        existingApp.getEducation(),
+                        existingApp.getTransportation(),
+                        request.productId()
+                )
+        );
+
+        if (!eligibilityResult.eligible()) {
+            var reason = eligibilityResult.reason() != null ? eligibilityResult.reason() : "Does not meet eligibility criteria";
+            var maxAmountInfo = eligibilityResult.maxEligibleAmount() != null
+                    && eligibilityResult.maxEligibleAmount().compareTo(BigDecimal.ZERO) > 0
+                    ? ". Maximum eligible amount: " + eligibilityResult.maxEligibleAmount() + " SAR" : "";
+            var fullMessage = "Not eligible: " + reason + maxAmountInfo;
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, fullMessage, fullMessage);
+        }
+
+        if (eligibilityResult.maxEligibleAmount() != null
+                && eligibilityResult.maxEligibleAmount().compareTo(request.requestedAmount()) < 0) {
+            var fullMessage = "Requested amount " + request.requestedAmount() + " SAR exceeds your affordability. "
+                    + "Maximum eligible amount: " + eligibilityResult.maxEligibleAmount() + " SAR. "
+                    + "Monthly instalment capacity: " + eligibilityResult.monthlyInstallment() + " SAR/month";
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, fullMessage, fullMessage);
+        }
+
+        log.info("Eligibility re-check passed at basic-info step: DBR before={}, after={}", eligibilityResult.dbrBefore(), eligibilityResult.dbrAfter());
+
+        var workflowId = existingApp.getWorkflowId();
+        if (workflowId == null) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Application has no active workflow");
+        }
 
         log.info("Signal: submitBasicInfo for customer: {}, app: {}, workflow: {}", customerId, applicationId, workflowId);
 
@@ -596,7 +654,8 @@ public class LoanApplicationController {
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        log.info("Looking up bank accounts for customer: {}, NID: ***{}", customerId, nationalId.substring(nationalId.length() - 4));
+        String maskedNid = nationalId.length() >= 4 ? nationalId.substring(nationalId.length() - 4) : "****";
+        log.info("Looking up bank accounts for customer: {}, NID: ***{}", customerId, maskedNid);
 
         var result = bankAccountLookupService.lookupBankAccounts(customerId, nationalId, tenantId.toString(), jwt.getTokenValue());
         return ResponseEntity.ok(result);
@@ -686,7 +745,8 @@ public class LoanApplicationController {
                         statusInfo.status(),
                         null, null, null,
                         statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedTenureMonths() : 0,
-                        statusInfo.basicInfo() != null ? statusInfo.basicInfo().profitRate() : null
+                        statusInfo.basicInfo() != null ? statusInfo.basicInfo().profitRate() : null,
+                        statusInfo
                 ));
             }
         } catch (Exception e) {
@@ -745,7 +805,8 @@ public class LoanApplicationController {
                             statusInfo.status(),
                             null, null, null,
                             statusInfo.basicInfo() != null ? statusInfo.basicInfo().requestedTenureMonths() : 0,
-                            statusInfo.basicInfo() != null ? statusInfo.basicInfo().profitRate() : null
+                            statusInfo.basicInfo() != null ? statusInfo.basicInfo().profitRate() : null,
+                            statusInfo
                     ));
                 }
             } catch (Exception e) {

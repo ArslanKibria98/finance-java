@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public interface JpaModuleRepository extends JpaRepository<ModuleJpaEntity, UUID> {
     List<ModuleJpaEntity> findByTenantIdOrderByDisplayOrder(UUID tenantId);
+    List<ModuleJpaEntity> findByTenantIdAndCatalogVisibleTrueOrderByDisplayOrder(UUID tenantId);
     Optional<ModuleJpaEntity> findByTenantIdAndId(UUID tenantId, UUID id);
     Optional<ModuleJpaEntity> findByTenantIdAndModuleCode(UUID tenantId, String moduleCode);
 }

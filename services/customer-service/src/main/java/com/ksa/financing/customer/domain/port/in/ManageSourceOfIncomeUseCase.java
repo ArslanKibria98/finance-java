@@ -13,6 +13,8 @@ public interface ManageSourceOfIncomeUseCase {
     List<SourceOfIncomeOption> getAll(UUID tenantId);
     List<SourceOfIncomeOption> getActive(UUID tenantId);
     void deactivate(UUID tenantId, UUID id);
+    void activate(UUID tenantId, UUID id);
+    void delete(UUID tenantId, UUID id);
 
     record CreateSourceOfIncomeCommand(
         String code,

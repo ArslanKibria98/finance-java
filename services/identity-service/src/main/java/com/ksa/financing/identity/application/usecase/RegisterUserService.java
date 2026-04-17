@@ -33,7 +33,7 @@ public class RegisterUserService implements RegisterUserUseCase {
         String realm = command.keycloakRealm() != null ? command.keycloakRealm() : "CompanyRealm";
 
         KeycloakAdapterPort.KeycloakUser keycloakUser = keycloakAdapter.createUser(
-            realm, command.username(), command.email(), command.password()
+            realm, command.username(), command.email(), command.password(), null
         );
 
         keycloakAdapter.assignRole(realm, keycloakUser.keycloakUserId(), "customer");
