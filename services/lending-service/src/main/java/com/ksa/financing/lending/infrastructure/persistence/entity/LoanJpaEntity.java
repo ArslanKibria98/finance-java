@@ -38,7 +38,7 @@ public class LoanJpaEntity {
     @Column(name = "product_id", nullable = false)
     private UUID productId;
 
-    @Column(name = "product_code", nullable = false)
+    @Column(name = "product_code")
     private String productCode;
 
     @Column(name = "sharia_structure", nullable = false)

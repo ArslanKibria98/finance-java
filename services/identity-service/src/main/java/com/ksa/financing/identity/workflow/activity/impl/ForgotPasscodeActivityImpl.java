@@ -38,7 +38,7 @@ public class ForgotPasscodeActivityImpl implements ForgotPasscodeActivity {
                         new IllegalArgumentException("No account found for the given mobile number")));
 
         // TODO: Replace with real random OTP + SMS (Unifonic) — static for dev/testing
-        String otp     = "469310";
+        String otp     = "123456";
         Instant expiry = Instant.now().plusSeconds(OTP_TTL_SECONDS);
 
         userIdentityRepository.saveOtp(identity.getId(), otp, expiry);

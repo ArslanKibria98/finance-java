@@ -111,5 +111,9 @@ public record LoanApplicationDto(
         BigDecimal totalAmount,
         BigDecimal installmentAmount,
         String fineractLoanId,
-        java.time.LocalDate disbursementDate
+        java.time.LocalDate disbursementDate,
+
+        // Current schedule (updated after reschedule — differs from requestedTenureMonths)
+        Integer currentTenureMonths,
+        java.time.LocalDate currentMaturityDate
 ) {}

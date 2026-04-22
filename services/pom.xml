@@ -30,5 +30,7 @@
         <module>product-service</module>
         <module>lending-service</module>
         <module>middleware-third-party</module>
+        <module>ledger-service</module>
+        <module>collections-service</module>
     </modules>
 </project>

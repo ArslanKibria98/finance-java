@@ -66,7 +66,7 @@ public class SendOtpService implements SendOtpUseCase {
 
     private String generateOtp() {
         // TODO: Temporary static OTP for development/testing — revert to random before production
-        return "469310";
+        return "123456";
     }
 
     private String maskLast4(String value) {

@@ -63,6 +63,7 @@ public class CustomerPersistenceMapper {
         entity.setRiskGradeUpdatedAt(toOffsetDateTime(domain.getRiskGradeUpdatedAt()));
         entity.setPepFlag(domain.isPepFlag());
         entity.setSanctionsFlag(domain.isSanctionsFlag());
+        entity.setPepStatus(domain.getPepStatus() != null ? domain.getPepStatus().name() : null);
         entity.setKeycloakUserId(domain.getKeycloakUserId());
         entity.setGlobalUid(domain.getGlobalUid());
         entity.setLifecycleStage(domain.getLifecycleStage() != null ? domain.getLifecycleStage().name() : null);
@@ -119,6 +120,7 @@ public class CustomerPersistenceMapper {
         domain.setRiskGradeUpdatedAt(toInstant(entity.getRiskGradeUpdatedAt()));
         domain.setPepFlag(entity.isPepFlag());
         domain.setSanctionsFlag(entity.isSanctionsFlag());
+        domain.setPepStatus(parseEnum(com.ksa.financing.customer.domain.model.PepStatus.class, entity.getPepStatus()));
         domain.setKeycloakUserId(entity.getKeycloakUserId());
         domain.setGlobalUid(entity.getGlobalUid());
         domain.setLifecycleStage(parseEnum(LifecycleStage.class, entity.getLifecycleStage()));

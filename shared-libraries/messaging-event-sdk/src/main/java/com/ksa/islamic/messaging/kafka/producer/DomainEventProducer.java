@@ -67,52 +67,62 @@ public class DomainEventProducer {
             String tenantId,
             String correlationId) {
 
-        return publishTimer.recordCallable(() -> {
-            try {
-                // Create event envelope
-                EventEnvelope envelope = createEventEnvelope(event, tenantId, correlationId);
+        try {
+            return publishTimer.recordCallable(() -> {
+                try {
+                    // Create event envelope
+                    EventEnvelope envelope = createEventEnvelope(event, tenantId, correlationId);
 
-                // Create producer record with headers
-                ProducerRecord<String, Object> record = createProducerRecord(
-                    topicName, envelope, tenantId, correlationId
-                );
+                    // Create producer record with headers
+                    ProducerRecord<String, Object> record = createProducerRecord(
+                        topicName, envelope, tenantId, correlationId
+                    );
 
-                log.info("Publishing domain event to topic: {}, EventType: {}, " +
-                        "TenantId: {}, CorrelationId: {}, EventId: {}",
-                        topicName, event.getClass().getSimpleName(),
-                        tenantId, correlationId, envelope.getEventId());
+                    log.info("Publishing domain event to topic: {}, EventType: {}, " +
+                            "TenantId: {}, CorrelationId: {}, EventId: {}",
+                            topicName, event.getClass().getSimpleName(),
+                            tenantId, correlationId, envelope.getEventId());
 
-                // Send the event
-                CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(record);
+                    // Send the event
+                    CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(record);
 
-                // Handle completion
-                future.whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        failureCounter.increment();
-                        log.error("Failed to publish event to topic: {}, Error: {}",
-                                topicName, ex.getMessage(), ex);
-                    } else {
-                        successCounter.increment();
-                        log.debug("Successfully published event to topic: {}, " +
-                                "Partition: {}, Offset: {}",
-                                topicName,
-                                result.getRecordMetadata().partition(),
-                                result.getRecordMetadata().offset());
-                    }
-                });
+                    // Handle completion
+                    future.whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            failureCounter.increment();
+                            log.error("Failed to publish event to topic: {}, Error: {}",
+                                    topicName, ex.getMessage(), ex);
+                        } else {
+                            successCounter.increment();
+                            log.debug("Successfully published event to topic: {}, " +
+                                    "Partition: {}, Offset: {}",
+                                    topicName,
+                                    result.getRecordMetadata().partition(),
+                                    result.getRecordMetadata().offset());
+                        }
+                    });
 
-                return future;
+                    return future;
 
-            } catch (Exception e) {
-                failureCounter.increment();
-                log.error("Error preparing event for publication: {}", e.getMessage(), e);
-                CompletableFuture<SendResult<String, Object>> failedFuture = new CompletableFuture<>();
-                failedFuture.completeExceptionally(
-                    new EventPublishingException("Failed to publish event", e)
-                );
-                return failedFuture;
-            }
-        });
+                } catch (Exception e) {
+                    failureCounter.increment();
+                    log.error("Error preparing event for publication: {}", e.getMessage(), e);
+                    CompletableFuture<SendResult<String, Object>> failedFuture = new CompletableFuture<>();
+                    failedFuture.completeExceptionally(
+                        new EventPublishingException("Failed to publish event", e)
+                    );
+                    return failedFuture;
+                }
+            });
+        } catch (Exception e) {
+            failureCounter.increment();
+            log.error("Error in publishTimer.recordCallable: {}", e.getMessage(), e);
+            CompletableFuture<SendResult<String, Object>> failedFuture = new CompletableFuture<>();
+            failedFuture.completeExceptionally(
+                new EventPublishingException("Failed to record callable", e)
+            );
+            return failedFuture;
+        }
     }
 
     /**

@@ -39,6 +39,15 @@ public class ProfileCreationActivityImpl implements ProfileCreationActivity {
                 }
             }
 
+            UUID keycloakUserUuid = null;
+            if (input.keycloakUserId() != null && !input.keycloakUserId().isBlank()) {
+                try {
+                    keycloakUserUuid = UUID.fromString(input.keycloakUserId());
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid keycloakUserId from workflow: {}", input.keycloakUserId());
+                }
+            }
+
             Customer customer = createCustomerUseCase.create(
                     new CreateCustomerUseCase.CreateCustomerCommand(
                             tenantUuid,
@@ -55,7 +64,7 @@ public class ProfileCreationActivityImpl implements ProfileCreationActivity {
                             "CITIZEN",
                             input.mobileNumber(),
                             input.email(),
-                            null,
+                            keycloakUserUuid,
                             input.lifecycleStage() != null ? input.lifecycleStage() : "ONBOARDING",
                             preAssignedGlobalUid,
                             null  // idempotencyKey — Temporal provides its own idempotency via workflow ID

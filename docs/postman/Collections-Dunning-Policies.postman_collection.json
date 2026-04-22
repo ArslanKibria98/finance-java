@@ -1,0 +1,477 @@
+{
+  "info": {
+    "name": "Collections Service - Dunning & Delinquency (Admin)",
+    "description": "Admin-configurable, multi-tenant collections configuration for the Collections Service.\n\n## Folders\n1. **Dunning Policies** — DPD-stage policies (PRE_DUE → WRITE_OFF) with late-fee, Simah, and stage-action JSON. Resolution chain: product-specific → tenant default → built-in.\n2. **Delinquency Rules** — Per-product, per-stage rules mirroring the LMS admin UI (6 lifecycle types: 1=Early Settlement, 2=Due Loan, 3=Late Payment, 4=Write-offs, 5=Non-Performing Loan, 6=Broken Promises). Type=1 also owns child early-settlement configs (singles + ranges).\n\nEvery payment completion triggers `DelinquencyEngine.tickAndAssess(...)` — advances installment stages using the resolved grace-period and emits a DelinquencyAssessment event (Simah reporting, agent assignment, wallet freeze, charity-fund late fee).\n\nAuth: Bearer {{accessToken}} from identity-service login.\nRole required: `collections_head`, `admin`, or `super_admin` for writes. `product_admin`, `compliance_officer`, `head_of_accounts`, `underwriter`, `collections_agent` get read.\n\nKong route: {{kongUrl}}/collections-service/api/v1/admin/...",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "kongUrl", "value": "http://46.62.226.94:8000", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001", "type": "string" },
+    { "key": "policyId", "value": "", "type": "string" },
+    { "key": "productCode", "value": "MURABAHA_AUTO", "type": "string" },
+    { "key": "productId", "value": "00000000-0000-0000-0000-000000000010", "type": "string" },
+    { "key": "ruleId", "value": "", "type": "string" },
+    { "key": "configId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Dunning Policies",
+      "description": "Admin-configurable, product-wise DPD-stage policies (PRE_DUE → WRITE_OFF). Used by `DunningPolicyResolver` to drive the dynamic dunning flow on every payment tick.",
+      "item": [
+        {
+          "name": "1. List Policies",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies?activeOnly=false",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies"],
+              "query": [
+                { "key": "activeOnly", "value": "false" }
+              ]
+            },
+            "description": "Lists all dunning policies for the caller's tenant. `activeOnly=true` filters to active only.\n\nCasbin: `dunning.policies:read`"
+          }
+        },
+        {
+          "name": "2. Get Policy by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","{{policyId}}"]
+            },
+            "description": "Fetch a single policy by ID.\n\nCasbin: `dunning.policies:read`"
+          }
+        },
+        {
+          "name": "3. Create Tenant-Default Policy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('policyId', body.id);",
+                  "    pm.test('Policy created with ID', () => pm.expect(body.id).to.be.a('string'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"policyName\": \"TENANT_DEFAULT_POLICY\",\n  \"productCode\": null,\n  \"description\": \"Tenant-wide default delinquency policy (fallback when no product-specific match).\",\n  \"defaultPolicy\": true,\n\n  \"preDueDaysBefore\": 3,\n  \"gracePeriodDays\": 10,\n  \"softCollectionDpd\": 11,\n  \"hardCollectionDpd\": 31,\n  \"legalDpd\": 91,\n  \"writeOffDpd\": 181,\n\n  \"lateFeeEnabled\": true,\n  \"lateFeeType\": \"PERCENTAGE\",\n  \"lateFeePercentage\": 1.50,\n  \"lateFeeMinDpd\": 11,\n  \"lateFeeMaxAmount\": 500.00,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n\n  \"simahReportEnabled\": true,\n  \"simahReportDpd\": 60,\n  \"simahDefaultStatusDpd\": 90,\n\n  \"autoAssignAgent\": true,\n  \"agentAssignmentDpd\": 31,\n  \"walletFreezeDpd\": 91,\n\n  \"stageActions\": {\n    \"PRE_DUE_REMINDER\":    { \"channels\": [\"SMS\",\"EMAIL\"], \"template\": \"PRE_DUE_TPL\", \"daysBeforeDue\": [3,1] },\n    \"DUE_DATE_REMINDER\":   { \"channels\": [\"SMS\",\"EMAIL\",\"PUSH\"], \"template\": \"DUE_DATE_TPL\" },\n    \"GRACE_PERIOD\":        { \"channels\": [\"SMS\",\"EMAIL\"], \"template\": \"GRACE_WARNING\" },\n    \"SOFT_COLLECTION\":     { \"channels\": [\"SMS\",\"PUSH\"], \"template\": \"SOFT_COLLECTION\", \"callAttempts\": 3 },\n    \"HARD_COLLECTION\":     { \"channels\": [\"SMS\",\"PHONE_CALL\"], \"template\": \"HARD_COLLECTION\", \"fieldVisit\": true },\n    \"LEGAL\":               { \"channels\": [\"LEGAL_NOTICE\",\"EMAIL\"], \"template\": \"LEGAL_NOTICE\", \"reportToSimah\": true },\n    \"WRITE_OFF\":           { \"channels\": [\"EMAIL\"], \"template\": \"WRITE_OFF\", \"glWriteOff\": true }\n  }\n}"
+            },
+            "description": "Creates the tenant-wide default policy. Applied to ANY loan whose productCode has no policy bound.\n\n**Thresholds** (DPD buckets):\n- PRE_DUE: 3 days before due\n- GRACE: 1–10 DPD\n- SOFT: 11–30 DPD\n- HARD: 31–90 DPD\n- LEGAL: 91–180 DPD\n- WRITE_OFF: ≥ 181 DPD\n\n**Sharia**: late fee swept to `charityFundAccount`, NOT revenue.\n\nCasbin: `dunning.policies:create`"
+          }
+        },
+        {
+          "name": "4. Create Product-Specific Policy (Murabaha Auto)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"policyName\": \"MURABAHA_AUTO_STRICT\",\n  \"productCode\": \"{{productCode}}\",\n  \"description\": \"Stricter thresholds for secured auto-Murabaha — shorter grace, earlier Simah reporting.\",\n  \"defaultPolicy\": false,\n\n  \"preDueDaysBefore\": 5,\n  \"gracePeriodDays\": 5,\n  \"softCollectionDpd\": 6,\n  \"hardCollectionDpd\": 21,\n  \"legalDpd\": 61,\n  \"writeOffDpd\": 121,\n\n  \"lateFeeEnabled\": true,\n  \"lateFeeType\": \"PERCENTAGE\",\n  \"lateFeePercentage\": 2.00,\n  \"lateFeeMinDpd\": 6,\n  \"lateFeeMaxAmount\": 750.00,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n\n  \"simahReportEnabled\": true,\n  \"simahReportDpd\": 30,\n  \"simahDefaultStatusDpd\": 60,\n\n  \"autoAssignAgent\": true,\n  \"agentAssignmentDpd\": 21,\n  \"walletFreezeDpd\": 61,\n\n  \"stageActions\": {\n    \"HARD_COLLECTION\": { \"channels\": [\"SMS\",\"PHONE_CALL\",\"FIELD_VISIT\"], \"fieldVisit\": true, \"repossessionWarning\": true },\n    \"LEGAL\":           { \"channels\": [\"LEGAL_NOTICE\"], \"repossess\": true }\n  }\n}"
+            },
+            "description": "Product-specific policy. Takes precedence over tenant default for loans where `productCode = MURABAHA_AUTO`.\n\nCasbin: `dunning.policies:create`"
+          }
+        },
+        {
+          "name": "5. Create FLAT Late-Fee Policy Example",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"policyName\": \"IJARA_EQUIPMENT_FLAT_FEE\",\n  \"productCode\": \"IJARA_EQUIPMENT\",\n  \"description\": \"Equipment Ijara — flat SAR 100 late fee per overdue installment, swept to charity.\",\n  \"defaultPolicy\": false,\n  \"preDueDaysBefore\": 3,\n  \"gracePeriodDays\": 7,\n  \"softCollectionDpd\": 8,\n  \"hardCollectionDpd\": 30,\n  \"legalDpd\": 90,\n  \"writeOffDpd\": 180,\n\n  \"lateFeeEnabled\": true,\n  \"lateFeeType\": \"FLAT\",\n  \"lateFeeAmount\": 100.00,\n  \"lateFeeMinDpd\": 8,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n\n  \"simahReportEnabled\": true,\n  \"simahReportDpd\": 60,\n  \"simahDefaultStatusDpd\": 90,\n\n  \"autoAssignAgent\": false,\n  \"agentAssignmentDpd\": null,\n  \"walletFreezeDpd\": null\n}"
+            },
+            "description": "Demonstrates the FLAT late-fee type and minimal stage-actions (admin can seed richer actions later)."
+          }
+        },
+        {
+          "name": "6. Update Policy (Partial)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","{{policyId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated: tighter grace period after Q2 collections review\",\n  \"gracePeriodDays\": 7,\n  \"softCollectionDpd\": 8,\n  \"hardCollectionDpd\": 31,\n  \"legalDpd\": 91,\n  \"writeOffDpd\": 181,\n  \"preDueDaysBefore\": 3,\n\n  \"lateFeeEnabled\": true,\n  \"lateFeeType\": \"PERCENTAGE\",\n  \"lateFeePercentage\": 2.00,\n  \"lateFeeMinDpd\": 8,\n  \"lateFeeMaxAmount\": 500.00,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n\n  \"autoAssignAgent\": true,\n  \"agentAssignmentDpd\": 31,\n  \"walletFreezeDpd\": 91\n}"
+            },
+            "description": "Partial update — only non-null fields are applied. Triggers `DunningPolicyThresholdsChanged` event and evicts the resolver cache so the new rules are active on the next payment.\n\nCasbin: `dunning.policies:update`"
+          }
+        },
+        {
+          "name": "7. Activate Policy",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}/activate",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","{{policyId}}","activate"]
+            },
+            "description": "Emits `DunningPolicyActivated` event. Cache eviction ensures the next payment sees this policy.\n\nCasbin: `dunning.policies:update`"
+          }
+        },
+        {
+          "name": "8. Deactivate Policy",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}/deactivate",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","{{policyId}}","deactivate"]
+            },
+            "description": "Emits `DunningPolicyDeactivated`. The resolver falls back to the next policy in the chain (tenant default → built-in).\n\nCasbin: `dunning.policies:update`"
+          }
+        },
+        {
+          "name": "9. Mark as Tenant Default",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}/mark-default",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","{{policyId}}","mark-default"]
+            },
+            "description": "Clears the `is_default` flag on every other policy for the tenant, then marks this one. The partial unique index on the DB guarantees exactly one active default per tenant.\n\nCasbin: `dunning.policies:update`"
+          }
+        },
+        {
+          "name": "10. Simulate — No Product Match (tenant default fallback)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/simulate?dpd=45&outstanding=5000",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","simulate"],
+              "query": [
+                { "key": "dpd", "value": "45" },
+                { "key": "outstanding", "value": "5000" }
+              ]
+            },
+            "description": "Dry-run: with no productCode, the resolver uses the tenant default. Response shows resolved stage, late fee, Simah flags, and agent/wallet flags for an outstanding balance of SAR 5,000 at DPD=45.\n\nExpected: stage=HARD_COLLECTION, lateFee ≈ outstanding × 1.5% (capped at maxAmount), simahReport=false (reportDpd=60), assignAgent=true (agentAssignmentDpd=31).\n\nCasbin: `dunning.policies:read`"
+          }
+        },
+        {
+          "name": "11. Simulate — Product-Specific (Murabaha Auto at DPD=75)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/simulate?productCode={{productCode}}&dpd=75&outstanding=12000",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","simulate"],
+              "query": [
+                { "key": "productCode", "value": "{{productCode}}" },
+                { "key": "dpd", "value": "75" },
+                { "key": "outstanding", "value": "12000" }
+              ]
+            },
+            "description": "With product-specific policy active for `{{productCode}}`: policySource=PRODUCT_SPECIFIC, stage=LEGAL (legalDpd=61 for strict policy), simahReport=true, simahDefaultFlag=true, freezeWallet=true."
+          }
+        },
+        {
+          "name": "12. Simulate — Stage Boundary Walk",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/simulate?dpd=0&outstanding=1000",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","simulate"],
+              "query": [
+                { "key": "dpd", "value": "0" },
+                { "key": "outstanding", "value": "1000" }
+              ]
+            },
+            "description": "Change `dpd` to walk the stages:\n- dpd = -3 → PRE_DUE_REMINDER (3 days before due)\n- dpd = 0  → DUE_DATE_REMINDER\n- dpd = 5  → GRACE_PERIOD (< gracePeriodDays=10)\n- dpd = 15 → SOFT_COLLECTION\n- dpd = 45 → HARD_COLLECTION\n- dpd = 100 → LEGAL\n- dpd = 200 → WRITE_OFF"
+          }
+        },
+        {
+          "name": "13. Delete Policy",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","dunning-policies","{{policyId}}"]
+            },
+            "description": "Hard-delete. Prefer `deactivate` (#8) to preserve audit history.\n\nCasbin: `dunning.policies:delete`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delinquency Rules",
+      "description": "Per-product delinquency rules — one row per `(tenant, product, delinquencyType)` tuple. Mirrors the LMS admin UI's six tabs.\n\n**Single atomic PUT** — the rule AND its early-settlement configs are sent together in one request. The server replaces the complete config set on every upsert (rewrite-on-save).\n\n**Wire codes for `delinquencyType`:**\n- 1 = `EARLY_SETTLEMENT` (embed `configs[]` with `isCustom=true`)\n- 2 = `DUE_LOAN`\n- 3 = `LATE_PAYMENT`\n- 4 = `WRITE_OFFS`\n- 5 = `NON_PERFORMING_LOAN`\n- 6 = `BROKEN_PROMISES` (uses `promisesPerYear` / `promisesPerLoan`; `penaltyType` defaults to 0 = N/A)\n\n**`configs[]` item** (only valid for `EARLY_SETTLEMENT` + `isCustom=true`):\n- `kind`: `SINGLE` or `RANGE`\n- SINGLE requires `invoiceOrder`\n- RANGE requires `rangeNo`, `minInvoiceOrder`, `maxInvoiceOrder`\n- All items require `isPercentage`, `fromDay`, `tillDay` (+ `discountPercentage` or `discountAmount`)\n\n**Sharia**: any monetary `penaltyAmount` / `penaltyPercentage` for late payment must route to `charityFundAccount`, never to revenue.\n\nCasbin object: `delinquency.rules` (actions: `manage`, `read`, `delete`).",
+      "item": [
+        {
+          "name": "1. Upsert Rule — Early Settlement (type=1, flat discount, isCustom=false)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('ruleId', body.id);",
+                  "    pm.test('Rule upserted with ID', () => pm.expect(body.id).to.be.a('string'));",
+                  "    pm.test('Type is EARLY_SETTLEMENT (code=1)', () => pm.expect(body.delinquencyType).to.eql(1));",
+                  "    pm.test('No configs when isCustom=false', () => pm.expect(body.earlySettlementConfigs).to.be.an('array').that.is.empty);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 1.50,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 30,\n  \"penaltyType\": 1,\n  \"isCustom\": false,\n  \"charityFundAccount\": \"CHARITY_FUND_001\"\n}"
+            },
+            "description": "Flat discount mode. `isCustom=false` → the rule uses the top-level `penaltyPercentage`/`penaltyAmount` + day range; `configs[]` must be empty or omitted.\n\nCasbin: `delinquency.rules:manage`"
+          }
+        },
+        {
+          "name": "2. Upsert Rule — Early Settlement (type=1, custom frequency, full configs atomic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('ruleId', body.id);",
+                  "    pm.test('isCustom=true', () => pm.expect(body.isCustom).to.eql(true));",
+                  "    pm.test('6 configs persisted (1 single + 5 range rows)', () => pm.expect(body.earlySettlementConfigs).to.have.lengthOf(6));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 0.00,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 0,\n  \"penaltyType\": 1,\n  \"isCustom\": true,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n  \"configs\": [\n    {\n      \"kind\": \"SINGLE\",\n      \"invoiceOrder\": 1,\n      \"fromDay\": 0,\n      \"tillDay\": 30,\n      \"isPercentage\": true,\n      \"discountPercentage\": 5.00,\n      \"discountAmount\": 0.00\n    },\n    {\n      \"kind\": \"RANGE\",\n      \"rangeNo\": 1,\n      \"minInvoiceOrder\": 2,\n      \"maxInvoiceOrder\": 6,\n      \"fromDay\": 0,\n      \"tillDay\": 60,\n      \"isPercentage\": true,\n      \"discountPercentage\": 3.50,\n      \"discountAmount\": 0.00\n    }\n  ]\n}"
+            },
+            "description": "Custom-frequency mode. `isCustom=true` with the full `configs[]` array in ONE request.\n\n- The RANGE item (invoices 2–6) expands server-side into 5 rows (`isRange=true`, `rangeNo=1`, `min=2`, `max=6`).\n- The SINGLE item (invoice 1) becomes 1 row (`isRange=false`, `rangeNo=0`).\n- Every upsert **replaces** the entire config set for this rule (rewrite-on-save). Omit `configs[]` to clear all configs.\n\nServer returns 422 if `isCustom=false` and `configs[]` is non-empty."
+          }
+        },
+        {
+          "name": "3. Upsert Rule — Due Loan (type=2)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 2,\n  \"isPercentage\": false,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 0,\n  \"penaltyType\": 1\n}"
+            },
+            "description": "DUE_LOAN configures the bank's posture on the due date itself (typically zero penalty, just the stage marker). Adjust `tillDay` to define the grace before LATE_PAYMENT kicks in."
+          }
+        },
+        {
+          "name": "4. Upsert Rule — Late Payment (type=3, % penalty to charity)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 3,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 2.00,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 1,\n  \"tillDay\": 30,\n  \"penaltyType\": 1,\n  \"charityFundAccount\": \"CHARITY_FUND_001\"\n}"
+            },
+            "description": "Late payment penalty 2% of the overdue installment, applied 1–30 DPD. Sharia-compliant: the collected amount routes to `charityFundAccount`, NOT to revenue."
+          }
+        },
+        {
+          "name": "5. Upsert Rule — Write-offs (type=4)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 4,\n  \"isPercentage\": false,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 181,\n  \"tillDay\": 999,\n  \"penaltyType\": 1\n}"
+            },
+            "description": "Write-off threshold at 181+ DPD (matches the standard SAMA prudential charge-off window)."
+          }
+        },
+        {
+          "name": "6. Upsert Rule — Non-Performing Loan (type=5)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 5,\n  \"isPercentage\": false,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 90,\n  \"tillDay\": 180,\n  \"penaltyType\": 1\n}"
+            },
+            "description": "NPL bucket — typically 90–180 DPD per SAMA classification. No additional penalty (already accruing under LATE_PAYMENT) — this rule just marks the stage."
+          }
+        },
+        {
+          "name": "7. Upsert Rule — Broken Promises (type=6)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 6,\n  \"isPercentage\": false,\n  \"fromDay\": 0,\n  \"tillDay\": 0,\n  \"penaltyType\": 0,\n  \"promisesPerYear\": 6,\n  \"promisesPerLoan\": 3\n}"
+            },
+            "description": "Broken Promises tracker — caps the customer at 6 promise-to-pay arrangements per year and 3 per loan. `penaltyType=0` (N/A — this is a behavioural cap, not a fee)."
+          }
+        },
+        {
+          "name": "8. Get Rule by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules/{{ruleId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules","{{ruleId}}"]
+            },
+            "description": "Fetch one rule. For EARLY_SETTLEMENT rules, the response includes the `earlySettlementConfigs` array (singles + ranges) attached during hydration.\n\nCasbin: `delinquency.rules:read`"
+          }
+        },
+        {
+          "name": "9. List Rules for a Product (all 6 stages)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules?productId={{productId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"],
+              "query": [
+                { "key": "productId", "value": "{{productId}}" }
+              ]
+            },
+            "description": "Returns every rule (active + soft-deleted) for the product, one per `delinquencyType`. Useful for the LMS admin UI's tabbed view.\n\nCasbin: `delinquency.rules:read`"
+          }
+        },
+        {
+          "name": "10. Soft-Delete Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules/{{ruleId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules","{{ruleId}}"]
+            },
+            "description": "Sets `record_state=0`. The unique active-rule index `(tenant, product, type) WHERE record_state=1` is then free, so a fresh `PUT` can install a replacement rule for the same triplet.\n\nEmits `DelinquencyRuleDeactivated` event. Prefer this over a hard delete to preserve audit history.\n\nCasbin: `delinquency.rules:delete`"
+          }
+        }
+      ]
+    }
+  ]
+}

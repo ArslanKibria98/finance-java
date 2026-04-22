@@ -2,6 +2,7 @@ package com.ksa.financing.customer.infrastructure.config;
 
 import com.ksa.financing.customer.domain.port.in.CreateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
+import com.ksa.financing.customer.domain.port.in.SubmitPepAnswerUseCase;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
 import com.ksa.financing.customer.workflow.activity.impl.ProfileCreationActivityImpl;
 import com.ksa.financing.customer.workflow.activity.impl.UpdateCustomerActivityImpl;
@@ -25,6 +26,7 @@ public class TemporalWorkerConfig {
     private final CreateCustomerUseCase createCustomerUseCase;
     private final UpdateCustomerUseCase updateCustomerUseCase;
     private final ManageBankAccountsUseCase manageBankAccountsUseCase;
+    private final SubmitPepAnswerUseCase submitPepAnswerUseCase;
 
     @PostConstruct
     public void startWorker() {
@@ -34,7 +36,7 @@ public class TemporalWorkerConfig {
 
         worker.registerActivitiesImplementations(
                 new ProfileCreationActivityImpl(createCustomerUseCase),
-                new UpdateCustomerActivityImpl(updateCustomerUseCase, manageBankAccountsUseCase)
+                new UpdateCustomerActivityImpl(updateCustomerUseCase, manageBankAccountsUseCase, submitPepAnswerUseCase)
         );
 
         workerFactory.start();

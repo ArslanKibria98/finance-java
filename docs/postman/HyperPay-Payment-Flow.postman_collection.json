@@ -1,0 +1,698 @@
+{
+  "info": {
+    "name": "HyperPay Payment Flow - Collections Service (Kong Routing)",
+    "description": "Complete HyperPay payment integration workflow routed through Kong API Gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "kong_url",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Kong Gateway URL. Local: http://localhost:8000, Prod: https://api.kfs.com"
+    },
+    {
+      "key": "service_name",
+      "value": "collections-service",
+      "type": "string",
+      "description": "Kong service name for Collections Service"
+    },
+    {
+      "key": "jwt_token",
+      "value": "your_keycloak_jwt_token_here",
+      "type": "string",
+      "description": "JWT from Keycloak /token endpoint"
+    },
+    {
+      "key": "tenant_id",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string",
+      "description": "Tenant UUID from JWT claims"
+    },
+    {
+      "key": "loan_id",
+      "value": "770e8400-e29b-41d4-a716-446655440000",
+      "type": "string",
+      "description": "Loan UUID"
+    },
+    {
+      "key": "idempotency_key",
+      "value": "{{$randomUUID}}",
+      "type": "string",
+      "description": "Unique key per payment attempt"
+    },
+    {
+      "key": "mobile_number",
+      "value": "966501234567",
+      "type": "string",
+      "description": "Saudi mobile number for SMS"
+    },
+    {
+      "key": "invoice_id",
+      "value": "INV-54F5B2DD-001",
+      "type": "string",
+      "description": "Invoice ID from GET /loans/{id}/installments response"
+    },
+    {
+      "key": "payment_amount",
+      "value": "100.302973",
+      "type": "string",
+      "description": "Amount from installment (fees + profit + principal)"
+    },
+    {
+      "key": "workflow_id",
+      "value": "",
+      "type": "string",
+      "description": "Workflow ID from payment initiation response (auto-set)"
+    },
+    {
+      "key": "checkout_url",
+      "value": "",
+      "type": "string",
+      "description": "HyperPay checkout URL (auto-set)"
+    }
+  ],
+  "item": [
+    {
+      "name": "0️⃣ STEP 0: Get Loan Installments (Required First)",
+      "item": [
+        {
+          "name": "GET - Loan Installments List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{kong_url}}/api/v1/loans/{{loan_id}}/installments",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "{{service_name}}",
+                "api",
+                "v1",
+                "loans",
+                "{{loan_id}}",
+                "installments"
+              ]
+            },
+            "description": "**STEP 0: Get Installments (Required)**\n\n**Kong Route:** `GET {{kong_url}}/api/v1/loans/{id}/installments`\n\n1. Lists all installments for loan\n2. Each installment has:\n   - `invoiceId`: e.g., INV-54F5B2DD-001 (use in payment)\n   - `installmentNumber`: 1, 2, 3...\n   - `dueDate`: When payment is due\n   - `totalOutstanding`: Amount to pay (fees + profit + principal)\n   - `status`: DUE, SCHEDULED, PAID, OVERDUE\n\n3. **Save invoiceId and amount** for next step\n\n**Response Fields Used:**\n- `installments[0].invoiceId` → Set {{invoice_id}}\n- `installments[0].totalOutstanding` → Set {{payment_amount}}\n\n**Kong Service Routing:**\nKong resolves `{{service_name}}` to internal Collections-Service :8090"
+          },
+          "response": [
+            {
+              "name": "200 OK - Installments",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kong_url}}/api/v1/loans/{{loan_id}}/installments",
+                  "protocol": "{{api_protocol}}",
+                  "host": [
+                    "{{api_host}}"
+                  ],
+                  "port": "{{api_port}}",
+                  "path": [
+                    "api",
+                    "v1",
+                    "loans",
+                    "{{loan_id}}",
+                    "installments"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"loanId\": \"770e8400-e29b-41d4-a716-446655440000\",\n  \"totalInstallments\": 10,\n  \"installments\": [\n    {\n      \"invoiceId\": \"INV-54F5B2DD-001\",\n      \"installmentNumber\": 1,\n      \"dueDate\": \"2026-05-10\",\n      \"status\": \"DUE\",\n      \"totalOutstanding\": 100.302973,\n      \"outstandingPrincipal\": 95.00,\n      \"outstandingProfit\": 5.70,\n      \"outstandingFees\": 0.00,\n      \"dpd\": 0,\n      \"isOverdue\": false\n    },\n    {\n      \"invoiceId\": \"INV-54F5B2DD-002\",\n      \"installmentNumber\": 2,\n      \"dueDate\": \"2026-06-10\",\n      \"status\": \"SCHEDULED\",\n      \"totalOutstanding\": 100.302973,\n      \"dpd\": 0,\n      \"isOverdue\": false\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1️⃣ STEP 1: Mobile Initiates Payment (Kong Route)",
+      "item": [
+        {
+          "name": "POST - Initiate HyperPay Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.workflowId) {",
+                  "  pm.environment.set('workflow_id', response.workflowId);",
+                  "  pm.environment.set('checkout_url', response.checkoutUrl);",
+                  "  console.log('✅ Payment initiated');",
+                  "  console.log('Workflow ID:', response.workflowId);",
+                  "  console.log('Checkout URL:', response.checkoutUrl);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant_id}}",
+                "type": "text",
+                "disabled": true,
+                "description": "Optional - extracted from JWT if present"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": \"{{invoice_id}}\",\n  \"loanId\": \"{{loan_id}}\",\n  \"amount\": {{payment_amount}},\n  \"paymentMethod\": \"HYPERPAY_MADA\",\n  \"idempotencyKey\": \"{{idempotency_key}}\",\n  \"mobileNumber\": \"{{mobile_number}}\",\n  \"returnUrl\": \"myapp://payment-callback\"\n}"
+            },
+            "url": {
+              "raw": "{{kong_url}}/api/v1/payments",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "{{service_name}}",
+                "api",
+                "v1",
+                "payments"
+              ]
+            },
+            "description": "**STEP 1: Initiate Payment (Routed through Kong)**\n\n**Kong Route:** `POST {{kong_url}}/api/v1/payments`\n\n**Request Body (Kong compatible):**\n- `invoiceId`: From Step 0 (INV-54F5B2DD-001)\n- `loanId`: Loan UUID\n- `amount`: Decimal amount (100.302973)\n- `paymentMethod`: HYPERPAY_MADA, HYPERPAY_VISA, HYPERPAY_MASTERCARD\n- `idempotencyKey`: Unique per attempt (prevents duplicates)\n- `mobileNumber`: 966501234567 (Saudi number for SMS)\n- `returnUrl`: Deep link for mobile callback\n\n**Response:**\n- `workflowId`: Use for status polling\n- `checkoutUrl`: HyperPay checkout URL\n- `status`: INITIATED\n\n**Kong Service Name:**\n- Service: `{{service_name}}` = `collections-service`\n- Kong resolves this to internal service :8090\n\n**For Local Development:**\nChange `api_gateway` to `{{kong_local}}` (http://localhost:8000)"
+          },
+          "response": [
+            {
+              "name": "202 Accepted - Payment Initiated",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Idempotency-Key",
+                    "value": "{{idempotency_key}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoiceId\": \"{{invoice_id}}\",\n  \"loanId\": \"{{loan_id}}\",\n  \"amount\": {{payment_amount}},\n  \"paymentMethod\": \"HYPERPAY_MADA\",\n  \"idempotencyKey\": \"{{idempotency_key}}\",\n  \"mobileNumber\": \"{{mobile_number}}\",\n  \"returnUrl\": \"myapp://payment-callback\"\n}"
+                },
+                "url": {
+                  "raw": "{{kong_url}}/api/v1/payments",
+                  "protocol": "{{api_protocol}}",
+                  "host": [
+                    "{{api_host}}"
+                  ],
+                  "port": "{{api_port}}",
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments"
+                  ]
+                }
+              },
+              "status": "Accepted",
+              "code": 202,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"workflowId\": \"payment-abc123def456\",\n  \"paymentId\": \"880e8400-e29b-41d4-a716-446655440000\",\n  \"invoiceId\": \"INV-54F5B2DD-001\",\n  \"loanId\": \"770e8400-e29b-41d4-a716-446655440000\",\n  \"amount\": 100.302973,\n  \"status\": \"INITIATED\",\n  \"checkoutUrl\": \"https://checkout.hyperpay.com/session/CPR-xyz123\",\n  \"nextAction\": \"REDIRECT_TO_CHECKOUT\",\n  \"createdAt\": \"2026-04-16T08:00:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1️⃣.5️⃣ STEP 1.5: Auto-Complete Mock (TESTING ONLY)",
+      "item": [
+        {
+          "name": "POST - Auto-Complete Payment After 2 Seconds",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "console.log('✅ Auto-complete scheduled');",
+                  "console.log('Message:', response.message);",
+                  "console.log('Payment ID:', response.paymentId);",
+                  "console.log('⏳ Waiting 2.5 seconds before checking status...');",
+                  "",
+                  "setTimeout(() => {",
+                  "  pm.sendRequest({",
+                  "    url: pm.environment.get('kong_url') + '/' + pm.environment.get('service_name') + '/api/v1/payments/' + response.paymentId,",
+                  "    method: 'GET',",
+                  "    header: {",
+                  "      'Authorization': 'Bearer ' + pm.environment.get('jwt_token'),",
+                  "      'Accept': 'application/json'",
+                  "    }",
+                  "  }, (err, response) => {",
+                  "    if (err) { console.error('Request failed:', err); return; }",
+                  "    const payment = response.json();",
+                  "    console.log('✅ Payment Status:', payment.data.status);",
+                  "    if (payment.data.status === 'COMPLETED') {",
+                  "      console.log('🎉 Payment COMPLETED!');",
+                  "    }",
+                  "  });",
+                  "}, 2500);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{kong_url}}/{{service_name}}/api/v1/payments/{{payment_id}}/auto-complete-mock",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "{{service_name}}",
+                "api",
+                "v1",
+                "payments",
+                "{{payment_id}}",
+                "auto-complete-mock"
+              ]
+            },
+            "description": "**STEP 1.5: Auto-Complete Payment (Testing Only)**\n\n🧪 **FOR TESTING ONLY** - Simulates HyperPay webhook\n\n**What happens:**\n1. Call this endpoint with paymentId from Step 1\n2. Backend schedules auto-completion in 2 seconds\n3. Response returns immediately with status PROCESSING\n4. After 2 seconds, payment status auto-changes to COMPLETED\n5. No manual webhook needed\n\n**Use case:**\n- Local development testing\n- Mobile app testing without real HyperPay\n- Demo purposes\n\n**Production:**\n- ❌ DO NOT USE in production\n- ✅ Use real HyperPay webhook instead\n\n**Variables Required:**\n- `{{kong_url}}`: http://localhost:8000 (local) or https://api.kfs.com (prod)\n- `{{service_name}}`: collections-service\n- `{{jwt_token}}`: Valid Keycloak JWT\n- `{{payment_id}}`: From Step 1 response (\"id\" field)"
+          },
+          "response": [
+            {
+              "name": "202 Accepted - Auto-Complete Scheduled",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kong_url}}/{{service_name}}/api/v1/payments/{{payment_id}}/auto-complete-mock",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8000",
+                  "path": [
+                    "{{service_name}}",
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{payment_id}}",
+                    "auto-complete-mock"
+                  ]
+                }
+              },
+              "status": "Accepted",
+              "code": 202,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"Payment will auto-complete in 2 seconds\",\n  \"paymentId\": \"0061e67e-d509-4b98-a2f3-197b7fe72c13\",\n  \"status\": \"PROCESSING\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2️⃣ STEP 2: Customer Opens HyperPay Checkout (Client-Side)",
+      "item": [
+        {
+          "name": "📌 Manual Action: Open Checkout URL in WebView",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://checkout.hyperpay.com/session/CPR-xyz123",
+              "protocol": "https",
+              "host": [
+                "checkout",
+                "hyperpay",
+                "com"
+              ],
+              "path": [
+                "session",
+                "CPR-xyz123"
+              ]
+            },
+            "description": "**STEP 2: Mobile App (Client-Side)**\n\n1. Take `checkoutUrl` from Step 1 response\n2. Open in WebView (Android) or SFSafariViewController (iOS)\n3. HyperPay checkout page loads\n4. Customer enters:\n   - Card number\n   - Expiry (MM/YY)\n   - CVV\n   - Cardholder name\n5. Click \"Pay\"\n6. 3D Secure OTP → Enter OTP\n7. HyperPay redirects to `returnUrl`\n\n**Deep Link Callback Examples:**\n- Success: `myapp://payment-callback?checkoutId=CPR-xyz123&result=APPROVE`\n- Failed: `myapp://payment-callback?checkoutId=CPR-xyz123&result=DECLINED&reason=insufficient_funds`\n- Cancelled: `myapp://payment-callback?result=CANCELLED`\n\n**After callback:**\n→ Skip to STEP 4: Poll status (HyperPay webhook is server-side)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3️⃣ STEP 3: HyperPay Webhook (Server-Side, Kong Route)",
+      "item": [
+        {
+          "name": "POST - HyperPay Callback Webhook (Simulated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Signature",
+                "value": "sha256=abcd1234...",
+                "type": "text",
+                "description": "HMAC-SHA256(payload, api_secret) from HyperPay"
+              },
+              {
+                "key": "X-Webhook-Id",
+                "value": "WH-{{$randomUUID}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"EV-999\",\n  \"timestamp\": \"2026-04-16T08:05:30Z\",\n  \"eventType\": \"CHECKOUT.COMPLETED\",\n  \"resourceId\": \"CPR-xyz123\",\n  \"data\": {\n    \"checkoutId\": \"CPR-xyz123\",\n    \"status\": \"APPROVED\",\n    \"transactionId\": \"TXN-12345678\",\n    \"amount\": 100.302973,\n    \"currency\": \"SAR\",\n    \"paymentMethod\": \"MADA\",\n    \"resultCode\": \"000\",\n    \"resultDescription\": \"Transaction approved\",\n    \"merchantReferenceId\": \"INV-54F5B2DD-001\",\n    \"eci\": \"05\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{kong_url}}/webhooks/hyperpay-callback",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "{{service_name}}",
+                "webhooks",
+                "hyperpay-callback"
+              ]
+            },
+            "description": "**STEP 3: HyperPay Server-Side Webhook (Kong Route)**\n\n**Kong Route:** `POST {{kong_url}}/webhooks/hyperpay-callback`\n\n**How it works:**\n1. HyperPay calls this endpoint with payment result\n2. Kong routes to {{service_name}} (collections-service internal)\n3. Collections-Service verifies X-Signature header\n4. Sends signal to Temporal workflow\n5. Workflow continues: allocate payment → post ledger → send SMS\n\n**Response Expected:** 200 OK with `{\"acknowledged\": true}`\n\n**Do NOT manually send this** - HyperPay sends automatically\n→ Skip to STEP 4: Poll payment status\n\n**Kong Service Name:** `{{service_name}}` = `collections-service`"
+          },
+          "response": [
+            {
+              "name": "200 OK - Webhook Acknowledged",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Signature",
+                    "value": "sha256=abcd1234..."
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"id\": \"EV-999\", \"data\": { \"status\": \"APPROVED\" } }"
+                },
+                "url": {
+                  "raw": "{{kong_url}}/webhooks/hyperpay-callback",
+                  "protocol": "{{api_protocol}}",
+                  "host": [
+                    "{{api_host}}"
+                  ],
+                  "port": "{{api_port}}",
+                  "path": [
+                    "webhooks",
+                    "hyperpay-callback"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"acknowledged\": true,\n  \"eventId\": \"EV-999\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4️⃣ STEP 4: Poll Payment Status (Kong Route)",
+      "item": [
+        {
+          "name": "GET - Payment Status (Poll Every 2s)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "console.log('Status:', response.status);",
+                  "if (response.status === 'COMPLETED') {",
+                  "  console.log('✅ Payment completed!');",
+                  "  console.log('Allocations:', response.appliedAllocations);",
+                  "} else if (response.status === 'FAILED') {",
+                  "  console.log('❌ Payment failed:', response.failureReason);",
+                  "} else {",
+                  "  console.log('⏳ Still processing...');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{kong_url}}/api/v1/payments/{{workflow_id}}/status",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "{{service_name}}",
+                "api",
+                "v1",
+                "payments",
+                "{{workflow_id}}",
+                "status"
+              ]
+            },
+            "description": "**STEP 4: Poll Payment Status (Kong Route)**\n\n**Kong Route:** `GET {{kong_url}}/api/v1/payments/{workflowId}/status`\n\n**Mobile App Loop:**\n- Poll every 2 seconds\n- Max 30 attempts (60 second timeout)\n- Stop on COMPLETED or FAILED\n\n**Possible Statuses:**\n\n1. **PROCESSING** (initial)\n   - Step: AWAITING_GATEWAY_CALLBACK\n\n2. **PROCESSING** (after webhook)\n   - Step: APPLYING_ALLOCATION\n   - Waterfall: fees → profit → principal\n\n3. **PROCESSING** (ledger posting)\n   - Step: POSTING_LEDGER\n\n4. **COMPLETED** ✅\n   - Allocation applied\n   - Ledger posted\n   - SMS sent\n   - Invoice marked PAID\n\n5. **FAILED** ❌\n   - Bank declined\n   - Timeout\n   - Other errors\n\n**Kong Service Name:** `{{service_name}}` = `collections-service`"
+          },
+          "response": [
+            {
+              "name": "200 OK - Still Processing",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kong_url}}/api/v1/payments/{{workflow_id}}/status",
+                  "protocol": "{{api_protocol}}",
+                  "host": [
+                    "{{api_host}}"
+                  ],
+                  "port": "{{api_port}}",
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{workflow_id}}",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"workflowId\": \"payment-abc123def456\",\n  \"status\": \"PROCESSING\",\n  \"currentStep\": \"APPLYING_ALLOCATION\",\n  \"amount\": 100.302973,\n  \"failureReason\": null\n}"
+            },
+            {
+              "name": "200 OK - Completed Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kong_url}}/api/v1/payments/{{workflow_id}}/status",
+                  "protocol": "{{api_protocol}}",
+                  "host": [
+                    "{{api_host}}"
+                  ],
+                  "port": "{{api_port}}",
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{workflow_id}}",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"workflowId\": \"payment-abc123def456\",\n  \"paymentId\": \"880e8400-e29b-41d4-a716-446655440000\",\n  \"invoiceId\": \"INV-54F5B2DD-001\",\n  \"status\": \"COMPLETED\",\n  \"currentStep\": \"DONE\",\n  \"amount\": 100.302973,\n  \"appliedAllocations\": {\n    \"fees\": 0.00,\n    \"profit\": 5.70,\n    \"principal\": 95.00\n  },\n  \"ledgerPosted\": true,\n  \"notificationSent\": true,\n  \"completedAt\": \"2026-04-16T08:06:00Z\",\n  \"failureReason\": null\n}"
+            },
+            {
+              "name": "200 OK - Payment Failed",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kong_url}}/api/v1/payments/{{workflow_id}}/status",
+                  "protocol": "{{api_protocol}}",
+                  "host": [
+                    "{{api_host}}"
+                  ],
+                  "port": "{{api_port}}",
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments",
+                    "{{workflow_id}}",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"workflowId\": \"payment-abc123def456\",\n  \"status\": \"FAILED\",\n  \"failureReason\": \"Bank declined payment: Insufficient funds\",\n  \"retryable\": true,\n  \"allowedRetryMethods\": [\"HYPERPAY_VISA\", \"HYPERPAY_MASTERCARD\"]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🔧 KONG CONFIGURATION REFERENCE",
+      "item": [
+        {
+          "name": "ℹ️ Kong Routing Documentation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8001/routes",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8001",
+              "path": [
+                "routes"
+              ]
+            },
+            "description": "**Kong API Gateway - Service-Based Routing**\n\n**Production Architecture:**\n```\nMobile Client\n    ↓\nhttps://api.kfs.com (Public, via Nginx :443)\n    ↓\nKong Proxy (:8000 internal)\n    ↓\n    Service: collections-service\n    ↓\n    Collections-Service :8090 (Internal Only)\n```\n\n**Kong Service Configuration:**\n\n| Service Name | Routes | Target | Port |\n|---|---|---|---|\n| `collections-service` | `/api/v1/payments/**` | collections-service | 8090 |\n| `collections-service` | `/api/v1/loans/**` | collections-service | 8090 |\n| `collections-service` | `/api/v1/invoices/**` | collections-service | 8090 |\n| `collections-service` | `/webhooks/**` | collections-service | 8090 |\n\n**Kong Admin Interface:**\n- URL: `http://localhost:8001` (local dev)\n- View all services: `GET /services`\n- View service routes: `GET /services/collections-service/routes`\n- View all routes: `GET /routes`\n\n**Environment Variables for This Collection:**\n\n**Production (Public via Nginx):**\n```\napi_gateway = https://api.kfs.com\ncollections_service = collections-service\n(Kong resolves to internal :8090)\n```\n\n**Local Development (via Kong proxy):**\n```\napi_gateway = http://localhost:8000\ncollections_service = collections-service\n(Kong resolves to internal :8090)\n```\n\n**How Kong Routing Works:**\n\n1. Mobile sends: `POST https://api.kfs.com/api/v1/payments`\n2. Nginx routes to Kong: `http://localhost:8000/api/v1/payments`\n3. Kong matches route `/api/v1/payments`\n4. Kong looks up service: `collections-service`\n5. Kong routes to: `http://collections-service:8090/api/v1/payments`\n6. Collections-Service processes request\n7. Response flows back through Kong → Nginx → Client\n\n**Key Points:**\n✅ Kong routes by SERVICE NAME, not IP:port\n✅ Collections-Service never exposed directly (internal only)\n✅ Single Kong proxy handles all endpoints\n✅ JWT validation at Kong layer\n✅ Webhook also routes through Kong\n✅ Service discovery: Kong knows about collections-service"
+          }
+        }
+      ]
+    }
+  ]
+}

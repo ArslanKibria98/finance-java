@@ -1,5 +1,6 @@
 package com.ksa.financing.product.infrastructure.persistence.repository;
 
+import com.ksa.financing.product.domain.model.DurationSettings;
 import com.ksa.financing.product.domain.port.out.ProductSettingsRepository;
 import com.ksa.financing.product.infrastructure.persistence.entity.*;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -25,6 +27,7 @@ private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
     private final JpaApprovalWorkflowRepository jpaApprovalWorkflowRepository;
     private final JpaApprovalConditionRepository jpaApprovalConditionRepository;
     private final JpaApprovalActionRepository jpaApprovalActionRepository;
+    private final JpaProductDurationSettingsRepository jpaProductDurationSettingsRepository;
     // --- Tab 1: Application Steps (replace-all) ---
 
     @Override
@@ -163,6 +166,48 @@ private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
             jpaProductEnvironmentConfigRepository.save(entity);
         }
         log.debug("Environment configs saved for productId={}", productId);
+    }
+
+    // --- Tab 6: Duration Settings (upsert) ---
+
+    @Override
+    public void saveDurationSettings(UUID tenantId, UUID productId,
+                                     Integer requestDurationDays,
+                                     Integer approvalDurationDays,
+                                     Integer disbursementDurationHours,
+                                     Integer repaymentDurationDays) {
+        log.debug("Saving duration settings for productId={}", productId);
+        var now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        var entity = jpaProductDurationSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
+                .orElseGet(() -> {
+                    var newEntity = new ProductDurationSettingsJpaEntity();
+                    newEntity.setTenantId(tenantId);
+                    newEntity.setProductId(productId);
+                    newEntity.setCreatedAt(now);
+                    return newEntity;
+                });
+
+        entity.setRequestDurationDays(requestDurationDays != null ? requestDurationDays : 0);
+        entity.setApprovalDurationDays(approvalDurationDays != null ? approvalDurationDays : 0);
+        entity.setDisbursementDurationHours(disbursementDurationHours != null ? disbursementDurationHours : 0);
+        entity.setRepaymentDurationDays(repaymentDurationDays != null ? repaymentDurationDays : 0);
+        entity.setUpdatedAt(now);
+
+        jpaProductDurationSettingsRepository.save(entity);
+        log.debug("Duration settings saved for productId={}", productId);
+    }
+
+    @Override
+    public Optional<DurationSettings> findDurationSettings(UUID tenantId, UUID productId) {
+        return jpaProductDurationSettingsRepository
+                .findByProductIdAndTenantId(productId, tenantId)
+                .map(e -> new DurationSettings(
+                        e.getId(),
+                        e.getRequestDurationDays(),
+                        e.getApprovalDurationDays(),
+                        e.getDisbursementDurationHours(),
+                        e.getRepaymentDurationDays()));
     }
 
     // --- Tab 7: Approval Workflows (replace-all with children) ---

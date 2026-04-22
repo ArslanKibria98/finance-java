@@ -32,6 +32,9 @@ public class FineractJournalRequest {
     @JsonProperty("credits")
     private List<JournalLine> credits;
 
+    @JsonProperty("officeId")
+    private Long officeId;
+
     @JsonProperty("referenceNumber")
     private String referenceNumber;
 
@@ -49,6 +52,9 @@ public class FineractJournalRequest {
     public static class JournalLine {
         @JsonProperty("glAccountId")
         private Long glAccountId;
+
+        @JsonProperty("glAccountCode")
+        private String glAccountCode;   // Alternative to glAccountId — use account code
 
         @JsonProperty("amount")
         private BigDecimal amount;

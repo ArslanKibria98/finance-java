@@ -23,7 +23,18 @@ public interface JpaLoanRepository extends JpaRepository<LoanJpaEntity, UUID> {
 
     Optional<LoanJpaEntity> findByTenantIdAndApplicationId(UUID tenantId, UUID applicationId);
 
+    boolean existsByProductId(UUID productId);
+
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(l.loanNumber, 5) AS int)), 0) + 1 " +
            "FROM LoanJpaEntity l WHERE l.tenantId = :tenantId")
     int getNextLoanSequence(@Param("tenantId") UUID tenantId);
+
+    @Query(value = "SELECT * FROM loans " +
+                   "WHERE tenant_id = :tenantId " +
+                   "AND UPPER(LEFT(CAST(id AS TEXT), 8)) = UPPER(:prefix) " +
+                   "LIMIT 1",
+           nativeQuery = true)
+    Optional<LoanJpaEntity> findFirstByTenantIdAndIdPrefix(
+            @Param("tenantId") UUID tenantId,
+            @Param("prefix") String prefix);
 }

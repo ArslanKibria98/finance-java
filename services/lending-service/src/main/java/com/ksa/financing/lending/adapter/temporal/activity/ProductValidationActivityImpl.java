@@ -83,6 +83,16 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
             }
             String fineractProductId = textOrNull(product, "fineractProductId");
 
+            // Disbursement delay (hours) — pulled from durationSettings block on the product response.
+            // 0 (or missing) means "disburse immediately" (backwards-compatible).
+            int disbursementDurationHours = 0;
+            if (product.has("durationSettings") && !product.get("durationSettings").isNull()) {
+                disbursementDurationHours = intOrZero(product.get("durationSettings"), "disbursementDurationHours");
+                if (disbursementDurationHours < 0) {
+                    disbursementDurationHours = 0;
+                }
+            }
+
             // Validate amount range
             if (minAmount != null && input.requestedAmount().compareTo(minAmount) < 0) {
                 return invalidResult("Requested amount below minimum: " + minAmount);
@@ -105,13 +115,14 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
                 product.get("requiredDocuments").forEach(doc -> requiredDocs.add(doc.asText()));
             }
 
-            log.info("Product validated successfully: {} ({})", productName, productCode);
+            log.info("Product validated successfully: {} ({}), disbursementDelay={}h",
+                    productName, productCode, disbursementDurationHours);
             return new ProductValidationResult(
                     true, productCode, productName, shariaStructure, fineractProductId,
                     minAmount, maxAmount, minTenure, maxTenure,
                     profitRate, processingFeePercent, adminFeeAmount,
                     minAge, maxAge, minSalary, minEmploymentMonths, minCreditScore, maxDbrPercent,
-                    requiredDocs, null
+                    requiredDocs, disbursementDurationHours, null
             );
 
         } catch (Exception e) {

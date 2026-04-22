@@ -94,6 +94,7 @@ public class Product {
     // Settings (loaded eagerly on getById)
     private TermsConditions termsConditions;
     private FeeSettings feeSettings;
+    private DurationSettings durationSettings;
     private List<ApplicationStep> applicationSteps;
     private List<EnvironmentConfigLink> environmentConfigs;
     private List<ApprovalWorkflow> approvalWorkflows;
@@ -389,6 +390,9 @@ public class Product {
 
     public FeeSettings getFeeSettings() { return feeSettings; }
     public void setFeeSettings(FeeSettings feeSettings) { this.feeSettings = feeSettings; }
+
+    public DurationSettings getDurationSettings() { return durationSettings; }
+    public void setDurationSettings(DurationSettings durationSettings) { this.durationSettings = durationSettings; }
 
     public List<ApplicationStep> getApplicationSteps() { return applicationSteps; }
     public void setApplicationSteps(List<ApplicationStep> applicationSteps) { this.applicationSteps = applicationSteps; }

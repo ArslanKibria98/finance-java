@@ -27,6 +27,8 @@ public interface JpaLoanApplicationRepository extends JpaRepository<LoanApplicat
 
     boolean existsByTenantIdAndApplicationNumber(UUID tenantId, String applicationNumber);
 
+    boolean existsByProductIdAndStatusNotIn(UUID productId, List<String> statuses);
+
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(la.applicationNumber, 5) AS int)), 0) + 1 " +
            "FROM LoanApplicationJpaEntity la WHERE la.tenantId = :tenantId")
     int getNextApplicationSequence(@Param("tenantId") UUID tenantId);

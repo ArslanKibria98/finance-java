@@ -13,12 +13,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,12 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @Value("${keycloak.admin-client-secret:}")
     private String adminClientSecret;
 
+    @Value("${keycloak.user-lookup-retry-max-attempts:5}")
+    private int userLookupRetryMaxAttempts;
+
+    @Value("${keycloak.user-lookup-retry-delay-ms:250}")
+    private long userLookupRetryDelayMs;
+
     public KeycloakAdapterImpl(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
@@ -80,45 +88,103 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         }
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(userRepresentation, headers);
-        restTemplate.postForEntity(usersUrl, request, Void.class);
+        ResponseEntity<Void> createResponse = restTemplate.postForEntity(usersUrl, request, Void.class);
 
-        // Retrieve the created user to get the Keycloak user ID
-        String searchUrl = usersUrl + "?username=" + username + "&exact=true";
+        // Prefer Keycloak Location header to get created user ID reliably.
         HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-        ResponseEntity<List> searchResponse = restTemplate.exchange(
-                searchUrl, org.springframework.http.HttpMethod.GET, getRequest, List.class
+        UUID keycloakUserId = extractUserIdFromLocation(createResponse.getHeaders().getLocation())
+                .orElseGet(() -> resolveCreatedUserId(usersUrl, getRequest, username, email));
+
+        // Keycloak 26+ ignores credentials in user creation payload.
+        // Set password separately via the reset-password endpoint.
+        String resetPwUrl = usersUrl + "/" + keycloakUserId + "/reset-password";
+        Map<String, Object> credential = Map.of(
+                "type", "password",
+                "value", password,
+                "temporary", false
         );
+        HttpEntity<Map<String, Object>> pwRequest = new HttpEntity<>(credential, headers);
+        restTemplate.put(resetPwUrl, pwRequest);
 
-        if (searchResponse.getBody() != null && !searchResponse.getBody().isEmpty()) {
-            Map<String, Object> createdUser = (Map<String, Object>) searchResponse.getBody().get(0);
-            UUID keycloakUserId = UUID.fromString((String) createdUser.get("id"));
+        log.info("Keycloak user created successfully with ID: {}", keycloakUserId);
+        return new KeycloakUser(keycloakUserId, username);
+    }
 
-            // Keycloak 26+ ignores credentials in user creation payload.
-            // Set password separately via the reset-password endpoint.
-            String resetPwUrl = usersUrl + "/" + keycloakUserId + "/reset-password";
-            Map<String, Object> credential = Map.of(
-                    "type", "password",
-                    "value", password,
-                    "temporary", false
-            );
-            HttpEntity<Map<String, Object>> pwRequest = new HttpEntity<>(credential, headers);
-            restTemplate.put(resetPwUrl, pwRequest);
+    private java.util.Optional<UUID> extractUserIdFromLocation(URI location) {
+        if (location == null) {
+            return java.util.Optional.empty();
+        }
+        String path = location.getPath();
+        if (path == null || path.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash < 0 || lastSlash + 1 >= path.length()) {
+            return java.util.Optional.empty();
+        }
+        String id = path.substring(lastSlash + 1);
+        try {
+            return java.util.Optional.of(UUID.fromString(id));
+        } catch (IllegalArgumentException ex) {
+            log.warn("Could not parse Keycloak user ID from Location header: {}", location);
+            return java.util.Optional.empty();
+        }
+    }
 
-            log.info("Keycloak user created successfully with ID: {}", keycloakUserId);
-            return new KeycloakUser(keycloakUserId, username);
+    private UUID resolveCreatedUserId(String usersUrl,
+                                      HttpEntity<Void> getRequest,
+                                      String username,
+                                      String email) {
+        for (int attempt = 1; attempt <= userLookupRetryMaxAttempts; attempt++) {
+            var byUsername = searchUser(usersUrl, getRequest, "username", username);
+            if (byUsername != null && !byUsername.isEmpty()) {
+                Map<String, Object> user = (Map<String, Object>) byUsername.get(0);
+                return UUID.fromString((String) user.get("id"));
+            }
+
+            var byEmail = searchUser(usersUrl, getRequest, "email", email);
+            if (byEmail != null && !byEmail.isEmpty()) {
+                Map<String, Object> user = (Map<String, Object>) byEmail.get(0);
+                return UUID.fromString((String) user.get("id"));
+            }
+
+            if (attempt < userLookupRetryMaxAttempts) {
+                try {
+                    Thread.sleep(userLookupRetryDelayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new TechnicalException(
+                            ErrorCodes.TECHNICAL_ERROR,
+                            "Interrupted while waiting for Keycloak user availability");
+                }
+            }
         }
 
-        UUID fallbackId = UUID.randomUUID();
-        log.warn("Could not retrieve created Keycloak user, using generated ID: {}", fallbackId);
-        return new KeycloakUser(fallbackId, username);
+        throw new TechnicalException(
+                ErrorCodes.TECHNICAL_ERROR,
+                "Keycloak user was created but could not be retrieved for password setup");
+    }
+
+    @SuppressWarnings("rawtypes")
+    private List searchUser(String usersUrl,
+                            HttpEntity<Void> getRequest,
+                            String paramName,
+                            String paramValue) {
+        String url = usersUrl
+                + "?" + paramName + "=" + UriUtils.encodeQueryParam(paramValue, StandardCharsets.UTF_8)
+                + "&exact=true";
+        ResponseEntity<List> response = restTemplate.exchange(
+                url, org.springframework.http.HttpMethod.GET, getRequest, List.class
+        );
+        return response.getBody();
     }
 
     @SuppressWarnings("unused")
     private KeycloakUser createUserFallback(String realm, String username, String email, String password, String firstName, Throwable t) {
         log.error("Keycloak unavailable for user creation after retries: {}", t.getMessage());
-        UUID mockId = UUID.randomUUID();
-        log.warn("Returning mock Keycloak user with ID: {} (circuit breaker fallback)", mockId);
-        return new KeycloakUser(mockId, username);
+        throw new TechnicalException(
+                ErrorCodes.TECHNICAL_ERROR,
+                "Keycloak user creation failed and fallback was triggered");
     }
 
     @Override

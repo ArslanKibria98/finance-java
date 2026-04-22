@@ -1,8 +1,6 @@
 package com.ksa.financing.product.adapter.temporal.activity;
 
-import com.ksa.financing.lms.adapter.fineract.dto.FineractLoanProductRequest;
-import com.ksa.financing.lms.adapter.fineract.dto.FineractLoanProductResponse;
-import com.ksa.financing.product.infrastructure.fineract.ProductFineractClient;
+import com.ksa.financing.product.infrastructure.ledger.LedgerServiceClient;
 import com.ksa.islamic.orchestration.activity.product.FineractProductActivity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,50 +9,66 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class FineractProductActivityImpl implements FineractProductActivity {
 
-    private final ProductFineractClient fineractClient;
+    private final LedgerServiceClient ledgerServiceClient;
 
     @Override
     public CreateFineractProductResult createLoanProduct(CreateFineractProductInput input) {
-        log.info("Creating loan product in Fineract: productCode={} tenant={}", input.productCode(), input.tenantId());
+        log.info("Creating loan product via ledger-service: productCode={} tenant={}", input.productCode(), input.tenantId());
 
         try {
             String shortName = generateUniqueShortName(input.productCode());
             int interestType = "FLAT".equalsIgnoreCase(input.rateType()) ? 1 : 0;
-
-            // Ensure unique Fineract product name by appending product code
             String fineractName = input.nameEn() + " (" + input.productCode() + ")";
 
-            // Fineract stores only product identity — all limits (amount, tenure) are
-            // governed by product-service slabs and must NOT be duplicated here.
-            // Placeholder values satisfy Fineract's required fields only.
-            var request = FineractLoanProductRequest.builder()
-                    .name(fineractName)
-                    .shortName(shortName)
-                    .description(input.nameEn() + " - " + input.shariaStructure())
-                    .currencyCode(input.currency() != null ? input.currency() : "SAR")
-                    .principal(new BigDecimal("10000"))
-                    .numberOfRepayments(12)
-                    .interestRatePerPeriod(input.baseProfitRate())
-                    .interestType(interestType)
-                    .graceOnPrincipalPayment(input.gracePeriodDays() > 0 ? 1 : null)
-                    .externalId(input.productId())
-                    .build();
+            // Build Fineract loanproducts payload
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("name", fineractName);
+            payload.put("shortName", shortName);
+            payload.put("description", input.nameEn() + " - " + input.shariaStructure());
+            payload.put("currencyCode", input.currency() != null ? input.currency() : "SAR");
+            payload.put("digitsAfterDecimal", 2);
+            payload.put("inMultiplesOf", 0);
+            payload.put("principal", input.minAmount() != null ? input.minAmount() : new BigDecimal("10000"));
+            payload.put("minPrincipal", input.minAmount());
+            payload.put("maxPrincipal", input.maxAmount());
+            payload.put("numberOfRepayments", input.maxTenureMonths() > 0 ? input.maxTenureMonths() : 12);
+            payload.put("repaymentEvery", 1);
+            payload.put("repaymentFrequencyType", 2); // MONTHS
+            payload.put("interestRatePerPeriod", input.baseProfitRate() != null ? input.baseProfitRate() : new BigDecimal("5.0"));
+            payload.put("interestRateFrequencyType", 2); // PER_YEAR
+            payload.put("amortizationType", 1); // EQUAL_INSTALLMENTS
+            payload.put("interestType", interestType);
+            payload.put("interestCalculationPeriodType", 1); // SAME_AS_REPAYMENT
+            payload.put("daysInYearType", 365);
+            payload.put("daysInMonthType", 30);
+            payload.put("isInterestRecalculationEnabled", false);
+            payload.put("transactionProcessingStrategyCode", "mifos-standard-strategy");
+            payload.put("accountingRule", 1); // NONE
+            payload.put("locale", "en");
+            payload.put("dateFormat", "yyyy-MM-dd");
+            if (input.gracePeriodDays() > 0) {
+                payload.put("graceOnPrincipalPayment", 1);
+            }
+            payload.put("externalId", input.productId());
 
-            FineractLoanProductResponse response = fineractClient.createLoanProduct(request);
+            // Route through ledger-service → Fineract (not direct)
+            Long resourceId = ledgerServiceClient.createLoanProduct(payload);
 
-            String fineractProductId = String.valueOf(response.getResourceId());
-            log.info("Loan product created in Fineract: fineractProductId={}", fineractProductId);
+            String fineractProductId = String.valueOf(resourceId);
+            log.info("Loan product created via ledger-service: fineractProductId={}", fineractProductId);
 
             return new CreateFineractProductResult(fineractProductId, shortName, true, null);
 
         } catch (Exception e) {
-            log.error("Failed to create loan product in Fineract: {}", e.getMessage(), e);
+            log.error("Failed to create loan product via ledger-service: {}", e.getMessage(), e);
             return new CreateFineractProductResult(null, null, false, e.getMessage());
         }
     }

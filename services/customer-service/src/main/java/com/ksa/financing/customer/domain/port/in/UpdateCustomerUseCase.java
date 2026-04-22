@@ -12,6 +12,8 @@ public interface UpdateCustomerUseCase {
     Customer updateRiskGrade(UUID tenantId, UUID customerId, RiskGrade grade);
     Customer updatePepFlag(UUID tenantId, UUID customerId, boolean pepFlag);
     Customer update(UUID tenantId, UUID customerId, UpdateCustomerCommand command);
+    Customer linkKeycloakUser(String mobileNumber, UUID keycloakUserId);
+    Customer linkKeycloakUserByCustomerId(UUID customerId, UUID keycloakUserId);
 
     record UpdateCustomerCommand(
         String firstName,

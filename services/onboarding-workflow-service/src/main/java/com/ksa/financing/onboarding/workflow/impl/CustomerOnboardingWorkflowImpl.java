@@ -441,7 +441,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                                 request.tenantId(),
                                 state.getGlobalUid(),
                                 state.getCustomerId(),
-                                state.getLifecycleStage()
+                                state.getLifecycleStage(),
+                                state.getKeycloakUserId()
                         )
                 );
                 if (profileResult.created()) {
@@ -671,6 +672,24 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                 );
             } catch (Exception e) {
                 log.warn("Customer update with additional info failed (continuing): {}", e.getMessage());
+            }
+
+            if (additionalInfoSignal != null && additionalInfoSignal.isPep()) {
+                try {
+                    updateCustomerActivity.submitPepFromOnboarding(
+                            new UpdateCustomerActivity.SubmitPepFromOnboardingInput(
+                                    state.getCustomerId(),
+                                    request.tenantId(),
+                                    true,
+                                    additionalInfoSignal.sourceOfFunds(),
+                                    additionalInfoSignal.estimatedNetWorth(),
+                                    additionalInfoSignal.sourceOfIncome()
+                            )
+                    );
+                    log.info("Onboarding PEP data persisted for customer: {}", state.getCustomerId());
+                } catch (Exception e) {
+                    log.warn("Onboarding PEP persistence failed (continuing): {}", e.getMessage());
+                }
             }
 
             // Update KYC status to VERIFIED (Nafath + Yakeen completed)

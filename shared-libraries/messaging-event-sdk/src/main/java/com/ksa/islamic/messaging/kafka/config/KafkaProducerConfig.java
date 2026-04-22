@@ -13,7 +13,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
-import org.springframework.kafka.support.serializer.ErrorHandlingSerializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.util.HashMap;
@@ -111,9 +110,8 @@ public class KafkaProducerConfig {
                   "event:com.ksa.islamic.messaging.contract.EventEnvelope");
         props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
 
-        // Add error handling serializer wrapper
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ErrorHandlingSerializer.class);
-        props.put(ErrorHandlingSerializer.VALUE_SERIALIZER_CLASS, JsonSerializer.class);
+        // Use JsonSerializer directly
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
         return new DefaultKafkaProducerFactory<>(props);
     }

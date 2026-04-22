@@ -42,6 +42,49 @@ public class ProductServiceClient implements ProductConfigPort {
     }
 
     @Override
+    public List<ProductConfig> listActiveProducts(UUID tenantId, String authToken) {
+        try {
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Tenant-Id", tenantId.toString());
+            if (authToken != null && !authToken.isBlank()) {
+                headers.set("Authorization", "Bearer " + authToken);
+            }
+
+            var url = productServiceUrl + "/api/v1/products";
+            var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+            var rawRoot = objectMapper.readTree(response.getBody());
+            var root = rawRoot.has("data") && rawRoot.get("data").isArray() ? rawRoot.get("data") : rawRoot;
+
+            if (!root.isArray()) {
+                log.warn("Product-service list response is not an array");
+                return List.of();
+            }
+
+            var results = new ArrayList<ProductConfig>();
+            for (var item : root) {
+                var status = textOrNull(item, "status");
+                var visibleToCustomers = item.has("visibleToCustomers") && item.get("visibleToCustomers").asBoolean(false);
+                var fineractProductId = textOrNull(item, "fineractProductId");
+
+                if (!"ACTIVE".equalsIgnoreCase(status)) continue;
+                if (!visibleToCustomers) continue;
+                if (fineractProductId == null || fineractProductId.isBlank()) continue;
+
+                results.add(parseProductConfig(item));
+            }
+
+            log.info("Listed {} active customer-visible products for tenant {}", results.size(), tenantId);
+            return results;
+
+        } catch (Exception e) {
+            log.warn("Product-service list unavailable ({}), returning empty list", e.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
     public ProductConfig fetchProductConfig(UUID tenantId, String productId, BigDecimal amount, int tenureMonths) {
         if (productId == null || productId.isBlank()) {
             log.info("No productId provided, returning default product config");

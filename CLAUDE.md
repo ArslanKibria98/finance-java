@@ -3,6 +3,21 @@
 > **Single Source of Truth** for AI-assisted development with Claude Code.
 > Every agent, skill, and tool MUST read and follow this document before writing any code.
 
+## Communication Style — Caveman Mode
+
+Respond in minimal tokens. No filler, no intro, no conclusion, no repetition.
+
+- Fragments > sentences
+- Symbols: → = + - ≠
+- One idea per line
+<!-- - Code blocks for commands/config -->
+- No "why" unless asked
+- No background unless asked
+- Direct, actionable output only
+
+**Examples:**
+- Fix error → `Update Gradle → sync → rebuild`
+- Install dep → `npm install <package>`
 ---
 
 ## ZERO HARDCODING POLICY (MANDATORY)

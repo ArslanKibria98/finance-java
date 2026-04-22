@@ -39,11 +39,10 @@ public abstract class RetryableMessageListener<T> implements AcknowledgingMessag
             .waitDuration(Duration.ofMillis(1000))
             .intervalFunction(intervalMillis -> {
                 // Exponential backoff: 1s, 2s, 4s
-                return intervalMillis * 2;
+                return intervalMillis * 2L;
             })
             .retryExceptions(EventProcessingException.class, RuntimeException.class)
             .ignoreExceptions(IllegalArgumentException.class, NullPointerException.class)
-            .retryOnResult(retryResultPredicate())
             .build();
 
         RetryRegistry registry = RetryRegistry.of(config);
@@ -112,7 +111,8 @@ public abstract class RetryableMessageListener<T> implements AcknowledgingMessag
 
             // Check if error is retryable
             if (isRetryableError(e)) {
-                throw new EventProcessingException("Retryable error occurred", e, true);
+                // Wrap retryable errors to signal retry needed
+                return ProcessingResult.retryableFailure(e.getMessage());
             } else {
                 return ProcessingResult.failure(e.getMessage());
             }

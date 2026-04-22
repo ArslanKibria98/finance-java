@@ -125,6 +125,10 @@ public class LoanApplicationAggregate {
     // Idempotency
     private String idempotencyKey;
 
+    // Disbursement delay (snapshot from product at apply time, 0 = immediate)
+    private int disbursementDurationHours;
+    private LocalDateTime disbursementScheduledAt;
+
     // Audit
     private final LocalDateTime createdAt;
     private final UUID createdBy;
@@ -606,6 +610,14 @@ public class LoanApplicationAggregate {
         this.idempotencyKey = idempotencyKey;
     }
 
+    public void setDisbursementDurationHours(int hours) {
+        this.disbursementDurationHours = Math.max(0, hours);
+    }
+
+    public void setDisbursementScheduledAt(LocalDateTime scheduledAt) {
+        this.disbursementScheduledAt = scheduledAt;
+    }
+
     // ==================== EVENT MANAGEMENT ====================
 
     private void registerEvent(Object event) {
@@ -709,6 +721,8 @@ public class LoanApplicationAggregate {
     public LocalDateTime getSubmittedAt() { return submittedAt; }
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public String getIdempotencyKey() { return idempotencyKey; }
+    public int getDisbursementDurationHours() { return disbursementDurationHours; }
+    public LocalDateTime getDisbursementScheduledAt() { return disbursementScheduledAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public UUID getCreatedBy() { return createdBy; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

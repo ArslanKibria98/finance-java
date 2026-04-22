@@ -26,6 +26,7 @@ public record CustomerResponse(
     String riskGrade,
     boolean pepFlag,
     boolean sanctionsFlag,
+    String pepStatus,
     UUID globalUid,
     String profilePicture,
     Instant createdAt,

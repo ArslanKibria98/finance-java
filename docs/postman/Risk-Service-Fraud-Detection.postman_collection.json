@@ -1,0 +1,515 @@
+{
+  "info": {
+    "name": "Risk Service - Fraud Detection",
+    "description": "Fraud detection testing with correct endpoints and JWT authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:8090",
+      "type": "string"
+    },
+    {
+      "key": "TENANT_ID",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string"
+    },
+    {
+      "key": "JWT_TOKEN",
+      "value": "YOUR_JWT_TOKEN_HERE",
+      "type": "string",
+      "description": "Get from Keycloak or use a test token"
+    },
+    {
+      "key": "DEVICE_ID",
+      "value": "device-test-001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔑 Authentication",
+      "item": [
+        {
+          "name": "Get JWT Token (Keycloak)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "admin-dashboard"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "your-client-secret"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:8080/realms/CompanyRealm/protocol/openid-connect/token",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["realms", "CompanyRealm", "protocol", "openid-connect", "token"]
+            },
+            "description": "Get JWT token from Keycloak. Copy token from response and paste into {{JWT_TOKEN}} variable"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🚀 Fraud Detection Tests",
+      "item": [
+        {
+          "name": "1️⃣ Test Invalid NID Format",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"123456\",\n  \"mobileNumber\": \"+966500000000\",\n  \"countryCode\": \"SAU\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "Test invalid NID (too short)\nExpected: HARD_BLOCK"
+          },
+          "response": []
+        },
+        {
+          "name": "2️⃣ Add NID to Blacklist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"1111111111\",\n  \"reason\": \"FRAUD_CONFIRMED\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/blacklist/nid",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "blacklist", "nid"]
+            },
+            "description": "Add NID to blacklist (setup for Test 3)"
+          },
+          "response": []
+        },
+        {
+          "name": "3️⃣ Test Blacklist Hit (Silent Block)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"1111111111\",\n  \"mobileNumber\": \"+966500001111\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "Test blacklist hit\nExpected: HARD_BLOCK with generic message 'Unable to proceed...'"
+          },
+          "response": []
+        },
+        {
+          "name": "4️⃣ Add Mobile to Blacklist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"+966500002222\",\n  \"reason\": \"FRAUD_CONFIRMED\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/blacklist/mobile",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "blacklist", "mobile"]
+            },
+            "description": "Add mobile to blacklist (setup for Test 5)"
+          },
+          "response": []
+        },
+        {
+          "name": "5️⃣ Test Mobile Blacklist Hit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"1234567890\",\n  \"mobileNumber\": \"+966500002222\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "Test mobile blacklist hit\nExpected: HARD_BLOCK"
+          },
+          "response": []
+        },
+        {
+          "name": "6️⃣ Test Duplicate Mobile (First)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              },
+              {
+                "key": "X-Device-Id",
+                "value": "device-001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"+966500003333\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "First registration with mobile\nExpected: PASS"
+          },
+          "response": []
+        },
+        {
+          "name": "7️⃣ Test Duplicate Mobile (Second)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              },
+              {
+                "key": "X-Device-Id",
+                "value": "device-002"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"2234567890\",\n  \"mobileNumber\": \"+966500003333\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "Same mobile from different device\nExpected: FLAG_ENHANCED_MONITORING"
+          },
+          "response": []
+        },
+        {
+          "name": "8️⃣ Test Velocity Exceeded",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              },
+              {
+                "key": "X-Client-Ip",
+                "value": "192.168.1.100"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"1234567891\",\n  \"mobileNumber\": \"+966500004001\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "Copy this request 10 times (change NID/mobile)\nRequest 11 from same IP should flag velocity\nExpected: FLAG_HIGH_RISK"
+          },
+          "response": []
+        },
+        {
+          "name": "9️⃣ Test Device Multi-NID (First)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              },
+              {
+                "key": "X-Device-Id",
+                "value": "device-multiuse"
+              },
+              {
+                "key": "X-Device-Fingerprint",
+                "value": "fingerprint-abc123"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"1345678901\",\n  \"mobileNumber\": \"+966500006666\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "First NID on device\nExpected: PASS"
+          },
+          "response": []
+        },
+        {
+          "name": "🔟 Test Device Multi-NID (Second)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              },
+              {
+                "key": "X-Device-Id",
+                "value": "device-multiuse"
+              },
+              {
+                "key": "X-Device-Fingerprint",
+                "value": "fingerprint-abc123"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationalId\": \"2345678901\",\n  \"mobileNumber\": \"+966500007777\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/internal-checks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "internal-checks"]
+            },
+            "description": "Different NID, same device\nExpected: FLAG_ENHANCED_MONITORING with MULTI_NID_DEVICE flag"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📋 Admin Operations",
+      "item": [
+        {
+          "name": "View NID Blacklist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/blacklist/nid",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "blacklist", "nid"]
+            },
+            "description": "List all NID blacklist entries"
+          },
+          "response": []
+        },
+        {
+          "name": "View Mobile Blacklist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/blacklist/mobile",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "blacklist", "mobile"]
+            },
+            "description": "List all mobile blacklist entries"
+          },
+          "response": []
+        },
+        {
+          "name": "View Audit Trail by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/audit/date-range?from=2026-04-01T00:00:00Z&to=2026-04-30T23:59:59Z",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "audit", "date-range"],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-04-01T00:00:00Z"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-04-30T23:59:59Z"
+                }
+              ]
+            },
+            "description": "Get audit trail within date range"
+          },
+          "response": []
+        },
+        {
+          "name": "View Audit Trail by Correlation ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/audit/correlation/{correlationId}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "audit", "correlation", "{correlationId}"]
+            },
+            "description": "Get audit trail by correlation ID (from response header)"
+          },
+          "response": []
+        },
+        {
+          "name": "View Audit Trail by Entity",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{JWT_TOKEN}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{TENANT_ID}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/risk/audit/entity/CUSTOMER/{entityId}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "risk", "audit", "entity", "CUSTOMER", "{entityId}"]
+            },
+            "description": "Get audit trail for specific entity (CUSTOMER, NID, etc)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

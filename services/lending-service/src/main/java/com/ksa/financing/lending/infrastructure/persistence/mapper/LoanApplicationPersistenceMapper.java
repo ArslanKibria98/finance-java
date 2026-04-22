@@ -116,6 +116,10 @@ public class LoanApplicationPersistenceMapper {
         entity.setExpiresAt(agg.getExpiresAt());
         entity.setIdempotencyKey(agg.getIdempotencyKey());
 
+        // Disbursement delay (snapshot from product at apply time)
+        entity.setDisbursementDurationHours(agg.getDisbursementDurationHours());
+        entity.setDisbursementScheduledAt(agg.getDisbursementScheduledAt());
+
         // Audit
         entity.setCreatedBy(agg.getCreatedBy());
         entity.setCreatedAt(agg.getCreatedAt());
@@ -127,7 +131,7 @@ public class LoanApplicationPersistenceMapper {
     }
 
     public LoanApplicationAggregate toDomain(LoanApplicationJpaEntity e) {
-        return LoanApplicationAggregate.reconstitute(
+        var agg = LoanApplicationAggregate.reconstitute(
                 LoanApplicationId.of(e.getId()),
                 e.getTenantId(),
                 e.getApplicationNumber(),
@@ -224,5 +228,12 @@ public class LoanApplicationPersistenceMapper {
                 e.getUpdatedAt(),
                 e.getVersion() != null ? e.getVersion() : 1
         );
+
+        // Disbursement delay (snapshot from product at apply time)
+        agg.setDisbursementDurationHours(
+                e.getDisbursementDurationHours() != null ? e.getDisbursementDurationHours() : 0);
+        agg.setDisbursementScheduledAt(e.getDisbursementScheduledAt());
+
+        return agg;
     }
 }

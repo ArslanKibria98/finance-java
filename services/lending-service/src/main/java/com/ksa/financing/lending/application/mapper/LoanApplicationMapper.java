@@ -110,8 +110,8 @@ public class LoanApplicationMapper {
                 agg.getUpdatedAt(),
                 agg.getVersion(),
 
-                // Loan / Disbursement (populated separately)
-                null, null, null, null, null, null, null, null
+                // Loan / Disbursement (populated separately via withLoanData)
+                null, null, null, null, null, null, null, null, null, null
         );
     }
 
@@ -119,7 +119,9 @@ public class LoanApplicationMapper {
                                             String loanId, String loanNumber, String loanStatus,
                                             java.math.BigDecimal principalAmount, java.math.BigDecimal totalAmount,
                                             java.math.BigDecimal installmentAmount, String fineractLoanId,
-                                            java.time.LocalDate disbursementDate) {
+                                            java.time.LocalDate disbursementDate,
+                                            Integer currentTenureMonths,
+                                            java.time.LocalDate currentMaturityDate) {
         return new LoanApplicationDto(
                 dto.id(), dto.tenantId(), dto.applicationNumber(), dto.customerId(), dto.nationalId(),
                 dto.status(), dto.stepperIndex(), dto.stepperLabel(), dto.workflowId(),
@@ -145,7 +147,8 @@ public class LoanApplicationMapper {
                 dto.nabaNotificationSent(), dto.paymentGuardSessionId(), dto.paymentGuardStatus(),
                 dto.createdAt(), dto.updatedAt(), dto.version(),
                 loanId, loanNumber, loanStatus, principalAmount, totalAmount,
-                installmentAmount, fineractLoanId, disbursementDate
+                installmentAmount, fineractLoanId, disbursementDate,
+                currentTenureMonths, currentMaturityDate
         );
     }
 

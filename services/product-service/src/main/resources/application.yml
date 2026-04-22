@@ -131,12 +131,17 @@ temporal:
   worker:
     enabled: ${TEMPORAL_WORKER_ENABLED:true}
 
-# Fineract Core Banking Configuration
+# Fineract Core Banking Configuration (kept for reference — product-service routes via ledger-service)
 fineract:
   base-url: ${FINERACT_BASE_URL:https://localhost:8443/fineract-provider/api/v1}
   username: ${FINERACT_USERNAME:mifos}
   password: ${FINERACT_PASSWORD:password}
   tenant-id: ${FINERACT_TENANT_ID:default}
+
+# Ledger Service — all Fineract calls route through ledger-service
+ledger:
+  service:
+    url: ${LEDGER_SERVICE_URL:http://localhost:8095}
 
 # Kafka Topic Configuration
 kafka:

@@ -1,0 +1,503 @@
+{
+  "info": {
+    "name": "Fraud Detection Testing",
+    "description": "Comprehensive negative test cases for fraud detection rules",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "kongUrl",
+      "value": "http://46.62.226.94:8000",
+      "type": "string",
+      "description": "Kong Gateway URL"
+    },
+    {
+      "key": "TENANT_ID",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string"
+    },
+    {
+      "key": "DEVICE_ID",
+      "value": "device-test-001",
+      "type": "string"
+    },
+    {
+      "key": "SESSION_ID",
+      "value": "session-test-001",
+      "type": "string"
+    },
+    {
+      "key": "CLIENT_IP",
+      "value": "192.168.1.100",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Test Invalid NID Format",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"123456\",\n  \"mobileNumber\": \"+966500000000\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 1: Invalid NID format (too short)\nExpected: HARD_BLOCK with validation error"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Add NID to Blacklist",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1111111111\",\n  \"reason\": \"FRAUD_CONFIRMED\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/blacklist/nid",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "blacklist", "nid"]
+        },
+        "description": "Setup for Test Case 2: Add NID to blacklist"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Test Blacklist Hit - Silent Block",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1111111111\",\n  \"mobileNumber\": \"+966500001111\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 2: Blacklist hit triggers HARD_BLOCK\nExpected: HARD_BLOCK with generic message 'Unable to proceed...'"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Add Mobile to Blacklist",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mobileNumber\": \"+966500002222\",\n  \"reason\": \"FRAUD_CONFIRMED\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/blacklist/mobile",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "blacklist", "mobile"]
+        },
+        "description": "Setup for Test Case 3: Add mobile to blacklist"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Test Mobile Blacklist Hit",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1234567890\",\n  \"mobileNumber\": \"+966500002222\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 3: Mobile on blacklist triggers HARD_BLOCK\nExpected: HARD_BLOCK"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Test Duplicate Mobile - First Registration",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          },
+          {
+            "key": "X-Device-Id",
+            "value": "device-001"
+          },
+          {
+            "key": "X-Session-Id",
+            "value": "session-001"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mobileNumber\": \"+966500003333\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 4: First registration with mobile - should PASS"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Test Duplicate Mobile - Second Registration",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          },
+          {
+            "key": "X-Device-Id",
+            "value": "device-002"
+          },
+          {
+            "key": "X-Session-Id",
+            "value": "session-002"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"2234567890\",\n  \"mobileNumber\": \"+966500003333\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 4: Same mobile reused - should FLAG_ENHANCED_MONITORING\nExpected: COMPLETED with flags=['DUPLICATE_MOBILE'], totalScore >= 15"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Test Velocity Exceeded - Rapid Fire (Request 1-10)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          },
+          {
+            "key": "X-Client-Ip",
+            "value": "192.168.1.100"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1234567891\",\n  \"mobileNumber\": \"+966500004001\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 5: First of 10 velocity test requests\nCopy and modify nationalId & mobileNumber for requests 2-10"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Test Velocity Exceeded - Request 11 (Over Limit)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          },
+          {
+            "key": "X-Client-Ip",
+            "value": "192.168.1.100"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1234567899\",\n  \"mobileNumber\": \"+966500005555\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 5: 11th request from same IP should FLAG_HIGH_RISK\nExpected: overallDecision=FLAG_HIGH_RISK, flags=['VELOCITY_EXCEEDED_IP']"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Test Device Multi-NID - First NID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          },
+          {
+            "key": "X-Device-Id",
+            "value": "device-multiuse"
+          },
+          {
+            "key": "X-Device-Fingerprint",
+            "value": "fingerprint-abc123"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1345678901\",\n  \"mobileNumber\": \"+966500006666\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 6: First NID on device - should PASS"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Test Device Multi-NID - Second NID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          },
+          {
+            "key": "X-Device-Id",
+            "value": "device-multiuse"
+          },
+          {
+            "key": "X-Device-Fingerprint",
+            "value": "fingerprint-abc123"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"2345678901\",\n  \"mobileNumber\": \"+966500007777\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 6: Same device with different NID - should FLAG_HIGH_RISK\nExpected: overallDecision=FLAG_ENHANCED_MONITORING, flags=['MULTI_NID_DEVICE'], totalScore=30"
+      },
+      "response": []
+    },
+    {
+      "name": "7. Add Watchlist Entry",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1456789012\",\n  \"reason\": \"WATCHLIST_PEP\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/blacklist/nid",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "blacklist", "nid"]
+        },
+        "description": "Setup for Test Case 7: Add NID to watchlist"
+      },
+      "response": []
+    },
+    {
+      "name": "7. Test Watchlist Match (Not Blacklist)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1456789012\",\n  \"mobileNumber\": \"+966500008888\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 7: Watchlist match - should FLAG_ENHANCED_MONITORING (not HARD_BLOCK)\nExpected: overallDecision=FLAG_ENHANCED_MONITORING, riskLevel=HIGH, totalScore=40, flags=['WATCHLIST_MATCH']"
+      },
+      "response": []
+    },
+    {
+      "name": "8. Test Existing Customer (Pass Case)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"1567890123\",\n  \"mobileNumber\": \"+966500009999\",\n  \"countryCode\": \"SAU\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/internal-checks",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "internal-checks"]
+        },
+        "description": "Test Case 8: Positive test - clean registration\nExpected: overallDecision=PASS, riskLevel=LOW, status=COMPLETED"
+      },
+      "response": []
+    },
+    {
+      "name": "Admin: View Blacklist Entries",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/blacklist/nid",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "blacklist", "nid"]
+        },
+        "description": "Admin: View all NID blacklist entries for tenant"
+      },
+      "response": []
+    },
+    {
+      "name": "Admin: View Audit Trail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Tenant-Id",
+            "value": "{{TENANT_ID}}"
+          }
+        ],
+        "url": {
+          "raw": "{{kongUrl}}/risk-service/api/v1/risk/audit/date-range?limit=50&offset=0",
+          "host": ["{{kongUrl}}"],
+          "path": ["risk-service", "api", "v1", "risk", "audit", "date-range"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "50"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            }
+          ]
+        },
+        "description": "Admin: View audit trail of all risk assessments"
+      },
+      "response": []
+    }
+  ]
+}

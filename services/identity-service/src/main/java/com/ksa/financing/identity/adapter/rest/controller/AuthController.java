@@ -117,6 +117,7 @@ public class AuthController {
                 null,
                 null,
                 null,
+                null,
                 result.name()
         );
 
@@ -138,6 +139,7 @@ public class AuthController {
                 result.refreshToken(),
                 result.expiresIn(),
                 "Bearer",
+                null,
                 null,
                 null,
                 null,
@@ -200,7 +202,7 @@ public class AuthController {
         var response = new AuthResponse(
                 result.accessToken(), result.refreshToken(),
                 result.expiresIn(), "Bearer", result.customerId(),
-                result.nationalId(), result.mobileNumber(), result.name()
+                result.pepStatus(), result.nationalId(), result.mobileNumber(), result.name()
         );
 
         log.info("PIN login successful for NID ending in: {}", maskNid(request.nationalId()));
@@ -230,7 +232,7 @@ public class AuthController {
         var response = new AuthResponse(
                 result.accessToken(), result.refreshToken(),
                 result.expiresIn(), "Bearer", result.customerId(),
-                result.nationalId(), result.mobileNumber(), result.name()
+                result.pepStatus(), result.nationalId(), result.mobileNumber(), result.name()
         );
 
         log.info("Mobile PIN login successful for mobile ending in: ****{}",

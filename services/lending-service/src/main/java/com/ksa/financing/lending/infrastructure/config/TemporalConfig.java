@@ -2,6 +2,7 @@ package com.ksa.financing.lending.infrastructure.config;
 
 import com.ksa.financing.lending.adapter.temporal.activity.*;
 import com.ksa.financing.lending.adapter.temporal.workflow.LoanApplicationWorkflowImpl;
+import com.ksa.financing.lending.adapter.temporal.workflow.LoanRescheduleWorkflowImpl;
 import io.temporal.client.WorkflowClient;
 import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
@@ -38,6 +39,8 @@ public class TemporalConfig {
     private final ThirdPartyActivityImpl thirdPartyActivity;
     private final ContractActivityImpl contractActivity;
     private final DisbursementActivityImpl disbursementActivity;
+    private final LedgerActivityImpl ledgerActivity;
+    private final RescheduleActivityImpl rescheduleActivity;
 
     private WorkerFactory workerFactory;
 
@@ -62,7 +65,10 @@ public class TemporalConfig {
         Worker worker = workerFactory.newWorker(taskQueue);
 
         // Register workflow implementations
-        worker.registerWorkflowImplementationTypes(LoanApplicationWorkflowImpl.class);
+        worker.registerWorkflowImplementationTypes(
+                LoanApplicationWorkflowImpl.class,
+                LoanRescheduleWorkflowImpl.class
+        );
 
         // Register ALL activity implementations on the same task queue for MVP.
         // In production, external activities (product-service, customer-service, risk-service)
@@ -74,10 +80,12 @@ public class TemporalConfig {
                 creditCheckActivity,           // Calls risk-service REST (→ SIMAH via middleware)
                 thirdPartyActivity,            // Calls middleware-third-party (IBAN, commodity, IVR, e-promissory)
                 contractActivity,              // Calls middleware-third-party (contract gen, OTP)
-                disbursementActivity           // Calls Fineract + middleware (payment gateway)
+                disbursementActivity,          // Calls Fineract + middleware (payment gateway)
+                ledgerActivity,                // Calls ledger-service → posts GL entries → Fineract GL sync
+                rescheduleActivity             // Loan rescheduling — eligibility, schedule, Fineract proxy via ledger-service
         );
 
-        log.info("Temporal worker configured for queue: {} with 7 activity implementations", taskQueue);
+        log.info("Temporal worker configured for queue: {} with 9 activity implementations", taskQueue);
 
         workerFactory.start();
         log.info("Temporal worker started on queue: {}", taskQueue);

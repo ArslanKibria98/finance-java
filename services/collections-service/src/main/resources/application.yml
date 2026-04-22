@@ -1,0 +1,125 @@
+spring:
+  application:
+    name: collections-service
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:collections_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: ${DB_CONN_TIMEOUT:30000}
+      idle-timeout: ${DB_IDLE_TIMEOUT:600000}
+      max-lifetime: ${DB_MAX_LIFETIME:1800000}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+      acks: all
+      retries: 3
+    consumer:
+      group-id: ${spring.application.name}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "com.ksa.financing.*"
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_BASE_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:islamic-financing}/protocol/openid-connect/certs
+          issuer-uri: ${KEYCLOAK_BASE_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:islamic-financing}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${REDIS_PORT:6379}}
+
+server:
+  port: ${SERVER_PORT:8099}
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-exception: true
+    include-stacktrace: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.ksa.financing: ${APP_LOG_LEVEL:DEBUG}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+ksa:
+  authorization:
+    enabled: ${KSA_AUTH_ENABLED:true}
+    cache-key-prefix: ${CASBIN_CACHE_KEY_PREFIX:casbin:policies}
+    redis-host: ${REDIS_HOST:localhost}
+    redis-port: ${REDIS_PORT:6379}
+
+kafka:
+  topics:
+    payment-completed: ${KAFKA_TOPIC_PAYMENT_COMPLETED:financing.payment.completed}
+    payment-failed: ${KAFKA_TOPIC_PAYMENT_FAILED:financing.payment.failed}
+    payment-applied: ${KAFKA_TOPIC_PAYMENT_APPLIED:financing.repayment.payment-applied}
+    schedule-fully-paid: ${KAFKA_TOPIC_SCHEDULE_FULLY_PAID:financing.repayment.schedule.fully-paid}
+
+middleware:
+  base-url: ${MIDDLEWARE_BASE_URL:http://middleware-third-party:8093}
+  secret-key: ${MIDDLEWARE_SECRET_KEY:test-mock-secret-key-2026}
+  caller-service: ${spring.application.name}
+
+hyperpay:
+  widget-url: ${HYPERPAY_WIDGET_URL:https://eu-prod.oppwa.com/v1/paymentWidgets.js}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  service:
+    name: ${spring.application.name}

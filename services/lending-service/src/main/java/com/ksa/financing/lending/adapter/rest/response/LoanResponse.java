@@ -31,9 +31,15 @@ public record LoanResponse(
         @Schema(description = "Current DPD") int currentDpd,
         @Schema(description = "IFRS9 stage") int ifrs9Stage,
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") @Schema(description = "Created at") LocalDateTime createdAt,
-        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") @Schema(description = "Updated at") LocalDateTime updatedAt
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") @Schema(description = "Updated at") LocalDateTime updatedAt,
+        @Schema(description = "True if the loan's product has an active EARLY_SETTLEMENT delinquency rule (sourced from collections-service)")
+        Boolean earlySettlementEligible
 ) {
     public static LoanResponse from(LoanDto dto) {
+        return from(dto, null);
+    }
+
+    public static LoanResponse from(LoanDto dto, Boolean earlySettlementEligible) {
         return new LoanResponse(
                 dto.id(),
                 dto.loanNumber(),
@@ -56,7 +62,8 @@ public record LoanResponse(
                 dto.currentDpd(),
                 dto.ifrs9Stage(),
                 dto.createdAt(),
-                dto.updatedAt()
+                dto.updatedAt(),
+                earlySettlementEligible
         );
     }
 }

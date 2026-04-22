@@ -27,6 +27,7 @@
     </properties>
 
     <modules>
+        <module>file-storage-sdk</module>
         <module>foundational-infra-sdk</module>
         <module>domain-core-sdk</module>
         <module>workflow-orchestration-sdk</module>

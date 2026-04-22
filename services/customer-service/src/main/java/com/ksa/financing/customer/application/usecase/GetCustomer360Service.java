@@ -12,6 +12,7 @@ import com.ksa.financing.customer.domain.model.SupportedCountry;
 import com.ksa.financing.customer.domain.port.out.*;
 import com.ksa.financing.customer.infrastructure.http.HttpKycServiceAdapter;
 import com.ksa.financing.customer.infrastructure.http.HttpRiskServiceAdapter;
+import com.ksa.financing.storage.port.FileStoragePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,8 @@ import java.util.*;
 @RequiredArgsConstructor
 @Slf4j
 public class GetCustomer360Service {
+
+    private final FileStoragePort fileStoragePort;
 
     private final GetCustomerUseCase getCustomerUseCase;
     private final ManageBankAccountsUseCase manageBankAccountsUseCase;
@@ -698,7 +701,7 @@ public class GetCustomer360Service {
         String riskGrade = latestRiskLevel != null ? latestRiskLevel :
                 (customer.getRiskGrade() != null ? customer.getRiskGrade().name() : null);
         String profilePictureUrl = customer.getProfilePicture() != null
-                ? "/api/v1/customers/" + customer.getId() + "/profile-picture"
+                ? fileStoragePort.getPresignedUrl(customer.getProfilePicture(), java.time.Duration.ofHours(24))
                 : null;
         return new CustomerResponse(
                 customer.getId(),
@@ -722,6 +725,7 @@ public class GetCustomer360Service {
                 riskGrade,
                 latestPepFlag,
                 customer.isSanctionsFlag(),
+                customer.getPepStatus() != null ? customer.getPepStatus().name() : null,
                 customer.getGlobalUid(),
                 profilePictureUrl,
                 customer.getCreatedAt(),

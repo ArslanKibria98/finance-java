@@ -1,5 +1,7 @@
 package com.ksa.financing.product.domain.port.in;
 
+import com.ksa.financing.product.domain.model.DurationSettings;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +23,11 @@ public interface ManageProductSettingsUseCase {
     // Tab 5: Environment Configs
     void updateEnvironmentConfigs(UUID tenantId, UUID productId, List<EnvironmentConfigLinkCommand> configs);
 
+
+    // Tab 6: Duration Settings
+    void updateDurationSettings(UUID tenantId, UUID productId, UpdateDurationSettingsCommand command);
+
+    DurationSettings getDurationSettings(UUID tenantId, UUID productId);
 
     // Tab 7: Approval Workflows
     void updateApprovalWorkflows(UUID tenantId, UUID productId, List<ApprovalWorkflowCommand> workflows);
@@ -50,6 +57,13 @@ public interface ManageProductSettingsUseCase {
     ) {}
 
     record EnvironmentConfigLinkCommand(UUID environmentConfigId, boolean active, int sortOrder) {}
+
+    record UpdateDurationSettingsCommand(
+        Integer requestDurationDays,
+        Integer approvalDurationDays,
+        Integer disbursementDurationHours,
+        Integer repaymentDurationDays
+    ) {}
 
 
     record ApprovalWorkflowCommand(

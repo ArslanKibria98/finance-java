@@ -43,6 +43,23 @@ public interface ProductValidationActivity {
             int minCreditScore,
             BigDecimal maxDbrPercent,
             List<String> requiredDocuments,
-            String rejectionReason      // null if valid
-    ) {}
+            int disbursementDurationHours,  // 0 = immediate disbursement
+            String rejectionReason          // null if valid
+    ) {
+        /** Backwards-compatible constructor — defaults disbursementDurationHours to 0. */
+        public ProductValidationResult(
+                boolean valid, String productCode, String productName, String shariaStructure,
+                String fineractProductId, BigDecimal minAmount, BigDecimal maxAmount,
+                int minTenureMonths, int maxTenureMonths, BigDecimal profitRate,
+                BigDecimal processingFeePercent, BigDecimal adminFeeAmount,
+                int minAge, int maxAge, BigDecimal minSalary, int minEmploymentMonths,
+                int minCreditScore, BigDecimal maxDbrPercent, List<String> requiredDocuments,
+                String rejectionReason) {
+            this(valid, productCode, productName, shariaStructure, fineractProductId,
+                    minAmount, maxAmount, minTenureMonths, maxTenureMonths, profitRate,
+                    processingFeePercent, adminFeeAmount, minAge, maxAge, minSalary,
+                    minEmploymentMonths, minCreditScore, maxDbrPercent, requiredDocuments,
+                    0, rejectionReason);
+        }
+    }
 }

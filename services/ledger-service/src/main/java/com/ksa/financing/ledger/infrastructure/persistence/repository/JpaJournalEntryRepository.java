@@ -57,6 +57,34 @@ public interface JpaJournalEntryRepository extends JpaRepository<JournalEntryJpa
             Pageable pageable);
 
     /**
+     * Find all entries for tenant in date range (no pagination — for reports).
+     */
+    @Query("SELECT e FROM JournalEntryJpaEntity e " +
+           "WHERE e.tenantId = :tenantId " +
+           "AND e.entryDate >= :fromDate AND e.entryDate <= :toDate " +
+           "ORDER BY e.entryDate ASC, e.createdAt ASC")
+    List<JournalEntryJpaEntity> findAllByTenantAndDateRange(
+            @Param("tenantId") UUID tenantId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
+    /**
+     * Find entries with optional reference-type and status filters (for vouchers report).
+     */
+    @Query("SELECT e FROM JournalEntryJpaEntity e " +
+           "WHERE e.tenantId = :tenantId " +
+           "AND e.entryDate >= :fromDate AND e.entryDate <= :toDate " +
+           "AND (:referenceType IS NULL OR e.referenceType = :referenceType) " +
+           "AND (:status IS NULL OR CAST(e.status as string) = :status) " +
+           "ORDER BY e.entryDate ASC, e.entryNumber ASC")
+    List<JournalEntryJpaEntity> findForVouchersReport(
+            @Param("tenantId") UUID tenantId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("referenceType") String referenceType,
+            @Param("status") String status);
+
+    /**
      * Find entries by tenant and reference type (LOAN, REPAY, ACCRUAL, etc).
      */
     @Query("SELECT e FROM JournalEntryJpaEntity e " +

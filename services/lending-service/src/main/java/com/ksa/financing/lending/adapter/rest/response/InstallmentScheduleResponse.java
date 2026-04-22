@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 
 /**
  * BRD UC#04 — Installment schedule entry for Finance Overview.
@@ -42,5 +43,25 @@ public record InstallmentScheduleResponse(
         BigDecimal paidAmount,
 
         @Schema(description = "Receipt available for download")
-        boolean receiptAvailable
-) {}
+        boolean receiptAvailable,
+
+        @Schema(description = "Delinquency snapshot mirrored from collections-service: status, dpd, latePenaltyAmount, earlySettlementEligible, discount fields, etc.")
+        Map<String, Object> delinquency
+) {
+    public static InstallmentScheduleResponse of(
+            String invoiceId,
+            int installmentNumber,
+            LocalDate dueDate,
+            BigDecimal installmentAmount,
+            BigDecimal principalComponent,
+            BigDecimal profitComponent,
+            BigDecimal outstandingBalance,
+            String paymentStatus,
+            LocalDate paidDate,
+            BigDecimal paidAmount,
+            boolean receiptAvailable) {
+        return new InstallmentScheduleResponse(invoiceId, installmentNumber, dueDate, installmentAmount,
+                principalComponent, profitComponent, outstandingBalance, paymentStatus, paidDate,
+                paidAmount, receiptAvailable, null);
+    }
+}

@@ -117,5 +117,6 @@ public final class ErrorCodes {
         public static final String PARTNER_NOT_FOUND      = "PRODUCT.PARTNER.NOT_FOUND";
         public static final String DOCUMENT_NOT_FOUND     = "PRODUCT.DOCUMENT.NOT_FOUND";
         public static final String CONFIG_NOT_FOUND       = "PRODUCT.CONFIG.NOT_FOUND";
+        public static final String HAS_ACTIVE_LOANS       = "PRODUCT.DELETE.HAS_ACTIVE_LOANS";
     }
 }

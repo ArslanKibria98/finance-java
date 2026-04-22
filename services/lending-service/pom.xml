@@ -50,14 +50,19 @@
             <artifactId>workflow-orchestration-sdk</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- messaging-event-sdk, lms-adapter-sdk, compliance-localization-sdk
-             will be added when their features are integrated -->
+        <dependency>
+            <groupId>com.ksa.islamic.finance</groupId>
+            <artifactId>lms-adapter-sdk</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <!-- test-harness-sdk added when Testcontainers integration tests are needed -->
+
+        <!-- Temporal activity API shared with orchestration-service (lending workflows) -->
         <dependency>
             <groupId>com.ksa.islamic.finance</groupId>
             <artifactId>lending-activity-api</artifactId>
             <version>1.0.0</version>
         </dependency>
-        <!-- test-harness-sdk added when Testcontainers integration tests are needed -->
 
         <!-- Spring Boot Starters -->
         <dependency>

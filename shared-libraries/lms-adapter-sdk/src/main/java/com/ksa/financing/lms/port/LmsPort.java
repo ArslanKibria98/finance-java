@@ -5,6 +5,8 @@ import com.ksa.financing.lms.dto.*;
 
 import java.util.List;
 
+
+
 /**
  * LMS Port - High-level abstraction for Loan Management System operations.
  * This interface provides intent-based methods that express WHAT needs to be done,
@@ -97,6 +99,18 @@ public interface LmsPort {
      * @param transactionId The transaction to reverse
      */
     void reverseTransaction(String transactionId);
+
+    /**
+     * Reschedules a loan in the CBS.
+     * Supports all 4 Blueprint 17 types: SKIP_PAYMENT, TENURE_EXTENSION, PAYMENT_HOLIDAY, RESTRUCTURING.
+     *
+     * For RESTRUCTURING with write-off: also posts GL journal entries.
+     * Implements idempotency to prevent duplicate rescheduling.
+     *
+     * @param intent The rescheduling details including type and parameters
+     * @return The reschedule result with Fineract reference IDs
+     */
+    RescheduleResult rescheduleLoan(RescheduleIntent intent);
 
     /**
      * Checks if the LMS is available and operational.

@@ -54,6 +54,7 @@ public class LoanApplicationController {
     private final WorkflowClient workflowClient;
     private final BankAccountLookupService bankAccountLookupService;
     private final com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort;
+    private final com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRescheduleRepository rescheduleRepository;
 
     @Value("${temporal.task-queue:loan-application-queue}")
     private String taskQueue;
@@ -64,7 +65,8 @@ public class LoanApplicationController {
                                       LoanApplicationMapper mapper,
                                       WorkflowClient workflowClient,
                                       BankAccountLookupService bankAccountLookupService,
-                                      com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort) {
+                                      com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort,
+                                      com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRescheduleRepository rescheduleRepository) {
         this.useCase = useCase;
         this.loanUseCase = loanUseCase;
         this.checkEligibilityUseCase = checkEligibilityUseCase;
@@ -72,6 +74,7 @@ public class LoanApplicationController {
         this.workflowClient = workflowClient;
         this.bankAccountLookupService = bankAccountLookupService;
         this.productConfigPort = productConfigPort;
+        this.rescheduleRepository = rescheduleRepository;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -966,6 +969,8 @@ public class LoanApplicationController {
     private List<LoanApplicationResponse> enrichWithLoanData(UUID tenantId,
                                                                List<com.ksa.financing.lending.application.dto.LoanApplicationDto> dtos) {
         return dtos.stream().map(dto -> {
+            String rescheduleId = null;
+            String rescheduleStatus = null;
             try {
                 var loan = loanUseCase.getLoanByApplicationId(tenantId, UUID.fromString(dto.id()));
                 var enriched = mapper.withLoanData(dto,
@@ -976,11 +981,27 @@ public class LoanApplicationController {
                         loan.getTotalAmount(),
                         loan.getInstallmentAmount(),
                         loan.getFineractLoanId() != null ? loan.getFineractLoanId().toString() : null,
-                        loan.getDisbursementDate() != null ? loan.getDisbursementDate() : null);
-                return LoanApplicationResponse.from(enriched);
+                        loan.getDisbursementDate() != null ? loan.getDisbursementDate() : null,
+                        loan.getTenureMonths(),
+                        loan.getMaturityDate());
+
+                // Fetch latest reschedule for this loan (if any)
+                try {
+                    var reschedules = rescheduleRepository.findByTenantIdAndLoanId(
+                            tenantId, loan.getId().getValue());
+                    if (!reschedules.isEmpty()) {
+                        var latest = reschedules.stream()
+                                .max(java.util.Comparator.comparing(r -> r.getCreatedAt()))
+                                .get();
+                        rescheduleId = latest.getId().toString();
+                        rescheduleStatus = latest.getStatus();
+                    }
+                } catch (Exception ignored) {}
+
+                return LoanApplicationResponse.from(enriched, rescheduleId, rescheduleStatus);
             } catch (Exception e) {
                 // No loan yet for this application
-                return LoanApplicationResponse.from(dto);
+                return LoanApplicationResponse.from(dto, rescheduleId, rescheduleStatus);
             }
         }).toList();
     }

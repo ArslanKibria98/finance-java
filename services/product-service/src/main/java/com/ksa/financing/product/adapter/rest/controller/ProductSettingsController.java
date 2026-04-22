@@ -1,6 +1,7 @@
 package com.ksa.financing.product.adapter.rest.controller;
 
 import com.ksa.financing.product.adapter.rest.request.*;
+import com.ksa.financing.product.adapter.rest.response.ProductResponse.DurationSettingsResponse;
 import com.ksa.financing.product.domain.port.in.ManageProductSettingsUseCase;
 import com.ksa.financing.product.domain.port.in.ManageProductSettingsUseCase.*;
 import com.ksa.financing.infra.exception.BusinessException;
@@ -14,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -140,6 +142,51 @@ public class ProductSettingsController {
                 .toList();
 
         manageProductSettingsUseCase.updateEnvironmentConfigs(tenantId, productId, commands);
+        return ResponseEntity.ok().build();
+    }
+
+    // --- Tab 6: Duration Settings ---
+
+    @SecuredEndpoint(obj = "product-settings", act = "read")
+    @GetMapping("/duration-settings")
+    @Operation(summary = "Get duration settings",
+               description = "Returns current duration settings. Returns defaults (all zeros) if never saved — never 404.")
+    public ResponseEntity<DurationSettingsResponse> getDurationSettings(
+            @PathVariable UUID productId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        log.info("Fetching duration settings for product: {} tenant: {}", productId, tenantId);
+
+        var ds = manageProductSettingsUseCase.getDurationSettings(tenantId, productId);
+        return ResponseEntity.ok(new DurationSettingsResponse(
+                ds.id(),
+                ds.requestDurationDays(),
+                ds.approvalDurationDays(),
+                ds.disbursementDurationHours(),
+                ds.repaymentDurationDays()));
+    }
+
+    @SecuredEndpoint(obj = "product-settings", act = "update")
+    @PutMapping("/duration-settings")
+    @Operation(summary = "Update duration settings",
+               description = "Upserts duration settings for this product. All fields allow 0 (immediate / no wait).")
+    public ResponseEntity<Void> updateDurationSettings(
+            @PathVariable UUID productId,
+            @Valid @RequestBody UpdateDurationSettingsRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        log.info("Updating duration settings for product: {} tenant: {}", productId, tenantId);
+
+        var command = new UpdateDurationSettingsCommand(
+                request.requestDurationDaysOrZero(),
+                request.approvalDurationDaysOrZero(),
+                request.disbursementDurationHoursOrZero(),
+                request.repaymentDurationDaysOrZero()
+        );
+
+        manageProductSettingsUseCase.updateDurationSettings(tenantId, productId, command);
         return ResponseEntity.ok().build();
     }
 

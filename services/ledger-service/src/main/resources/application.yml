@@ -93,6 +93,10 @@ ksa:
     enabled: true
     cache-key-prefix: casbin:policies
 
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:4200,http://localhost:5173,http://localhost:5174,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:4200,http://127.0.0.1:5173,http://127.0.0.1:5174,http://46.62.226.94:7374,http://65.108.31.172:7374,https://46.62.226.94:7374,https://65.108.31.172:7374}
+
 # Fineract integration
   fineract:
     base-url: ${FINERACT_BASE_URL:https://localhost:8443/fineract-provider/api/v1}

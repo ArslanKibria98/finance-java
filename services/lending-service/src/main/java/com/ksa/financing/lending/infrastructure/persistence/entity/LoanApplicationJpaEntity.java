@@ -273,6 +273,14 @@ public class LoanApplicationJpaEntity {
     @Column(name = "idempotency_key", length = 100)
     private String idempotencyKey;
 
+    // ══════════ Disbursement Delay (snapshot from product at apply time) ══════════
+
+    @Column(name = "disbursement_duration_hours", nullable = false)
+    private Integer disbursementDurationHours = 0;
+
+    @Column(name = "disbursement_scheduled_at")
+    private LocalDateTime disbursementScheduledAt;
+
     // ══════════ Audit ══════════
 
     @Column(name = "created_by")

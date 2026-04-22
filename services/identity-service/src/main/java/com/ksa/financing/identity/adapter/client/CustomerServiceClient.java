@@ -29,7 +29,7 @@ public class CustomerServiceClient implements CustomerLookupPort {
     }
 
     @Override
-    public Optional<String> resolveCustomerIdByNationalId(String nationalId, String bearerToken) {
+    public Optional<CustomerLookupResult> resolveCustomerByNationalId(String nationalId, String bearerToken) {
         String url = customerServiceUrl + "/api/v1/customers/by-nid/" + nationalId;
         log.info("Resolving customer ID from customer-service: {}", url);
         try {
@@ -54,8 +54,13 @@ public class CustomerServiceClient implements CustomerLookupPort {
             JsonNode idNode = customerNode.get("id");
             if (idNode != null && !idNode.isNull()) {
                 String customerId = idNode.asText();
-                log.info("Resolved customer-service ID: {}", customerId);
-                return Optional.of(customerId);
+                String pepStatus = null;
+                var pepStatusNode = customerNode.get("pepStatus");
+                if (pepStatusNode != null && !pepStatusNode.isNull()) {
+                    pepStatus = pepStatusNode.asText();
+                }
+                log.info("Resolved customer-service ID: {} with pepStatus={}", customerId, pepStatus);
+                return Optional.of(new CustomerLookupResult(customerId, pepStatus));
             }
             log.warn("Customer-service response has no 'id' field");
             return Optional.empty();

@@ -30,3 +30,4 @@ p, customer, /api/v1/profiles/me, GET
 p, customer, /api/v1/profiles/me, PUT
 p, customer, /api/v1/authorize, POST
 p, customer, /api/v1/token-info, GET
+p, customer, /api/v1/admin/delinquency-rules/eligibility, GET

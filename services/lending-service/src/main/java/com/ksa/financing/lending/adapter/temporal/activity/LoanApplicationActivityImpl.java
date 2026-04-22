@@ -243,6 +243,26 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
 
     @Override
     @Transactional
+    public void setDisbursementDelay(SetDisbursementDelayInput input) {
+        log.info("Activity: Setting disbursement delay {}h for application {}",
+                input.disbursementDurationHours(), input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+        aggregate.setDisbursementDurationHours(Math.max(0, input.disbursementDurationHours()));
+
+        if (input.scheduledAt() != null && !input.scheduledAt().isBlank()) {
+            try {
+                aggregate.setDisbursementScheduledAt(LocalDateTime.parse(input.scheduledAt()));
+            } catch (Exception ex) {
+                log.warn("Invalid scheduledAt format '{}', ignoring", input.scheduledAt());
+            }
+        }
+
+        applicationRepository.save(aggregate);
+    }
+
+    @Override
+    @Transactional
     public void cancelApplication(CancelInput input) {
         log.info("Activity: Cancelling application: {} — reason: {}", input.applicationId(), input.reason());
 

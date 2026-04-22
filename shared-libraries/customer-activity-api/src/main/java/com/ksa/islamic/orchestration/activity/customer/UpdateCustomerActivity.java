@@ -29,6 +29,9 @@ public interface UpdateCustomerActivity {
     @ActivityMethod
     UpdateRiskGradeResult updateRiskGrade(UpdateRiskGradeInput input);
 
+    @ActivityMethod
+    SubmitPepFromOnboardingResult submitPepFromOnboarding(SubmitPepFromOnboardingInput input);
+
     record UpdateRiskGradeInput(
         String customerId,
         int riskScore,
@@ -38,6 +41,19 @@ public interface UpdateCustomerActivity {
     record UpdateRiskGradeResult(
         boolean updated,
         String riskGrade
+    ) {}
+
+    record SubmitPepFromOnboardingInput(
+        String customerId,
+        String tenantId,
+        boolean isPep,
+        String sourceOfFunds,
+        String estimatedNetWorth,
+        String sourceOfIncome
+    ) {}
+
+    record SubmitPepFromOnboardingResult(
+        boolean submitted
     ) {}
 
     record UpdateKycStatusInput(

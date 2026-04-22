@@ -21,6 +21,7 @@ public interface LoginWithPinUseCase {
         String refreshToken,
         long expiresIn,
         String customerId,
+        String pepStatus,
         String nationalId,
         String mobileNumber,
         String name

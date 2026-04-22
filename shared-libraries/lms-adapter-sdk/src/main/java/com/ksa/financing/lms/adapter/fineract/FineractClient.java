@@ -3,6 +3,8 @@ package com.ksa.financing.lms.adapter.fineract;
 import com.ksa.financing.lms.adapter.fineract.dto.*;
 import com.ksa.financing.lms.config.FineractConfig;
 import com.ksa.financing.lms.exception.FineractException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
@@ -240,6 +242,56 @@ public class FineractClient {
         } catch (HttpClientErrorException e) {
             log.error("Failed to process early settlement: {}", e.getResponseBodyAsString());
             throw new FineractException("Failed to process early settlement", e);
+        }
+    }
+
+    /**
+     * Submits a loan reschedule request to Fineract.
+     * POST /rescheduleloans
+     */
+    @Retry(name = "fineract-api")
+    @CircuitBreaker(name = "fineract-api")
+    public FineractRescheduleResponse submitReschedule(FineractRescheduleRequest request) {
+        String url = fineractConfig.getBaseUrl() + "/rescheduleloans";
+        log.debug("Submitting reschedule request for loan {}: {}", request.getLoanId(), request.getRescheduleFromDate());
+
+        try {
+            ResponseEntity<FineractRescheduleResponse> response = fineractRestTemplate.postForEntity(
+                url, request, FineractRescheduleResponse.class);
+
+            log.info("Reschedule request submitted successfully: {}", response.getBody());
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to submit reschedule request: {}", e.getResponseBodyAsString());
+            throw new FineractException("Failed to submit reschedule to Fineract", e);
+        }
+    }
+
+    /**
+     * Approves a pending reschedule request in Fineract.
+     * POST /rescheduleloans/{id}?command=approve
+     */
+    @Retry(name = "fineract-api")
+    @CircuitBreaker(name = "fineract-api")
+    public FineractRescheduleResponse approveReschedule(Long rescheduleId, String approvedOnDate) {
+        String url = fineractConfig.getBaseUrl() + "/rescheduleloans/" + rescheduleId + "?command=approve";
+        log.debug("Approving reschedule {} in Fineract", rescheduleId);
+
+        Map<String, Object> approvalBody = Map.of(
+            "approvedOnDate", approvedOnDate,
+            "dateFormat", "dd MMMM yyyy",
+            "locale", "en"
+        );
+
+        try {
+            ResponseEntity<FineractRescheduleResponse> response = fineractRestTemplate.postForEntity(
+                url, approvalBody, FineractRescheduleResponse.class);
+
+            log.info("Reschedule approved successfully in Fineract: {}", rescheduleId);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to approve reschedule {}: {}", rescheduleId, e.getResponseBodyAsString());
+            throw new FineractException("Failed to approve reschedule in Fineract", e);
         }
     }
 

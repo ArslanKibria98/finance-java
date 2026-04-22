@@ -16,7 +16,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD wget -qO- http://localhost:8097/actuator/health || exit 1
 
 ENTRYPOINT ["java", \
-    "-XX:+UseZGC", \
-    "-XX:MaxRAMPercentage=75.0", \
+    "-XX:+UseG1GC", \
+    "-XX:InitialRAMPercentage=20.0", \
+    "-XX:MaxRAMPercentage=50.0", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]

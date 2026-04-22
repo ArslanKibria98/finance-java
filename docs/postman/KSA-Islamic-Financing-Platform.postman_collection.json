@@ -82,7 +82,7 @@
     },
     {
       "key": "productId",
-      "value": "",
+      "value": "4210f18e-8c35-4b12-9b7f-c96de95767c7",
       "type": "string"
     },
     {
@@ -227,6 +227,18 @@
       "key": "hyperPayRegistrationId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "coaFieldLovId",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "coaConfigProfileId",
+      "value": "00000000-0000-0000-0000-000000000002"
+    },
+    {
+      "key": "coaProductCode",
+      "value": "MICRO_FINANCE"
     }
   ],
   "auth": {
@@ -285,7 +297,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"Admin@123456\"\n}"
+              "raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"Admin@1234\"\n}"
             },
             "url": "{{kongUrl}}/identity-service/api/v1/auth/login",
             "description": "Kong -> identity-service:8083\nPUBLIC — Super Admin login. Role in token: super_admin\nAuto-sets accessToken and refreshToken variables."

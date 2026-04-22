@@ -31,6 +31,14 @@ public class FineractRestTemplateConfig {
     private String tenantId;
 
     @Bean
+    public RestTemplate ledgerServiceRestTemplate() {
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(30_000);
+        return new RestTemplate(factory);
+    }
+
+    @Bean
     public RestTemplate productFineractRestTemplate() throws Exception {
         SSLContext sslContext = SSLContextBuilder.create()
                 .loadTrustMaterial(null, TrustAllStrategy.INSTANCE)

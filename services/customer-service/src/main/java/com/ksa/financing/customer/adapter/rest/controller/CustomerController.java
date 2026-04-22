@@ -7,21 +7,27 @@ import com.ksa.financing.customer.application.dto.Customer360Response;
 import com.ksa.financing.customer.application.dto.CustomerResponse;
 import com.ksa.financing.customer.application.dto.UpdateCustomerRequest;
 import com.ksa.financing.customer.application.dto.UpdateMyProfileRequest;
+import com.ksa.financing.customer.application.dto.SubmitPepAnswerRequest;
 import com.ksa.financing.customer.application.usecase.GetCustomer360Service;
 import com.ksa.financing.customer.domain.model.BankAccount;
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.EmploymentInfo;
 import com.ksa.financing.customer.domain.model.EmploymentType;
 import com.ksa.financing.customer.domain.model.KycStatus;
+import com.ksa.financing.customer.domain.model.RiskGrade;
 import com.ksa.financing.customer.domain.model.LifecycleStage;
 import com.ksa.financing.customer.domain.port.in.CreateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
+import com.ksa.financing.customer.domain.port.in.SubmitPepAnswerUseCase;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.out.EmploymentInfoRepository;
 import com.ksa.financing.customer.domain.port.out.WalletPort;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.storage.model.FileCategory;
+import com.ksa.financing.storage.model.FileUploadRequest;
+import com.ksa.financing.storage.port.FileStoragePort;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Base64;
 
 import java.math.BigDecimal;
@@ -58,9 +65,15 @@ import java.util.UUID;
 @Tag(name = "Customers", description = "Customer management endpoints")
 public class CustomerController {
 
+    @org.springframework.beans.factory.annotation.Value("${minio.presigned-url-expiry-hours:24}")
+    private int presignedUrlExpiryHours;
+
+    private final FileStoragePort fileStoragePort;
+
     private final CreateCustomerUseCase createCustomerUseCase;
     private final GetCustomerUseCase getCustomerUseCase;
     private final UpdateCustomerUseCase updateCustomerUseCase;
+    private final SubmitPepAnswerUseCase submitPepAnswerUseCase;
     private final ManageBankAccountsUseCase manageBankAccountsUseCase;
     private final WalletPort walletPort;
     private final com.ksa.financing.customer.domain.port.out.PiiVaultPort piiVaultPort;
@@ -240,8 +253,7 @@ public class CustomerController {
         Customer customer = getCustomerUseCase.getById(id);
         String iban = walletPort.getIbanByCustomerId(customer.getTenantId(), id).orElse(null);
 
-        String profilePictureUrl = customer.getProfilePicture() != null
-                ? "/api/v1/customers/" + customer.getId() + "/profile-picture" : null;
+        String profilePictureUrl = buildProfilePictureUrl(customer.getId(), customer.getProfilePicture());
         return ResponseEntity.ok(new CustomerProfileResponse(
                 customer.getId(),
                 customer.getFirstName(),
@@ -263,7 +275,23 @@ public class CustomerController {
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID keycloakUserId = UUID.fromString(jwt.getSubject());
-        Customer self = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+        Customer self;
+        try {
+            self = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+        } catch (Exception notFoundByKeycloak) {
+            String preferredUsername = jwt.getClaimAsString("preferred_username");
+            if (preferredUsername == null || preferredUsername.isBlank()) {
+                throw notFoundByKeycloak;
+            }
+            try {
+                self = getCustomerUseCase.getByNationalId(preferredUsername);
+            } catch (Exception notFoundByNid) {
+                throw notFoundByKeycloak;
+            }
+            updateCustomerUseCase.linkKeycloakUserByCustomerId(self.getId(), keycloakUserId);
+            log.info("Auto-linked keycloakUserId={} to customerId={} via preferred_username",
+                    keycloakUserId, self.getId());
+        }
 
         String iban = null;
         try {
@@ -272,8 +300,7 @@ public class CustomerController {
             log.warn("Wallet IBAN lookup failed for customerId={}: {}", self.getId(), e.getMessage());
         }
 
-        String profilePictureUrl = self.getProfilePicture() != null
-                ? "/api/v1/customers/" + self.getId() + "/profile-picture" : null;
+        String profilePictureUrl = buildProfilePictureUrl(self.getId(), self.getProfilePicture());
 
         return ResponseEntity.ok(new CustomerProfileResponse(
                 self.getId(),
@@ -288,38 +315,39 @@ public class CustomerController {
         ));
     }
 
-    @SecuredEndpoint(obj = "customers", act = "read")
     @GetMapping("/{id}/profile-picture")
-    @Operation(summary = "Get customer profile picture", description = "Returns the raw image bytes for a customer's profile picture")
-    @ApiResponse(responseCode = "200", description = "Image returned")
-    @ApiResponse(responseCode = "404", description = "Customer or picture not found")
-    public ResponseEntity<byte[]> getProfilePicture(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "Get customer profile picture", description = "Returns the image file — publicly accessible, no auth required")
+    public void getProfilePicture(@PathVariable UUID id,
+                                  jakarta.servlet.http.HttpServletResponse response) throws IOException {
 
         Customer customer = getCustomerUseCase.getById(id);
-        String raw = customer.getProfilePicture();
-        if (raw == null || raw.isBlank()) {
-            return ResponseEntity.notFound().build();
+        String objectKey = customer.getProfilePicture();
+        if (objectKey == null || objectKey.isBlank()) {
+            response.sendError(jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND);
+            return;
         }
 
-        // Parse "data:{contentType};base64,{data}"
-        String contentType = "image/jpeg";
-        String base64Data = raw;
-        if (raw.startsWith("data:")) {
-            int semicolon = raw.indexOf(';');
-            int comma = raw.indexOf(',');
-            if (semicolon > 5 && comma > semicolon) {
-                contentType = raw.substring(5, semicolon);
-                base64Data = raw.substring(comma + 1);
-            }
-        }
+        try {
+            String ext = objectKey.contains(".") ? objectKey.substring(objectKey.lastIndexOf('.') + 1).toLowerCase() : "jpg";
+            String contentType = switch (ext) {
+                case "png"  -> "image/png";
+                case "gif"  -> "image/gif";
+                case "webp" -> "image/webp";
+                case "pdf"  -> "application/pdf";
+                default     -> "image/jpeg";
+            };
 
-        byte[] imageBytes = Base64.getDecoder().decode(base64Data);
-        return ResponseEntity.ok()
-                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
-                .contentLength(imageBytes.length)
-                .body(imageBytes);
+            InputStream stream = fileStoragePort.download(objectKey);
+            byte[] bytes = stream.readAllBytes();
+            response.setContentType(contentType);
+            response.setContentLength(bytes.length);
+            response.setHeader("Cache-Control", "public, max-age=86400");
+            response.getOutputStream().write(bytes);
+            response.getOutputStream().flush();
+        } catch (Exception e) {
+            log.warn("Profile picture not found in MinIO: objectKey={} error={}", objectKey, e.getMessage());
+            response.sendError(jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND);
+        }
     }
 
     @SecuredEndpoint(obj = "customers", act = "read")
@@ -403,34 +431,58 @@ public class CustomerController {
 
         // Resolve customer by keycloak user ID (JWT sub) — avoids tenant mismatch
         UUID keycloakUserId = UUID.fromString(jwt.getSubject());
-        Customer self = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+        Customer self;
+        try {
+            self = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+        } catch (Exception notFoundByKeycloak) {
+            // Auto-heal: customer was onboarded before keycloakUserId was saved.
+            // Fall back to preferred_username (= national ID set as Keycloak username).
+            String preferredUsername = jwt.getClaimAsString("preferred_username");
+            if (preferredUsername == null || preferredUsername.isBlank()) {
+                throw notFoundByKeycloak;
+            }
+            try {
+                self = getCustomerUseCase.getByNationalId(preferredUsername);
+            } catch (Exception notFoundByNid) {
+                throw notFoundByKeycloak; // rethrow original error
+            }
+            // Link keycloakUserId so future calls won't need this fallback
+            updateCustomerUseCase.linkKeycloakUserByCustomerId(self.getId(), keycloakUserId);
+            log.info("Auto-linked keycloakUserId={} to customerId={} via preferred_username",
+                    keycloakUserId, self.getId());
+        }
         UUID customerId = self.getId();
         UUID tenantId   = self.getTenantId();
 
         log.info("Updating own profile for customerId={} tenant={} hasEmail={} hasPicture={}",
                 customerId, tenantId, email != null, profilePicture != null && !profilePicture.isEmpty());
 
-        // Convert uploaded file → Base64 data URL for storage (only when file is present)
-        String profilePictureData = null;
+        // Upload file to MinIO (only when present)
+        String savedObjectKey = null;
         if (profilePicture != null && !profilePicture.isEmpty()) {
             try {
-                byte[] bytes = profilePicture.getBytes();
-                String contentType = profilePicture.getContentType() != null
-                        ? profilePicture.getContentType() : "image/jpeg";
-                profilePictureData = "data:" + contentType + ";base64,"
-                        + Base64.getEncoder().encodeToString(bytes);
-                log.info("Profile picture uploaded: {} bytes, type={}", bytes.length, contentType);
+                var result = fileStoragePort.upload(new FileUploadRequest(
+                        tenantId,
+                        customerId,
+                        FileCategory.PROFILE_PICTURE,
+                        profilePicture.getOriginalFilename(),
+                        profilePicture.getContentType(),
+                        profilePicture.getInputStream(),
+                        profilePicture.getSize()
+                ));
+                savedObjectKey = result.objectKey();
+                log.info("Profile picture uploaded to MinIO: key={} size={}", savedObjectKey, profilePicture.getSize());
             } catch (IOException e) {
-                throw new BusinessException(ErrorCodes.BAD_REQUEST, "Failed to process profile picture: " + e.getMessage());
+                throw new BusinessException(ErrorCodes.BAD_REQUEST, "Failed to upload profile picture: " + e.getMessage());
             }
         }
 
         UpdateCustomerUseCase.UpdateCustomerCommand command = new UpdateCustomerUseCase.UpdateCustomerCommand(
-                null, null, null, null,  // name fields — not updatable by customer
+                null, null, null, null,
                 email,
-                null,  // mobileNumber — requires OTP verification
-                null, null, null, null, null,  // address fields — not updatable by customer
-                profilePictureData
+                null,
+                null, null, null, null, null,
+                savedObjectKey  // store MinIO object key (e.g. "tenants/abc/profile-pictures/cust-123/uuid.jpg")
         );
 
         Customer customer = updateCustomerUseCase.update(tenantId, customerId, command);
@@ -441,8 +493,7 @@ public class CustomerController {
         } catch (Exception e) {
             log.warn("Wallet IBAN lookup failed for customerId={}: {}", customer.getId(), e.getMessage());
         }
-        String profilePictureUrl = customer.getProfilePicture() != null
-                ? "/api/v1/customers/" + customer.getId() + "/profile-picture" : null;
+        String profilePictureUrl = buildProfilePictureUrl(customer.getId(), customer.getProfilePicture());
 
         return ResponseEntity.ok(new CustomerProfileResponse(
                 customer.getId(),
@@ -489,6 +540,45 @@ public class CustomerController {
         return ResponseEntity.ok(toResponse(customer));
     }
 
+    @SecuredEndpoint(obj = "customers.pep-answer", act = "create")
+    @PostMapping("/{id}/pep-answer")
+    @Operation(summary = "Submit customer PEP answers",
+            description = "Captures post-login PEP/EDD answers and marks pepStatus as COMPLETED")
+    @ApiResponse(responseCode = "200", description = "PEP answers submitted successfully")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<CustomerResponse> submitPepAnswer(
+            @PathVariable UUID id,
+            @Valid @RequestBody SubmitPepAnswerRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        UUID submittedBy = UUID.fromString(jwt.getSubject());
+
+        var command = new SubmitPepAnswerUseCase.SubmitPepAnswerCommand(
+                Boolean.TRUE.equals(request.isPep()),
+                request.politicalPosition(),
+                request.governmentBody(),
+                request.countryOfInfluence(),
+                request.positionStartDate(),
+                request.positionEndDate(),
+                request.primarySourceOfWealth(),
+                request.estimatedNetWorth(),
+                request.sourceOfWealthDescription(),
+                request.sourceOfFunds(),
+                request.sourceOfFundsDetails(),
+                request.relatedPersons() == null ? List.of() : request.relatedPersons().stream()
+                        .map(p -> new com.ksa.financing.customer.domain.model.CustomerPepAnswer.RelatedPerson(
+                                p.name(), p.relationship(), p.position()))
+                        .toList(),
+                request.additionalNotes(),
+                submittedBy
+        );
+
+        submitPepAnswerUseCase.submit(tenantId, id, command);
+        Customer customer = getCustomerUseCase.getById(tenantId, id);
+        return ResponseEntity.ok(toResponse(customer));
+    }
+
     @SecuredEndpoint(obj = "customers.kyc-status", act = "update")
     @PatchMapping("/{id}/kyc-status")
     @Operation(summary = "Update customer KYC status", description = "Updates the KYC verification status of a customer")
@@ -504,6 +594,25 @@ public class CustomerController {
 
         KycStatus kycStatus = KycStatus.valueOf(request.kycStatus());
         Customer customer = updateCustomerUseCase.updateKycStatus(tenantId, id, kycStatus);
+        return ResponseEntity.ok(toResponse(customer));
+    }
+
+    @SecuredEndpoint(obj = "customers.risk-grade", act = "update")
+    @PatchMapping("/{id}/risk-grade")
+    @Operation(summary = "Update customer risk grade", description = "Updates the risk grade of a customer (LOW, MEDIUM, HIGH, CRITICAL)")
+    @ApiResponse(responseCode = "200", description = "Risk grade updated successfully")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public ResponseEntity<CustomerResponse> updateRiskGrade(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateRiskGradeRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        boolean superAdmin = isSuperAdmin(jwt);
+        UUID tenantId = superAdmin ? null : extractTenantId(jwt);
+        log.info("Updating risk grade for customer: {} to {} superAdmin: {}", id, request.riskGrade(), superAdmin);
+
+        RiskGrade riskGrade = RiskGrade.valueOf(request.riskGrade().toUpperCase());
+        Customer customer = updateCustomerUseCase.updateRiskGrade(tenantId, id, riskGrade);
         return ResponseEntity.ok(toResponse(customer));
     }
 
@@ -650,9 +759,7 @@ public class CustomerController {
     }
 
     private CustomerResponse toResponse(Customer customer) {
-        String profilePictureUrl = customer.getProfilePicture() != null
-                ? "/api/v1/customers/" + customer.getId() + "/profile-picture"
-                : null;
+        String profilePictureUrl = buildProfilePictureUrl(customer.getId(), customer.getProfilePicture());
         return new CustomerResponse(
                 customer.getId(),
                 customer.getCifNumber(),
@@ -675,6 +782,7 @@ public class CustomerController {
                 customer.getRiskGrade() != null ? customer.getRiskGrade().name() : null,
                 customer.isPepFlag(),
                 customer.isSanctionsFlag(),
+                customer.getPepStatus() != null ? customer.getPepStatus().name() : null,
                 customer.getGlobalUid(),
                 profilePictureUrl,
                 customer.getCreatedAt(),
@@ -714,10 +822,20 @@ public class CustomerController {
         );
     }
 
+    private String buildProfilePictureUrl(UUID customerId, String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) return null;
+        // Return presigned URL (time-limited, signed) — bucket stays private
+        return fileStoragePort.getPresignedUrl(objectKey, java.time.Duration.ofHours(presignedUrlExpiryHours));
+    }
+
     // ---- Inner DTOs for endpoints without dedicated DTO files ----
 
     public record UpdateKycStatusRequest(
             @jakarta.validation.constraints.NotBlank String kycStatus
+    ) {}
+
+    public record UpdateRiskGradeRequest(
+            @jakarta.validation.constraints.NotBlank String riskGrade
     ) {}
 
     public record BankAccountResponse(

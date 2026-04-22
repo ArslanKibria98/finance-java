@@ -33,7 +33,8 @@ public interface ProfileCreationActivity {
         String tenantId,
         String globalUid,
         String customerId,
-        String lifecycleStage
+        String lifecycleStage,
+        String keycloakUserId
     ) {}
 
     record ProfileCreationResult(

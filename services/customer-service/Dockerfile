@@ -3,6 +3,7 @@ RUN apk --no-cache add curl
 RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 WORKDIR /app
 COPY target/customer-service-*.jar app.jar
+RUN mkdir -p /app/uploads/profile-pictures && chown -R appuser:appgroup /app/uploads
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
 USER appuser
 EXPOSE 8084

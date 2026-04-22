@@ -127,6 +127,9 @@ public class CustomerJpaEntity {
     @Column(name = "sanctions_flag", nullable = false)
     private boolean sanctionsFlag;
 
+    @Column(name = "pep_status")
+    private String pepStatus;
+
     @Column(name = "keycloak_user_id")
     private UUID keycloakUserId;
 

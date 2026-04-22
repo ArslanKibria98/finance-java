@@ -37,6 +37,7 @@ public class CustomerMapper {
             c.getRiskGrade() != null ? c.getRiskGrade().name() : null,
             c.isPepFlag(),
             c.isSanctionsFlag(),
+            c.getPepStatus() != null ? c.getPepStatus().name() : null,
             c.getGlobalUid(),
             profilePictureUrl,
             c.getCreatedAt(),

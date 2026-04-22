@@ -55,14 +55,14 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
-        spring.json.type.mapping: event:com.ksa.financing.messaging.event.EventEnvelope
+        spring.json.add.type.headers: false
     consumer:
       group-id: ${spring.application.name}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
       properties:
-        spring.json.trusted.packages: "com.ksa.financing.*"
+        spring.json.trusted.packages: "com.ksa.*,com.ksa.islamic.*"
 
   # Redis Configuration
   data:
@@ -173,7 +173,14 @@ app:
     fineract-username: ${FINERACT_USERNAME:#{null}}
     fineract-password: ${FINERACT_PASSWORD:#{null}}
     fineract-tenant-id: ${FINERACT_TENANT_ID:default}
-    notification-service-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8095}
+    notification-service-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8096}
+    ledger-service-url: ${LEDGER_SERVICE_URL:http://localhost:8095}
+  gl:
+    accounts:
+      loans-receivable: ${GL_ACCOUNT_LOANS_RECEIVABLE:1200}
+      bank-disbursement: ${GL_ACCOUNT_BANK_DISBURSEMENT:1010}
+      profit-receivable: ${GL_ACCOUNT_PROFIT_RECEIVABLE:1300}
+      deferred-income: ${GL_ACCOUNT_DEFERRED_INCOME:2200}
 
 # Error message configuration
 ksa:

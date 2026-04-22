@@ -96,6 +96,19 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     private final DisbursementActivity disbursementActivity =
             Workflow.newActivityStub(DisbursementActivity.class, disbursementOptions);
 
+    private final ActivityOptions ledgerOptions = ActivityOptions.newBuilder()
+            .setStartToCloseTimeout(Duration.ofSeconds(30))
+            .setRetryOptions(RetryOptions.newBuilder()
+                    .setInitialInterval(Duration.ofSeconds(2))
+                    .setMaximumInterval(Duration.ofSeconds(30))
+                    .setBackoffCoefficient(2.0)
+                    .setMaximumAttempts(5)
+                    .build())
+            .build();
+
+    private final LedgerActivity ledgerActivity =
+            Workflow.newActivityStub(LedgerActivity.class, ledgerOptions);
+
     // ══════════════════════════════════════════════════════════════
     // WORKFLOW STATE (all mutable, preserved across signals)
     // ══════════════════════════════════════════════════════════════
@@ -407,6 +420,22 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
             updateStep(5, "Sign Contract", "CONTRACT_SIGNED", "CREATING_LOAN");
             lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
                     tenantId, applicationId, "CONTRACT_SIGNED", createdBy));
+
+            // Product-configured disbursement delay (hours). 0 = immediate (default).
+            int disbursementDelayHours = productValidation != null
+                    ? productValidation.disbursementDurationHours() : 0;
+            if (disbursementDelayHours > 0) {
+                log.info("Disbursement delay active: waiting {} hour(s) before disbursement for application {}",
+                        disbursementDelayHours, applicationNumber);
+                var scheduledAt = Workflow.currentTimeMillis() + disbursementDelayHours * 3_600_000L;
+                lendingActivity.setDisbursementDelay(new LoanApplicationActivity.SetDisbursementDelayInput(
+                        tenantId, applicationId, disbursementDelayHours,
+                        Instant.ofEpochMilli(scheduledAt).toString(), createdBy));
+                updateStep(5, "Sign Contract", "CONTRACT_SIGNED", "WAITING_DISBURSEMENT");
+                Workflow.sleep(Duration.ofHours(disbursementDelayHours));
+                log.info("Disbursement delay elapsed for application {}, proceeding to disbursement",
+                        applicationNumber);
+            }
 
             processLoanCreationAndDisbursement(workflowId);
 
@@ -1198,7 +1227,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         var loanResult = lendingActivity.createLoan(new LoanApplicationActivity.LoanCreationInput(
                 tenantId, applicationId, customerId,
                 basicInfoSignal.productId(),
-                basicInfoSignal.productCode(),
+                basicInfoSignal.productCode() != null ? basicInfoSignal.productCode() : basicInfoSignal.productName(),
                 basicInfoSignal.shariaStructure(),
                 selectedAmount,
                 offerDetails.totalProfit(),
@@ -1280,6 +1309,26 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                         workflowId + "-disburse"
                 )
         );
+
+        // 6g-2: Post disbursement GL entry via ledger-service → Fineract GL
+        // Ledger-service is the single GL bridge. This Temporal activity retries
+        // independently — disbursement funds have already been sent successfully.
+        subStep = "POSTING_GL_ENTRY";
+        try {
+            ledgerActivity.postDisbursementGlEntry(new LedgerActivity.DisbursementGlInput(
+                    tenantId,
+                    loanResult.loanId(),
+                    loanResult.loanNumber(),
+                    selectedAmount,
+                    workflowId + "-gl-disburse",
+                    createdBy
+            ));
+            log.info("Disbursement GL entry posted: loanId={} amount={}", loanResult.loanId(), selectedAmount);
+        } catch (Exception e) {
+            // GL posting failure must NOT block loan completion — ledger-service recon will catch discrepancies
+            log.warn("GL entry posting failed (non-blocking, recon will reconcile): loanId={} error={}",
+                    loanResult.loanId(), e.getMessage());
+        }
 
         // 6h: Send completion notification
         subStep = "SENDING_NOTIFICATION";

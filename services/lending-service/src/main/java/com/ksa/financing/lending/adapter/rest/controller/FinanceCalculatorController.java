@@ -5,10 +5,13 @@ import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.lending.adapter.rest.request.CheckEligibilityRequest;
 import com.ksa.financing.lending.adapter.rest.request.FinanceCalculatorRequest;
+import com.ksa.financing.lending.adapter.rest.request.SuggestProductsRequest;
 import com.ksa.financing.lending.adapter.rest.response.CheckEligibilityResponse;
 import com.ksa.financing.lending.adapter.rest.response.FinanceCalculatorResponse;
+import com.ksa.financing.lending.adapter.rest.response.SuggestProductsResponse;
 import com.ksa.financing.lending.domain.port.in.CalculateFinanceUseCase;
 import com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase;
+import com.ksa.financing.lending.domain.port.in.SuggestProductsUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,6 +37,7 @@ public class FinanceCalculatorController {
 
     private final CalculateFinanceUseCase calculateFinanceUseCase;
     private final CheckEligibilityUseCase checkEligibilityUseCase;
+    private final SuggestProductsUseCase suggestProductsUseCase;
 
     @SecuredEndpoint(obj = "finance.calculator", act = "read")
     @PostMapping("/calculator")
@@ -91,6 +95,37 @@ public class FinanceCalculatorController {
         );
 
         return ResponseEntity.ok(CheckEligibilityResponse.from(result));
+    }
+
+    @SecuredEndpoint(obj = "finance.suggestions", act = "read")
+    @PostMapping("/suggest-products")
+    @Operation(summary = "Suggest eligible products based on financial info (no productId required)")
+    public ResponseEntity<SuggestProductsResponse> suggestProducts(
+            @Valid @RequestBody SuggestProductsRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+
+        var result = suggestProductsUseCase.suggestProducts(
+                new SuggestProductsUseCase.SuggestProductsCommand(
+                        tenantId,
+                        jwt.getTokenValue(),
+                        request.salary(),
+                        request.liabilities(),
+                        request.adultDependents(),
+                        request.childDependents(),
+                        request.foodGroceries(),
+                        request.utilities(),
+                        request.healthcare(),
+                        request.communication(),
+                        request.housingRent(),
+                        request.clothingEssentials(),
+                        request.education(),
+                        request.transportation()
+                )
+        );
+
+        return ResponseEntity.ok(SuggestProductsResponse.from(result));
     }
 
     private UUID extractTenantId(Jwt jwt) {

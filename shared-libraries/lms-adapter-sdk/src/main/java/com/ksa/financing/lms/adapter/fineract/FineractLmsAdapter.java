@@ -6,6 +6,8 @@ import com.ksa.financing.lms.exception.FineractException;
 import com.ksa.financing.lms.exception.IdempotencyException;
 import com.ksa.financing.lms.intent.*;
 import com.ksa.financing.lms.port.LmsPort;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -365,6 +367,137 @@ public class FineractLmsAdapter implements LmsPort {
                 LoanAccountId.of(intent.getLoanAccountId()),
                 e.getMessage()
             );
+        }
+    }
+
+    @Override
+    @Transactional
+    public RescheduleResult rescheduleLoan(RescheduleIntent intent) {
+        log.info("Rescheduling loan {} — type: {}", intent.getLoanAccountId(), intent.getRescheduleType());
+
+        String idempotencyKey = "reschedule:" + intent.getIdempotencyKey();
+
+        // 1. Idempotency check
+        if (idempotencyStore.exists(idempotencyKey)) {
+            log.warn("Duplicate reschedule request: {}", intent.getIdempotencyKey());
+            RescheduleResult cached = idempotencyStore.getResult(idempotencyKey, RescheduleResult.class);
+            if (cached != null) {
+                cached.setDuplicate(true);
+                return cached;
+            }
+        }
+
+        Long fineractLoanId = extractFineractLoanId(intent.getLoanAccountId());
+        LoanAccountId loanAccountId = LoanAccountId.of(intent.getLoanAccountId());
+        String todayFormatted = LocalDate.now().format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
+
+
+        try {
+            // 2. Submit reschedule request to Fineract
+            FineractRescheduleRequest rescheduleRequest =
+                    fineractMapper.toFineractRescheduleRequest(intent, fineractLoanId);
+
+            FineractRescheduleResponse submitResponse =
+                    fineractClient.submitReschedule(rescheduleRequest);
+
+            Long fineractRescheduleId = submitResponse.getResourceId();
+            log.info("Reschedule submitted to Fineract with ID: {}", fineractRescheduleId);
+
+            // 3. Approve reschedule in Fineract (our approval already done in Temporal workflow)
+            fineractClient.approveReschedule(fineractRescheduleId, todayFormatted);
+            log.info("Reschedule {} approved in Fineract", fineractRescheduleId);
+
+            // 4. Build result
+            RescheduleResult result = RescheduleResult.success(
+                    loanAccountId,
+                    intent.getRequestId(),
+                    String.valueOf(fineractRescheduleId));
+
+            // 5. For RESTRUCTURING — post GL journal entries (write-off + profit waiver)
+            if (intent.getRescheduleType() == RescheduleIntent.RescheduleType.RESTRUCTURING) {
+                postRestructuringGlEntries(intent, result);
+            }
+
+            // 6. Store for idempotency
+            idempotencyStore.store(idempotencyKey, result);
+
+            log.info("Loan rescheduled successfully: loanId={}, fineractRescheduleId={}",
+                    intent.getLoanAccountId(), fineractRescheduleId);
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to reschedule loan {}: {}", intent.getLoanAccountId(), e.getMessage(), e);
+            return RescheduleResult.failed(loanAccountId, intent.getRequestId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Posts GL journal entries for RESTRUCTURING with write-off.
+     * Blueprint 17 Section 4.4:
+     *   Dr PROVISION_FOR_BAD_DEBTS / Cr LOAN_RECEIVABLE_PRINCIPAL  (principal write-off)
+     *   Dr UNEARNED_PROFIT        / Cr LOAN_RECEIVABLE_PROFIT      (profit waiver)
+     */
+    private void postRestructuringGlEntries(RescheduleIntent intent, RescheduleResult result) {
+        LocalDate today = LocalDate.now();
+
+        // Principal write-off GL entry
+        if (intent.getWriteOffAmount() != null &&
+                intent.getWriteOffAmount().compareTo(java.math.BigDecimal.ZERO) > 0) {
+
+            String writeOffKey = "gl-writeoff:" + intent.getIdempotencyKey();
+            if (!idempotencyStore.exists(writeOffKey)) {
+                FineractJournalRequest writeOffEntry = FineractJournalRequest.builder()
+                        .officeId(1L)
+                        .currencyCode("SAR")
+                        .transactionDate(today)
+                        .locale("en")
+                        .dateFormat("dd MMMM yyyy")
+                        .comments("Principal write-off per restructure — requestId: " + intent.getRequestId())
+                        .debits(List.of(FineractJournalRequest.JournalLine.builder()
+                                .glAccountCode(intent.getWriteOffGlAccountCode())
+                                .amount(intent.getWriteOffAmount())
+                                .build()))
+                        .credits(List.of(FineractJournalRequest.JournalLine.builder()
+                                .glAccountCode(intent.getLoanReceivableGlCode())
+                                .amount(intent.getWriteOffAmount())
+                                .build()))
+                        .build();
+
+                FineractJournalResponse resp = fineractClient.createJournalEntry(writeOffEntry);
+                result.setWriteOffJournalEntryId(resp != null ? resp.getTransactionId() : null);
+                idempotencyStore.store(writeOffKey, resp);
+                log.info("Write-off GL entry posted: amount={}", intent.getWriteOffAmount());
+            }
+        }
+
+        // Profit waiver GL entry
+        if (intent.getProfitWaiverAmount() != null &&
+                intent.getProfitWaiverAmount().compareTo(java.math.BigDecimal.ZERO) > 0) {
+
+            String profitWaiverKey = "gl-profitwvr:" + intent.getIdempotencyKey();
+            if (!idempotencyStore.exists(profitWaiverKey)) {
+                FineractJournalRequest profitWaiverEntry = FineractJournalRequest.builder()
+                        .officeId(1L)
+                        .currencyCode("SAR")
+                        .transactionDate(today)
+                        .locale("en")
+                        .dateFormat("dd MMMM yyyy")
+                        .comments("Profit waiver per restructure — requestId: " + intent.getRequestId())
+                        .debits(List.of(FineractJournalRequest.JournalLine.builder()
+                                .glAccountCode(intent.getUnearnedProfitGlCode())
+                                .amount(intent.getProfitWaiverAmount())
+                                .build()))
+                        .credits(List.of(FineractJournalRequest.JournalLine.builder()
+                                .glAccountCode(intent.getProfitReceivableGlCode())
+                                .amount(intent.getProfitWaiverAmount())
+                                .build()))
+                        .build();
+
+                FineractJournalResponse resp = fineractClient.createJournalEntry(profitWaiverEntry);
+                result.setProfitWaiverJournalEntryId(resp != null ? resp.getTransactionId() : null);
+                idempotencyStore.store(profitWaiverKey, resp);
+                log.info("Profit waiver GL entry posted: amount={}", intent.getProfitWaiverAmount());
+            }
         }
     }
 

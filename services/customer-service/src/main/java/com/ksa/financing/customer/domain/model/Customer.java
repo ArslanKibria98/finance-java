@@ -39,6 +39,7 @@ public class Customer {
     private Instant riskGradeUpdatedAt;
     private boolean pepFlag;
     private boolean sanctionsFlag;
+    private PepStatus pepStatus;
     private UUID keycloakUserId;
     private UUID globalUid;
     private LifecycleStage lifecycleStage;
@@ -124,6 +125,8 @@ public class Customer {
     public void setPepFlag(boolean pepFlag) { this.pepFlag = pepFlag; }
     public boolean isSanctionsFlag() { return sanctionsFlag; }
     public void setSanctionsFlag(boolean sanctionsFlag) { this.sanctionsFlag = sanctionsFlag; }
+    public PepStatus getPepStatus() { return pepStatus; }
+    public void setPepStatus(PepStatus pepStatus) { this.pepStatus = pepStatus; }
     public UUID getKeycloakUserId() { return keycloakUserId; }
     public void setKeycloakUserId(UUID keycloakUserId) { this.keycloakUserId = keycloakUserId; }
     public UUID getGlobalUid() { return globalUid; }

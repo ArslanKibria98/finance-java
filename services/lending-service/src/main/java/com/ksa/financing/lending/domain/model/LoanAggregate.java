@@ -272,6 +272,12 @@ public class LoanAggregate {
     public BigDecimal getTotalAmount() { return totalAmount; }
     public BigDecimal getProfitRate() { return profitRate; }
     public int getTenureMonths() { return tenureMonths; }
+    public void updateOutstandingBalance(BigDecimal newOutstanding) {
+        this.totalOutstanding = newOutstanding;
+        this.updatedAt = LocalDateTime.now();
+        this.version++;
+    }
+
     public BigDecimal getInstallmentAmount() { return installmentAmount; }
     public BigDecimal getOutstandingPrincipal() { return outstandingPrincipal; }
     public BigDecimal getOutstandingProfit() { return outstandingProfit; }

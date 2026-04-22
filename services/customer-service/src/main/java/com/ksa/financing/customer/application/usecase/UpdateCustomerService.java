@@ -66,7 +66,9 @@ public class UpdateCustomerService implements UpdateCustomerUseCase {
     @Override
     @Transactional
     public Customer updateRiskGrade(UUID tenantId, UUID customerId, RiskGrade grade) {
-        Customer customer = customerRepository.findById(tenantId, customerId)
+        Customer customer = (tenantId != null
+                ? customerRepository.findById(tenantId, customerId)
+                : customerRepository.findById(customerId))
             .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + customerId));
         customer.setRiskGrade(grade);
         customer.setRiskGradeUpdatedAt(java.time.Instant.now());
@@ -108,6 +110,38 @@ public class UpdateCustomerService implements UpdateCustomerUseCase {
             log.warn("Failed to publish customer-updated event for customerId: {} — continuing: {}",
                     saved.getId(), e.getMessage());
         }
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public Customer linkKeycloakUser(String mobileNumber, UUID keycloakUserId) {
+        Customer customer = customerRepository.findByMobileNumber(mobileNumber)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Customer not found with mobileNumber: " + mobileNumber));
+        if (customer.getKeycloakUserId() != null) {
+            log.info("Customer {} already linked to Keycloak user {}", customer.getId(), customer.getKeycloakUserId());
+            return customer;
+        }
+        customer.setKeycloakUserId(keycloakUserId);
+        Customer saved = customerRepository.save(customer);
+        log.info("Linked keycloakUserId={} to customerId={}", keycloakUserId, saved.getId());
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public Customer linkKeycloakUserByCustomerId(UUID customerId, UUID keycloakUserId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Customer not found: " + customerId));
+        if (customer.getKeycloakUserId() != null) {
+            log.info("Customer {} already linked to Keycloak user {}", customerId, customer.getKeycloakUserId());
+            return customer;
+        }
+        customer.setKeycloakUserId(keycloakUserId);
+        Customer saved = customerRepository.save(customer);
+        log.info("Linked keycloakUserId={} to customerId={}", keycloakUserId, saved.getId());
         return saved;
     }
 }

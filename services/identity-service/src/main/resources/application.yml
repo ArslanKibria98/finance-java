@@ -135,6 +135,8 @@ keycloak:
   base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
   internal-url: ${KEYCLOAK_AUTH_SERVER_URL:http://keycloak:8080}
   realm: ${KEYCLOAK_REALM:CompanyRealm}
+  user-lookup-retry-max-attempts: ${KEYCLOAK_USER_LOOKUP_RETRY_MAX_ATTEMPTS:5}
+  user-lookup-retry-delay-ms: ${KEYCLOAK_USER_LOOKUP_RETRY_DELAY_MS:250}
   sso:
     client-id: ${KEYCLOAK_SSO_CLIENT_ID:react-frontend}
     redirect-uri: ${KEYCLOAK_SSO_REDIRECT_URI:http://localhost:3000/callback}

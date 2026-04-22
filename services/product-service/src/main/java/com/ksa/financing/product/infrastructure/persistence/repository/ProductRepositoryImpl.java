@@ -26,6 +26,7 @@ public class ProductRepositoryImpl implements ProductRepository {
     private final JpaAdminFeeSlabRepository jpaAdminFeeSlabRepository;
     private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
     private final JpaFeeSettingsRepository jpaFeeSettingsRepository;
+    private final JpaProductDurationSettingsRepository jpaProductDurationSettingsRepository;
     private final JpaApplicationStepRepository jpaApplicationStepRepository;
 private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigRepository;
     private final JpaApprovalWorkflowRepository jpaApprovalWorkflowRepository;
@@ -155,6 +156,15 @@ private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigR
                         fs.getDbrCalculationMethod(), fs.getDbrExceptions(),
                         fs.getMaxDti(), fs.getMinAge(), fs.getMaxAge(),
                         fs.getGdbrPercentage())));
+
+        // Duration Settings
+        jpaProductDurationSettingsRepository.findByProductIdAndTenantId(productId, tenantId)
+                .ifPresent(ds -> product.setDurationSettings(new DurationSettings(
+                        ds.getId(),
+                        ds.getRequestDurationDays(),
+                        ds.getApprovalDurationDays(),
+                        ds.getDisbursementDurationHours(),
+                        ds.getRepaymentDurationDays())));
 
         // Application Steps
         var steps = jpaApplicationStepRepository

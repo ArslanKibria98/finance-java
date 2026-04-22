@@ -58,12 +58,22 @@ public class DeadLetterQueueConfig {
     /**
      * Dead Letter Publishing Recoverer for failed messages
      */
+    private DeadLetterPublishingRecoverer dlpRecoverer;
+
     @Bean
     public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer() {
-        return new DeadLetterPublishingRecoverer(
-            kafkaTemplate,
-            destinationResolver()
-        );
+        // Use simplified constructor for Spring Kafka 3.3.0 compatibility
+        if (dlpRecoverer == null) {
+            dlpRecoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        }
+        return dlpRecoverer;
+    }
+
+    public DeadLetterPublishingRecoverer getDeadLetterPublishingRecoverer() {
+        if (dlpRecoverer == null) {
+            dlpRecoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        }
+        return dlpRecoverer;
     }
 
     /**
@@ -176,7 +186,7 @@ public class DeadLetterQueueConfig {
         if (cause != null) {
             sb.append("Caused by: ").append(cause.toString()).append("\n");
             StackTraceElement[] causeTrace = cause.getStackTrace();
-            int causeLi} = Math.min(causeTrace.length, 10);
+            int causeLines = Math.min(causeTrace.length, 10);
             for (int i = 0; i < causeLines; i++) {
                 sb.append("\tat ").append(causeTrace[i]).append("\n");
             }

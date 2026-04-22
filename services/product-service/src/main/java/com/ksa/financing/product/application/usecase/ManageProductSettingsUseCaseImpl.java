@@ -1,6 +1,7 @@
 package com.ksa.financing.product.application.usecase;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.product.domain.model.DurationSettings;
 import com.ksa.financing.product.domain.port.in.ManageProductSettingsUseCase;
 import com.ksa.financing.product.domain.port.out.ProductRepository;
 import com.ksa.financing.product.domain.port.out.ProductSettingsRepository;
@@ -94,6 +95,30 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
         advanceWizardIfNeeded(tenantId, productId, 3);
     }
 
+
+    @Override
+    @Transactional
+    public void updateDurationSettings(UUID tenantId, UUID productId, UpdateDurationSettingsCommand command) {
+        log.info("Updating duration settings for product: {}", productId);
+        ensureProductExists(tenantId, productId);
+
+        settingsRepository.saveDurationSettings(
+                tenantId, productId,
+                command.requestDurationDays(),
+                command.approvalDurationDays(),
+                command.disbursementDurationHours(),
+                command.repaymentDurationDays()
+        );
+
+        advanceWizardIfNeeded(tenantId, productId, 3);
+    }
+
+    @Override
+    public DurationSettings getDurationSettings(UUID tenantId, UUID productId) {
+        ensureProductExists(tenantId, productId);
+        return settingsRepository.findDurationSettings(tenantId, productId)
+                .orElseGet(DurationSettings::defaults);
+    }
 
     @Override
     @Transactional

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Lending Service - Stepper Workflow (BRD V1.8)",
-    "description": "Loan Application Stepper Workflow via Temporal Signals.\n\nFlow: Initiate (APPLY) \u2192 Basic Info \u2192 Bank Account \u2192 SIMAH Consent \u2192 Accept Offer \u2192 Sign Contract \u2192 OTP \u2192 IVR \u2192 Done\n\nBRD Phases: SafeWatch AML, Masdar Employment, AML Declaration, PaymentGuard, NABA, OTP/IVR retries.\n\nRouting: {{kongUrl}}/lending-service/api/v1/...\nAuth: Bearer {{accessToken}} (from identity-service login-with-pin)\n\nAll signal/query endpoints accept optional ?applicationId=xxx to target a specific application.",
+    "description": "Loan Application Stepper Workflow via Temporal Signals.\n\nFlow: Initiate (APPLY) → Basic Info → Bank Account → SIMAH Consent → Accept Offer → Sign Contract → OTP → IVR → Done\n\nBRD Phases: SafeWatch AML, Masdar Employment, AML Declaration, PaymentGuard, NABA, OTP/IVR retries.\n\nRouting: {{kongUrl}}/lending-service/api/v1/...\nAuth: Bearer {{accessToken}} (from identity-service login-with-pin)\n\nAll signal/query endpoints accept optional ?applicationId=xxx to target a specific application.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -91,9 +91,27 @@
       "type": "string"
     },
     {
+      "key": "invoiceId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "todayDate",
       "value": "2026-03-30",
       "type": "string"
+    },
+    {
+      "key": "rescheduleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "coaFieldLovId",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "coaConfigProfileId",
+      "value": "00000000-0000-0000-0000-000000000002"
     }
   ],
   "item": [
@@ -277,7 +295,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"PERSONAL\",\n  \"nameEn\": \"Personal Finance\",\n  \"nameAr\": \"\u062a\u0645\u0648\u064a\u0644 \u0634\u062e\u0635\u064a\",\n  \"descriptionEn\": \"General personal financing\",\n  \"descriptionAr\": \"\u062a\u0645\u0648\u064a\u0644 \u0634\u062e\u0635\u064a \u0639\u0627\u0645\",\n  \"sortOrder\": 1\n}"
+              "raw": "{\n  \"code\": \"PERSONAL\",\n  \"nameEn\": \"Personal Finance\",\n  \"nameAr\": \"تمويل شخصي\",\n  \"descriptionEn\": \"General personal financing\",\n  \"descriptionAr\": \"تمويل شخصي عام\",\n  \"sortOrder\": 1\n}"
             },
             "url": {
               "raw": "{{kongUrl}}/lending-service/api/v1/purpose-of-finance",
@@ -305,7 +323,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nameEn\": \"Personal Finance (Updated)\",\n  \"nameAr\": \"\u062a\u0645\u0648\u064a\u0644 \u0634\u062e\u0635\u064a (\u0645\u062d\u062f\u062b)\",\n  \"descriptionEn\": \"Updated\",\n  \"descriptionAr\": \"\u0645\u062d\u062f\u062b\",\n  \"sortOrder\": 1,\n  \"active\": true\n}"
+              "raw": "{\n  \"nameEn\": \"Personal Finance (Updated)\",\n  \"nameAr\": \"تمويل شخصي (محدث)\",\n  \"descriptionEn\": \"Updated\",\n  \"descriptionAr\": \"محدث\",\n  \"sortOrder\": 1,\n  \"active\": true\n}"
             },
             "url": {
               "raw": "{{kongUrl}}/lending-service/api/v1/purpose-of-finance/{{purposeOfFinanceId}}",
@@ -433,7 +451,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fieldKey\": \"monthly_income\",\n  \"nameEn\": \"Monthly Income\",\n  \"nameAr\": \"\u0627\u0644\u062f\u062e\u0644 \u0627\u0644\u0634\u0647\u0631\u064a\",\n  \"descriptionEn\": \"Total monthly income\",\n  \"descriptionAr\": \"\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u062f\u062e\u0644 \u0627\u0644\u0634\u0647\u0631\u064a\",\n  \"dataType\": \"DECIMAL\",\n  \"inputType\": \"NUMBER\",\n  \"placeholderEn\": \"Enter income in SAR\",\n  \"placeholderAr\": \"\u0623\u062f\u062e\u0644 \u0627\u0644\u062f\u062e\u0644 \u0628\u0627\u0644\u0631\u064a\u0627\u0644\",\n  \"unit\": \"SAR\",\n  \"minValue\": 3000,\n  \"maxValue\": 500000,\n  \"required\": true,\n  \"sortOrder\": 1\n}"
+              "raw": "{\n  \"fieldKey\": \"monthly_income\",\n  \"nameEn\": \"Monthly Income\",\n  \"nameAr\": \"الدخل الشهري\",\n  \"descriptionEn\": \"Total monthly income\",\n  \"descriptionAr\": \"إجمالي الدخل الشهري\",\n  \"dataType\": \"DECIMAL\",\n  \"inputType\": \"NUMBER\",\n  \"placeholderEn\": \"Enter income in SAR\",\n  \"placeholderAr\": \"أدخل الدخل بالريال\",\n  \"unit\": \"SAR\",\n  \"minValue\": 3000,\n  \"maxValue\": 500000,\n  \"required\": true,\n  \"sortOrder\": 1\n}"
             },
             "url": {
               "raw": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/definitions",
@@ -462,7 +480,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nameEn\": \"Monthly Income (Updated)\",\n  \"nameAr\": \"\u0627\u0644\u062f\u062e\u0644 \u0627\u0644\u0634\u0647\u0631\u064a\",\n  \"descriptionEn\": \"Total monthly income\",\n  \"descriptionAr\": \"\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u062f\u062e\u0644 \u0627\u0644\u0634\u0647\u0631\u064a\",\n  \"dataType\": \"DECIMAL\",\n  \"inputType\": \"NUMBER\",\n  \"placeholderEn\": \"Enter income in SAR\",\n  \"placeholderAr\": \"\u0623\u062f\u062e\u0644 \u0627\u0644\u062f\u062e\u0644 \u0628\u0627\u0644\u0631\u064a\u0627\u0644\",\n  \"unit\": \"SAR\",\n  \"minValue\": 3000,\n  \"maxValue\": 500000,\n  \"required\": true,\n  \"active\": true,\n  \"sortOrder\": 1\n}"
+              "raw": "{\n  \"nameEn\": \"Monthly Income (Updated)\",\n  \"nameAr\": \"الدخل الشهري\",\n  \"descriptionEn\": \"Total monthly income\",\n  \"descriptionAr\": \"إجمالي الدخل الشهري\",\n  \"dataType\": \"DECIMAL\",\n  \"inputType\": \"NUMBER\",\n  \"placeholderEn\": \"Enter income in SAR\",\n  \"placeholderAr\": \"أدخل الدخل بالريال\",\n  \"unit\": \"SAR\",\n  \"minValue\": 3000,\n  \"maxValue\": 500000,\n  \"required\": true,\n  \"active\": true,\n  \"sortOrder\": 1\n}"
             },
             "url": {
               "raw": "{{kongUrl}}/lending-service/api/v1/eligibility-fields/definitions/{{eligibilityFieldId}}",
@@ -566,7 +584,7 @@
     },
     {
       "name": "2 - Stepper Flow (Signals)",
-      "description": "Complete loan application flow.\nRun in order \u2014 each sends a Temporal signal.\n\nAfter initiate, applicationId is auto-set and passed to all subsequent calls via ?applicationId=xxx",
+      "description": "Complete loan application flow.\nRun in order — each sends a Temporal signal.\n\nAfter initiate, applicationId is auto-set and passed to all subsequent calls via ?applicationId=xxx",
       "item": [
         {
           "name": "Step 0: Initiate Application",
@@ -829,7 +847,7 @@
                 }
               ]
             },
-            "description": "Step 2: Submit bank account for disbursement.\nTriggers: IBAN verify \u2192 Masdar employment (Phase 5) \u2192 AML declaration (Phase 6)."
+            "description": "Step 2: Submit bank account for disbursement.\nTriggers: IBAN verify → Masdar employment (Phase 5) → AML declaration (Phase 6)."
           }
         },
         {
@@ -893,7 +911,7 @@
                 }
               ]
             },
-            "description": "Step 3: SIMAH consent \u2192 credit check \u2192 eligibility \u2192 offer calculation."
+            "description": "Step 3: SIMAH consent → credit check → eligibility → offer calculation."
           }
         },
         {
@@ -957,7 +975,7 @@
                 }
               ]
             },
-            "description": "Step 4: Accept offer. Triggers PaymentGuard (Phase 7) \u2192 contract generation."
+            "description": "Step 4: Accept offer. Triggers PaymentGuard (Phase 7) → contract generation."
           }
         },
         {
@@ -1149,7 +1167,7 @@
                 }
               ]
             },
-            "description": "Step 5c: IVR callback (max 3 attempts).\nAfter IVR: Fineract \u2192 commodity \u2192 disbursement \u2192 APPROVED."
+            "description": "Step 5c: IVR callback (max 3 attempts).\nAfter IVR: Fineract → commodity → disbursement → APPROVED."
           }
         }
       ]
@@ -1900,7 +1918,7 @@
       ]
     },
     {
-      "name": "BRD V1.8 \u2014 UC#01 Finance Calculator",
+      "name": "BRD V1.8 — UC#01 Finance Calculator",
       "description": "Stateless finance calculation and eligibility check endpoints.",
       "item": [
         {
@@ -1933,7 +1951,7 @@
           }
         },
         {
-          "name": "[UC01\u2192UC02] Check Eligibility (Pre-Qualification)",
+          "name": "[UC01→UC02] Check Eligibility (Pre-Qualification)",
           "request": {
             "method": "POST",
             "header": [
@@ -1960,11 +1978,45 @@
               ]
             }
           }
+        },
+        {
+          "name": "[UC01→UC02] Suggest Products (Financial-First, No productId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50000,\n  \"tenureMonths\": 36,\n  \"salary\": 20000,\n  \"liabilities\": 2000,\n  \"adultDependents\": 1,\n  \"childDependents\": 1,\n  \"foodGroceries\": 1500,\n  \"utilities\": 500,\n  \"healthcare\": 300,\n  \"communication\": 200,\n  \"housingRent\": 3000,\n  \"clothingEssentials\": 300,\n  \"education\": 500,\n  \"transportation\": 500\n}"
+            },
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/finance/suggest-products",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "finance",
+                "suggest-products"
+              ]
+            },
+            "description": "Financial-first product suggestion. Customer provides salary/liabilities/expenses WITHOUT pre-selecting a product. Returns all ACTIVE customer-visible products for which the customer is eligible, sorted by lowest monthly installment first. Each item includes installment preview (monthlyInstallment, totalPayable, APR, dbrAfter, disposableIncome). After picking a productId, continue with POST /loan-applications/initiate."
+          }
         }
       ]
     },
     {
-      "name": "BRD V1.8 \u2014 UC#03 Application Tracker",
+      "name": "BRD V1.8 — UC#03 Application Tracker",
       "description": "Track loan application progress with 6 visual stages.",
       "item": [
         {
@@ -2017,7 +2069,7 @@
       ]
     },
     {
-      "name": "BRD V1.8 \u2014 UC#04 Finance Overview & Loan Management",
+      "name": "BRD V1.8 — UC#04 Finance Overview & Loan Management",
       "description": "Customer finance dashboard with loan breakdown, installments, invoices, contracts, and receipts.",
       "item": [
         {
@@ -2278,6 +2330,40 @@
           }
         },
         {
+          "name": "[UC04] Invoice Detail (by invoiceId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var data = json.data || json;",
+                  "pm.test('Invoice detail loaded', function() { pm.response.to.have.status(200); });",
+                  "console.log('Invoice: ' + data.invoiceId + ' | #' + data.installmentNumber + ' | Due: ' + data.dueDate + ' | Amount: ' + data.installmentAmount + ' | Status: ' + data.paymentStatus);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/invoices/{{invoiceId}}",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "invoices",
+                "{{invoiceId}}"
+              ]
+            },
+            "description": "Get detail for a single invoice by its invoiceId (format: INV-XXXXXXXX-NNN where XXXXXXXX is first 8 chars of loanId and NNN is 3-digit installment number). Returns invoice id, amounts (total/principal/profit), due date, outstanding balance, payment status (PAID/PENDING/OVERDUE/COMPLETED/PARTIALLY_PAID — synced from collections-service), paid date/amount, and receipt availability flag. Returns 400 if invoiceId format is invalid, 404 if invoice doesn't exist."
+          }
+        },
+        {
           "name": "[UC04] Loan Contract (by Loan ID)",
           "event": [
             {
@@ -2515,6 +2601,876 @@
               ]
             },
             "description": "Get dashboard statistics for today only."
+          }
+        }
+      ]
+    },
+    {
+      "name": "9 - Loan Rescheduling (Blueprint 17)",
+      "description": "Loan rescheduling workflows via Temporal.\n\nPATH KEY: applicationId (loan application UUID — returned from loan origination flow)\n\nTypes:\n  SKIP_PAYMENT      → self-service, no approval (max 2/loan, 6mo gap)\n  TENURE_EXTENSION  → ops_head approval signal (max +12mo, total ≤72mo)\n  PAYMENT_HOLIDAY   → ops_head approval signal (max 3 months)\n  RESTRUCTURING     → credit_committee signal + GL write-off via ledger-service\n\nFlow:\n  1. Submit → returns rescheduleId (DB UUID)\n  2. Poll status using rescheduleId\n  3. ops_head / credit_committee sends approve or reject signal\n\nAll calls route: lending-service → Temporal → activities → ledger-service → Fineract",
+      "item": [
+        {
+          "name": "[reschedule] SKIP_PAYMENT — self-service (no approval needed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const d = pm.response.json();",
+                  "    pm.collectionVariables.set('rescheduleId', d.rescheduleId);",
+                  "    console.log('rescheduleId set:', d.rescheduleId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rescheduleType\": \"SKIP_PAYMENT\",\n  \"justification\": \"Temporary financial hardship \\u2014 requesting one month payment skip\",\n  \"requestedSkipMonth\": \"2026-05-01\"\n}"
+            },
+            "description": "No manager approval needed. Path key: applicationId.\nWorkflow: validate → save → generate schedule → Fineract sync → APPLIED\n\nResponse includes rescheduleId (DB UUID) — save it for status/approve/reject."
+          }
+        },
+        {
+          "name": "[reschedule] TENURE_EXTENSION — submit (awaits ops_head approval)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const d = pm.response.json();",
+                  "    pm.collectionVariables.set('rescheduleId', d.rescheduleId);",
+                  "    console.log('rescheduleId set:', d.rescheduleId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rescheduleType\": \"TENURE_EXTENSION\",\n  \"justification\": \"Customer income reduced after job change\",\n  \"extensionMonths\": 6\n}"
+            },
+            "description": "Workflow pauses at AWAITING_APPROVAL.\nops_head must send approve/reject signal.\nBusinessRule: max +12mo extension, total tenure ≤ 72mo, loan age ≥ 6mo."
+          }
+        },
+        {
+          "name": "[reschedule] PAYMENT_HOLIDAY — submit (awaits ops_head approval)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const d = pm.response.json();",
+                  "    pm.collectionVariables.set('rescheduleId', d.rescheduleId);",
+                  "    console.log('rescheduleId set:', d.rescheduleId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rescheduleType\": \"PAYMENT_HOLIDAY\",\n  \"justification\": \"Medical emergency \\u2014 requesting 2-month payment holiday\",\n  \"holidayMonths\": 2\n}"
+            },
+            "description": "Sharia-compliant: no extra profit charged during holiday.\nTenure extends by holidayMonths. Max 3 months. ops_head approval required."
+          }
+        },
+        {
+          "name": "[reschedule] RESTRUCTURING — submit (awaits credit_committee + GL write-off)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const d = pm.response.json();",
+                  "    pm.collectionVariables.set('rescheduleId', d.rescheduleId);",
+                  "    console.log('rescheduleId set:', d.rescheduleId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rescheduleType\": \"RESTRUCTURING\",\n  \"justification\": \"Severe financial distress \\u2014 full restructuring required\",\n  \"writeOffAmount\": 5000.0,\n  \"profitWaiverAmount\": 2000.0,\n  \"newProfitRate\": 0.03\n}"
+            },
+            "description": "credit_committee approval required.\nOn approval: GL write-off entries posted via Temporal LedgerActivity → ledger-service → Fineract.\n  Dr. Provision Bad Debts (1400) / Cr. Loans Receivable (1200)\n  Dr. Deferred Income (2200) / Cr. Profit Receivable (1300)"
+          }
+        },
+        {
+          "name": "[reschedule] List all reschedules for loan",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules"
+              ]
+            },
+            "description": "Returns all reschedule requests for the loan identified by applicationId.\nResponse includes rescheduleId, status, type, dates for each record."
+          }
+        },
+        {
+          "name": "[reschedule] Get status by rescheduleId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/{{rescheduleId}}/status",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules",
+                "{{rescheduleId}}",
+                "status"
+              ]
+            },
+            "description": "Returns DB record status + optionally live Temporal status.\n\nStatuses:\n  PENDING           → just submitted, workflow starting\n  AWAITING_APPROVAL → waiting for manager signal\n  APPROVED          → signal received, processing\n  APPROVED          → complete, DB + Fineract updated\n  REJECTED          → rejected by manager or ineligible"
+          }
+        },
+        {
+          "name": "[reschedule] Approve — ops_head / credit_committee signal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/{{rescheduleId}}/approve",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules",
+                "{{rescheduleId}}",
+                "approve"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approverRole\": \"ops_head\",\n  \"approvalNotes\": \"Approved after reviewing customer payment history\"\n}"
+            },
+            "description": "Lookup: rescheduleId → workflowId from DB → send @SignalMethod to Temporal.\nWorkflow wakes from AWAITING_APPROVAL → generate schedule → Fineract sync → APPROVED.\n\nFor RESTRUCTURING use approverRole: credit_committee"
+          }
+        },
+        {
+          "name": "[reschedule] Reject — ops_head / credit_committee signal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/loans/{{applicationId}}/reschedules/{{rescheduleId}}/reject",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "loans",
+                "{{applicationId}}",
+                "reschedules",
+                "{{rescheduleId}}",
+                "reject"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectionReason\": \"Customer does not meet eligibility criteria at this time\"\n}"
+            },
+            "description": "Lookup: rescheduleId → workflowId from DB → send reject @SignalMethod → workflow marks DB record REJECTED and closes."
+          }
+        },
+        {
+          "name": "[admin] Reschedule History — List All",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var d = pm.response.json();",
+                  "if (d.reschedules && d.reschedules.length > 0) {",
+                  "    pm.collectionVariables.set('rescheduleId', d.reschedules[0].rescheduleId);",
+                  "    console.log('First rescheduleId set:', d.reschedules[0].rescheduleId);",
+                  "}",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has reschedules array', () => pm.expect(d).to.have.property('reschedules'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/admin/loan-reschedules",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "admin",
+                "loan-reschedules"
+              ]
+            },
+            "description": "Admin: list ALL reschedule requests across all loans (no applicationId needed).\n\nResponse per record:\n- rescheduleId, loanId, loanNumber, applicationId, customerId\n- rescheduleType, status\n- before / after: tenure, installment, maturityDate\n- timeline: requestedAt, approvedAt, appliedAt, rejectedAt\n- approver: approverId, role, notes\n- rejectionReason\n- sync: fineractSynced, glPosted\n\nAccess: super_admin, admin"
+          }
+        },
+        {
+          "name": "[admin] Reschedule History — Filter by Status (PENDING)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/admin/loan-reschedules?status=PENDING",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "admin",
+                "loan-reschedules"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                }
+              ]
+            },
+            "description": "Filter reschedules by status.\n\nValid statuses: SUBMITTED, PENDING, APPROVED, APPLIED, REJECTED, CANCELLED, FAILED\n\nExamples:\n  ?status=PENDING   → awaiting approval\n  ?status=APPROVED  → successfully applied\n  ?status=REJECTED  → rejected by manager or eligibility"
+          }
+        },
+        {
+          "name": "[admin] Reschedule History — Filter by Status (APPROVED)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/admin/loan-reschedules?status=APPLIED",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "admin",
+                "loan-reschedules"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "APPROVED"
+                }
+              ]
+            },
+            "description": "List all successfully applied reschedules. Shows before/after schedule changes."
+          }
+        },
+        {
+          "name": "[admin] Reschedule History — Filter by Type (TENURE_EXTENSION)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/admin/loan-reschedules?type=TENURE_EXTENSION",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "admin",
+                "loan-reschedules"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "TENURE_EXTENSION"
+                }
+              ]
+            },
+            "description": "Filter by reschedule type.\n\nValid types: SKIP_PAYMENT, TENURE_EXTENSION, PAYMENT_HOLIDAY, RESTRUCTURING"
+          }
+        },
+        {
+          "name": "[admin] Reschedule History — Get Single Record (full detail)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/admin/loan-reschedules/{{rescheduleId}}",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "admin",
+                "loan-reschedules",
+                "{{rescheduleId}}"
+              ]
+            },
+            "description": "Full detail for one reschedule by rescheduleId only (no applicationId needed).\n\nUse the rescheduleId from the list endpoint or from a reschedule submission response."
+          }
+        },
+        {
+          "name": "[admin] Reschedule History — By Application ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/lending-service/api/v1/admin/loan-reschedules/by-application/{{applicationId}}",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "lending-service",
+                "api",
+                "v1",
+                "admin",
+                "loan-reschedules",
+                "by-application",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "Get full reschedule history for a specific loan application.\n\nReturns all reschedule records (any status) linked to the given applicationId, sorted newest first.\n\nEndpoint: GET /api/v1/admin/loan-reschedules/by-application/{applicationId}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Fineract GL COA Configuration (ledger-service)",
+      "description": "Product-wise COA configuration and mappings for Fineract GL aligned flow.",
+      "item": [
+        {
+          "name": "[Fineract GL] Create COA Configuration Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations"
+              ]
+            },
+            "description": "Create product-wise COA profile.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productCode\": \"MICRO_FINANCE\",\n  \"profileName\": \"Micro Finance COA Mapping v1\",\n  \"effectiveFrom\": \"2026-04-01\",\n  \"effectiveTo\": \"2027-03-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] List Profiles By Product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations?productCode=MICRO_FINANCE",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations"
+              ],
+              "query": [
+                {
+                  "key": "productCode",
+                  "value": "MICRO_FINANCE"
+                }
+              ]
+            },
+            "description": "List COA profiles by product code.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] Get Profile By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations/{{coaConfigProfileId}}",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations",
+                "{{coaConfigProfileId}}"
+              ]
+            },
+            "description": "Get COA profile by id.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] Upsert Profile Mappings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations/{{coaConfigProfileId}}",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations",
+                "{{coaConfigProfileId}}"
+              ]
+            },
+            "description": "Upsert product-wise COA field to account mappings.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"fieldKey\": \"COLLECTION_ACCOUNT\",\n      \"accountCode\": \"110201\",\n      \"mandatoryOverride\": true,\n      \"notes\": \"Primary collection account\"\n    },\n    {\n      \"fieldKey\": \"PURCHASE_ACCOUNT\",\n      \"accountCode\": \"122310\",\n      \"mandatoryOverride\": false,\n      \"notes\": \"Purchase account mapping\"\n    },\n    {\n      \"fieldKey\": \"SUPPLIER_ACCOUNT\",\n      \"accountCode\": \"160101\",\n      \"mandatoryOverride\": false,\n      \"notes\": \"Supplier payable mapping\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] Get Profile Mappings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations/{{coaConfigProfileId}}/mappings",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations",
+                "{{coaConfigProfileId}}",
+                "mappings"
+              ]
+            },
+            "description": "Get all mappings for profile.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] Validate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations/{{coaConfigProfileId}}/validate",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations",
+                "{{coaConfigProfileId}}",
+                "validate"
+              ]
+            },
+            "description": "Validate profile mappings before activation.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] Activate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations/{{coaConfigProfileId}}/activate",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations",
+                "{{coaConfigProfileId}}",
+                "activate"
+              ]
+            },
+            "description": "Activate COA profile after successful validation.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[Fineract GL] Deactivate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/ledger-service/api/v1/coa-configurations/{{coaConfigProfileId}}/deactivate",
+              "host": [
+                "{{kongUrl}}"
+              ],
+              "path": [
+                "ledger-service",
+                "api",
+                "v1",
+                "coa-configurations",
+                "{{coaConfigProfileId}}",
+                "deactivate"
+              ]
+            },
+            "description": "Deactivate active COA profile.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         }
       ]

@@ -3,6 +3,7 @@ package com.ksa.financing.customer.workflow.activity.impl;
 import com.ksa.financing.customer.domain.model.KycStatus;
 import com.ksa.financing.customer.domain.model.RiskGrade;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
+import com.ksa.financing.customer.domain.port.in.SubmitPepAnswerUseCase;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
 import com.ksa.islamic.orchestration.activity.customer.UpdateCustomerActivity;
 import io.temporal.activity.Activity;
@@ -17,6 +18,7 @@ public class UpdateCustomerActivityImpl implements UpdateCustomerActivity {
 
     private final UpdateCustomerUseCase updateCustomerUseCase;
     private final ManageBankAccountsUseCase manageBankAccountsUseCase;
+    private final SubmitPepAnswerUseCase submitPepAnswerUseCase;
 
     @Override
     public UpdateCustomerResult updateWithAdditionalInfo(UpdateCustomerInput input) {
@@ -127,6 +129,43 @@ public class UpdateCustomerActivityImpl implements UpdateCustomerActivity {
             return new UpdateRiskGradeResult(true, grade.name());
         } catch (Exception e) {
             log.error("Risk grade update failed for customerId={}: {}", input.customerId(), e.getMessage(), e);
+            throw Activity.wrap(e);
+        }
+    }
+
+    @Override
+    public SubmitPepFromOnboardingResult submitPepFromOnboarding(SubmitPepFromOnboardingInput input) {
+        log.info("Submitting onboarding PEP data for customerId={} isPep={}", input.customerId(), input.isPep());
+        try {
+            UUID tenantId;
+            try {
+                tenantId = UUID.fromString(input.tenantId());
+            } catch (IllegalArgumentException e) {
+                tenantId = UUID.nameUUIDFromBytes(input.tenantId().getBytes());
+            }
+            UUID customerId = UUID.fromString(input.customerId());
+
+            submitPepAnswerUseCase.submit(tenantId, customerId,
+                    new SubmitPepAnswerUseCase.SubmitPepAnswerCommand(
+                            input.isPep(),
+                            null, // politicalPosition
+                            null, // governmentBody
+                            null, // countryOfInfluence
+                            null, // positionStartDate
+                            null, // positionEndDate
+                            input.sourceOfIncome(), // primarySourceOfWealth
+                            input.estimatedNetWorth(),
+                            null, // sourceOfWealthDescription
+                            input.sourceOfFunds(),
+                            null, // sourceOfFundsDetails
+                            java.util.List.of(),
+                            "Submitted during onboarding",
+                            customerId // best available actor in onboarding context
+                    )
+            );
+            return new SubmitPepFromOnboardingResult(true);
+        } catch (Exception e) {
+            log.error("Onboarding PEP submission failed for customerId={}: {}", input.customerId(), e.getMessage(), e);
             throw Activity.wrap(e);
         }
     }

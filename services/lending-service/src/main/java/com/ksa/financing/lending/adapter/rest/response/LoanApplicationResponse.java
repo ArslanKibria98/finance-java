@@ -149,9 +149,26 @@ public record LoanApplicationResponse(
         String fineractLoanId,
         @Schema(description = "Disbursement date")
         @JsonFormat(pattern = "yyyy-MM-dd")
-        java.time.LocalDate disbursementDate
+        java.time.LocalDate disbursementDate,
+
+        // Current schedule (updated after reschedule — differs from requestedTenureMonths which is the original request)
+        @Schema(description = "Current tenure months from loans table (updated after reschedule)")
+        Integer currentTenureMonths,
+        @Schema(description = "Current maturity date from loans table (updated after reschedule)")
+        @JsonFormat(pattern = "yyyy-MM-dd")
+        java.time.LocalDate currentMaturityDate,
+
+        // Rescheduling
+        @Schema(description = "Latest reschedule request ID (if any active reschedule exists)")
+        String rescheduleId,
+        @Schema(description = "Latest reschedule status: PENDING, AWAITING_APPROVAL, PROCESSING, APPROVED, REJECTED, CANCELLED")
+        String rescheduleStatus
 ) {
     public static LoanApplicationResponse from(LoanApplicationDto dto) {
+        return from(dto, null, null);
+    }
+
+    public static LoanApplicationResponse from(LoanApplicationDto dto, String rescheduleId, String rescheduleStatus) {
         String displayStatus = switch (dto.status()) {
             case "APPROVED"   -> "APPROVED";
             case "REJECTED"   -> "REJECTED";
@@ -246,7 +263,12 @@ public record LoanApplicationResponse(
                 scale2(dto.totalAmount()),
                 scale2(dto.installmentAmount()),
                 dto.fineractLoanId(),
-                dto.disbursementDate()
+                dto.disbursementDate(),
+                // Current schedule (updated after reschedule)
+                dto.currentTenureMonths(),
+                dto.currentMaturityDate(),
+                rescheduleId,
+                rescheduleStatus
         );
     }
 

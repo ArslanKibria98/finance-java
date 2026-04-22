@@ -103,6 +103,17 @@ app:
   tenant:
     header-name: X-Tenant-ID
     default: default
+  profile-picture:
+    base-url: ${PROFILE_PICTURE_BASE_URL:http://localhost:9000}
+
+minio:
+  enabled: true
+  endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:ksa-financing-documents}
+  public-url: ${MINIO_PUBLIC_URL:http://46.62.226.94:9100}
+  presigned-url-expiry-hours: ${MINIO_PRESIGNED_EXPIRY_HOURS:24}
 
 wallet:
   service:

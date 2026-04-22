@@ -4,12 +4,14 @@ import com.ksa.financing.lms.adapter.fineract.dto.*;
 import com.ksa.financing.lms.dto.*;
 import com.ksa.financing.lms.intent.LoanIntent;
 import com.ksa.financing.lms.intent.LoanProductIntent;
+import com.ksa.financing.lms.intent.RescheduleIntent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -223,6 +225,72 @@ public class FineractMapper {
             case 2 -> "MONTHS";
             case 3 -> "YEARS";
             default -> "MONTHS";
+        };
+    }
+
+    /**
+     * Maps RescheduleIntent to FineractRescheduleRequest.
+     * Each rescheduling type maps to different Fineract fields per Blueprint 17.
+     */
+    public FineractRescheduleRequest toFineractRescheduleRequest(RescheduleIntent intent, Long fineractLoanId) {
+        String fromDate = intent.getRescheduleFromDate() != null
+                ? intent.getRescheduleFromDate().format(DateTimeFormatter.ofPattern("dd MMMM yyyy"))
+                : LocalDate.now().format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
+
+        var builder = FineractRescheduleRequest.builder()
+                .loanId(fineractLoanId)
+                .rescheduleFromDate(fromDate)
+                .submittedOnDate(LocalDate.now().format(DateTimeFormatter.ofPattern("dd MMMM yyyy")))
+                .rescheduleReasonId(mapRescheduleReasonId(intent.getRescheduleType()))
+                .rescheduleReasonComment(intent.getRescheduleReasonComment())
+                .dateFormat("dd MMMM yyyy")
+                .locale("en");
+
+        switch (intent.getRescheduleType()) {
+            case SKIP_PAYMENT -> {
+                // Skip 1 installment — grace on both principal and profit
+                builder.graceOnPrincipalPayment(1);
+                builder.graceOnInterestPayment(1);
+            }
+            case TENURE_EXTENSION -> {
+                // Extend by N months
+                builder.extraTerms(intent.getExtensionMonths());
+                if (intent.getNewInstallmentAmount() != null) {
+                    builder.adjustedInstallmentAmount(intent.getNewInstallmentAmount());
+                }
+            }
+            case PAYMENT_HOLIDAY -> {
+                // Pause N months — grace on both principal and profit
+                // Note: accrual suspension is handled in our domain, not Fineract
+                builder.graceOnPrincipalPayment(
+                        intent.getGraceOnPrincipalPayment() != null ? intent.getGraceOnPrincipalPayment() : 1);
+                builder.graceOnInterestPayment(
+                        intent.getGraceOnInterestPayment() != null ? intent.getGraceOnInterestPayment() : 1);
+            }
+            case RESTRUCTURING -> {
+                // Full restructure — extend tenure + adjust installment
+                if (intent.getExtensionMonths() != null) {
+                    builder.extraTerms(intent.getExtensionMonths());
+                }
+                if (intent.getNewInstallmentAmount() != null) {
+                    builder.adjustedInstallmentAmount(intent.getNewInstallmentAmount());
+                }
+            }
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Maps our rescheduling type to Fineract reason code.
+     * These reason IDs should be configured in Fineract admin.
+     */
+    private Long mapRescheduleReasonId(RescheduleIntent.RescheduleType type) {
+        return switch (type) {
+            case SKIP_PAYMENT     -> 1L;   // "Skip Payment"
+            case TENURE_EXTENSION -> 2L;   // "Tenure Extension"
+            case PAYMENT_HOLIDAY  -> 3L;   // "Payment Holiday"
+            case RESTRUCTURING    -> 4L;   // "Financial Distress Restructuring"
         };
     }
 

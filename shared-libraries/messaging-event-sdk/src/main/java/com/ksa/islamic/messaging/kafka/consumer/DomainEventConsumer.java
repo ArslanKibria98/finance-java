@@ -61,14 +61,18 @@ public abstract class DomainEventConsumer<T> implements AcknowledgingMessageList
         try {
             // Record processing duration
             processingTimer.record(() -> {
-                // Validate event
-                validateEvent(envelope);
+                try {
+                    // Validate event
+                    validateEvent(envelope);
 
-                // Extract and cast payload
-                T event = extractPayload(envelope);
+                    // Extract and cast payload
+                    T event = extractPayload(envelope);
 
-                // Process the event
-                processEvent(event, envelope);
+                    // Process the event
+                    processEvent(event, envelope);
+                } catch (EventProcessingException e) {
+                    throw new RuntimeException(e);
+                }
             });
 
             // Acknowledge successful processing

@@ -40,6 +40,9 @@ public interface LoanApplicationActivity {
     void updateStatus(UpdateStatusInput input);
 
     @ActivityMethod
+    void setDisbursementDelay(SetDisbursementDelayInput input);
+
+    @ActivityMethod
     void cancelApplication(CancelInput input);
 
     // ══════════ THIRD-PARTY RESULT PERSISTENCE ══════════
@@ -182,6 +185,14 @@ public interface LoanApplicationActivity {
             String tenantId,
             String applicationId,
             String targetStatus,
+            String updatedBy
+    ) {}
+
+    record SetDisbursementDelayInput(
+            String tenantId,
+            String applicationId,
+            int disbursementDurationHours,
+            String scheduledAt,   // ISO-8601 string, nullable
             String updatedBy
     ) {}
 

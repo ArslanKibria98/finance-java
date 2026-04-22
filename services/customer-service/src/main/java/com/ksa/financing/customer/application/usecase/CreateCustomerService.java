@@ -99,6 +99,7 @@ public class CreateCustomerService implements CreateCustomerUseCase {
         customer.setMobileNumber(command.mobileNumber());
         customer.setEmail(command.email());
         customer.setKycStatus(KycStatus.PENDING);
+        customer.setPepStatus(PepStatus.PENDING);
         customer.setLifecycleStage(
                 command.lifecycleStage() != null
                         ? LifecycleStage.valueOf(command.lifecycleStage())

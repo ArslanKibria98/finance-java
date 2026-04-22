@@ -145,6 +145,7 @@ services:
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: postgres
       KC_SPI_THEME_DEFAULT: finova
+      KC_SPI_THEME_WELCOME_THEME: keycloak
     volumes:
       - ./infrastructure/keycloak/themes/finova:/opt/keycloak/themes/finova
     ports:
@@ -431,6 +432,10 @@ services:
       LENDING_SERVICE_URL: http://lending-service:8097
       KYC_SERVICE_URL: http://kyc-adapter-service:8087
       ONBOARDING_SERVICE_URL: http://onboarding-workflow-service:8089
+      PROFILE_PICTURE_STORAGE_PATH: /app/uploads/profile-pictures
+      PROFILE_PICTURE_BASE_URL: http://46.62.226.94:8000
+    volumes:
+      - profile-pictures:/app/uploads/profile-pictures
     depends_on:
       postgres:
         condition: service_healthy
@@ -739,6 +744,7 @@ services:
       FINERACT_USERNAME: mifos
       FINERACT_PASSWORD: password
       FINERACT_TENANT_ID: default
+      LEDGER_SERVICE_URL: http://ledger-service:8095
     depends_on:
       postgres:
         condition: service_healthy
@@ -783,7 +789,12 @@ services:
       RISK_SERVICE_URL: http://risk-service:8090
       FRAUD_SERVICE_URL: http://fraud-service:8092
       MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
-      NOTIFICATION_SERVICE_URL: http://notification-service:8095
+      NOTIFICATION_SERVICE_URL: http://notification-service:8096
+      LEDGER_SERVICE_URL: http://ledger-service:8095
+      GL_ACCOUNT_LOANS_RECEIVABLE: "1200"
+      GL_ACCOUNT_BANK_DISBURSEMENT: "1010"
+      GL_ACCOUNT_PROFIT_RECEIVABLE: "1300"
+      GL_ACCOUNT_DEFERRED_INCOME: "2200"
       FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
       FINERACT_USERNAME: mifos
       FINERACT_PASSWORD: password
@@ -795,6 +806,96 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8097/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Ledger Service - Double-entry accounting ledger, Fineract GL bridge
+  ledger-service:
+    build:
+      context: .
+      dockerfile: services/ledger-service/Dockerfile
+    container_name: ksa-ledger-service
+    ports:
+      - "8095:8095"
+    environment:
+      SERVER_PORT: 8095
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ledger_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_TENANT_ID: default
+      FINERACT_OFFICE_ID: 1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: financing.ledger.entry.posted
+      KAFKA_TOPIC_LEDGER_ENTRY_SYNCED: financing.ledger.entry.synced
+      KAFKA_TOPIC_RECONCILIATION_DISCREPANCY: financing.reconciliation.discrepancy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8095/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Collections Service - Repayment tracking, payment processing, dunning, settlements
+  collections-service:
+    build:
+      context: .
+      dockerfile: services/collections-service/Dockerfile
+    container_name: ksa-collections-service
+    ports:
+      - "8099:8099"
+    environment:
+      SERVER_PORT: 8099
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: collections_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KSA_AUTH_ENABLED: "true"
+      CASBIN_CACHE_KEY_PREFIX: casbin:policies
+      KAFKA_TOPIC_PAYMENT_COMPLETED: financing.payment.completed
+      KAFKA_TOPIC_PAYMENT_FAILED: financing.payment.failed
+      KAFKA_TOPIC_PAYMENT_APPLIED: financing.repayment.payment-applied
+      KAFKA_TOPIC_SCHEDULE_FULLY_PAID: financing.repayment.schedule.fully-paid
+      MIDDLEWARE_BASE_URL: http://middleware-third-party:8093
+      MIDDLEWARE_SECRET_KEY: test-mock-secret-key-2026
+      HYPERPAY_WIDGET_URL: https://eu-prod.oppwa.com/v1/paymentWidgets.js
+      LOG_LEVEL: INFO
+      APP_LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8099/actuator/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -860,6 +961,29 @@ services:
     networks:
       - ksa-network
 
+  # MinIO - S3-compatible Object Storage for files/images/documents
+  minio:
+    image: minio/minio:latest
+    container_name: ksa-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9100:9000"   # API (S3-compatible) — 9000 is used by Portainer
+      - "9101:9001"   # Web Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL:-http://46.62.226.94:9100}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - ksa-network
+
 networks:
   ksa-network:
     driver: bridge
@@ -870,3 +994,5 @@ volumes:
   prometheus_data:
   grafana_data:
   portainer_data:
+  profile-pictures:
+  minio_data:

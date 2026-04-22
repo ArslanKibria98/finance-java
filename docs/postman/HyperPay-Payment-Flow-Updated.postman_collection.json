@@ -1,0 +1,222 @@
+{
+  "info": {
+    "name": "HyperPay Payment Flow - Multi Invoice (Collections)",
+    "description": "Multi-invoice payment flow tested against collections-service.\n\nVerified on 2026-04-21:\n- Initiate one request with two invoice IDs\n- Complete both generated payments\n- Confirm status is COMPLETED for both",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "4.0.0"
+  },
+  "variable": [
+    { "key": "kongUrl", "value": "http://46.62.226.94:8000", "type": "string" },
+    { "key": "customerNationalId", "value": "1234567890", "type": "string" },
+    { "key": "customerPin", "value": "482956", "type": "string" },
+    { "key": "authUsername", "value": "superadmin", "type": "string" },
+    { "key": "authPassword", "value": "Admin@1234", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "loanId", "value": "770e8400-e29b-41d4-a716-446655440000", "type": "string" },
+    { "key": "invoiceId1", "value": "INV-MULTI-001", "type": "string" },
+    { "key": "invoiceId2", "value": "INV-MULTI-002", "type": "string" },
+    { "key": "totalAmount", "value": "1000", "type": "string" },
+    { "key": "idempotencyKey", "value": "multi-test-001", "type": "string" },
+    { "key": "paymentId1", "value": "", "type": "string" },
+    { "key": "paymentId2", "value": "", "type": "string" },
+    { "key": "providerTxn1", "value": "TXN-MULTI-001", "type": "string" },
+    { "key": "providerTxn2", "value": "TXN-MULTI-002", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0) Customer Login (PIN) - If Provisioned",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  var json = pm.response.json();",
+              "  var data = json.data || json;",
+              "  if (data.accessToken) pm.collectionVariables.set('accessToken', data.accessToken);",
+              "}",
+              "pm.test('Customer login check', function () {",
+              "  pm.expect([200,404,422]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"{{customerNationalId}}\",\n  \"pin\": \"{{customerPin}}\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/identity-service/api/v1/auth/login-with-pin",
+          "host": ["{{kongUrl}}"],
+          "path": ["identity-service", "api", "v1", "auth", "login-with-pin"]
+        }
+      }
+    },
+    {
+      "name": "1) Login - Get Access Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "var data = json.data || json;",
+              "if (data.accessToken) pm.collectionVariables.set('accessToken', data.accessToken);",
+              "pm.test('Login success', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(data.accessToken).to.not.be.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{authUsername}}\",\n  \"password\": \"{{authPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/identity-service/api/v1/auth/login",
+          "host": ["{{kongUrl}}"],
+          "path": ["identity-service", "api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "2) Initiate Multi Invoice Payment (At Once)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "var data = json.data || [];",
+              "pm.test('Two payments created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  pm.expect(data).to.be.an('array');",
+              "  pm.expect(data.length).to.eql(2);",
+              "});",
+              "if (data.length >= 2) {",
+              "  pm.collectionVariables.set('paymentId1', data[0].id);",
+              "  pm.collectionVariables.set('paymentId2', data[1].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json", "type": "text" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"invoiceId\": [\"{{invoiceId1}}\", \"{{invoiceId2}}\"],\n  \"amount\": {{totalAmount}},\n  \"paymentMethod\": \"HYPERPAY_MADA\",\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+        },
+        "url": {
+          "raw": "{{kongUrl}}/collections-service/api/v1/payments",
+          "host": ["{{kongUrl}}"],
+          "path": ["collections-service", "api", "v1", "payments"]
+        }
+      }
+    },
+    {
+      "name": "3) Complete Payment for Invoice 1",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json", "type": "text" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"providerTransactionId\": \"{{providerTxn1}}\"\n}" },
+        "url": {
+          "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId1}}/complete",
+          "host": ["{{kongUrl}}"],
+          "path": ["collections-service", "api", "v1", "payments", "{{paymentId1}}", "complete"]
+        }
+      }
+    },
+    {
+      "name": "4) Complete Payment for Invoice 2",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json", "type": "text" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"providerTransactionId\": \"{{providerTxn2}}\"\n}" },
+        "url": {
+          "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId2}}/complete",
+          "host": ["{{kongUrl}}"],
+          "path": ["collections-service", "api", "v1", "payments", "{{paymentId2}}", "complete"]
+        }
+      }
+    },
+    {
+      "name": "5) Get Invoice 1 Payment Status (Expect COMPLETED)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "var data = json.data || {};",
+              "pm.test('Invoice 1 status completed', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(data.status).to.eql('COMPLETED');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId1}}/status",
+          "host": ["{{kongUrl}}"],
+          "path": ["collections-service", "api", "v1", "payments", "{{paymentId1}}", "status"]
+        }
+      }
+    },
+    {
+      "name": "6) Get Invoice 2 Payment Status (Expect COMPLETED)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "var data = json.data || {};",
+              "pm.test('Invoice 2 status completed', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(data.status).to.eql('COMPLETED');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{kongUrl}}/collections-service/api/v1/payments/{{paymentId2}}/status",
+          "host": ["{{kongUrl}}"],
+          "path": ["collections-service", "api", "v1", "payments", "{{paymentId2}}", "status"]
+        }
+      }
+    }
+  ]
+}

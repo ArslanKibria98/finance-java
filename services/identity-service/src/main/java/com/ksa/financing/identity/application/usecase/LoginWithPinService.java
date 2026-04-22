@@ -79,21 +79,23 @@ public class LoginWithPinService implements LoginWithPinUseCase {
         log.info("PIN login successful for NID ending in: {}", maskNid(command.nationalId()));
 
         // Resolve actual customer-service ID by NID
-        String customerId = customerLookupPort
-                .resolveCustomerIdByNationalId(command.nationalId(), tokenResponse.accessToken())
+        var customerLookup = customerLookupPort
+                .resolveCustomerByNationalId(command.nationalId(), tokenResponse.accessToken())
                 .orElseGet(() -> {
                     log.warn("Could not resolve customer-service ID for NID: {}, falling back to internalUserId",
                             maskNid(command.nationalId()));
-                    return identity.getInternalUserId() != null
-                            ? identity.getInternalUserId().toString()
-                            : null;
+                    return new CustomerLookupPort.CustomerLookupResult(
+                            identity.getInternalUserId() != null ? identity.getInternalUserId().toString() : null,
+                            null
+                    );
                 });
 
         return new LoginWithPinResult(
                 tokenResponse.accessToken(),
                 tokenResponse.refreshToken(),
                 tokenResponse.expiresIn(),
-                customerId,
+                customerLookup.customerId(),
+                customerLookup.pepStatus(),
                 identity.getKeycloakUsername(),
                 identity.getMobileNumber(),
                 tokenResponse.name()
@@ -151,11 +153,16 @@ public class LoginWithPinService implements LoginWithPinUseCase {
 
         // Resolve customer ID
         String customerId = null;
+        String pepStatus = null;
         if (identity.getKeycloakUsername() != null) {
-            customerId = customerLookupPort
-                    .resolveCustomerIdByNationalId(identity.getKeycloakUsername(), tokenResponse.accessToken())
-                    .orElseGet(() -> identity.getInternalUserId() != null
-                            ? identity.getInternalUserId().toString() : null);
+            var lookup = customerLookupPort
+                    .resolveCustomerByNationalId(identity.getKeycloakUsername(), tokenResponse.accessToken())
+                    .orElseGet(() -> new CustomerLookupPort.CustomerLookupResult(
+                            identity.getInternalUserId() != null ? identity.getInternalUserId().toString() : null,
+                            null
+                    ));
+            customerId = lookup.customerId();
+            pepStatus = lookup.pepStatus();
         }
 
         return new LoginWithPinResult(
@@ -163,6 +170,7 @@ public class LoginWithPinService implements LoginWithPinUseCase {
                 tokenResponse.refreshToken(),
                 tokenResponse.expiresIn(),
                 customerId,
+                pepStatus,
                 identity.getKeycloakUsername(),
                 identity.getMobileNumber(),
                 tokenResponse.name()

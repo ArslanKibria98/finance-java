@@ -54,6 +54,7 @@ public record ProductResponse(
     List<AdminFeeSlabResponse> adminFeeSlabs,
     TermsConditionsResponse termsConditions,
     FeeSettingsResponse feeSettings,
+    DurationSettingsResponse durationSettings,
     List<ApplicationStepResponse> applicationSteps,
     List<EnvironmentConfigResponse> environmentConfigs,
     List<ApprovalWorkflowResponse> approvalWorkflows,
@@ -94,6 +95,14 @@ public record ProductResponse(
         Integer minAge,
         Integer maxAge,
         BigDecimal gdbrPercentage
+    ) {}
+
+    public record DurationSettingsResponse(
+        UUID id,
+        Integer requestDurationDays,
+        Integer approvalDurationDays,
+        Integer disbursementDurationHours,
+        Integer repaymentDurationDays
     ) {}
 
     public record ApplicationStepResponse(

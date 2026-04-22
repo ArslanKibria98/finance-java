@@ -94,6 +94,7 @@ public class ProductMapper {
                             product.getTermsConditions().termsAr())
                     : null,
                 mapFeeSettingsWithSlabDerived(product),
+                mapDurationSettings(product),
                 product.getApplicationSteps() != null
                     ? product.getApplicationSteps().stream()
                         .map(s -> new ApplicationStepResponse(
@@ -158,6 +159,19 @@ public class ProductMapper {
                 fs.minAge(),
                 fs.maxAge(),
                 fs.gdbrPercentage());
+    }
+
+    private static DurationSettingsResponse mapDurationSettings(Product product) {
+        var ds = product.getDurationSettings();
+        if (ds == null) {
+            return null;
+        }
+        return new DurationSettingsResponse(
+                ds.id(),
+                ds.requestDurationDays(),
+                ds.approvalDurationDays(),
+                ds.disbursementDurationHours(),
+                ds.repaymentDurationDays());
     }
 
     public static ProductSummaryResponse toSummaryResponse(Product product) {

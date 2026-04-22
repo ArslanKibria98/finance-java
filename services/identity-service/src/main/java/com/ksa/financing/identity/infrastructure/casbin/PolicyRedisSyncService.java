@@ -41,6 +41,7 @@ public class PolicyRedisSyncService {
      */
     public void syncPoliciesToRedis() {
         try {
+            policyEnforcer.reloadPolicy();
             List<List<String>> allPolicies = policyEnforcer.getAllPolicies();
             log.info("Syncing {} Casbin policies to Redis", allPolicies.size());
 
