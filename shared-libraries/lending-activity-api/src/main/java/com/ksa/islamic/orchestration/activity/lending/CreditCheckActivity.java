@@ -79,6 +79,7 @@ public interface CreditCheckActivity {
             BigDecimal profitRate,
             int tenureMonths,
             BigDecimal processingFeePercent,
+            BigDecimal processingFeeAmount,
             BigDecimal adminFeeAmount
     ) {}
 

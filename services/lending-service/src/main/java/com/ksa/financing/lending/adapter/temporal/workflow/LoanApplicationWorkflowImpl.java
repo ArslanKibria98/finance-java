@@ -959,6 +959,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                         effectiveProfitRate,
                         basicInfoSignal.requestedTenureMonths(),
                         productValidation.processingFeePercent(),
+                        productValidation.processingFeeAmount(),
                         productValidation.adminFeeAmount()
                 )
         );
@@ -1034,6 +1035,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                         resolvedProfitRate,
                         basicInfoSignal.requestedTenureMonths(),
                         productValidation.processingFeePercent(),
+                        productValidation.processingFeeAmount(),
                         productValidation.adminFeeAmount()
                 )
         );

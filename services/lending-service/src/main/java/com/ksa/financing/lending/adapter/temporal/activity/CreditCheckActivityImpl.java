@@ -218,10 +218,13 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
                 ? rate.movePointLeft(2)
                 : rate;
 
-        BigDecimal processingFee = input.processingFeePercent() != null
-                ? input.principalAmount().multiply(input.processingFeePercent())
-                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
+        BigDecimal processingFee = BigDecimal.ZERO;
+        if (input.processingFeeAmount() != null && input.processingFeeAmount().compareTo(BigDecimal.ZERO) > 0) {
+            processingFee = input.processingFeeAmount();
+        } else if (input.processingFeePercent() != null && input.processingFeePercent().compareTo(BigDecimal.ZERO) > 0) {
+            processingFee = input.principalAmount().multiply(input.processingFeePercent())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        }
 
         BigDecimal adminFee = input.adminFeeAmount() != null ? input.adminFeeAmount() : BigDecimal.ZERO;
 
