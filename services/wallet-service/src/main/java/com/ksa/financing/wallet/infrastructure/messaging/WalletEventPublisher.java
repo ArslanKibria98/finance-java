@@ -1,6 +1,7 @@
 package com.ksa.financing.wallet.infrastructure.messaging;
 
 import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.model.WalletTransfer;
 import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -28,6 +29,10 @@ public class WalletEventPublisher implements EventPublisherPort {
 
     private static final String TOPIC_WALLET_CREATED = "islamic-financing.wallet.wallet-created";
     private static final String TOPIC_TOP_UP_COMPLETED = "islamic-financing.wallet.top-up-completed";
+    private static final String TOPIC_TRANSFER_INITIATED = "financing.wallet.transfer.initiated";
+    private static final String TOPIC_TRANSFER_COMPLETED = "financing.wallet.transfer.completed";
+    private static final String TOPIC_TRANSFER_FAILED    = "financing.wallet.transfer.failed";
+    private static final String TOPIC_TRANSFER_REVERSED  = "financing.wallet.transfer.reversed";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -79,6 +84,54 @@ public class WalletEventPublisher implements EventPublisherPort {
                     } else {
                         log.info("Successfully published top-up-completed event for wallet: {} offset: {}",
                                 wallet.getId(), result.getRecordMetadata().offset());
+                    }
+                });
+    }
+
+    @Override
+    public void publishTransferInitiated(WalletTransfer t) {
+        publishTransferEvent(TOPIC_TRANSFER_INITIATED, "TRANSFER_INITIATED", t);
+    }
+
+    @Override
+    public void publishTransferCompleted(WalletTransfer t) {
+        publishTransferEvent(TOPIC_TRANSFER_COMPLETED, "TRANSFER_COMPLETED", t);
+    }
+
+    @Override
+    public void publishTransferFailed(WalletTransfer t) {
+        publishTransferEvent(TOPIC_TRANSFER_FAILED, "TRANSFER_FAILED", t);
+    }
+
+    @Override
+    public void publishTransferReversed(WalletTransfer t) {
+        publishTransferEvent(TOPIC_TRANSFER_REVERSED, "TRANSFER_REVERSED", t);
+    }
+
+    private void publishTransferEvent(String topic, String eventType, WalletTransfer t) {
+        Map<String, Object> event = new HashMap<>();
+        event.put("eventType", eventType);
+        event.put("transferId", t.getId().toString());
+        event.put("transferNumber", t.getTransferNumber());
+        event.put("tenantId", t.getTenantId() != null ? t.getTenantId().toString() : null);
+        event.put("sourceWalletId", t.getSourceWalletId() != null ? t.getSourceWalletId().toString() : null);
+        event.put("destinationWalletId", t.getDestinationWalletId() != null ? t.getDestinationWalletId().toString() : null);
+        event.put("amount", t.getAmount() != null ? t.getAmount().toString() : null);
+        event.put("feeAmount", t.getFeeAmount() != null ? t.getFeeAmount().toString() : null);
+        event.put("currency", t.getCurrency());
+        event.put("status", t.getStatus() != null ? t.getStatus().name() : null);
+        event.put("errorCode", t.getErrorCode());
+        event.put("timestamp", Instant.now().toString());
+
+        log.info("Publishing {} event topic={} transferId={}", eventType, topic, t.getId());
+
+        kafkaTemplate.send(topic, t.getId().toString(), event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish {} event transferId={}", eventType, t.getId(), ex);
+                    } else {
+                        log.debug("Published {} event transferId={} offset={}",
+                                eventType, t.getId(), result.getRecordMetadata().offset());
                     }
                 });
     }

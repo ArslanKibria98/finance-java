@@ -7,6 +7,7 @@ import com.ksa.financing.customer.application.dto.Customer360Response;
 import com.ksa.financing.customer.application.dto.CustomerResponse;
 import com.ksa.financing.customer.application.dto.UpdateCustomerRequest;
 import com.ksa.financing.customer.application.dto.UpdateMyProfileRequest;
+import com.ksa.financing.customer.application.dto.PepAnswerResponse;
 import com.ksa.financing.customer.application.dto.SubmitPepAnswerRequest;
 import com.ksa.financing.customer.application.usecase.GetCustomer360Service;
 import com.ksa.financing.customer.domain.model.BankAccount;
@@ -25,6 +26,8 @@ import com.ksa.financing.customer.domain.port.out.EmploymentInfoRepository;
 import com.ksa.financing.customer.domain.port.out.WalletPort;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.storage.model.FileCategory;
 import com.ksa.financing.storage.model.FileUploadRequest;
 import com.ksa.financing.storage.port.FileStoragePort;
@@ -385,9 +388,10 @@ public class CustomerController {
     @GetMapping
     @Operation(summary = "List all customers", description = "Retrieves customers. super_admin sees all tenants, other roles see only their tenant. Optionally filter by lifecycleStage or kycStatus.")
     @ApiResponse(responseCode = "200", description = "Customers retrieved")
-    public ResponseEntity<List<CustomerResponse>> listCustomers(
+    public PageResponse<CustomerResponse> listCustomers(
             @org.springframework.web.bind.annotation.RequestParam(required = false) String lifecycleStage,
             @org.springframework.web.bind.annotation.RequestParam(required = false) String kycStatus,
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         boolean isSuperAdmin = isSuperAdmin(jwt);
@@ -395,24 +399,20 @@ public class CustomerController {
         log.info("Listing customers - superAdmin: {}, tenant: {}, lifecycleStage: {}, kycStatus: {}",
                 isSuperAdmin, tenantId, lifecycleStage, kycStatus);
 
-        List<Customer> customers;
+        PageResponse<Customer> customers;
         if (lifecycleStage != null && !lifecycleStage.isBlank()) {
             LifecycleStage stage = LifecycleStage.valueOf(lifecycleStage.toUpperCase());
-            customers = getCustomerUseCase.getByLifecycleStage(tenantId, stage);
+            customers = getCustomerUseCase.getByLifecycleStage(tenantId, stage, pageQuery);
         } else if (kycStatus != null && !kycStatus.isBlank()) {
             KycStatus status = KycStatus.valueOf(kycStatus.toUpperCase());
-            customers = getCustomerUseCase.getByKycStatus(tenantId, status);
+            customers = getCustomerUseCase.getByKycStatus(tenantId, status, pageQuery);
         } else if (isSuperAdmin) {
-            customers = getCustomerUseCase.getAll();
+            customers = getCustomerUseCase.getAll(pageQuery);
         } else {
-            customers = getCustomerUseCase.getAllByTenant(tenantId);
+            customers = getCustomerUseCase.getAllByTenant(tenantId, pageQuery);
         }
 
-        List<CustomerResponse> responses = customers.stream()
-                .sorted(java.util.Comparator.comparing(Customer::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
-                .map(this::toResponse)
-                .toList();
-        return ResponseEntity.ok(responses);
+        return customers.map(this::toResponse);
     }
 
     @SecuredEndpoint(obj = "profiles.me", act = "update")
@@ -546,7 +546,7 @@ public class CustomerController {
             description = "Captures post-login PEP/EDD answers and marks pepStatus as COMPLETED")
     @ApiResponse(responseCode = "200", description = "PEP answers submitted successfully")
     @ApiResponse(responseCode = "404", description = "Customer not found")
-    public ResponseEntity<CustomerResponse> submitPepAnswer(
+    public ResponseEntity<PepAnswerResponse> submitPepAnswer(
             @PathVariable UUID id,
             @Valid @RequestBody SubmitPepAnswerRequest request,
             @AuthenticationPrincipal Jwt jwt) {
@@ -576,7 +576,11 @@ public class CustomerController {
 
         submitPepAnswerUseCase.submit(tenantId, id, command);
         Customer customer = getCustomerUseCase.getById(tenantId, id);
-        return ResponseEntity.ok(toResponse(customer));
+        return ResponseEntity.ok(PepAnswerResponse.of(
+                customer.getId(),
+                customer.isPepFlag(),
+                customer.getPepStatus() != null ? customer.getPepStatus().name() : null
+        ));
     }
 
     @SecuredEndpoint(obj = "customers.kyc-status", act = "update")
@@ -791,19 +795,42 @@ public class CustomerController {
     }
 
     private BankAccountResponse toBankAccountResponse(BankAccount account) {
+        String iban = account.getIban();
+        String maskedIban = iban != null && iban.length() > 4
+                ? "****" + iban.substring(iban.length() - 4)
+                : iban;
         return new BankAccountResponse(
                 account.getId(),
                 account.getBankName(),
                 account.getBankCode(),
-                account.getIban(),
+                account.getBankName(),
+                resolveNameAr(account.getBankCode(), account.getBankName()),
+                iban,
+                maskedIban,
                 account.getAccountHolderName(),
                 account.getAccountType(),
                 account.isPrimary(),
                 account.isSalaryAccount(),
+                account.isSalaryAccount(),
                 account.getStatus() != null ? account.getStatus().name() : null,
                 account.getVerifiedAt(),
-                account.getCreatedAt()
+                account.getCreatedAt(),
+                0
         );
+    }
+
+    private static String resolveNameAr(String code, String name) {
+        if ("80".equals(code) || "Al Rajhi Bank".equals(name)) return "بنك الراجحي";
+        if ("10".equals(code)) return "البنك الأهلي السعودي";
+        if ("15".equals(code) || "Al Bilad Bank".equals(name)) return "بنك البلاد";
+        if ("05".equals(code) || "Al Inma Bank".equals(name)) return "بنك الإنماء";
+        if ("30".equals(code) || "Arab National Bank".equals(name)) return "البنك العربي";
+        if ("60".equals(code) || "Bank Al Jazira".equals(name)) return "بنك الجزيرة";
+        if ("76".equals(code) || "Bank Muscat".equals(name)) return "بنك مسقط";
+        if ("55".equals(code) || "Banque Saudi Fransi".equals(name)) return "البنك السعودي الفرنسي";
+        if ("95".equals(code) || "Emirates Bank".equals(name)) return "البنك الإماراتي";
+        if ("90".equals(code) || "Gulf International Bank".equals(name)) return "بنك الخليج";
+        return null;
     }
 
     private EmploymentInfoResponse toEmploymentResponse(EmploymentInfo info) {
@@ -842,14 +869,19 @@ public class CustomerController {
             UUID id,
             String bankName,
             String bankCode,
+            String nameEn,
+            String nameAr,
             String iban,
+            String maskedIban,
             String accountHolderName,
             String accountType,
             boolean isPrimary,
             boolean isSalaryAccount,
+            boolean salaryAccount,
             String status,
             java.time.Instant verifiedAt,
-            java.time.Instant createdAt
+            java.time.Instant createdAt,
+            int sortOrder
     ) {}
 
     public record CustomerProfileResponse(

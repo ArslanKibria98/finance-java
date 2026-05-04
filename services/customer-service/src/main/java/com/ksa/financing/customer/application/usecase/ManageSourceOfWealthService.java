@@ -6,13 +6,14 @@ import com.ksa.financing.customer.domain.port.out.SourceOfWealthRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -79,13 +80,13 @@ public class ManageSourceOfWealthService implements ManageSourceOfWealthUseCase 
     }
 
     @Override
-    public List<SourceOfWealthOption> getAll(UUID tenantId) {
-        return repository.findAllByTenantId(tenantId);
+    public PageResponse<SourceOfWealthOption> getAll(UUID tenantId, PageQuery pageQuery) {
+        return repository.findAllByTenantId(tenantId, pageQuery);
     }
 
     @Override
-    public List<SourceOfWealthOption> getActive(UUID tenantId) {
-        return repository.findActiveByTenantId(tenantId);
+    public PageResponse<SourceOfWealthOption> getActive(UUID tenantId, PageQuery pageQuery) {
+        return repository.findActiveByTenantId(tenantId, pageQuery);
     }
 
     @Override

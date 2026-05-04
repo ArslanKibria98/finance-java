@@ -3,6 +3,8 @@ package com.ksa.financing.risk.adapter.rest.controller;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.audit.AuditEntry;
 import com.ksa.financing.risk.domain.model.audit.AuditEntityType;
 import com.ksa.financing.risk.domain.port.in.QueryAuditTrailUseCase;
@@ -30,45 +32,49 @@ public class AuditTrailController {
     @SecuredEndpoint(obj = "risk.audit", act = "read")
     @GetMapping("/entity/{entityType}/{entityId}")
     @Operation(summary = "Get audit trail for a specific entity")
-    public List<AuditEntry> getByEntity(
+    public PageResponse<AuditEntry> getByEntity(
             @PathVariable String entityType,
             @PathVariable UUID entityId,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return queryAuditTrailUseCase.getByEntity(tenantId, AuditEntityType.valueOf(entityType), entityId);
+        return queryAuditTrailUseCase.getByEntity(tenantId, AuditEntityType.valueOf(entityType), entityId, query);
     }
 
     @SecuredEndpoint(obj = "risk.audit", act = "read")
     @GetMapping("/actor/{actorId}")
     @Operation(summary = "Get audit trail for a specific actor within date range")
-    public List<AuditEntry> getByActor(
+    public PageResponse<AuditEntry> getByActor(
             @PathVariable UUID actorId,
             @RequestParam Instant from,
             @RequestParam Instant to,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return queryAuditTrailUseCase.getByActor(tenantId, actorId, from, to);
+        return queryAuditTrailUseCase.getByActor(tenantId, actorId, from, to, query);
     }
 
     @SecuredEndpoint(obj = "risk.audit", act = "read")
     @GetMapping("/date-range")
     @Operation(summary = "Get audit trail within date range")
-    public List<AuditEntry> getByDateRange(
+    public PageResponse<AuditEntry> getByDateRange(
             @RequestParam Instant from,
             @RequestParam Instant to,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return queryAuditTrailUseCase.getByDateRange(tenantId, from, to);
+        return queryAuditTrailUseCase.getByDateRange(tenantId, from, to, query);
     }
 
     @SecuredEndpoint(obj = "risk.audit", act = "read")
     @GetMapping("/correlation/{correlationId}")
     @Operation(summary = "Get audit trail by correlation ID")
-    public List<AuditEntry> getByCorrelationId(
+    public PageResponse<AuditEntry> getByCorrelationId(
             @PathVariable String correlationId,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return queryAuditTrailUseCase.getByCorrelationId(tenantId, correlationId);
+        return queryAuditTrailUseCase.getByCorrelationId(tenantId, correlationId, query);
     }
 
     private UUID extractTenantId(Jwt jwt) {

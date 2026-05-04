@@ -110,6 +110,15 @@ public class WebConfig {
     }
 
     @Bean
+    @org.springframework.context.annotation.Primary
+    public RestTemplate restTemplate() {
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000);
+        factory.setReadTimeout(15000);
+        return new RestTemplate(factory);
+    }
+
+    @Bean
     public RestTemplate fineractRestTemplate() {
         try {
             // Trust all certificates — Fineract uses self-signed cert in dev/staging

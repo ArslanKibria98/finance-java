@@ -53,6 +53,7 @@ public interface LoanRescheduleWorkflow {
             BigDecimal writeOffAmount,     // for RESTRUCTURING
             BigDecimal profitWaiverAmount, // for RESTRUCTURING
             BigDecimal outstandingPrincipal,
+            String attachmentUrl,
             String idempotencyKey,
             String createdBy
     ) {}

@@ -2,6 +2,8 @@ package com.ksa.financing.risk.application.usecase;
 
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.lov.LovEntry;
 import com.ksa.financing.risk.domain.model.lov.LovSet;
 import com.ksa.financing.risk.domain.port.in.ManageLovUseCase;
@@ -13,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -75,14 +76,14 @@ public class ManageLovService implements ManageLovUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LovSet> getAllLovSets(UUID tenantId) {
-        return lovSetRepository.findAllByTenantId(tenantId);
+    public PageResponse<LovSet> getAllLovSets(UUID tenantId, PageQuery pageQuery) {
+        return lovSetRepository.findAllByTenantId(tenantId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<LovSet> getActiveLovSets(UUID tenantId) {
-        return lovSetRepository.findActiveByTenantId(tenantId);
+    public PageResponse<LovSet> getActiveLovSets(UUID tenantId, PageQuery pageQuery) {
+        return lovSetRepository.findActiveByTenantId(tenantId, pageQuery);
     }
 
     @Override
@@ -148,14 +149,14 @@ public class ManageLovService implements ManageLovUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LovEntry> getEntriesByLovSet(UUID tenantId, UUID lovSetId) {
-        return lovEntryRepository.findByLovSetId(tenantId, lovSetId);
+    public PageResponse<LovEntry> getEntriesByLovSet(UUID tenantId, UUID lovSetId, PageQuery pageQuery) {
+        return lovEntryRepository.findByLovSetId(tenantId, lovSetId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<LovEntry> getActiveEntriesByLovSet(UUID tenantId, UUID lovSetId) {
-        return lovEntryRepository.findActiveByLovSetId(tenantId, lovSetId);
+    public PageResponse<LovEntry> getActiveEntriesByLovSet(UUID tenantId, UUID lovSetId, PageQuery pageQuery) {
+        return lovEntryRepository.findActiveByLovSetId(tenantId, lovSetId, pageQuery);
     }
 
     @Override

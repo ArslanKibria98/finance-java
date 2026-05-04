@@ -4,6 +4,7 @@ import com.ksa.financing.lending.domain.model.ApplicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
 
 /**
@@ -110,6 +111,67 @@ public record LoanApplicationStepInfo(
     }
 
     /**
+     * Builds step list for workflow statuses that may include non-enum values.
+     * Used by tracker/signal responses where workflow can emit integration-specific states.
+     */
+    public static List<LoanApplicationStepInfo> buildSteps(String currentStatus) {
+        String normalizedStatus = normalizeStatus(currentStatus);
+        if (normalizedStatus == null) {
+            return buildSteps((ApplicationStatus) null);
+        }
+
+        if ("MANUAL_REVIEW".equals(normalizedStatus)) {
+            // User journey is completed and submitted; underwriting decision is pending internally.
+            return List.of(
+                    new LoanApplicationStepInfo(1, "BASIC_INFORMATION", "Basic Information",
+                            "Select product, amount, purpose of finance and tenure", "completed"),
+                    new LoanApplicationStepInfo(2, "ADD_BANK_ACCOUNT", "Add Bank Account",
+                            "Link your bank account for verification and disbursement", "completed"),
+                    new LoanApplicationStepInfo(3, "ELIGIBILITY_CHECK", "Eligibility Check",
+                            "Review your eligibility based on credit and affordability", "completed"),
+                    new LoanApplicationStepInfo(4, "ACCEPT_OFFER", "Accept Offer",
+                            "Review and accept the financing offer with profit rate and schedule", "completed"),
+                    new LoanApplicationStepInfo(5, "SIGN_CONTRACT", "Sign Contract",
+                            "Review and sign the financing contract", "completed"),
+                    new LoanApplicationStepInfo(6, "OTP_VERIFICATION", "OTP Verification",
+                            "Verify your identity with a one-time password", "completed"),
+                    new LoanApplicationStepInfo(7, "CALL_VERIFICATION", "Call Verification",
+                            "Authenticate your identity by receiving a verification call", "completed"),
+                    new LoanApplicationStepInfo(8, "FUNDS_TRANSFER", "Funds Transfer",
+                            "Loan account created and amount transferred to your bank account", "pending")
+            );
+        }
+
+        if ("AUTO_APPROVED".equals(normalizedStatus) || "MANUALLY_APPROVED".equals(normalizedStatus)) {
+            // Customer journey is complete; system is processing post-approval steps.
+            return List.of(
+                    new LoanApplicationStepInfo(1, "BASIC_INFORMATION", "Basic Information",
+                            "Select product, amount, purpose of finance and tenure", "completed"),
+                    new LoanApplicationStepInfo(2, "ADD_BANK_ACCOUNT", "Add Bank Account",
+                            "Link your bank account for verification and disbursement", "completed"),
+                    new LoanApplicationStepInfo(3, "ELIGIBILITY_CHECK", "Eligibility Check",
+                            "Review your eligibility based on credit and affordability", "completed"),
+                    new LoanApplicationStepInfo(4, "ACCEPT_OFFER", "Accept Offer",
+                            "Review and accept the financing offer with profit rate and schedule", "completed"),
+                    new LoanApplicationStepInfo(5, "SIGN_CONTRACT", "Sign Contract",
+                            "Review and sign the financing contract", "completed"),
+                    new LoanApplicationStepInfo(6, "OTP_VERIFICATION", "OTP Verification",
+                            "Verify your identity with a one-time password", "completed"),
+                    new LoanApplicationStepInfo(7, "CALL_VERIFICATION", "Call Verification",
+                            "Authenticate your identity by receiving a verification call", "completed"),
+                    new LoanApplicationStepInfo(8, "FUNDS_TRANSFER", "Funds Transfer",
+                            "Loan account created and amount transferred to your bank account", "pending")
+            );
+        }
+
+        try {
+            return buildSteps(ApplicationStatus.valueOf(normalizedStatus));
+        } catch (IllegalArgumentException e) {
+            return buildSteps((ApplicationStatus) null);
+        }
+    }
+
+    /**
      * Builds step list for a REJECTED application.
      * Marks completed steps, the failed step, and remaining pending steps.
      */
@@ -173,6 +235,39 @@ public record LoanApplicationStepInfo(
             case EXPIRED -> "APPLICATION_EXPIRED";
             case EXPIRED_RESUMABLE -> "RESUME_CONTRACT_SIGNING";
         };
+    }
+
+    /**
+     * Resolves next action for workflow statuses that may include non-enum values.
+     */
+    public static String getNextAction(String currentStatus) {
+        String normalizedStatus = normalizeStatus(currentStatus);
+        if (normalizedStatus == null) {
+            return "START_APPLICATION";
+        }
+
+        if ("MANUAL_REVIEW".equals(normalizedStatus)) {
+            // User has completed submission; system is waiting for underwriter/admin decision.
+            return "DONE";
+        }
+
+        if ("AUTO_APPROVED".equals(normalizedStatus) || "MANUALLY_APPROVED".equals(normalizedStatus)) {
+            return "AWAIT_DISBURSEMENT";
+        }
+
+        try {
+            return getNextAction(ApplicationStatus.valueOf(normalizedStatus));
+        } catch (IllegalArgumentException e) {
+            // Unknown status: avoid resetting journey to basic info.
+            return "AWAIT_STATUS_UPDATE";
+        }
+    }
+
+    private static String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        return status.trim().toUpperCase(Locale.ROOT);
     }
 
     /**

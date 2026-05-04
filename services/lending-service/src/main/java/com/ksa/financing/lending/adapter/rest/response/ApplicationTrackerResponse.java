@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
+import com.ksa.financing.lending.domain.model.LoanApplicationAggregate;
 
 @Schema(description = "BRD UC#03 — Finance Application Tracker")
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -66,10 +68,21 @@ public record ApplicationTrackerResponse(
             ApplicationStatusInfo statusInfo
     ) {
         ApplicationStatus appStatus = parseStatus(currentStatusStr);
-        var steps = LoanApplicationStepInfo.buildSteps(appStatus);
-        var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
-        var overallStatus = resolveOverallStatus(appStatus);
-        var preQual = PreQualificationData.calculate(requestedAmount, tenureMonths, profitRate);
+        var steps = LoanApplicationStepInfo.buildSteps(currentStatusStr);
+        var nextAction = LoanApplicationStepInfo.getNextAction(currentStatusStr);
+        var overallStatus = resolveOverallStatus(currentStatusStr, appStatus);
+        
+        var preQual = (statusInfo != null && statusInfo.offer() != null)
+                ? PreQualificationData.fromOffer(statusInfo.offer())
+                : PreQualificationData.calculateFinance(
+                        requestedAmount, 
+                        tenureMonths, 
+                        profitRate,
+                        statusInfo != null && statusInfo.basicInfo() != null ? statusInfo.basicInfo().processingFeePercent() : null,
+                        statusInfo != null && statusInfo.basicInfo() != null ? statusInfo.basicInfo().processingFeeAmount() : null,
+                        statusInfo != null && statusInfo.basicInfo() != null ? statusInfo.basicInfo().adminFeeAmount() : null
+                );
+        
         var workflowState = statusInfo != null ? StepSignalResponse.WorkflowState.from(statusInfo) : null;
 
         return new ApplicationTrackerResponse(
@@ -78,6 +91,37 @@ public record ApplicationTrackerResponse(
                 currentStatusStr, overallStatus, nextAction,
                 failureReason, steps, preQual, createdAt, lastUpdatedAt,
                 workflowState
+        );
+    }
+
+    public static ApplicationTrackerResponse build(LoanApplicationAggregate aggregate) {
+        if (aggregate == null) return null;
+
+        var currentStatusStr = aggregate.getStatus().name();
+        var appStatus = aggregate.getStatus();
+        var steps = LoanApplicationStepInfo.buildSteps(currentStatusStr);
+        var nextAction = LoanApplicationStepInfo.getNextAction(currentStatusStr);
+        var overallStatus = resolveOverallStatus(currentStatusStr, appStatus);
+
+        // Prefer offered/accepted total payable from aggregate
+        BigDecimal totalPayable = aggregate.getOfferedTotalPayable();
+
+        var preQual = PreQualificationData.fromAggregate(aggregate);
+
+        return new ApplicationTrackerResponse(
+                aggregate.getId().getValue().toString(),
+                aggregate.getApplicationNumber(),
+                aggregate.getRequestedAmount(),
+                totalPayable,
+                currentStatusStr,
+                overallStatus,
+                nextAction,
+                null, // failureReason
+                steps,
+                preQual,
+                aggregate.getCreatedAt() != null ? aggregate.getCreatedAt().toString() : null,
+                aggregate.getUpdatedAt() != null ? aggregate.getUpdatedAt().toString() : null,
+                null // workflowState not available for DB-based fallback
         );
     }
 
@@ -111,7 +155,7 @@ public record ApplicationTrackerResponse(
     private static ApplicationStatus parseStatus(String status) {
         if (status == null) return null;
         try {
-            return ApplicationStatus.valueOf(status);
+            return ApplicationStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -127,5 +171,12 @@ public record ApplicationTrackerResponse(
             case EXPIRED_RESUMABLE -> "expired_resumable";
             default -> "active";
         };
+    }
+
+    private static String resolveOverallStatus(String rawStatus, ApplicationStatus status) {
+        if (rawStatus != null && "MANUAL_REVIEW".equals(rawStatus.trim().toUpperCase(Locale.ROOT))) {
+            return "active";
+        }
+        return resolveOverallStatus(status);
     }
 }

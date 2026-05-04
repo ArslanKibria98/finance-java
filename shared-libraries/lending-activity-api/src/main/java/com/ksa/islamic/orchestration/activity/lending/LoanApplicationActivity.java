@@ -118,6 +118,9 @@ public interface LoanApplicationActivity {
             int requestedTenureMonths,
             String purposeOfFinance,
             BigDecimal profitRate,
+            BigDecimal processingFeePercent,
+            BigDecimal processingFeeAmount,
+            BigDecimal adminFeeAmount,
             String partnerId,
             String leadId,
             String updatedBy

@@ -1,5 +1,7 @@
 package com.ksa.financing.identity.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.identity.domain.model.Permission;
 
 import java.util.List;
@@ -13,7 +15,7 @@ public interface ManagePermissionUseCase {
 
     Permission create(CreatePermissionCommand command);
     Permission getById(UUID tenantId, UUID permissionId);
-    List<Permission> listByTenant(UUID tenantId);
+    PageResponse<Permission> listByTenant(UUID tenantId, PageQuery query);
     List<Permission> listByRole(UUID tenantId, UUID roleId);
     Permission update(UUID tenantId, UUID permissionId, UpdatePermissionCommand command);
     void assignToRole(UUID tenantId, UUID roleId, UUID permissionId);

@@ -2,15 +2,16 @@ package com.ksa.financing.fraud.domain.port.in;
 
 import com.ksa.financing.fraud.domain.model.rule.FraudRule;
 import com.ksa.financing.fraud.domain.model.rule.FraudRuleId;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageFraudRulesUseCase {
 
-    List<FraudRule> getAllRules(UUID tenantId);
+    PageResponse<FraudRule> getAllRules(UUID tenantId, PageQuery pageQuery);
 
-    List<FraudRule> getActiveRules(UUID tenantId);
+    PageResponse<FraudRule> getActiveRules(UUID tenantId, PageQuery pageQuery);
 
     FraudRule getRule(UUID tenantId, FraudRuleId ruleId);
 

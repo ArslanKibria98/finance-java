@@ -1,5 +1,7 @@
 package com.ksa.financing.risk.adapter.rest.controller;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.assessment.AssessmentAnswer;
 import com.ksa.financing.risk.domain.model.assessment.AssessmentSession;
 import com.ksa.financing.risk.domain.model.assessment.ScoreBreakdown;
@@ -93,12 +95,13 @@ public class AssessmentController {
 
     @SecuredEndpoint(obj = "risk.assessment", act = "read")
     @GetMapping("/entity/{entityReference}")
-    @Operation(summary = "Get all assessment sessions for an entity")
-    public List<AssessmentSession> getSessionsByEntity(
+    @Operation(summary = "Get all assessment sessions for an entity (paginated)")
+    public PageResponse<AssessmentSession> getSessionsByEntity(
             @PathVariable String entityReference,
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = isSuperAdmin(jwt) ? null : extractTenantId(jwt);
-        return runAssessmentUseCase.getSessionsByEntity(tenantId, entityReference);
+        return runAssessmentUseCase.getSessionsByEntity(tenantId, entityReference, pageQuery);
     }
 
     @SecuredEndpoint(obj = "risk.assessment", act = "read")

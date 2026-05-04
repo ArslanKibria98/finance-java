@@ -7,6 +7,7 @@ import com.ksa.financing.wallet.domain.model.TopUpTransaction;
 import com.ksa.financing.wallet.domain.model.Wallet;
 import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.GetBalanceUseCase;
+import com.ksa.financing.wallet.domain.port.in.GetTransactionHistoryUseCase;
 import com.ksa.financing.wallet.domain.port.in.TopUpUseCase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
@@ -36,6 +37,7 @@ public class WalletController {
     private final CreateWalletUseCase createWalletUseCase;
     private final GetBalanceUseCase getBalanceUseCase;
     private final TopUpUseCase topUpUseCase;
+    private final GetTransactionHistoryUseCase getTransactionHistoryUseCase;
 
     @SecuredEndpoint(obj = "wallets", act = "read")
     @GetMapping("/by-customer/{customerId}")
@@ -64,6 +66,20 @@ public class WalletController {
         return ResponseEntity.ok(toResponse(wallet));
     }
 
+    @SecuredEndpoint(obj = "wallets", act = "read")
+    @GetMapping("/balance")
+    @Operation(summary = "Get wallet balance by mobile number")
+    public ResponseEntity<WalletResponse> getByMobile(
+            @RequestParam("mobile") String mobile,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Getting balance for mobile: {}", mobile);
+
+        Wallet wallet = getBalanceUseCase.getByMobile(tenantId, mobile);
+        return ResponseEntity.ok(toResponse(wallet));
+    }
+
     @SecuredEndpoint(obj = "wallets", act = "manage")
     @PostMapping("/{walletId}/top-up")
     @Operation(summary = "Top up wallet balance")
@@ -85,6 +101,18 @@ public class WalletController {
         ));
 
         return ResponseEntity.ok(toTopUpResponse(transaction));
+    }
+
+    @SecuredEndpoint(obj = "wallets", act = "read")
+    @GetMapping("/{walletId}/transactions")
+    @Operation(summary = "Get unified transaction history (Fineract txs + transfer counterparty info)")
+    public ResponseEntity<GetTransactionHistoryUseCase.TransactionHistory> getTransactions(
+            @PathVariable UUID walletId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
+        extractTenantId(jwt);
+        return ResponseEntity.ok(getTransactionHistoryUseCase.getHistory(walletId, page, size));
     }
 
     @SecuredEndpoint(obj = "wallets", act = "create")

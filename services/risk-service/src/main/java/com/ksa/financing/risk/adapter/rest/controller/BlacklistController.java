@@ -1,6 +1,8 @@
 package com.ksa.financing.risk.adapter.rest.controller;
 
 import com.ksa.financing.domain.valueobject.NationalId;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.adapter.rest.request.BlacklistMobileRequest;
 import com.ksa.financing.risk.adapter.rest.request.BlacklistNidRequest;
 import com.ksa.financing.risk.domain.model.MobileBlacklistEntry;
@@ -19,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -71,10 +72,12 @@ public class BlacklistController {
 
     @SecuredEndpoint(obj = "risk.blacklist", act = "read")
     @GetMapping("/nid")
-    @Operation(summary = "List all NID blacklist entries")
-    public List<NidBlacklistEntry> listNidBlacklist(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all NID blacklist entries (paginated)")
+    public PageResponse<NidBlacklistEntry> listNidBlacklist(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return manageBlacklistUseCase.listNidBlacklist();
+        return manageBlacklistUseCase.listNidBlacklist(pageQuery);
     }
 
     // ===== MOBILE BLACKLIST =====
@@ -114,10 +117,12 @@ public class BlacklistController {
 
     @SecuredEndpoint(obj = "risk.blacklist", act = "read")
     @GetMapping("/mobile")
-    @Operation(summary = "List all mobile blacklist entries")
-    public List<MobileBlacklistEntry> listMobileBlacklist(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all mobile blacklist entries (paginated)")
+    public PageResponse<MobileBlacklistEntry> listMobileBlacklist(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return manageBlacklistUseCase.listMobileBlacklist();
+        return manageBlacklistUseCase.listMobileBlacklist(pageQuery);
     }
 
     private UUID extractTenantId(Jwt jwt) {

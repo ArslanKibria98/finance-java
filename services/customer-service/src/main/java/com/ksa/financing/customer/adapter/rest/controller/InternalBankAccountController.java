@@ -89,18 +89,27 @@ public class InternalBankAccountController {
 
         BankAccount bankAccount = manageBankAccountsUseCase.addBankAccount(tenantId, customerId, command);
 
+        String iban = bankAccount.getIban();
+        String maskedIban = iban != null && iban.length() > 4
+                ? "****" + iban.substring(iban.length() - 4)
+                : iban;
         var response = new BankAccountResponse(
                 bankAccount.getId(),
                 bankAccount.getBankName(),
                 bankAccount.getBankCode(),
-                bankAccount.getIban(),
+                bankAccount.getBankName(),
+                com.ksa.financing.customer.application.mapper.BankNameAr.lookup(bankAccount.getBankCode(), bankAccount.getBankName()),
+                iban,
+                maskedIban,
                 bankAccount.getAccountHolderName(),
                 bankAccount.getAccountType(),
                 bankAccount.isPrimary(),
                 bankAccount.isSalaryAccount(),
+                bankAccount.isSalaryAccount(),
                 bankAccount.getStatus() != null ? bankAccount.getStatus().name() : "PENDING_VERIFICATION",
                 null,
-                bankAccount.getCreatedAt()
+                bankAccount.getCreatedAt(),
+                0
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

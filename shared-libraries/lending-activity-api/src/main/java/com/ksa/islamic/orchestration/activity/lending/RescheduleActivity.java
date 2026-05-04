@@ -92,7 +92,8 @@ public interface RescheduleActivity {
             BigDecimal outstandingPrincipal,
             int loanAgeMonths,
             int currentDpd,
-            int previousSkips
+            int previousSkips,
+            LocalDate currentMaturityDate
     ) {}
 
     record SaveRescheduleInput(
@@ -109,7 +110,11 @@ public interface RescheduleActivity {
             BigDecimal writeOffAmount,
             BigDecimal profitWaiverAmount,
             String workflowId,
-            String idempotencyKey
+            String attachmentUrl,
+            String idempotencyKey,
+            Integer oldTenureMonths,
+            BigDecimal oldInstallmentAmount,
+            LocalDate oldMaturityDate
     ) {}
 
     record GenerateScheduleInput(

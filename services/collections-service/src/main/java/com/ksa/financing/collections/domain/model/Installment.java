@@ -2,11 +2,13 @@ package com.ksa.financing.collections.domain.model;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
  * Installment entity — child of RepaymentScheduleAggregate.
- * Tracks scheduled vs paid amounts. Zero framework imports.
+ * Tracks scheduled vs paid amounts, late-penalty accrual + waivers,
+ * write-off eligibility + execution. Zero framework imports.
  */
 public class Installment {
 
@@ -21,8 +23,9 @@ public class Installment {
     private final BigDecimal principalAmount;
     private final BigDecimal profitAmount;
     private final BigDecimal feeAmount;
-    private BigDecimal latePenaltyAmount;  // accrued via DelinquencyEngine (LATE_PAYMENT rule, type=3)
-    private BigDecimal totalAmount;        // principal + profit + fee + latePenalty (refreshed on penalty tick)
+    private BigDecimal latePenaltyAmount;   // accrued via DelinquencyEngine (LATE_PAYMENT rule)
+    private BigDecimal waivedPenaltyAmount; // cumulative waived from latePenaltyAmount
+    private BigDecimal totalAmount;         // principal + profit + fee + latePenalty (refreshed on penalty tick)
 
     // Paid amounts (mutable)
     private BigDecimal paidPrincipal;
@@ -34,6 +37,17 @@ public class Installment {
     private InstallmentStatus status;
     private int dpd;
     private LocalDate paidDate;
+
+    // Write-off eligibility + execution
+    private boolean isEligibleForWriteOff;
+    private LocalDateTime eligibilityEvaluatedAt;
+    private BigDecimal writtenOffPrincipal;
+    private BigDecimal writtenOffProfit;
+    private BigDecimal writtenOffFee;
+    private BigDecimal writtenOffPenalty;
+    private LocalDate writeOffDate;
+    private String writeOffReason;
+    private UUID writtenOffBy;
 
     private Installment(UUID id, UUID tenantId, UUID scheduleId, UUID loanId,
                         int installmentNumber, LocalDate dueDate,
@@ -49,6 +63,7 @@ public class Installment {
         this.profitAmount = profitAmount;
         this.feeAmount = feeAmount;
         this.latePenaltyAmount = BigDecimal.ZERO;
+        this.waivedPenaltyAmount = BigDecimal.ZERO;
         this.totalAmount = principalAmount.add(profitAmount).add(feeAmount);
         this.paidPrincipal = BigDecimal.ZERO;
         this.paidProfit = BigDecimal.ZERO;
@@ -56,6 +71,10 @@ public class Installment {
         this.paidTotal = BigDecimal.ZERO;
         this.status = InstallmentStatus.SCHEDULED;
         this.dpd = 0;
+        this.writtenOffPrincipal = BigDecimal.ZERO;
+        this.writtenOffProfit = BigDecimal.ZERO;
+        this.writtenOffFee = BigDecimal.ZERO;
+        this.writtenOffPenalty = BigDecimal.ZERO;
     }
 
     public static Installment create(UUID tenantId, UUID scheduleId, UUID loanId,
@@ -99,34 +118,53 @@ public class Installment {
         return inst;
     }
 
+    /** Hydrates the write-off + waiver fields. Called from the persistence mapper. */
+    public void hydrateWriteOffState(boolean eligible, LocalDateTime evaluatedAt,
+                                     BigDecimal waivedPenalty,
+                                     BigDecimal woPrincipal, BigDecimal woProfit,
+                                     BigDecimal woFee, BigDecimal woPenalty,
+                                     LocalDate writeOffDate, String reason, UUID writtenOffBy) {
+        this.isEligibleForWriteOff = eligible;
+        this.eligibilityEvaluatedAt = evaluatedAt;
+        this.waivedPenaltyAmount = waivedPenalty != null ? waivedPenalty : BigDecimal.ZERO;
+        this.writtenOffPrincipal = woPrincipal != null ? woPrincipal : BigDecimal.ZERO;
+        this.writtenOffProfit = woProfit != null ? woProfit : BigDecimal.ZERO;
+        this.writtenOffFee = woFee != null ? woFee : BigDecimal.ZERO;
+        this.writtenOffPenalty = woPenalty != null ? woPenalty : BigDecimal.ZERO;
+        this.writeOffDate = writeOffDate;
+        this.writeOffReason = reason;
+        this.writtenOffBy = writtenOffBy;
+    }
+
     /**
      * Sets the late-payment penalty from the LATE_PAYMENT DelinquencyRule.
      * Idempotent — overwrites the existing penalty with the new computed value.
-     * The penalty is tracked SEPARATELY from {@code totalAmount} so the scheduled
-     * installment total (principal+profit+fee) remains unchanged when a penalty
-     * accrues. The penalty appears only in the {@code latePenaltyAmount} field.
-     * Sharia: the penalty routes to the charity fund on collection (see
-     * DelinquencyRule.charityFundAccount).
+     * Penalty routes to the charity fund on collection (Sharia).
      */
     public void applyLatePenalty(BigDecimal penalty) {
-        if (status == InstallmentStatus.PAID || status == InstallmentStatus.WAIVED) {
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF) {
             return;
         }
         BigDecimal next = penalty != null ? penalty : BigDecimal.ZERO;
         if (next.compareTo(this.latePenaltyAmount) == 0) {
             return;
         }
+        BigDecimal diff = next.subtract(this.latePenaltyAmount);
+        this.totalAmount = this.totalAmount.add(diff);
         this.latePenaltyAmount = next;
     }
 
     /**
      * Applies a payment allocation to this installment.
      * Uses waterfall: fees first, then profit, then principal.
-     * Returns actual amount applied.
      */
     public BigDecimal applyAllocation(BigDecimal feeAlloc, BigDecimal profitAlloc, BigDecimal principalAlloc) {
-        if (status == InstallmentStatus.PAID || status == InstallmentStatus.WAIVED)
-            throw new IllegalStateException("Cannot apply payment to a fully paid or waived installment");
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF)
+            throw new IllegalStateException("Cannot apply payment to a fully paid, waived, or written-off installment");
 
         this.paidFee = this.paidFee.add(feeAlloc);
         this.paidProfit = this.paidProfit.add(profitAlloc);
@@ -134,7 +172,6 @@ public class Installment {
         BigDecimal applied = feeAlloc.add(profitAlloc).add(principalAlloc);
         this.paidTotal = this.paidTotal.add(applied);
 
-        // Update status
         BigDecimal outstanding = this.totalAmount.subtract(this.paidTotal);
         if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
             this.status = InstallmentStatus.PAID;
@@ -147,17 +184,35 @@ public class Installment {
     }
 
     /**
-     * Test-only hook to shift an installment's due date. Used by the admin test-support
-     * endpoint to backdate an installment and exercise the LATE_PAYMENT delinquency rule.
-     * Resets status to SCHEDULED so the engine can re-transition to DUE/OVERDUE based on
-     * the new date.
+     * Applies a penalty allocation to this installment.
      */
+    public BigDecimal applyPenaltyAllocation(BigDecimal penaltyAlloc) {
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF)
+            throw new IllegalStateException("Cannot apply payment to a fully paid, waived, or written-off installment");
+
+        this.paidTotal = this.paidTotal.add(penaltyAlloc);
+
+        BigDecimal outstanding = this.totalAmount.subtract(this.paidTotal);
+        if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            this.status = InstallmentStatus.PAID;
+            this.paidDate = LocalDate.now();
+        } else if (this.paidTotal.compareTo(BigDecimal.ZERO) > 0) {
+            this.status = InstallmentStatus.PARTIALLY_PAID;
+        }
+
+        return penaltyAlloc;
+    }
+
     public void changeDueDate(LocalDate newDueDate) {
         if (newDueDate == null) {
             throw new IllegalArgumentException("due date cannot be null");
         }
-        if (status == InstallmentStatus.PAID || status == InstallmentStatus.WAIVED) {
-            throw new IllegalStateException("Cannot change due date on a PAID or WAIVED installment");
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF) {
+            throw new IllegalStateException("Cannot change due date on a PAID, WAIVED, or WRITTEN_OFF installment");
         }
         this.dueDate = newDueDate;
         this.dpd = 0;
@@ -177,7 +232,9 @@ public class Installment {
     }
 
     public void markOverdue(int dpd) {
-        if (status != InstallmentStatus.PAID && status != InstallmentStatus.WAIVED) {
+        if (status != InstallmentStatus.PAID
+                && status != InstallmentStatus.WAIVED
+                && status != InstallmentStatus.WRITTEN_OFF) {
             this.status = InstallmentStatus.OVERDUE;
             this.dpd = dpd;
         }
@@ -186,14 +243,127 @@ public class Installment {
     public void waive() {
         if (status == InstallmentStatus.PAID)
             throw new IllegalStateException("Cannot waive an already paid installment");
+        if (status == InstallmentStatus.WRITTEN_OFF)
+            throw new IllegalStateException("Cannot waive a written-off installment");
         this.status = InstallmentStatus.WAIVED;
         this.paidDate = LocalDate.now();
     }
 
     public void defer() {
-        if (status == InstallmentStatus.PAID || status == InstallmentStatus.WAIVED)
-            throw new IllegalStateException("Cannot defer a paid or waived installment");
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF)
+            throw new IllegalStateException("Cannot defer a paid, waived, or written-off installment");
         this.status = InstallmentStatus.DEFERRED;
+    }
+
+    // ================== WRITE-OFF ELIGIBILITY ==================
+
+    /**
+     * Toggle the write-off eligibility flag. Called by {@code WriteOffEligibilityService}
+     * after evaluating the installment's DPD against the WRITE_OFFS DelinquencyRule.
+     */
+    public void setEligibleForWriteOff(boolean eligible) {
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF) {
+            this.isEligibleForWriteOff = false;
+            return;
+        }
+        this.isEligibleForWriteOff = eligible;
+        this.eligibilityEvaluatedAt = LocalDateTime.now();
+    }
+
+    // ================== PENALTY WAIVER ==================
+
+    /**
+     * Waives part or all of the accrued late penalty. Returns the amount actually waived.
+     * Safeguards:
+     *   - Cannot waive if status is PAID / WAIVED / WRITTEN_OFF
+     *   - Cannot waive more than the currently remaining penalty
+     */
+    public BigDecimal waivePenalty(BigDecimal amount) {
+        if (status == InstallmentStatus.PAID
+                || status == InstallmentStatus.WAIVED
+                || status == InstallmentStatus.WRITTEN_OFF) {
+            throw new IllegalStateException("Cannot waive penalty on a finalized installment");
+        }
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Waiver amount must be positive");
+        }
+        BigDecimal remainingPenalty = getRemainingPenalty();
+        if (remainingPenalty.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("No penalty remaining to waive");
+        }
+        BigDecimal actual = amount.min(remainingPenalty);
+        this.waivedPenaltyAmount = this.waivedPenaltyAmount.add(actual);
+        return actual;
+    }
+
+    public BigDecimal getRemainingPenalty() {
+        return latePenaltyAmount.subtract(waivedPenaltyAmount).max(BigDecimal.ZERO);
+    }
+
+    // ================== WRITE-OFF EXECUTION ==================
+
+    /**
+     * Marks the installment as WRITTEN_OFF and records the written-off amount
+     * breakdown. Safeguards:
+     *   - Must be in an overdue-compatible state (OVERDUE / PARTIALLY_PAID / DUE / GRACE_PERIOD / DEFERRED)
+     *   - Must be flagged as eligible by the evaluator (unless override=true)
+     *   - Idempotent: silently returns if already written-off
+     */
+    public WriteOffAmounts writeOff(String reason, UUID actorId, LocalDate asOf, boolean override) {
+        if (status == InstallmentStatus.WRITTEN_OFF) {
+            return new WriteOffAmounts(writtenOffPrincipal, writtenOffProfit,
+                    writtenOffFee, writtenOffPenalty);
+        }
+        if (status == InstallmentStatus.PAID || status == InstallmentStatus.WAIVED) {
+            throw new IllegalStateException("Cannot write off a PAID or WAIVED installment");
+        }
+        if (!override && !isEligibleForWriteOff) {
+            throw new IllegalStateException(
+                    "Installment is not eligible for write-off (delinquency threshold not met)");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Write-off reason is required");
+        }
+        if (actorId == null) {
+            throw new IllegalArgumentException("Actor id is required");
+        }
+
+        BigDecimal woPrincipal = getOutstandingPrincipal();
+        BigDecimal woProfit    = getOutstandingProfit();
+        BigDecimal woFee       = getOutstandingFee();
+        BigDecimal woPenalty   = getRemainingPenalty();
+
+        this.writtenOffPrincipal = woPrincipal;
+        this.writtenOffProfit    = woProfit;
+        this.writtenOffFee       = woFee;
+        this.writtenOffPenalty   = woPenalty;
+        this.writeOffDate        = asOf != null ? asOf : LocalDate.now();
+        this.writeOffReason      = reason;
+        this.writtenOffBy        = actorId;
+        this.status              = InstallmentStatus.WRITTEN_OFF;
+        this.isEligibleForWriteOff = false;
+
+        return new WriteOffAmounts(woPrincipal, woProfit, woFee, woPenalty);
+    }
+
+    /** Reverses a prior write-off (e.g., late recovery). Returns installment to OVERDUE. */
+    public void reverseWriteOff(int dpdAsOfReversal) {
+        if (status != InstallmentStatus.WRITTEN_OFF) {
+            throw new IllegalStateException("Can only reverse a WRITTEN_OFF installment");
+        }
+        this.writtenOffPrincipal = BigDecimal.ZERO;
+        this.writtenOffProfit    = BigDecimal.ZERO;
+        this.writtenOffFee       = BigDecimal.ZERO;
+        this.writtenOffPenalty   = BigDecimal.ZERO;
+        this.writeOffDate        = null;
+        this.writeOffReason      = null;
+        this.writtenOffBy        = null;
+        this.status              = InstallmentStatus.OVERDUE;
+        this.dpd                 = Math.max(0, dpdAsOfReversal);
     }
 
     public BigDecimal getOutstandingAmount() {
@@ -205,7 +375,7 @@ public class Installment {
     }
 
     public BigDecimal getOutstandingLatePenalty() {
-        return latePenaltyAmount;
+        return getRemainingPenalty();
     }
 
     public BigDecimal getLatePenaltyAmount() {
@@ -222,6 +392,10 @@ public class Installment {
 
     public boolean isFullyPaid() {
         return status == InstallmentStatus.PAID;
+    }
+
+    public boolean isWrittenOff() {
+        return status == InstallmentStatus.WRITTEN_OFF;
     }
 
     // Getters
@@ -242,4 +416,27 @@ public class Installment {
     public InstallmentStatus getStatus() { return status; }
     public int getDpd() { return dpd; }
     public LocalDate getPaidDate() { return paidDate; }
+
+    public boolean isEligibleForWriteOff() { return isEligibleForWriteOff; }
+    public LocalDateTime getEligibilityEvaluatedAt() { return eligibilityEvaluatedAt; }
+    public BigDecimal getWaivedPenaltyAmount() { return waivedPenaltyAmount; }
+    public BigDecimal getWrittenOffPrincipal() { return writtenOffPrincipal; }
+    public BigDecimal getWrittenOffProfit() { return writtenOffProfit; }
+    public BigDecimal getWrittenOffFee() { return writtenOffFee; }
+    public BigDecimal getWrittenOffPenalty() { return writtenOffPenalty; }
+    public LocalDate getWriteOffDate() { return writeOffDate; }
+    public String getWriteOffReason() { return writeOffReason; }
+    public UUID getWrittenOffBy() { return writtenOffBy; }
+
+    /** Amounts written off in a single write-off transaction. */
+    public record WriteOffAmounts(
+            BigDecimal principal,
+            BigDecimal profit,
+            BigDecimal fee,
+            BigDecimal penalty
+    ) {
+        public BigDecimal total() {
+            return principal.add(profit).add(fee).add(penalty);
+        }
+    }
 }

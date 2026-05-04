@@ -1,5 +1,7 @@
 package com.ksa.financing.identity.application.usecase;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.identity.domain.model.Permission;
 import com.ksa.financing.identity.domain.port.in.ManagePermissionUseCase;
 import com.ksa.financing.identity.domain.port.out.ModuleRepository;
@@ -70,8 +72,8 @@ public class ManagePermissionService implements ManagePermissionUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Permission> listByTenant(UUID tenantId) {
-        return permissionRepository.findAllByTenant(tenantId);
+    public PageResponse<Permission> listByTenant(UUID tenantId, PageQuery query) {
+        return permissionRepository.findAllByTenant(tenantId, query);
     }
 
     @Override

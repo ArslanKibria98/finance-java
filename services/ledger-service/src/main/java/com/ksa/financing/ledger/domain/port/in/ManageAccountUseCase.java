@@ -4,6 +4,8 @@ import com.ksa.financing.ledger.domain.model.AccountAggregate;
 import com.ksa.financing.ledger.domain.model.AccountId;
 import com.ksa.financing.ledger.domain.model.AccountType;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,7 +22,7 @@ public interface ManageAccountUseCase {
 
     AccountAggregate getByCode(UUID tenantId, String accountCode);
 
-    List<AccountAggregate> listByTenant(UUID tenantId);
+    PageResponse<AccountAggregate> listByTenant(UUID tenantId, PageQuery query);
 
     void deactivate(UUID tenantId, AccountId accountId);
 

@@ -1,8 +1,9 @@
 package com.ksa.financing.customer.domain.port.in;
 
 import com.ksa.financing.customer.domain.model.SourceOfFundsOption;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageSourceOfFundsUseCase {
@@ -10,8 +11,8 @@ public interface ManageSourceOfFundsUseCase {
     SourceOfFundsOption create(UUID tenantId, CreateSourceOfFundsCommand command);
     SourceOfFundsOption update(UUID tenantId, UUID id, UpdateSourceOfFundsCommand command);
     SourceOfFundsOption getById(UUID tenantId, UUID id);
-    List<SourceOfFundsOption> getAll(UUID tenantId);
-    List<SourceOfFundsOption> getActive(UUID tenantId);
+    PageResponse<SourceOfFundsOption> getAll(UUID tenantId, PageQuery pageQuery);
+    PageResponse<SourceOfFundsOption> getActive(UUID tenantId, PageQuery pageQuery);
     void deactivate(UUID tenantId, UUID id);
     void activate(UUID tenantId, UUID id);
     void delete(UUID tenantId, UUID id);

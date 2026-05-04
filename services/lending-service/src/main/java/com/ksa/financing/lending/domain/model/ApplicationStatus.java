@@ -47,8 +47,16 @@ public enum ApplicationStatus {
 
     public boolean canTransitionTo(ApplicationStatus target) {
         if (target == CANCELLED || target == EXPIRED) {
-            // Can cancel/expire from any non-terminal state
+            // Can cancel/expire from any state BEFORE disbursement
+            if (this == DISBURSING || this == APPROVED) {
+                return false;
+            }
             return !this.isTerminal();
+        }
+
+        // Allow reverting to editable steps from any non-terminal state (Go Back feature)
+        if ((target == BASIC_INFO_SUBMITTED || target == BANK_ACCOUNT_PENDING || target == DRAFT) && !this.isTerminal()) {
+            return true;
         }
 
         return switch (this) {

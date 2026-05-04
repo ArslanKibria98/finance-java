@@ -1,10 +1,11 @@
 package com.ksa.financing.customer.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.LifecycleStage;
 import com.ksa.financing.customer.domain.model.KycStatus;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface GetCustomerUseCase {
@@ -15,8 +16,8 @@ public interface GetCustomerUseCase {
     Customer getByNationalId(String nationalId);
     Customer getByMobileNumber(String mobileNumber);
     Customer getByKeycloakUserId(UUID keycloakUserId);
-    List<Customer> getAll();
-    List<Customer> getAllByTenant(UUID tenantId);
-    List<Customer> getByLifecycleStage(UUID tenantId, LifecycleStage lifecycleStage);
-    List<Customer> getByKycStatus(UUID tenantId, KycStatus kycStatus);
+    PageResponse<Customer> getAll(PageQuery query);
+    PageResponse<Customer> getAllByTenant(UUID tenantId, PageQuery query);
+    PageResponse<Customer> getByLifecycleStage(UUID tenantId, LifecycleStage lifecycleStage, PageQuery query);
+    PageResponse<Customer> getByKycStatus(UUID tenantId, KycStatus kycStatus, PageQuery query);
 }

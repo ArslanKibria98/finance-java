@@ -3,6 +3,8 @@ package com.ksa.financing.ledger.adapter.rest.controller;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.ledger.application.dto.CoaFieldLovResponse;
 import com.ksa.financing.ledger.application.dto.CreateCoaFieldLovRequest;
 import com.ksa.financing.ledger.application.dto.UpdateCoaFieldLovRequest;
@@ -18,7 +20,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -65,12 +66,13 @@ public class CoaFieldLovController {
     @GetMapping
     @Operation(summary = "List COA field LOVs",
             description = "Returns all COA field LOVs. Pass activeOnly=true to filter only active entries.")
-    public ResponseEntity<List<CoaFieldLovResponse>> list(
+    public ResponseEntity<PageResponse<CoaFieldLovResponse>> list(
             @RequestParam(defaultValue = "false") boolean activeOnly,
-            @AuthenticationPrincipal Jwt jwt
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery
     ) {
         var tenantId = extractTenantId(jwt);
-        var response = useCase.list(tenantId, activeOnly).stream().map(mapper::toResponse).toList();
+        var response = useCase.list(tenantId, activeOnly, pageQuery).map(mapper::toResponse);
         return ResponseEntity.ok(response);
     }
 

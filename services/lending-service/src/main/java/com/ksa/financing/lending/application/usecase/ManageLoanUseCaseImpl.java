@@ -1,6 +1,8 @@
 package com.ksa.financing.lending.application.usecase;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.LoanAggregate;
 import com.ksa.financing.lending.domain.model.LoanId;
 import com.ksa.financing.lending.domain.port.in.ManageLoanUseCase;
@@ -11,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -88,9 +89,16 @@ public class ManageLoanUseCaseImpl implements ManageLoanUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LoanAggregate> listLoansByCustomer(UUID tenantId, UUID customerId) {
+    public PageResponse<LoanAggregate> listLoansByCustomer(UUID tenantId, UUID customerId, PageQuery query) {
         log.debug("Listing loans for customer: {}", customerId);
-        return loanRepository.findByCustomer(tenantId, customerId);
+        return loanRepository.findByCustomer(tenantId, customerId, query);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<LoanAggregate> listAllLoans(UUID tenantId, PageQuery query) {
+        log.debug("Listing all loans for tenant: {}", tenantId);
+        return loanRepository.findAllByTenant(tenantId, query);
     }
 
     @Override

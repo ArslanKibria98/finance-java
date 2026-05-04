@@ -115,5 +115,9 @@ public record LoanApplicationDto(
 
         // Current schedule (updated after reschedule — differs from requestedTenureMonths)
         Integer currentTenureMonths,
-        java.time.LocalDate currentMaturityDate
+        java.time.LocalDate currentMaturityDate,
+        BigDecimal currentProfitRate,
+
+        @io.swagger.v3.oas.annotations.media.Schema(description = "True if the loan currently qualifies for early settlement (sourced from collections-service)")
+        Boolean earlySettlementEligible
 ) {}

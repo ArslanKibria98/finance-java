@@ -37,6 +37,9 @@ public class KafkaCollectionsEventPublisher implements EventPublisher {
     @Value("${kafka.topics.settlement-confirmed:financing.settlement.confirmed}")
     private String settlementConfirmedTopic;
 
+    @Value("${kafka.topics.loan-overdue:financing.loan.overdue}")
+    private String loanOverdueTopic;
+
     @Override
     public void publishAll(List<Object> events) {
         for (Object event : events) {
@@ -73,6 +76,11 @@ public class KafkaCollectionsEventPublisher implements EventPublisher {
             case SettlementAggregate.SettlementConfirmed e -> {
                 log.info("Publishing SettlementConfirmed: settlementId={} loanId={}", e.settlementId(), e.loanId());
                 kafkaTemplate.send(settlementConfirmedTopic, e.loanId().toString(), e);
+            }
+            case RepaymentScheduleAggregate.LoanOverdue e -> {
+                log.info("Publishing LoanOverdue: loanId={} maxDpd={} overdueAmount={}",
+                        e.loanId(), e.maxDpd(), e.overdueAmount());
+                kafkaTemplate.send(loanOverdueTopic, e.loanId().toString(), e);
             }
             default ->
                 log.debug("Unhandled event type: {}", event.getClass().getSimpleName());

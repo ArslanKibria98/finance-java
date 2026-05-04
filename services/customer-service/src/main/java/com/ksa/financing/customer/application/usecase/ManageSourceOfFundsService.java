@@ -6,13 +6,14 @@ import com.ksa.financing.customer.domain.port.out.SourceOfFundsRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -79,13 +80,13 @@ public class ManageSourceOfFundsService implements ManageSourceOfFundsUseCase {
     }
 
     @Override
-    public List<SourceOfFundsOption> getAll(UUID tenantId) {
-        return repository.findAllByTenantId(tenantId);
+    public PageResponse<SourceOfFundsOption> getAll(UUID tenantId, PageQuery pageQuery) {
+        return repository.findAllByTenantId(tenantId, pageQuery);
     }
 
     @Override
-    public List<SourceOfFundsOption> getActive(UUID tenantId) {
-        return repository.findActiveByTenantId(tenantId);
+    public PageResponse<SourceOfFundsOption> getActive(UUID tenantId, PageQuery pageQuery) {
+        return repository.findActiveByTenantId(tenantId, pageQuery);
     }
 
     @Override
@@ -104,9 +105,11 @@ public class ManageSourceOfFundsService implements ManageSourceOfFundsUseCase {
     @Transactional
     public void activate(UUID tenantId, UUID id) {
         SourceOfFundsOption option = repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Source of funds option", id.toString()));
+
+        log.info("Activating source of funds option: {} for tenant: {}", id, tenantId);
         option.setActive(true);
-        option.setUpdatedAt(java.time.Instant.now());
+        option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
 
@@ -114,7 +117,9 @@ public class ManageSourceOfFundsService implements ManageSourceOfFundsUseCase {
     @Transactional
     public void delete(UUID tenantId, UUID id) {
         repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Source of funds option", id.toString()));
+
+        log.info("Soft-deleting source of funds option: {} for tenant: {}", id, tenantId);
         repository.softDelete(tenantId, id);
     }
 }

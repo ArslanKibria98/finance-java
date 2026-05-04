@@ -2,12 +2,13 @@ package com.ksa.financing.customer.infrastructure.persistence.repository;
 
 import com.ksa.financing.customer.infrastructure.persistence.entity.CustomerJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface JpaCustomerRepository extends JpaRepository<CustomerJpaEntity, UUID> {
+public interface JpaCustomerRepository extends JpaRepository<CustomerJpaEntity, UUID>, JpaSpecificationExecutor<CustomerJpaEntity> {
 
     Optional<CustomerJpaEntity> findByIdAndTenantIdAndDeletedAtIsNull(UUID id, UUID tenantId);
 

@@ -5,13 +5,14 @@ import com.ksa.financing.product.domain.port.in.ManageApprovalConditionFieldsUse
 import com.ksa.financing.product.domain.port.out.ApprovalConditionFieldRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -23,9 +24,9 @@ public class ManageApprovalConditionFieldsUseCaseImpl implements ManageApprovalC
 
     @Override
     @Transactional(readOnly = true)
-    public List<ApprovalConditionFieldDefinition> listFieldDefinitions(UUID tenantId) {
+    public PageResponse<ApprovalConditionFieldDefinition> listFieldDefinitions(UUID tenantId, PageQuery pageQuery) {
         log.info("Listing approval condition field definitions for tenant: {}", tenantId);
-        return repository.findAllWithOptions(tenantId);
+        return repository.findAllWithOptions(tenantId, pageQuery);
     }
 
     @Override

@@ -1,9 +1,10 @@
 package com.ksa.financing.customer.domain.port.in;
 
 import com.ksa.financing.customer.domain.model.NetWorthRangeOption;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageNetWorthRangeUseCase {
@@ -11,8 +12,8 @@ public interface ManageNetWorthRangeUseCase {
     NetWorthRangeOption create(UUID tenantId, CreateNetWorthRangeCommand command);
     NetWorthRangeOption update(UUID tenantId, UUID id, UpdateNetWorthRangeCommand command);
     NetWorthRangeOption getById(UUID tenantId, UUID id);
-    List<NetWorthRangeOption> getAll(UUID tenantId);
-    List<NetWorthRangeOption> getActive(UUID tenantId);
+    PageResponse<NetWorthRangeOption> getAll(UUID tenantId, PageQuery pageQuery);
+    PageResponse<NetWorthRangeOption> getActive(UUID tenantId, PageQuery pageQuery);
     void deactivate(UUID tenantId, UUID id);
     void activate(UUID tenantId, UUID id);
     void delete(UUID tenantId, UUID id);

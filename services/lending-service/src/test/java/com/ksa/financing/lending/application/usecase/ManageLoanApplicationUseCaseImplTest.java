@@ -1,6 +1,8 @@
 package com.ksa.financing.lending.application.usecase;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.LoanApplicationAggregate;
 import com.ksa.financing.lending.domain.model.LoanApplicationId;
 import com.ksa.financing.lending.domain.port.out.LoanApplicationRepository;
@@ -32,6 +34,7 @@ class ManageLoanApplicationUseCaseImplTest {
 
     private static final UUID TENANT_ID = UUID.randomUUID();
     private static final UUID CUSTOMER_ID = UUID.randomUUID();
+    private static final PageQuery PAGE_QUERY = new PageQuery(0, 10, null, null, null);
 
     @BeforeEach
     void setUp() {
@@ -75,24 +78,24 @@ class ManageLoanApplicationUseCaseImplTest {
     @Test
     @DisplayName("should list all applications for tenant")
     void shouldListApplications() {
-        when(applicationRepository.findAllByTenant(TENANT_ID))
-                .thenReturn(List.of());
+        when(applicationRepository.findAllByTenant(eq(TENANT_ID), any(PageQuery.class)))
+                .thenReturn(PageResponse.empty(0, 10));
 
-        var result = useCase.listApplications(TENANT_ID);
+        var result = useCase.listApplications(TENANT_ID, PAGE_QUERY);
 
-        assertThat(result).isEmpty();
-        verify(applicationRepository).findAllByTenant(TENANT_ID);
+        assertThat(result.content()).isEmpty();
+        verify(applicationRepository).findAllByTenant(eq(TENANT_ID), any(PageQuery.class));
     }
 
     @Test
     @DisplayName("should list applications by customer")
     void shouldListByCustomer() {
-        when(applicationRepository.findByCustomer(TENANT_ID, CUSTOMER_ID))
-                .thenReturn(List.of());
+        when(applicationRepository.findByCustomer(eq(TENANT_ID), eq(CUSTOMER_ID), any(PageQuery.class)))
+                .thenReturn(PageResponse.empty(0, 10));
 
-        var result = useCase.listApplicationsByCustomer(TENANT_ID, CUSTOMER_ID);
+        var result = useCase.listApplicationsByCustomer(TENANT_ID, CUSTOMER_ID, PAGE_QUERY);
 
-        assertThat(result).isEmpty();
-        verify(applicationRepository).findByCustomer(TENANT_ID, CUSTOMER_ID);
+        assertThat(result.content()).isEmpty();
+        verify(applicationRepository).findByCustomer(eq(TENANT_ID), eq(CUSTOMER_ID), any(PageQuery.class));
     }
 }

@@ -1,5 +1,10 @@
 package com.ksa.financing.risk.infrastructure.persistence;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SortDirection;
+import com.ksa.financing.infra.pagination.SortField;
 import com.ksa.financing.risk.domain.model.credit.*;
 import com.ksa.financing.risk.domain.port.out.CreditScoringRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +15,11 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -19,20 +27,65 @@ import java.util.UUID;
 @Slf4j
 public class CreditScoringRepositoryImpl implements CreditScoringRepository {
 
+    private static final Set<String> SORT_ALLOWED_COLUMNS = Set.of(
+            "sort_order", "field_key", "name_en", "name_ar", "data_type", "is_active");
+
+    private static final Map<String, String> SORT_FIELD_TO_COLUMN = Map.of(
+            "fieldKey", "field_key",
+            "nameEn", "name_en",
+            "nameAr", "name_ar",
+            "dataType", "data_type",
+            "sortOrder", "sort_order",
+            "active", "is_active",
+            "isActive", "is_active");
+
     private final JdbcTemplate jdbcTemplate;
 
     @Override
-    public List<CreditScoringFieldDefinition> findActiveFieldDefinitions(String tenantId) {
-        return jdbcTemplate.query(
-                """
-                SELECT id, tenant_id, field_key, name_en, name_ar, data_type, is_active, sort_order
-                FROM credit_scoring_field_definitions
-                WHERE tenant_id = ?::uuid AND is_active = true
-                ORDER BY sort_order
-                """,
+    public PageResponse<CreditScoringFieldDefinition> findActiveFieldDefinitions(String tenantId, PageQuery pageQuery) {
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM credit_scoring_field_definitions WHERE tenant_id = ?::uuid AND is_active = true",
+                Long.class, tenantId);
+        long totalElements = total == null ? 0L : total;
+
+        int page = pageQuery.page();
+        int size = pageQuery.size();
+
+        if (totalElements == 0) {
+            return PageResponse.empty(page, size);
+        }
+
+        int offset = page * size;
+        String orderBy = buildOrderByClause(pageQuery);
+
+        List<CreditScoringFieldDefinition> content = jdbcTemplate.query(
+                "SELECT id, tenant_id, field_key, name_en, name_ar, data_type, is_active, sort_order "
+                        + "FROM credit_scoring_field_definitions "
+                        + "WHERE tenant_id = ?::uuid AND is_active = true "
+                        + orderBy + " LIMIT ? OFFSET ?",
                 fieldDefinitionRowMapper(),
-                tenantId
+                tenantId, size, offset
         );
+
+        int totalPages = size == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        var metadata = new PageMetadata(
+                page, size, totalElements, totalPages,
+                page == 0, page >= totalPages - 1, content.isEmpty());
+        return new PageResponse<>(content, metadata);
+    }
+
+    private String buildOrderByClause(PageQuery pageQuery) {
+        if (pageQuery.sort() == null || pageQuery.sort().isEmpty()) {
+            return "ORDER BY sort_order";
+        }
+        List<String> clauses = new ArrayList<>();
+        for (SortField sf : pageQuery.sort()) {
+            String col = SORT_FIELD_TO_COLUMN.getOrDefault(sf.field(), sf.field());
+            if (!SORT_ALLOWED_COLUMNS.contains(col)) continue;
+            String dir = sf.direction() == SortDirection.ASC ? "ASC" : "DESC";
+            clauses.add(col + " " + dir);
+        }
+        return clauses.isEmpty() ? "ORDER BY sort_order" : "ORDER BY " + String.join(", ", clauses);
     }
 
     @Override

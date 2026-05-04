@@ -13,13 +13,14 @@ import java.util.List;
 public class LoanApplicationMapper {
 
     public LoanApplicationDto toDto(LoanApplicationAggregate agg) {
+        var responseStatus = resolveResponseStatus(agg);
         return new LoanApplicationDto(
                 agg.getId().getValue().toString(),
                 agg.getTenantId().toString(),
                 agg.getApplicationNumber(),
                 agg.getCustomerId().toString(),
                 agg.getNationalId(),
-                agg.getStatus().name(),
+                responseStatus,
                 agg.getStatus().getStepperIndex(),
                 agg.getStatus().getStepperLabel(),
                 agg.getWorkflowId(),
@@ -111,8 +112,16 @@ public class LoanApplicationMapper {
                 agg.getVersion(),
 
                 // Loan / Disbursement (populated separately via withLoanData)
-                null, null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null, null, null
         );
+    }
+
+    private String resolveResponseStatus(LoanApplicationAggregate agg) {
+        var stage = agg.getCurrentStage();
+        if (stage != null && "MANUAL_REVIEW".equals(stage.trim().toUpperCase())) {
+            return "MANUAL_REVIEW";
+        }
+        return agg.getStatus().name();
     }
 
     public LoanApplicationDto withLoanData(LoanApplicationDto dto,
@@ -121,7 +130,9 @@ public class LoanApplicationMapper {
                                             java.math.BigDecimal installmentAmount, String fineractLoanId,
                                             java.time.LocalDate disbursementDate,
                                             Integer currentTenureMonths,
-                                            java.time.LocalDate currentMaturityDate) {
+                                            java.time.LocalDate currentMaturityDate,
+                                            java.math.BigDecimal currentProfitRate,
+                                            Boolean earlySettlementEligible) {
         return new LoanApplicationDto(
                 dto.id(), dto.tenantId(), dto.applicationNumber(), dto.customerId(), dto.nationalId(),
                 dto.status(), dto.stepperIndex(), dto.stepperLabel(), dto.workflowId(),
@@ -148,7 +159,7 @@ public class LoanApplicationMapper {
                 dto.createdAt(), dto.updatedAt(), dto.version(),
                 loanId, loanNumber, loanStatus, principalAmount, totalAmount,
                 installmentAmount, fineractLoanId, disbursementDate,
-                currentTenureMonths, currentMaturityDate
+                currentTenureMonths, currentMaturityDate, currentProfitRate, earlySettlementEligible
         );
     }
 

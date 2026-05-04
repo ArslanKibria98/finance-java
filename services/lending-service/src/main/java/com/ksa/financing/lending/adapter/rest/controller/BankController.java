@@ -3,70 +3,71 @@ package com.ksa.financing.lending.adapter.rest.controller;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.lending.adapter.rest.response.BankResponse;
 import com.ksa.financing.lending.domain.model.Bank;
 import com.ksa.financing.lending.domain.port.out.BankRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/v1/banks")
 @RequiredArgsConstructor
-@Tag(name = "Banks", description = "Bank reference data for loan disbursement")
+@Tag(name = "Banks", description = "Bank reference data (same shape as customer bank-accounts)")
 public class BankController {
 
     private final BankRepository bankRepository;
 
     @SecuredEndpoint(obj = "banks", act = "read")
     @GetMapping
-    @Operation(summary = "List all active banks")
-    public ResponseEntity<List<BankResponse>> listBanks(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all active banks (paginated). Same response shape as /customers/{id}/bank-accounts")
+    public PageResponse<BankResponse> listActive(
+            PageQuery query,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var banks = bankRepository.findAllActive(tenantId);
-        var responses = banks.stream().map(BankResponse::from).toList();
-        return ResponseEntity.ok(responses);
+        return bankRepository.findAllActive(tenantId, query).map(this::toResponse);
     }
 
-    public record BankResponse(
-            String bankName,
-            String bankCode,
-            String iban,
-            String accountHolderName,
-            String accountType,
-            boolean salaryAccount,
-            String status
-    ) {
-        public static BankResponse from(Bank bank) {
-            return new BankResponse(
-                    bank.nameEn(),
-                    bank.code(),
-                    generateRandomIban(bank.code()),
-                    null,
-                    "CURRENT",
-                    false,
-                    "ACTIVE"
-            );
-        }
+    private BankResponse toResponse(Bank b) {
+        String mockIban = generateMockIban(b.code());
+        String maskedIban = mockIban != null && mockIban.length() > 4
+                ? "****" + mockIban.substring(mockIban.length() - 4)
+                : mockIban;
+        return new BankResponse(
+                b.id(),
+                b.nameEn(),
+                b.code(),
+                b.nameEn(),
+                b.nameAr(),
+                mockIban,                         // mock IBAN for demo
+                maskedIban,
+                "Sample Holder",                  // mock account holder
+                "CURRENT",
+                false,                            // isPrimary
+                false,                            // isSalaryAccount
+                false,                            // salaryAccount alias
+                b.active() ? "ACTIVE" : "INACTIVE",
+                null,                             // verifiedAt
+                null,                             // createdAt
+                b.sortOrder());
+    }
 
-        private static String generateRandomIban(String bankCode) {
-            var rng = new java.util.Random();
-            var sb = new StringBuilder("SA");
-            sb.append(String.format("%02d", rng.nextInt(100)));
-            sb.append(String.format("%2s", bankCode).replace(' ', '0'));
-            for (int i = 0; i < 18; i++) sb.append(rng.nextInt(10));
-            return sb.toString();
-        }
+    /** Generate a deterministic mock Saudi IBAN: SA<2-check><2-bank>+18 digits. */
+    private static String generateMockIban(String bankCode) {
+        if (bankCode == null) return null;
+        String code2 = bankCode.length() >= 2 ? bankCode.substring(0, 2) : ("0" + bankCode);
+        // Deterministic check digits (00) + bank code + 18 padded digits
+        String suffix = String.format("%018d", Math.abs((long) bankCode.hashCode()));
+        return "SA00" + code2 + suffix;
     }
 
     private UUID extractTenantId(Jwt jwt) {

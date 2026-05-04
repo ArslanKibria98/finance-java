@@ -149,14 +149,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex, WebRequest request) {
+        Locale locale = resolveLocale(request);
         Map<String, String> validationErrors = new HashMap<>();
+        
         ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            validationErrors.put(fieldName, errorMessage);
+            String fieldName = (error instanceof FieldError fieldError) ? fieldError.getField() : error.getObjectName();
+            String messageKey = error.getDefaultMessage();
+            String resolvedMessage = resolveMessage(messageKey, error.getArguments(), messageKey, locale);
+            validationErrors.put(fieldName, resolvedMessage);
         });
 
-        Locale locale = resolveLocale(request);
         String localizedMessage = resolveMessage(
                 ErrorCodes.VALIDATION_FAILED, null,
                 "Validation failed", locale);

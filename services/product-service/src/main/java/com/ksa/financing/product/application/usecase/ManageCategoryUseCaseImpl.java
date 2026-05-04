@@ -3,6 +3,8 @@ package com.ksa.financing.product.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.product.domain.model.MasterCategory;
 import com.ksa.financing.product.domain.model.SubCategory;
 import com.ksa.financing.product.domain.port.in.ManageCategoryUseCase;
@@ -13,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -27,9 +28,9 @@ public class ManageCategoryUseCaseImpl implements ManageCategoryUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<MasterCategory> listMasterCategories(UUID tenantId) {
+    public PageResponse<MasterCategory> listMasterCategories(UUID tenantId, PageQuery query) {
         log.debug("Listing master categories for tenant: {}", tenantId);
-        return categoryRepository.findAllMasterCategories(tenantId);
+        return categoryRepository.findAllMasterCategories(tenantId, query);
     }
 
     @Override
@@ -125,9 +126,9 @@ public class ManageCategoryUseCaseImpl implements ManageCategoryUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SubCategory> listSubCategories(UUID tenantId, UUID masterCategoryId) {
+    public PageResponse<SubCategory> listSubCategories(UUID tenantId, UUID masterCategoryId, PageQuery query) {
         log.debug("Listing sub-categories for master: {} tenant: {}", masterCategoryId, tenantId);
-        return categoryRepository.findSubCategoriesByMaster(tenantId, masterCategoryId);
+        return categoryRepository.findSubCategoriesByMaster(tenantId, masterCategoryId, query);
     }
 
     @Override

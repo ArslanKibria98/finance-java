@@ -72,7 +72,7 @@ public class ProductServiceClient implements ProductConfigPort {
                 if (!visibleToCustomers) continue;
                 if (fineractProductId == null || fineractProductId.isBlank()) continue;
 
-                results.add(parseProductConfig(item));
+            results.add(parseProductConfig(item, null, null));
             }
 
             log.info("Listed {} active customer-visible products for tenant {}", results.size(), tenantId);
@@ -103,7 +103,7 @@ public class ProductServiceClient implements ProductConfigPort {
             // Unwrap {"data": {...}} wrapper if present
             var root = rawRoot.has("data") && rawRoot.get("data").isObject() ? rawRoot.get("data") : rawRoot;
 
-            return parseProductConfig(root);
+            return parseProductConfig(root, amount, tenureMonths);
 
         } catch (Exception e) {
             log.warn("Product-service unavailable ({}), using default config", e.getMessage());
@@ -117,7 +117,7 @@ public class ProductServiceClient implements ProductConfigPort {
      * product-service already aggregates all admin fee slabs into these top-level values.
      * If slabs are present in the response, we re-derive from them for accuracy.
      */
-    private ProductConfig parseProductConfig(JsonNode root) {
+    private ProductConfig parseProductConfig(JsonNode root, BigDecimal requestedAmount, Integer requestedTenure) {
         // Try to derive limits from slabs if present (most accurate)
         var slabsNode = root.path("adminFeeSlabs");
         BigDecimal minAmount = null;
@@ -126,6 +126,11 @@ public class ProductServiceClient implements ProductConfigPort {
         int maxTenure = 0;
         List<Integer> allowedTenures = List.of();
 
+        // Slab matching variables
+        BigDecimal slabProfitRate = null;
+        BigDecimal slabProcFee = null;
+        BigDecimal slabAdminFee = null;
+
         if (slabsNode.isArray() && slabsNode.size() > 0) {
             for (var slab : slabsNode) {
                 var slabMin = decimalOrNull(slab, "minAmount");
@@ -133,10 +138,31 @@ public class ProductServiceClient implements ProductConfigPort {
                 var slabMinT = intOrNull(slab, "minTenure");
                 var slabMaxT = intOrNull(slab, "maxTenure");
 
+                // Update global limits
                 if (slabMin != null) minAmount = minAmount == null ? slabMin : minAmount.min(slabMin);
                 if (slabMax != null) maxAmount = maxAmount == null ? slabMax : maxAmount.max(slabMax);
                 if (slabMinT != null) minTenure = minTenure == 0 ? slabMinT : Math.min(minTenure, slabMinT);
                 if (slabMaxT != null) maxTenure = Math.max(maxTenure, slabMaxT);
+
+                // Check for match if request context is provided
+                if (requestedAmount != null && slabProfitRate == null) {
+                    boolean amountMatch = (slabMin == null || requestedAmount.compareTo(slabMin) >= 0) &&
+                                         (slabMax == null || requestedAmount.compareTo(slabMax) <= 0);
+                    
+                    boolean tenureMatch = true;
+                    if (requestedTenure != null) {
+                        tenureMatch = (slabMinT == null || requestedTenure >= slabMinT) &&
+                                      (slabMaxT == null || requestedTenure <= slabMaxT);
+                    }
+
+                    if (amountMatch && tenureMatch) {
+                        slabProfitRate = decimalOrNull(slab, "profitPercentage");
+                        slabProcFee = decimalOrNull(slab, "processingFee");
+                        slabAdminFee = decimalOrNull(slab, "adminFee");
+                        log.info("Matching slab found for amount={} tenure={}: profit={}, adminFee={}, procFee={}",
+                                requestedAmount, requestedTenure, slabProfitRate, slabAdminFee, slabProcFee);
+                    }
+                }
             }
 
             if (minTenure > 0 && maxTenure > 0) {
@@ -163,16 +189,25 @@ public class ProductServiceClient implements ProductConfigPort {
             }
         }
 
+        // Final values: Priority to Slab, then Root, then Default
+        BigDecimal profitRate = slabProfitRate != null ? slabProfitRate : decimalOrDefault(root, "baseProfitRate", new BigDecimal("0.0385"));
+        // Normalize to decimal (e.g. 2.5 -> 0.025)
+        if (profitRate != null && profitRate.compareTo(new BigDecimal("0.5")) > 0) {
+            profitRate = profitRate.divide(new BigDecimal("100"), 6, java.math.RoundingMode.HALF_UP);
+        }
+        BigDecimal processingFeeAmount = slabProcFee != null ? slabProcFee : decimalOrDefault(root, "processingFeeAmount", BigDecimal.ZERO);
+        BigDecimal adminFeeAmount = slabAdminFee != null ? slabAdminFee : decimalOrDefault(root, "adminFeeAmount", BigDecimal.ZERO);
+
         return new ProductConfig(
                 textOrNull(root, "id"),
                 textOrNull(root, "nameEn"),
                 textOrNull(root, "productCode"),
                 textOrNull(root, "shariaStructure"),
-                decimalOrDefault(root, "baseProfitRate", new BigDecimal("0.0385")),
+                profitRate,
                 decimalOrDefault(root, "costOfTermPercent", null),
                 decimalOrDefault(root, "processingFeePercent", BigDecimal.ZERO),
-                decimalOrDefault(root, "processingFeeAmount", BigDecimal.ZERO),
-                decimalOrDefault(root, "adminFeeAmount", BigDecimal.ZERO),
+                processingFeeAmount,
+                adminFeeAmount,
                 decimalOrDefault(root, "vatPercent", new BigDecimal("15")),
                 minAmount,
                 maxAmount,

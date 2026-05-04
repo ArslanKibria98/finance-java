@@ -1,19 +1,20 @@
 package com.ksa.financing.risk.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.audit.AuditEntry;
 import com.ksa.financing.risk.domain.model.audit.AuditEntityType;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 public interface QueryAuditTrailUseCase {
 
-    List<AuditEntry> getByEntity(UUID tenantId, AuditEntityType entityType, UUID entityId);
+    PageResponse<AuditEntry> getByEntity(UUID tenantId, AuditEntityType entityType, UUID entityId, PageQuery query);
 
-    List<AuditEntry> getByActor(UUID tenantId, UUID actorId, Instant from, Instant to);
+    PageResponse<AuditEntry> getByActor(UUID tenantId, UUID actorId, Instant from, Instant to, PageQuery query);
 
-    List<AuditEntry> getByDateRange(UUID tenantId, Instant from, Instant to);
+    PageResponse<AuditEntry> getByDateRange(UUID tenantId, Instant from, Instant to, PageQuery query);
 
-    List<AuditEntry> getByCorrelationId(UUID tenantId, String correlationId);
+    PageResponse<AuditEntry> getByCorrelationId(UUID tenantId, String correlationId, PageQuery query);
 }

@@ -26,6 +26,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -63,6 +66,9 @@ public class ApplicationDetailController {
     @Value("${app.services.customer-service-url}")
     private String customerServiceUrl;
 
+    @Value("${app.services.collections-service-url:${COLLECTIONS_SERVICE_URL:http://collections-service:8099}}")
+    private String collectionsServiceUrl;
+
     // ══════════════════════════════════════════════════════════════
     // MAIN AGGREGATE ENDPOINT
     // ══════════════════════════════════════════════════════════════
@@ -71,7 +77,7 @@ public class ApplicationDetailController {
     @SecuredEndpoint(obj = "loan.applications", act = "read")
     @Operation(summary = "Full application detail — all tabs data in one response")
     public ResponseEntity<JsonNode> getFullDetail(
-            @PathVariable UUID applicationId,
+            @PathVariable("applicationId") UUID applicationId,
             @AuthenticationPrincipal Jwt jwt) {
 
         String tenantId = extractTenantId(jwt);
@@ -98,7 +104,7 @@ public class ApplicationDetailController {
         // ── 5. Build aggregate response ─────────────────────────────
         ObjectNode root = objectMapper.createObjectNode();
 
-        buildStepper(root, app, loan);
+        buildStepper(root, app, loan, jwt);
         buildPersonalInformation(root, customer360);
         buildLoanInformation(root, app, loan);
         buildEmploymentSalary(root, app, customer360);
@@ -119,7 +125,7 @@ public class ApplicationDetailController {
     // ══════════════════════════════════════════════════════════════
 
     /** Stepper: Finance → Verification → Simmah Consent → Counter → Contract → OTP → IVR → DISBURSED → PAID */
-    private void buildStepper(ObjectNode root, LoanApplicationJpaEntity app, LoanJpaEntity loan) {
+    private void buildStepper(ObjectNode root, LoanApplicationJpaEntity app, LoanJpaEntity loan, Jwt jwt) {
         ObjectNode stepper = root.putObject("stepper");
         stepper.put("currentStage",  nvl(app.getCurrentStage()));
         stepper.put("status",        nvl(app.getStatus()));
@@ -154,7 +160,14 @@ public class ApplicationDetailController {
             boolean simahDone = Boolean.TRUE.equals(app.getSimahConsent());
             boolean employmentDone = app.getEmployerName() != null;
 
-            if ("PAID".equals(loanStatus))                                      idx = 9;
+            // Collections-side check first — if all installments are settled there,
+            // the loan is effectively fully paid even if lending's loan.status row
+            // hasn't been flipped to PAID yet (no ScheduleFullyPaid listener wired).
+            boolean fullyPaidInCollections = loan != null
+                    && isFullyPaidInCollections(loan.getId(), jwt);
+
+            if (fullyPaidInCollections)                                          idx = 9;
+            else if ("PAID".equals(loanStatus))                                  idx = 9;
             else if (loan != null && ("ACTIVE".equals(loanStatus)
                     || "PENDING_DISBURSEMENT".equals(loanStatus)))               idx = 8;
             else if ("APPROVED".equals(appStatus) || "DISBURSED".equals(appStatus)) idx = 8;
@@ -190,6 +203,41 @@ public class ApplicationDetailController {
         if (Boolean.TRUE.equals(app.getSimahConsent()))   return 3;
         if (app.getEmployerName() != null)                return 2;
         return 1;
+    }
+
+    /**
+     * Calls collections-service to check if every installment is settled. Used as a
+     * fallback for the stepper's PAID step when lending's loan.status row hasn't
+     * been flipped to PAID yet. Returns false on any HTTP / parse failure.
+     */
+    private boolean isFullyPaidInCollections(UUID loanId, Jwt jwt) {
+        try {
+            var headers = new HttpHeaders();
+            headers.setBearerAuth(jwt.getTokenValue());
+            var response = restTemplate.exchange(
+                    collectionsServiceUrl + "/api/v1/repayment-schedules/by-loan/" + loanId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return false;
+            }
+            var data = objectMapper.readTree(response.getBody()).path("data");
+            var fullyPaid = data.path("fullyPaid");
+            if (fullyPaid.isBoolean()) {
+                return fullyPaid.asBoolean();
+            }
+            var installments = data.path("installments");
+            if (!installments.isArray() || installments.isEmpty()) return false;
+            for (var i : installments) {
+                var st = i.path("status").asText("");
+                if (!"PAID".equalsIgnoreCase(st) && !"WAIVED".equalsIgnoreCase(st)) return false;
+            }
+            return true;
+        } catch (Exception ex) {
+            log.debug("Collections fully-paid check failed for loanId={}: {}", loanId, ex.getMessage());
+            return false;
+        }
     }
 
     private void addStep(ArrayNode steps, int num, String label, String stage, int currentIdx) {
@@ -468,6 +516,7 @@ public class ApplicationDetailController {
             item.put("rescheduleId",     r.getId().toString());
             item.put("rescheduleType",   nvl(r.getRescheduleType()));
             item.put("status",           nvl(r.getStatus()));
+            item.put("details",          generateRescheduleDetails(r));
             item.put("justification",    nvl(r.getJustification()));
             item.put("extensionMonths",  r.getExtensionMonths() != null ? r.getExtensionMonths() : 0);
             item.put("holidayMonths",    r.getHolidayMonths() != null ? r.getHolidayMonths() : 0);
@@ -519,6 +568,57 @@ public class ApplicationDetailController {
             log.warn("Customer360 fetch failed: customerId={} error={}", customerId, e.getMessage());
         }
         return objectMapper.createObjectNode();
+    }
+
+    private String generateRescheduleDetails(LoanRescheduleJpaEntity r) {
+        StringBuilder sb = new StringBuilder();
+        String type = r.getRescheduleType();
+
+        Integer oldTenure = r.getOldTenureMonths();
+        LocalDate oldMaturity = r.getOldMaturityDate();
+        BigDecimal oldInstallment = r.getOldInstallmentAmount();
+
+        // Fallback for older records
+        try {
+            if (oldTenure == null || oldMaturity == null || oldInstallment == null) {
+                var loanOpt = loanRepository.findById(r.getLoanId());
+                if (loanOpt.isPresent()) {
+                    var loan = loanOpt.get();
+                    if (oldTenure == null) oldTenure = loan.getTenureMonths();
+                    if (oldMaturity == null) oldMaturity = loan.getMaturityDate();
+                    if (oldInstallment == null) oldInstallment = loan.getInstallmentAmount();
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if ("SKIP_PAYMENT".equals(type)) {
+            sb.append("Requested to skip installment for ").append(r.getRequestedSkipMonth() != null ? r.getRequestedSkipMonth().getMonth().name() + " " + r.getRequestedSkipMonth().getYear() : "selected month").append(". ");
+            sb.append("Action: The skipped month is moved to the end of the schedule. ");
+            sb.append("Total tenure remains ").append(oldTenure != null ? oldTenure : "?").append(" months, ");
+            sb.append("but maturity date is extended to ").append(r.getNewMaturityDate() != null ? r.getNewMaturityDate() : "a later date").append(".");
+        } else if ("TENURE_EXTENSION".equals(type)) {
+            sb.append("Loan tenure extended by ").append(r.getExtensionMonths()).append(" months. ");
+            sb.append("Configuration: Tenure changed from ").append(oldTenure != null ? oldTenure : "?").append(" to ").append(r.getNewTenureMonths()).append(" months. ");
+            sb.append("Result: Monthly installment reduced from ").append(scale2(oldInstallment)).append(" to ").append(scale2(r.getNewInstallmentAmount())).append(" SAR.");
+        } else if ("PAYMENT_HOLIDAY".equals(type)) {
+            sb.append("Payment holiday granted for ").append(r.getHolidayMonths()).append(" months. ");
+            sb.append("Impact: Next installments are paused, and maturity is extended to ").append(r.getNewMaturityDate()).append(".");
+        } else if ("RESTRUCTURING".equals(type)) {
+            sb.append("Loan restructuring performed for financial relief. ");
+            if (r.getWriteOffAmount() != null && r.getWriteOffAmount().compareTo(BigDecimal.ZERO) > 0) {
+                sb.append("Benefit: Principal write-off of ").append(scale2(r.getWriteOffAmount())).append(" SAR applied. ");
+            }
+            if (r.getNewProfitRate() != null) {
+                sb.append("Change: Profit rate updated to ").append(r.getNewProfitRate().multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)).append("%. ");
+            }
+            sb.append("Impact: Monthly payment adjusted from ").append(scale2(oldInstallment)).append(" to ").append(scale2(r.getNewInstallmentAmount())).append(" SAR.");
+        }
+
+        return sb.toString();
+    }
+
+    private BigDecimal scale2(BigDecimal val) {
+        return val != null ? val.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     private String extractTenantId(Jwt jwt) {

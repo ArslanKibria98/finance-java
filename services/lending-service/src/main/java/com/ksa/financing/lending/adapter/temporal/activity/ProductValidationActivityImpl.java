@@ -43,6 +43,7 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
 
             var headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Tenant-Id", input.tenantId());
 
             var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
@@ -51,6 +52,7 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
             }
 
             var rawBody = objectMapper.readTree(response.getBody());
+            log.info("Product service response for {}: {}", input.productId(), response.getBody());
             // Handle wrapped response: { "data": { ... } } or direct { ... }
             var product = rawBody.has("data") ? rawBody.get("data") : rawBody;
 
@@ -69,8 +71,73 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
             if (profitRate == null) {
                 profitRate = decimalOrNull(product, "baseProfitRate");
             }
+            // Normalize to decimal (e.g. 2.5 -> 0.025)
+            if (profitRate != null && profitRate.compareTo(new java.math.BigDecimal("0.5")) > 0) {
+                profitRate = profitRate.divide(java.math.BigDecimal.valueOf(100), 6, java.math.RoundingMode.HALF_UP);
+            }
             BigDecimal processingFeePercent = decimalOrNull(product, "processingFeePercent");
+            BigDecimal processingFeeAmount = decimalOrNull(product, "processingFeeAmount");
             BigDecimal adminFeeAmount = decimalOrNull(product, "adminFeeAmount");
+
+            // Resolve profit rate and fees from slabs if present (overrides defaults)
+            var slabsNode = product.path("adminFeeSlabs");
+            if (slabsNode.isArray() && slabsNode.size() > 0) {
+                log.info("Processing {} slabs for product {}", slabsNode.size(), input.productId());
+                for (var slab : slabsNode) {
+                    var slabMin = decimalOrNull(slab, "minAmount");
+                    var slabMax = decimalOrNull(slab, "maxAmount");
+                    var slabMinT = intOrZero(slab, "minTenure");
+                    var slabMaxT = intOrZero(slab, "maxTenure");
+
+                    boolean amountMatch = true;
+                    if (input.requestedAmount() != null) {
+                        amountMatch = (slabMin == null || input.requestedAmount().compareTo(slabMin) >= 0) &&
+                                     (slabMax == null || input.requestedAmount().compareTo(slabMax) <= 0);
+                    }
+
+                    boolean tenureMatch = true;
+                    if (input.requestedTenureMonths() > 0) {
+                        tenureMatch = (slabMinT == 0 || input.requestedTenureMonths() >= slabMinT) &&
+                                      (slabMaxT == 0 || input.requestedTenureMonths() <= slabMaxT);
+                    }
+
+                    if (amountMatch && tenureMatch) {
+                        BigDecimal slabProfit = decimalOrNull(slab, "profitPercentage");
+                        if (slabProfit == null) slabProfit = decimalOrNull(slab, "profitRate");
+
+                        BigDecimal slabProcAmount = decimalOrNull(slab, "processingFee");
+                        if (slabProcAmount == null) slabProcAmount = decimalOrNull(slab, "processingFeeAmount");
+
+                        BigDecimal slabProcPercent = decimalOrNull(slab, "processingFeePercent");
+                        
+                        BigDecimal slabAdmin = decimalOrNull(slab, "adminFee");
+                        if (slabAdmin == null) slabAdmin = decimalOrNull(slab, "adminFeeAmount");
+
+                        if (slabProfit != null) {
+                            profitRate = slabProfit;
+                            // Normalize slab profit rate if it's in percentage form
+                            if (profitRate.compareTo(java.math.BigDecimal.valueOf(0.5)) > 0) {
+                                profitRate = profitRate.divide(java.math.BigDecimal.valueOf(100), 6, java.math.RoundingMode.HALF_UP);
+                            }
+                        }
+                        if (slabProcAmount != null) processingFeeAmount = slabProcAmount;
+                        if (slabProcPercent != null) processingFeePercent = slabProcPercent;
+                        if (slabAdmin != null) adminFeeAmount = slabAdmin;
+
+                        log.info("Matching slab found for amount={} tenure={}: profit={}, adminFee={}, procFeeAmount={}, procFeePercent={}",
+                                input.requestedAmount(), input.requestedTenureMonths(),
+                                profitRate, adminFeeAmount, processingFeeAmount, processingFeePercent);
+                        break;
+                    }
+                }
+            }
+
+            // Standardize defaults to match ProductServiceClient behavior
+            if (processingFeePercent == null) processingFeePercent = java.math.BigDecimal.ZERO;
+            if (processingFeeAmount == null) processingFeeAmount = java.math.BigDecimal.ZERO;
+            if (adminFeeAmount == null) adminFeeAmount = java.math.BigDecimal.ZERO;
+            if (profitRate == null) profitRate = new java.math.BigDecimal("0.0385");
+
             int minAge = intOrZero(product, "minAge");
             int maxAge = intOrZero(product, "maxAge");
             BigDecimal minSalary = decimalOrNull(product, "minSalary");
@@ -115,12 +182,12 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
                 product.get("requiredDocuments").forEach(doc -> requiredDocs.add(doc.asText()));
             }
 
-            log.info("Product validated successfully: {} ({}), disbursementDelay={}h",
-                    productName, productCode, disbursementDurationHours);
+            log.info("Product validated successfully: {} ({}), profitRate={}, disbursementDelay={}h",
+                    productName, productCode, profitRate, disbursementDurationHours);
             return new ProductValidationResult(
                     true, productCode, productName, shariaStructure, fineractProductId,
                     minAmount, maxAmount, minTenure, maxTenure,
-                    profitRate, processingFeePercent, adminFeeAmount,
+                    profitRate, processingFeePercent, processingFeeAmount, adminFeeAmount,
                     minAge, maxAge, minSalary, minEmploymentMonths, minCreditScore, maxDbrPercent,
                     requiredDocs, disbursementDurationHours, null
             );
@@ -133,9 +200,9 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
             return new ProductValidationResult(
                     true, null, null, null, null,
                     null, null, 0, 0,
-                    null, null, null,
+                    null, null, null, null,
                     0, 0, null, 0, 0, null,
-                    List.of(), null
+                    List.of(), 0, null
             );
         }
     }
@@ -143,8 +210,8 @@ public class ProductValidationActivityImpl implements ProductValidationActivity 
     private ProductValidationResult invalidResult(String reason) {
         return new ProductValidationResult(
                 false, null, null, null, null, null, null, 0, 0,
-                null, null, null, 0, 0, null, 0, 0, null,
-                List.of(), reason
+                null, null, null, null, 0, 0, null, 0, 0, null,
+                List.of(), 0, reason
         );
     }
 

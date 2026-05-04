@@ -5,11 +5,14 @@ import com.ksa.financing.product.adapter.rest.request.UpdateBasicInfoRequest;
 import com.ksa.financing.product.adapter.rest.response.ProductResponse;
 import com.ksa.financing.product.adapter.rest.response.ProductSummaryResponse;
 import com.ksa.financing.product.application.mapper.ProductMapper;
+import com.ksa.financing.product.application.usecase.EvaluateApprovalRuleUseCase;
 import com.ksa.financing.product.domain.port.in.ManageProductUseCase;
 import com.ksa.financing.product.domain.port.in.ManageProductUseCase.CreateProductCommand;
 import com.ksa.financing.product.domain.port.in.ManageProductUseCase.UpdateBasicInfoCommand;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -27,9 +30,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -40,6 +47,7 @@ import java.util.UUID;
 public class ProductController {
 
     private final ManageProductUseCase manageProductUseCase;
+    private final EvaluateApprovalRuleUseCase evaluateApprovalRuleUseCase;
 
     @SecuredEndpoint(obj = "products", act = "create")
     @PostMapping
@@ -93,19 +101,20 @@ public class ProductController {
 
     @SecuredEndpoint(obj = "products", act = "read")
     @GetMapping
-    @Operation(summary = "List products", description = "Returns all products for the tenant")
-    public ResponseEntity<List<ProductSummaryResponse>> listProducts(
+    @Operation(summary = "List products",
+            description = "Returns a paginated list of products for the tenant. "
+                    + "Supports query params: page, size (default 10, max 100), "
+                    + "sort=field,asc|desc (repeatable), filter=field:op:value (repeatable), search=keyword.")
+    public PageResponse<ProductSummaryResponse> listProducts(
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        log.info("Listing products for tenantId: {}", tenantId);
+        log.info("Listing products page={} size={} for tenantId: {}",
+                pageQuery.page(), pageQuery.size(), tenantId);
 
-        var products = manageProductUseCase.listByTenant(tenantId);
-        var response = products.stream()
-                .map(ProductMapper::toSummaryResponse)
-                .toList();
-
-        return ResponseEntity.ok(response);
+        return manageProductUseCase.listByTenant(tenantId, pageQuery)
+                .map(ProductMapper::toSummaryResponse);
     }
 
     @GetMapping("/{id}")
@@ -220,6 +229,48 @@ public class ProductController {
 
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/{id}/approval-decision")
+    @Operation(summary = "Evaluate approval rules",
+            description = "Returns AUTO_APPROVAL / MANUAL_APPROVAL / REJECTION_SCENARIO for this product " +
+                    "given application context (loanAmount, creditScore, dbrPercentage, monthlySalary).")
+    public ResponseEntity<ApprovalDecisionResponse> evaluateApproval(
+            @PathVariable UUID id,
+            @RequestParam(name = "tenantId") UUID tenantId,
+            @RequestParam(name = "loanAmount", required = false) BigDecimal loanAmount,
+            @RequestParam(name = "creditScore", required = false) Integer creditScore,
+            @RequestParam(name = "dbrPercentage", required = false) BigDecimal dbrPercentage,
+            @RequestParam(name = "monthlySalary", required = false) BigDecimal monthlySalary,
+            @RequestParam(name = "riskScore", required = false) Integer riskScore) {
+
+        Map<String, Object> context = new HashMap<>();
+        if (loanAmount != null) {
+            context.put("loan_amount", loanAmount);
+            context.put("financing_amount", loanAmount);
+        }
+        if (creditScore != null) {
+            context.put("credit_score", creditScore);
+            context.put("simah_score", creditScore);
+        }
+        if (dbrPercentage != null) context.put("dbr_percentage", dbrPercentage);
+        if (monthlySalary != null) context.put("monthly_salary", monthlySalary);
+        if (riskScore != null) context.put("risk_score", riskScore);
+
+        var decision = evaluateApprovalRuleUseCase.evaluate(tenantId, id, context);
+        log.info("Approval decision for product={} amount={} => {}", id, loanAmount, decision.decision());
+
+        return ResponseEntity.ok(new ApprovalDecisionResponse(
+                decision.decision(),
+                decision.workflowId(),
+                decision.workflowName()
+        ));
+    }
+
+    public record ApprovalDecisionResponse(
+            String decision,
+            String workflowId,
+            String workflowName
+    ) {}
 
     private UUID extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");

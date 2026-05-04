@@ -1,11 +1,12 @@
 package com.ksa.financing.middleware.application.usecase;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.middleware.application.dto.RequestLogResponse;
 import com.ksa.financing.middleware.application.mapper.MiddlewareMapper;
 import com.ksa.financing.middleware.domain.model.ApiRequestLog;
 import com.ksa.financing.middleware.domain.port.in.ManageRequestLogUseCase;
 import com.ksa.financing.middleware.domain.port.out.RequestLogRepository;
-import com.ksa.financing.infra.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,7 +18,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)
 public class ManageRequestLogService implements ManageRequestLogUseCase {
 
     private final RequestLogRepository requestLogRepository;
@@ -30,28 +30,32 @@ public class ManageRequestLogService implements ManageRequestLogUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public RequestLogResponse getById(UUID tenantId, UUID id) {
         return requestLogRepository.findById(tenantId, id)
                 .map(mapper::toResponse)
-                .orElseThrow(() -> NotFoundException.forEntity("RequestLog", id.toString()));
+                .orElseThrow(() -> new IllegalArgumentException("Request log not found: " + id));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public RequestLogResponse getByRequestId(UUID tenantId, String requestId) {
         return requestLogRepository.findByRequestId(tenantId, requestId)
                 .map(mapper::toResponse)
-                .orElseThrow(() -> NotFoundException.forEntity("RequestLog", requestId));
+                .orElseThrow(() -> new IllegalArgumentException("Request log not found for request ID: " + requestId));
     }
 
     @Override
-    public List<RequestLogResponse> listAll(UUID tenantId, int page, int size) {
-        return requestLogRepository.findAll(tenantId, page, size)
-                .stream().map(mapper::toResponse).toList();
+    @Transactional(readOnly = true)
+    public PageResponse<RequestLogResponse> listAll(UUID tenantId, PageQuery query) {
+        return requestLogRepository.findAll(tenantId, query)
+                .map(mapper::toResponse);
     }
 
     @Override
-    public List<RequestLogResponse> listByProvider(UUID tenantId, List<UUID> apiIds, int page, int size) {
-        return requestLogRepository.findByApiIdIn(tenantId, apiIds, page, size)
-                .stream().map(mapper::toResponse).toList();
+    @Transactional(readOnly = true)
+    public PageResponse<RequestLogResponse> listByProvider(UUID tenantId, List<UUID> apiIds, PageQuery query) {
+        return requestLogRepository.findByApiIdIn(tenantId, apiIds, query)
+                .map(mapper::toResponse);
     }
 }

@@ -514,6 +514,38 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         log.info("firstName updated successfully for user {}", keycloakUserId);
     }
 
+    @Override
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak", fallbackMethod = "getUserDetailsFallback")
+    public KeycloakUserDetails getUserDetails(String realm, UUID keycloakUserId) {
+        String adminToken = obtainAdminToken(realm);
+        String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken);
+
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+        ResponseEntity<Map> response = restTemplate.exchange(
+                userUrl, org.springframework.http.HttpMethod.GET, request, Map.class);
+
+        Map<String, Object> body = response.getBody();
+        if (body == null) return null;
+
+        return new KeycloakUserDetails(
+                keycloakUserId,
+                (String) body.getOrDefault("username", null),
+                (String) body.getOrDefault("firstName", null),
+                (String) body.getOrDefault("lastName", null),
+                (String) body.getOrDefault("email", null),
+                Boolean.TRUE.equals(body.get("enabled")));
+    }
+
+    @SuppressWarnings("unused")
+    private KeycloakUserDetails getUserDetailsFallback(String realm, UUID keycloakUserId, Throwable t) {
+        log.error("Keycloak unavailable for user details fetch: {}", t.getMessage());
+        return null;
+    }
+
     /**
      * Obtains an admin access token using client credentials grant.
      */

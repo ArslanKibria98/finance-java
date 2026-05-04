@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.adapter.rest.controller;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.middleware.application.dto.CreateProviderRequest;
 import com.ksa.financing.middleware.application.dto.ProviderEnvironmentResponse;
 import com.ksa.financing.middleware.application.dto.ProviderResponse;
@@ -14,7 +16,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,10 +37,11 @@ public class ProviderController {
 
     @SecuredEndpoint(obj = "middleware.providers", act = "read")
     @GetMapping("/environment")
-    public ResponseEntity<List<ProviderEnvironmentResponse>> listAllWithEnvironment(
+    public PageResponse<ProviderEnvironmentResponse> listAllWithEnvironment(
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(manageProviderUseCase.listAllWithEnvironment(tenantId));
+        return manageProviderUseCase.listAllWithEnvironment(tenantId, query);
     }
 
     @SecuredEndpoint(obj = "middleware.providers", act = "read")
@@ -69,9 +71,9 @@ public class ProviderController {
 
     @SecuredEndpoint(obj = "middleware.providers", act = "read")
     @GetMapping
-    public ResponseEntity<List<ProviderResponse>> listAll(@AuthenticationPrincipal Jwt jwt) {
+    public PageResponse<ProviderResponse> listAll(PageQuery query, @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(manageProviderUseCase.listAll(tenantId));
+        return manageProviderUseCase.listAll(tenantId, query);
     }
 
     @SecuredEndpoint(obj = "middleware.providers", act = "manage")

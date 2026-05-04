@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.application.usecase;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.middleware.application.dto.CreateProviderRequest;
 import com.ksa.financing.middleware.application.dto.ProviderEnvironmentResponse;
 import com.ksa.financing.middleware.application.dto.ProviderResponse;
@@ -19,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -79,18 +80,16 @@ public class ManageProviderService implements ManageProviderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProviderResponse> listAll(UUID tenantId) {
-        return providerRepository.findAllByTenant(tenantId)
-                .stream().map(mapper::toResponse).toList();
+    public PageResponse<ProviderResponse> listAll(UUID tenantId, PageQuery query) {
+        return providerRepository.findAllByTenant(tenantId, query)
+                .map(mapper::toResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProviderEnvironmentResponse> listAllWithEnvironment(UUID tenantId) {
-        var providers = providerRepository.findAllByTenant(tenantId);
-        return providers.stream()
-                .map(provider -> buildEnvironmentResponse(tenantId, provider))
-                .toList();
+    public PageResponse<ProviderEnvironmentResponse> listAllWithEnvironment(UUID tenantId, PageQuery query) {
+        var page = providerRepository.findAllByTenant(tenantId, query);
+        return page.map(provider -> buildEnvironmentResponse(tenantId, provider));
     }
 
     @Override
@@ -102,15 +101,9 @@ public class ManageProviderService implements ManageProviderUseCase {
     }
 
     private ProviderEnvironmentResponse buildEnvironmentResponse(UUID tenantId, ThirdPartyProvider provider) {
-        var apis = providerApiRepository.findAllByProvider(tenantId, provider.getId());
-        var apisWithConfigs = apis.stream()
-                .map(api -> {
-                    var envConfigs = envConfigRepository.findAllByApi(tenantId, api.getId())
-                            .stream().map(mapper::toResponse).toList();
-                    return mapper.toApiWithEnvConfigsResponse(api, envConfigs);
-                })
-                .toList();
-        return mapper.toEnvironmentResponse(provider, apisWithConfigs);
+        var apis = providerApiRepository.findAllByProviderId(tenantId, provider.getId());
+        var configs = envConfigRepository.findAllByProviderId(tenantId, provider.getId());
+        return mapper.toEnvironmentResponse(provider, apis, configs);
     }
 
     @Override
@@ -130,19 +123,16 @@ public class ManageProviderService implements ManageProviderUseCase {
         );
         provider.setBaseUrlDev(request.baseUrlDev());
         provider.setBaseUrlProd(request.baseUrlProd());
+        provider.setActive(request.active());
 
         var saved = providerRepository.save(provider);
-        log.info("Updated provider: id={}, tenantId={}", id, tenantId);
+        log.info("Updated provider: code={}, tenantId={}", saved.getCode(), tenantId);
         return mapper.toResponse(saved);
     }
 
     @Override
     public void delete(UUID tenantId, UUID id) {
-        var provider = providerRepository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("Provider", id.toString()));
-
-        provider.softDelete();
-        providerRepository.save(provider);
-        log.info("Soft-deleted provider: id={}, tenantId={}", id, tenantId);
+        providerRepository.deleteById(tenantId, id);
+        log.info("Deleted provider: id={}, tenantId={}", id, tenantId);
     }
 }

@@ -7,6 +7,7 @@
 
 Respond in minimal tokens. No filler, no intro, no conclusion, no repetition.
 
+
 - Fragments > sentences
 - Symbols: → = + - ≠
 - One idea per line

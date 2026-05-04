@@ -31,7 +31,7 @@ public class ApprovalConditionJpaEntity {
     @Column(name = "field", nullable = false)
     private String field;
 
-    @Column(name = "operator", nullable = false, length = 20)
+    @Column(name = "operator", nullable = false, length = 50)
     private String operator;
 
     @Column(name = "value", nullable = false, length = 1000)

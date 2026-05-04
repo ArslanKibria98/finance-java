@@ -158,7 +158,7 @@ class ProcessPaymentUseCaseTest {
                         new BigDecimal("1000"), new BigDecimal("50"), new BigDecimal("20"))
         );
         return RepaymentScheduleAggregate.create(
-                tenantId, "SCH-TEST", loanId,
+                tenantId, "SCH-TEST", loanId, UUID.randomUUID(),
                 new BigDecimal("1000"), new BigDecimal("50"),
                 LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(1),
                 installments, UUID.randomUUID());

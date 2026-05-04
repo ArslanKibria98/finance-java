@@ -3,6 +3,8 @@ package com.ksa.financing.risk.application.usecase;
 import com.ksa.financing.domain.valueobject.NationalId;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.BlacklistStatus;
 import com.ksa.financing.risk.domain.model.MobileBlacklistEntry;
 import com.ksa.financing.risk.domain.model.NidBlacklistEntry;
@@ -14,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -64,8 +66,8 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<NidBlacklistEntry> listNidBlacklist() {
-        return blacklistRepository.findAllNid();
+    public PageResponse<NidBlacklistEntry> listNidBlacklist(PageQuery pageQuery) {
+        return blacklistRepository.findAllNid(pageQuery);
     }
 
     @Override
@@ -109,8 +111,8 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<MobileBlacklistEntry> listMobileBlacklist() {
-        return blacklistRepository.findAllMobile();
+    public PageResponse<MobileBlacklistEntry> listMobileBlacklist(PageQuery pageQuery) {
+        return blacklistRepository.findAllMobile(pageQuery);
     }
 
     private String maskNid(String nid) {

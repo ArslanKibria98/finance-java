@@ -10,6 +10,8 @@ import com.ksa.financing.identity.domain.port.in.ManageEmployeeUseCase.UpdateEmp
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -55,10 +57,12 @@ public class EmployeeController {
     @SecuredEndpoint(obj = "employees", act = "read")
     @GetMapping
     @Operation(summary = "List employees", description = "Returns all employees for the tenant")
-    public ResponseEntity<List<EmployeeResponse>> listEmployees(@AuthenticationPrincipal Jwt jwt) {
+    public PageResponse<EmployeeResponse> listEmployees(
+            PageQuery query,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var employees = manageEmployeeUseCase.listByTenant(tenantId);
-        return ResponseEntity.ok(employees.stream().map(this::toResponse).toList());
+        var page = manageEmployeeUseCase.listByTenant(tenantId, query);
+        return page.map(this::toResponse);
     }
 
     @SecuredEndpoint(obj = "employees", act = "read")

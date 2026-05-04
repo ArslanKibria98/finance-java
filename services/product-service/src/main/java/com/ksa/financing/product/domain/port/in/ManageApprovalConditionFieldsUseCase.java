@@ -1,13 +1,14 @@
 package com.ksa.financing.product.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.product.domain.model.ApprovalConditionFieldDefinition;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageApprovalConditionFieldsUseCase {
 
-    List<ApprovalConditionFieldDefinition> listFieldDefinitions(UUID tenantId);
+    PageResponse<ApprovalConditionFieldDefinition> listFieldDefinitions(UUID tenantId, PageQuery pageQuery);
 
     ApprovalConditionFieldDefinition getFieldDefinition(UUID tenantId, UUID id);
 

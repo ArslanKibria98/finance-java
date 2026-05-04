@@ -4,6 +4,8 @@ import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.ledger.application.dto.JournalEntryResponse;
 import com.ksa.financing.ledger.application.dto.JournalLineDto;
 import com.ksa.financing.ledger.application.dto.PostJournalEntryRequest;
@@ -103,30 +105,42 @@ public class JournalEntryController {
     }
 
     @SecuredEndpoint(obj = "ledger.entries", act = "read")
+    @GetMapping
+    @Operation(summary = "List all journal entries for tenant (paginated)")
+    public PageResponse<JournalEntryResponse> listAllEntries(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID tenantId = extractTenantId(jwt);
+        return journalEntryRepository.findAllByTenant(tenantId, pageQuery)
+                .map(mapper::toResponse);
+    }
+
+    @SecuredEndpoint(obj = "ledger.entries", act = "read")
     @GetMapping("/by-reference")
     @Operation(summary = "Get journal entries by reference", description = "Query entries by reference type and ID (e.g. LOAN, DISBURSEMENT_ABC)")
-    public ResponseEntity<List<JournalEntryResponse>> getByReference(
+    public PageResponse<JournalEntryResponse> getByReference(
             @RequestParam String referenceType,
             @RequestParam UUID referenceId,
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<JournalEntryAggregate> entries = journalEntryRepository
-                .findByReference(tenantId, referenceType, referenceId);
-
-        return ResponseEntity.ok(entries.stream().map(mapper::toResponse).toList());
+        return journalEntryRepository
+                .findByReference(tenantId, referenceType, referenceId, pageQuery)
+                .map(mapper::toResponse);
     }
 
     @SecuredEndpoint(obj = "ledger.entries", act = "read")
     @GetMapping("/by-date")
     @Operation(summary = "Get journal entries by date")
-    public ResponseEntity<List<JournalEntryResponse>> getByDate(
+    public PageResponse<JournalEntryResponse> getByDate(
             @RequestParam LocalDate date,
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<JournalEntryAggregate> entries = journalEntryRepository.findByDate(tenantId, date);
-        return ResponseEntity.ok(entries.stream().map(mapper::toResponse).toList());
+        return journalEntryRepository.findByDate(tenantId, date, pageQuery)
+                .map(mapper::toResponse);
     }
 
     // -----------------------------------------------------------------------

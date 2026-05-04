@@ -79,4 +79,43 @@ public interface JpaJournalLineRepository extends JpaRepository<JournalLineJpaEn
             @Param("accountId") UUID accountId,
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate);
+
+    /**
+     * Sum debits and credits for an account within a date range (inclusive).
+     * Returns [totalDebits, totalCredits].
+     */
+    @Query("SELECT COALESCE(SUM(jl.debitAmount), 0), COALESCE(SUM(jl.creditAmount), 0) " +
+           "FROM JournalLineJpaEntity jl " +
+           "JOIN jl.journalEntry je " +
+           "WHERE jl.tenantId = :tenantId " +
+           "AND jl.accountId = :accountId " +
+           "AND je.entryDate >= :fromDate AND je.entryDate <= :toDate " +
+           "AND je.status = 'POSTED'")
+    Object[] sumDebitsCreditsByAccountInRange(
+            @Param("tenantId") UUID tenantId,
+            @Param("accountId") UUID accountId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
+    /**
+     * Sum debits and credits for an account joined with journal entries filtered by transaction_type.
+     * Used to categorize cash flow entries by business event type.
+     */
+    @Query(value = "SELECT " +
+           "  je.transaction_type, " +
+           "  COALESCE(SUM(CAST(jl.debit_amount AS DECIMAL)), 0) as total_debits, " +
+           "  COALESCE(SUM(CAST(jl.credit_amount AS DECIMAL)), 0) as total_credits, " +
+           "  COUNT(DISTINCT je.id) as entry_count " +
+           "FROM journal_lines jl " +
+           "JOIN journal_entries je ON jl.journal_entry_id = je.id " +
+           "WHERE jl.tenant_id = :tenantId " +
+           "AND jl.account_id = :accountId " +
+           "AND je.entry_date >= :fromDate AND je.entry_date <= :toDate " +
+           "GROUP BY je.transaction_type",
+           nativeQuery = true)
+    List<Object[]> sumByTransactionTypeForAccountInRange(
+            @Param("tenantId") UUID tenantId,
+            @Param("accountId") UUID accountId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
 }

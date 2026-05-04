@@ -1,5 +1,7 @@
 package com.ksa.financing.customer.application.usecase;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.model.KycStatus;
 import com.ksa.financing.customer.domain.model.LifecycleStage;
@@ -10,7 +12,6 @@ import com.ksa.financing.customer.domain.port.out.CustomerRepository;
 import com.ksa.financing.infra.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -101,22 +102,22 @@ public class GetCustomerService implements GetCustomerUseCase {
     }
 
     @Override
-    public List<Customer> getAll() {
-        return customerRepository.findAll();
+    public PageResponse<Customer> getAll(PageQuery query) {
+        return customerRepository.findAll(query).map(this::normalizePepStatus);
     }
 
     @Override
-    public List<Customer> getAllByTenant(UUID tenantId) {
-        return customerRepository.findAllByTenantId(tenantId);
+    public PageResponse<Customer> getAllByTenant(UUID tenantId, PageQuery query) {
+        return customerRepository.findAllByTenantId(tenantId, query).map(this::normalizePepStatus);
     }
 
     @Override
-    public List<Customer> getByLifecycleStage(UUID tenantId, LifecycleStage lifecycleStage) {
-        return customerRepository.findByLifecycleStage(tenantId, lifecycleStage.name());
+    public PageResponse<Customer> getByLifecycleStage(UUID tenantId, LifecycleStage lifecycleStage, PageQuery query) {
+        return customerRepository.findByLifecycleStage(tenantId, lifecycleStage.name(), query).map(this::normalizePepStatus);
     }
 
     @Override
-    public List<Customer> getByKycStatus(UUID tenantId, KycStatus kycStatus) {
-        return customerRepository.findByKycStatus(tenantId, kycStatus.name());
+    public PageResponse<Customer> getByKycStatus(UUID tenantId, KycStatus kycStatus, PageQuery query) {
+        return customerRepository.findByKycStatus(tenantId, kycStatus.name(), query).map(this::normalizePepStatus);
     }
 }

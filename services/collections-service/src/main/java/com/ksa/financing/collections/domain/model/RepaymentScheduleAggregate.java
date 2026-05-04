@@ -181,6 +181,21 @@ public class RepaymentScheduleAggregate {
             }
         }
 
+        // Phase 4: Penalty (oldest first)
+        for (Installment inst : unpaid) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+            BigDecimal penaltyOutstanding = inst.getOutstandingLatePenalty();
+            if (penaltyOutstanding.compareTo(BigDecimal.ZERO) <= 0) continue;
+            BigDecimal penaltyApply = remaining.min(penaltyOutstanding).setScale(6, RoundingMode.HALF_UP);
+            if (penaltyApply.compareTo(BigDecimal.ZERO) > 0) {
+                inst.applyPenaltyAllocation(penaltyApply);
+                // Map penalty to feeAllocated in the domain event since there's no penaltyAllocated field
+                allocations.add(new PaymentAllocation(paymentId, inst.getId(), allocations.size() + 1,
+                        BigDecimal.ZERO, BigDecimal.ZERO, penaltyApply, penaltyApply));
+                remaining = remaining.subtract(penaltyApply);
+            }
+        }
+
         BigDecimal totalApplied = paymentAmount.subtract(remaining);
         registerEvent(new PaymentApplied(id, tenantId, loanId, paymentId, totalApplied, remaining));
 
@@ -237,6 +252,14 @@ public class RepaymentScheduleAggregate {
             remaining = remaining.subtract(principalApply);
         }
 
+        BigDecimal penaltyApply = remaining.min(installment.getOutstandingLatePenalty()).setScale(6, RoundingMode.HALF_UP);
+        if (penaltyApply.compareTo(BigDecimal.ZERO) > 0) {
+            installment.applyPenaltyAllocation(penaltyApply);
+            allocations.add(new PaymentAllocation(paymentId, installmentId, allocations.size() + 1,
+                    BigDecimal.ZERO, BigDecimal.ZERO, penaltyApply, penaltyApply));
+            remaining = remaining.subtract(penaltyApply);
+        }
+
         BigDecimal totalApplied = paymentAmount.subtract(remaining);
         registerEvent(new PaymentApplied(id, tenantId, loanId, paymentId, totalApplied, remaining));
 
@@ -270,6 +293,103 @@ public class RepaymentScheduleAggregate {
 
     public void deactivate() {
         this.active = false;
+    }
+
+    // ==================== WRITE-OFF OPERATIONS ====================
+
+    /**
+     * Marks every write-off-eligible installment as WRITTEN_OFF and registers a
+     * {@link ScheduleInstallmentsWrittenOff} event. Returns the list of installments
+     * that were actually written-off (may be empty). Safeguards:
+     *   - Only installments flagged {@code isEligibleForWriteOff=true} are touched
+     *     (unless {@code override=true}).
+     *   - Skips already-WRITTEN_OFF / PAID / WAIVED installments.
+     *   - Idempotent: a second call without new eligibility changes writes nothing.
+     */
+    public List<Installment> writeOffEligibleInstallments(String reason, UUID actorId,
+                                                          LocalDate asOf, boolean override) {
+        if (!active)
+            throw new IllegalStateException("Cannot write off on an inactive schedule");
+
+        List<Installment> written = new ArrayList<>();
+        BigDecimal principalSum = BigDecimal.ZERO;
+        BigDecimal profitSum = BigDecimal.ZERO;
+        BigDecimal feeSum = BigDecimal.ZERO;
+        BigDecimal penaltySum = BigDecimal.ZERO;
+
+        for (Installment inst : installments) {
+            var st = inst.getStatus();
+            if (st == InstallmentStatus.PAID
+                    || st == InstallmentStatus.WAIVED
+                    || st == InstallmentStatus.WRITTEN_OFF) {
+                continue;
+            }
+            if (!override && !inst.isEligibleForWriteOff()) {
+                continue;
+            }
+            var amounts = inst.writeOff(reason, actorId, asOf, override);
+            written.add(inst);
+            principalSum = principalSum.add(amounts.principal());
+            profitSum    = profitSum.add(amounts.profit());
+            feeSum       = feeSum.add(amounts.fee());
+            penaltySum   = penaltySum.add(amounts.penalty());
+        }
+
+        if (!written.isEmpty()) {
+            registerEvent(new ScheduleInstallmentsWrittenOff(
+                    id, tenantId, loanId, written.size(),
+                    principalSum, profitSum, feeSum, penaltySum,
+                    principalSum.add(profitSum).add(feeSum).add(penaltySum),
+                    actorId, asOf));
+        }
+        return written;
+    }
+
+    /** Writes off a single installment by id (admin-targeted flow). */
+    public Installment writeOffInstallment(UUID installmentId, String reason, UUID actorId,
+                                            LocalDate asOf, boolean override) {
+        if (!active)
+            throw new IllegalStateException("Cannot write off on an inactive schedule");
+
+        var inst = installments.stream()
+                .filter(i -> i.getId().equals(installmentId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Installment not found: " + installmentId));
+
+        var amounts = inst.writeOff(reason, actorId, asOf, override);
+        registerEvent(new ScheduleInstallmentsWrittenOff(
+                id, tenantId, loanId, 1,
+                amounts.principal(), amounts.profit(), amounts.fee(), amounts.penalty(),
+                amounts.total(), actorId, asOf));
+        return inst;
+    }
+
+    /**
+     * Waives penalty on a single installment. Returns the PenaltyWaiver audit record;
+     * caller persists it via the waiver repository.
+     */
+    public PenaltyWaiver waivePenaltyOnInstallment(UUID installmentId, BigDecimal amount,
+                                                   String reason, String approvalReference,
+                                                   UUID actorId) {
+        if (!active)
+            throw new IllegalStateException("Cannot waive penalty on inactive schedule");
+
+        var inst = installments.stream()
+                .filter(i -> i.getId().equals(installmentId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Installment not found: " + installmentId));
+
+        BigDecimal originalPenalty = inst.getLatePenaltyAmount();
+        BigDecimal priorWaived = inst.getWaivedPenaltyAmount();
+        BigDecimal remainingBefore = originalPenalty.subtract(priorWaived).max(BigDecimal.ZERO);
+        BigDecimal actual = inst.waivePenalty(amount);
+        BigDecimal remainingAfter = remainingBefore.subtract(actual);
+
+        registerEvent(new PenaltyWaived(id, tenantId, loanId, installmentId, actual,
+                remainingAfter, actorId));
+
+        return PenaltyWaiver.create(tenantId, loanId, installmentId,
+                originalPenalty, actual, reason, approvalReference, actorId);
     }
 
     // ==================== QUERIES ====================
@@ -383,5 +503,39 @@ public class RepaymentScheduleAggregate {
             RepaymentScheduleId scheduleId,
             UUID tenantId,
             UUID loanId
+    ) {}
+
+    public record ScheduleInstallmentsWrittenOff(
+            RepaymentScheduleId scheduleId,
+            UUID tenantId,
+            UUID loanId,
+            int installmentsCount,
+            BigDecimal principalWrittenOff,
+            BigDecimal profitWrittenOff,
+            BigDecimal feeWrittenOff,
+            BigDecimal penaltyWrittenOff,
+            BigDecimal totalWrittenOff,
+            UUID actorId,
+            LocalDate writeOffDate
+    ) {}
+
+    public record PenaltyWaived(
+            RepaymentScheduleId scheduleId,
+            UUID tenantId,
+            UUID loanId,
+            UUID installmentId,
+            BigDecimal waivedAmount,
+            BigDecimal remainingPenalty,
+            UUID actorId
+    ) {}
+
+    public record LoanOverdue(
+            RepaymentScheduleId scheduleId,
+            UUID tenantId,
+            UUID loanId,
+            int maxDpd,
+            int overdueInstallments,
+            BigDecimal overdueAmount,
+            LocalDate overdueDate
     ) {}
 }

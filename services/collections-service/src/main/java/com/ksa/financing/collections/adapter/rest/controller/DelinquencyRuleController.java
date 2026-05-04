@@ -62,6 +62,9 @@ public class DelinquencyRuleController {
         UUID tenantId = extractTenantId(jwt);
         var type = DelinquencyType.fromCode(req.delinquencyType());
 
+        log.info("Incoming delinquency rule update request: productId={}, type={}, isPercentage={}, pct={}, amount={}, from={}, till={}",
+                req.productId(), type, req.isPercentage(), req.penaltyPercentage(), req.penaltyAmount(), req.fromDay(), req.tillDay());
+
         var cmd = new UpsertRuleCommand(
                 tenantId,
                 req.productId(),

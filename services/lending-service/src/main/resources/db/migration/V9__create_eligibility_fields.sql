@@ -50,32 +50,32 @@ CREATE INDEX idx_prod_elig_tenant_product ON product_eligibility_fields(tenant_i
 -- ============================================================================
 -- Seed default eligibility fields
 -- ============================================================================
--- Uses a CTE to get tenant_id=00000000-0000-0000-0000-000000000000 as system default.
+-- Uses a CTE to get tenant_id=00000000-0000-0000-0000-000000000001 as system default.
 -- Real tenants will clone or create their own.
 
 INSERT INTO eligibility_field_definitions
     (tenant_id, field_key, name_en, name_ar, description_en, data_type, input_type, unit, min_value, max_value, is_required, sort_order)
 VALUES
-    ('00000000-0000-0000-0000-000000000000', 'monthly_income', 'Monthly Income', 'الدخل الشهري',
+    ('00000000-0000-0000-0000-000000000001', 'monthly_income', 'Monthly Income', 'الدخل الشهري',
      'Gross monthly salary in SAR', 'NUMBER', 'CURRENCY', 'SAR', 1000, 999999, true, 1),
 
-    ('00000000-0000-0000-0000-000000000000', 'total_expenses', 'Total Monthly Expenses', 'إجمالي المصاريف الشهرية',
+    ('00000000-0000-0000-0000-000000000001', 'total_expenses', 'Total Monthly Expenses', 'إجمالي المصاريف الشهرية',
      'Total monthly expenses in SAR', 'NUMBER', 'CURRENCY', 'SAR', 0, 999999, true, 2),
 
-    ('00000000-0000-0000-0000-000000000000', 'existing_liabilities', 'Existing Monthly Liabilities', 'الالتزامات الشهرية القائمة',
+    ('00000000-0000-0000-0000-000000000001', 'existing_liabilities', 'Existing Monthly Liabilities', 'الالتزامات الشهرية القائمة',
      'Existing monthly loan/credit obligations in SAR', 'NUMBER', 'CURRENCY', 'SAR', 0, 999999, true, 3),
 
-    ('00000000-0000-0000-0000-000000000000', 'adult_dependents', 'Adult Dependents', 'المعالون البالغون',
+    ('00000000-0000-0000-0000-000000000001', 'adult_dependents', 'Adult Dependents', 'المعالون البالغون',
      'Number of adult dependents', 'INTEGER', 'STEPPER', null, 0, 20, true, 4),
 
-    ('00000000-0000-0000-0000-000000000000', 'child_dependents', 'Child Dependents', 'المعالون الأطفال',
+    ('00000000-0000-0000-0000-000000000001', 'child_dependents', 'Child Dependents', 'المعالون الأطفال',
      'Number of child dependents', 'INTEGER', 'STEPPER', null, 0, 20, true, 5),
 
-    ('00000000-0000-0000-0000-000000000000', 'employment_sector', 'Employment Sector', 'قطاع العمل',
+    ('00000000-0000-0000-0000-000000000001', 'employment_sector', 'Employment Sector', 'قطاع العمل',
      'Government, Private, or Self-employed', 'STRING', 'SELECT', null, null, null, false, 6),
 
-    ('00000000-0000-0000-0000-000000000000', 'employment_months', 'Employment Duration (Months)', 'مدة العمل (شهور)',
+    ('00000000-0000-0000-0000-000000000001', 'employment_months', 'Employment Duration (Months)', 'مدة العمل (شهور)',
      'How many months at current employer', 'INTEGER', 'TEXT', 'months', 0, 600, false, 7),
 
-    ('00000000-0000-0000-0000-000000000000', 'age', 'Age', 'العمر',
+    ('00000000-0000-0000-0000-000000000001', 'age', 'Age', 'العمر',
      'Customer age in years', 'INTEGER', 'TEXT', 'years', 18, 70, false, 8);

@@ -19,6 +19,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -132,6 +135,7 @@ public class AdminRescheduleController {
         node.put("loanNumber",     r.getLoanNumber());
         node.put("rescheduleType", r.getRescheduleType());
         node.put("status",         r.getStatus());
+        node.put("details",        generateRescheduleDetails(r));
 
         // Resolve applicationId from loan
         try {
@@ -156,9 +160,24 @@ public class AdminRescheduleController {
 
         // Before/after schedule change
         ObjectNode before = objectMapper.createObjectNode();
-        before.put("tenureMonths",      r.getOldTenureMonths());
-        before.put("installmentAmount", r.getOldInstallmentAmount() != null ? r.getOldInstallmentAmount().toPlainString() : null);
-        before.put("maturityDate",      r.getOldMaturityDate() != null ? r.getOldMaturityDate().toString() : null);
+        Integer oldTenure = r.getOldTenureMonths();
+        BigDecimal oldInstallment = r.getOldInstallmentAmount();
+        LocalDate oldMaturity = r.getOldMaturityDate();
+
+        // Fallback to loan's current data if old data was not captured (for older records)
+        try {
+            var loanOpt = loanRepository.findById(r.getLoanId());
+            if (loanOpt.isPresent()) {
+                var loan = loanOpt.get();
+                if (oldTenure == null) oldTenure = loan.getTenureMonths();
+                if (oldInstallment == null) oldInstallment = loan.getInstallmentAmount();
+                if (oldMaturity == null) oldMaturity = loan.getMaturityDate();
+            }
+        } catch (Exception ignored) {}
+
+        before.put("tenureMonths",      oldTenure);
+        before.put("installmentAmount", oldInstallment != null ? oldInstallment.toPlainString() : null);
+        before.put("maturityDate",      oldMaturity != null ? oldMaturity.toString() : null);
         node.set("before", before);
 
         ObjectNode after = objectMapper.createObjectNode();
@@ -194,6 +213,57 @@ public class AdminRescheduleController {
         node.set("sync", sync);
 
         return node;
+    }
+
+    private String generateRescheduleDetails(LoanRescheduleJpaEntity r) {
+        StringBuilder sb = new StringBuilder();
+        String type = r.getRescheduleType();
+
+        Integer oldTenure = r.getOldTenureMonths();
+        LocalDate oldMaturity = r.getOldMaturityDate();
+        BigDecimal oldInstallment = r.getOldInstallmentAmount();
+
+        // Fallback for older records
+        try {
+            if (oldTenure == null || oldMaturity == null || oldInstallment == null) {
+                var loanOpt = loanRepository.findById(r.getLoanId());
+                if (loanOpt.isPresent()) {
+                    var loan = loanOpt.get();
+                    if (oldTenure == null) oldTenure = loan.getTenureMonths();
+                    if (oldMaturity == null) oldMaturity = loan.getMaturityDate();
+                    if (oldInstallment == null) oldInstallment = loan.getInstallmentAmount();
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if ("SKIP_PAYMENT".equals(type)) {
+            sb.append("Requested to skip installment for ").append(r.getRequestedSkipMonth() != null ? r.getRequestedSkipMonth().getMonth().name() + " " + r.getRequestedSkipMonth().getYear() : "selected month").append(". ");
+            sb.append("Action: The skipped month is moved to the end of the schedule. ");
+            sb.append("Total tenure remains ").append(oldTenure != null ? oldTenure : "?").append(" months, ");
+            sb.append("but maturity date is extended to ").append(r.getNewMaturityDate() != null ? r.getNewMaturityDate() : "a later date").append(".");
+        } else if ("TENURE_EXTENSION".equals(type)) {
+            sb.append("Loan tenure extended by ").append(r.getExtensionMonths()).append(" months. ");
+            sb.append("Configuration: Tenure changed from ").append(oldTenure != null ? oldTenure : "?").append(" to ").append(r.getNewTenureMonths()).append(" months. ");
+            sb.append("Result: Monthly installment reduced from ").append(scale2(oldInstallment)).append(" to ").append(scale2(r.getNewInstallmentAmount())).append(" SAR.");
+        } else if ("PAYMENT_HOLIDAY".equals(type)) {
+            sb.append("Payment holiday granted for ").append(r.getHolidayMonths()).append(" months. ");
+            sb.append("Impact: Next installments are paused, and maturity is extended to ").append(r.getNewMaturityDate()).append(".");
+        } else if ("RESTRUCTURING".equals(type)) {
+            sb.append("Loan restructuring performed for financial relief. ");
+            if (r.getWriteOffAmount() != null && r.getWriteOffAmount().compareTo(BigDecimal.ZERO) > 0) {
+                sb.append("Benefit: Principal write-off of ").append(scale2(r.getWriteOffAmount())).append(" SAR applied. ");
+            }
+            if (r.getNewProfitRate() != null) {
+                sb.append("Change: Profit rate updated to ").append(r.getNewProfitRate().multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)).append("%. ");
+            }
+            sb.append("Impact: Monthly payment adjusted from ").append(scale2(oldInstallment)).append(" to ").append(scale2(r.getNewInstallmentAmount())).append(" SAR.");
+        }
+
+        return sb.toString();
+    }
+
+    private BigDecimal scale2(BigDecimal val) {
+        return val != null ? val.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
     private UUID extractTenantId(Jwt jwt) {

@@ -1,2 +1,3 @@
 com.ksa.financing.infra.autoconfigure.FoundationalInfraAutoConfiguration
 com.ksa.financing.infra.authorization.AuthorizationAutoConfiguration
+com.ksa.financing.infra.pagination.PaginationAutoConfiguration

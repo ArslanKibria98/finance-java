@@ -2,6 +2,8 @@ package com.ksa.financing.risk.application.usecase;
 
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.assessment.AnswerChangeReason;
 import com.ksa.financing.risk.domain.model.assessment.AnswerVersionStatus;
 import com.ksa.financing.risk.domain.model.assessment.AssessmentAnswer;
@@ -265,8 +267,8 @@ public class RunAssessmentService implements RunAssessmentUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AssessmentSession> getSessionsByEntity(UUID tenantId, String entityReference) {
-        return sessionRepository.findByEntityReference(tenantId, entityReference);
+    public PageResponse<AssessmentSession> getSessionsByEntity(UUID tenantId, String entityReference, PageQuery pageQuery) {
+        return sessionRepository.findByEntityReference(tenantId, entityReference, pageQuery);
     }
 
     @Override

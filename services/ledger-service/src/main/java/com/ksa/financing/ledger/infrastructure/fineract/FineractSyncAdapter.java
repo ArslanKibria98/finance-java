@@ -3,6 +3,7 @@ package com.ksa.financing.ledger.infrastructure.fineract;
 import com.ksa.financing.ledger.domain.model.JournalEntryAggregate;
 import com.ksa.financing.ledger.domain.model.JournalLine;
 import com.ksa.financing.ledger.domain.port.out.FineractSyncPort;
+import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaFineractAccountMappingRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
@@ -32,14 +33,15 @@ import java.util.Map;
 public class FineractSyncAdapter implements FineractSyncPort {
 
     private final RestTemplate fineractRestTemplate;
+    private final JpaFineractAccountMappingRepository fineractAccountMappingRepository;
 
-    @Value("${ksa.fineract.base-url:https://localhost:8443/fineract-provider/api/v1}")
+    @Value("${app.fineract.base-url:https://localhost:8443/fineract-provider/api/v1}")
     private String fineractBaseUrl;
 
-    @Value("${ksa.fineract.office-id:1}")
+    @Value("${app.fineract.office-id:1}")
     private Long officeId;
 
-    @Value("${ksa.fineract.tenant-id:default}")
+    @Value("${app.fineract.tenant-id:default}")
     private String fineractTenantId;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy");
@@ -159,10 +161,17 @@ public class FineractSyncAdapter implements FineractSyncPort {
         List<Map<String, Object>> credits = new ArrayList<>();
 
         for (JournalLine line : entry.getLines()) {
+            var mapping = fineractAccountMappingRepository
+                    .findByTenantIdAndInternalAccountId(entry.getTenantId(), line.accountId().value())
+                    .orElse(null);
+            if (mapping == null || !mapping.isActive()) {
+                throw new FineractSyncException(
+                        "No active Fineract mapping for internal account " + line.accountId()
+                                + " (tenant=" + entry.getTenantId() + ")");
+            }
+
             Map<String, Object> lineMap = new HashMap<>();
-            // Map internal account UUID to Fineract GL account ID
-            // In production: look up fineract_account_mappings
-            lineMap.put("glAccountId", 1L); // Placeholder — real impl uses mapping table
+            lineMap.put("glAccountId", mapping.getFineractGlAccountId());
             lineMap.put("amount", line.effectiveAmount().toPlainString());
 
             if (line.isDebit()) {

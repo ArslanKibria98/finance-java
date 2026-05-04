@@ -165,7 +165,8 @@ public class PaymentController {
         return method == PaymentMethod.HYPERPAY_MADA
                 || method == PaymentMethod.HYPERPAY_VISA
                 || method == PaymentMethod.HYPERPAY_MASTERCARD
-                || method == PaymentMethod.HYPERPAY_APPLE_PAY;
+                || method == PaymentMethod.HYPERPAY_APPLE_PAY
+                || method == PaymentMethod.SADAD;
     }
 
     @PostMapping("/{paymentId}/complete")

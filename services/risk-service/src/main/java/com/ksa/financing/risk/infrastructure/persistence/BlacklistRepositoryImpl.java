@@ -1,6 +1,9 @@
 package com.ksa.financing.risk.infrastructure.persistence;
 
 import com.ksa.financing.domain.valueobject.NationalId;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.BlacklistStatus;
 import com.ksa.financing.risk.domain.model.MobileBlacklistEntry;
 import com.ksa.financing.risk.domain.model.NidBlacklistEntry;
@@ -11,8 +14,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -30,10 +31,14 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
 
     @Override
     public NidBlacklistEntry saveNid(NidBlacklistEntry entry) {
-        var id = UUID.randomUUID();
+        var id = entry.id() != null ? entry.id() : UUID.randomUUID();
         jdbcTemplate.update("""
             INSERT INTO nid_blacklist (id, national_id, reason, status, added_by, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (national_id) DO UPDATE SET
+                reason = EXCLUDED.reason,
+                status = EXCLUDED.status,
+                updated_at = EXCLUDED.updated_at
             """,
             id, entry.nationalId().value(), entry.reason(), entry.status().name(),
             entry.addedBy(), Timestamp.from(entry.createdAt()), Timestamp.from(entry.updatedAt())
@@ -59,10 +64,14 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
     }
 
     @Override
-    public List<NidBlacklistEntry> findAllNid() {
-        return jdbcTemplate.query(
-            "SELECT * FROM nid_blacklist ORDER BY created_at DESC", NID_MAPPER
-        );
+    public PageResponse<NidBlacklistEntry> findAllNid(PageQuery pageQuery) {
+        String countSql = "SELECT count(*) FROM nid_blacklist";
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class)).orElse(0L);
+
+        String sql = "SELECT * FROM nid_blacklist ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        List<NidBlacklistEntry> content = jdbcTemplate.query(sql, NID_MAPPER, pageQuery.size(), pageQuery.page() * pageQuery.size());
+
+        return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
     }
 
     @Override
@@ -78,10 +87,14 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
 
     @Override
     public MobileBlacklistEntry saveMobile(MobileBlacklistEntry entry) {
-        var id = UUID.randomUUID();
+        var id = entry.id() != null ? entry.id() : UUID.randomUUID();
         jdbcTemplate.update("""
             INSERT INTO mobile_blacklist (id, mobile_number, reason, status, added_by, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (mobile_number) DO UPDATE SET
+                reason = EXCLUDED.reason,
+                status = EXCLUDED.status,
+                updated_at = EXCLUDED.updated_at
             """,
             id, entry.mobileNumber(), entry.reason(), entry.status().name(),
             entry.addedBy(), Timestamp.from(entry.createdAt()), Timestamp.from(entry.updatedAt())
@@ -107,10 +120,14 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
     }
 
     @Override
-    public List<MobileBlacklistEntry> findAllMobile() {
-        return jdbcTemplate.query(
-            "SELECT * FROM mobile_blacklist ORDER BY created_at DESC", MOBILE_MAPPER
-        );
+    public PageResponse<MobileBlacklistEntry> findAllMobile(PageQuery pageQuery) {
+        String countSql = "SELECT count(*) FROM mobile_blacklist";
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class)).orElse(0L);
+
+        String sql = "SELECT * FROM mobile_blacklist ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        List<MobileBlacklistEntry> content = jdbcTemplate.query(sql, MOBILE_MAPPER, pageQuery.size(), pageQuery.page() * pageQuery.size());
+
+        return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
     }
 
     @Override
@@ -120,6 +137,19 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
             Integer.class, mobileNumber
         );
         return count != null && count > 0;
+    }
+
+    private PageMetadata buildMetadata(PageQuery query, long totalElements) {
+        int totalPages = (int) Math.ceil((double) totalElements / query.size());
+        return new PageMetadata(
+                query.page(),
+                query.size(),
+                totalElements,
+                totalPages,
+                query.page() == 0,
+                query.page() >= totalPages - 1,
+                totalElements == 0
+        );
     }
 
     // ===== ROW MAPPERS =====

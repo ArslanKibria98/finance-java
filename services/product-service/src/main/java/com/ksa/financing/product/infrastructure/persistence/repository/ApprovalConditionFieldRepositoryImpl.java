@@ -1,5 +1,8 @@
 package com.ksa.financing.product.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.product.domain.model.ApprovalConditionFieldDefinition;
 import com.ksa.financing.product.domain.model.ApprovalConditionFieldOption;
 import com.ksa.financing.product.domain.port.out.ApprovalConditionFieldRepository;
@@ -7,6 +10,8 @@ import com.ksa.financing.product.infrastructure.persistence.entity.ApprovalCondi
 import com.ksa.financing.infra.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
@@ -14,6 +19,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -22,16 +28,35 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ApprovalConditionFieldRepositoryImpl implements ApprovalConditionFieldRepository {
 
+    private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of("active", "dataType", "fieldKey");
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of("fieldKey", "nameEn", "nameAr");
+
     private final JpaApprovalConditionFieldDefinitionRepository jpaFieldDefRepo;
     private final JpaApprovalConditionFieldOptionRepository jpaFieldOptionRepo;
 
     @Override
-    public List<ApprovalConditionFieldDefinition> findAllWithOptions(UUID tenantId) {
+    public PageResponse<ApprovalConditionFieldDefinition> findAllWithOptions(UUID tenantId, PageQuery pageQuery) {
         log.debug("Loading approval condition field definitions with options for tenant: {}", tenantId);
 
-        var definitions = jpaFieldDefRepo.findByTenantIdAndActiveTrueOrderBySortOrder(tenantId);
-        var allOptions = jpaFieldOptionRepo.findByTenantIdAndActiveTrueOrderBySortOrder(tenantId);
+        Specification<ApprovalConditionFieldDefinitionJpaEntity> base = (root, query, cb) ->
+                cb.and(cb.equal(root.get("tenantId"), tenantId), cb.equal(root.get("active"), true));
 
+        Specification<ApprovalConditionFieldDefinitionJpaEntity> dynamic = SpecificationBuilder
+                .<ApprovalConditionFieldDefinitionJpaEntity>builder()
+                .filters(pageQuery.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(pageQuery.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<ApprovalConditionFieldDefinitionJpaEntity> page =
+                jpaFieldDefRepo.findAll(base.and(dynamic), pageQuery.toPageable());
+
+        if (page.isEmpty()) {
+            return PageResponse.from(page, d -> toDomain(d, Collections.emptyList()));
+        }
+
+        var allOptions = jpaFieldOptionRepo.findByTenantIdAndActiveTrueOrderBySortOrder(tenantId);
         Map<UUID, List<ApprovalConditionFieldOption>> optionsByFieldId = allOptions.stream()
                 .collect(Collectors.groupingBy(
                         o -> o.getFieldDefinitionId(),
@@ -41,9 +66,8 @@ public class ApprovalConditionFieldRepositoryImpl implements ApprovalConditionFi
                                         o.getLabelEn(), o.getLabelAr(), o.getSortOrder()),
                                 Collectors.toList())));
 
-        return definitions.stream()
-                .map(d -> toDomain(d, optionsByFieldId.getOrDefault(d.getId(), Collections.emptyList())))
-                .toList();
+        return PageResponse.from(page,
+                d -> toDomain(d, optionsByFieldId.getOrDefault(d.getId(), Collections.emptyList())));
     }
 
     @Override

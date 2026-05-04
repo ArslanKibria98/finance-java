@@ -41,7 +41,7 @@ public class FineractProxyController {
     private final String fineractPassword;
 
     public FineractProxyController(
-            RestTemplate restTemplate,
+            @org.springframework.beans.factory.annotation.Qualifier("fineractRestTemplate") RestTemplate restTemplate,
             ObjectMapper objectMapper,
             @Value("${ksa.fineract.base-url:https://localhost:8443/fineract-provider/api/v1}") String fineractBaseUrl,
             @Value("${ksa.fineract.tenant-id:default}") String fineractTenantId,

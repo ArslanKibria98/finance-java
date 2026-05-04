@@ -39,7 +39,7 @@ public class EddReferenceDataController {
     @Value("${app.services.customer-service-url}")
     private String customerServiceUrl;
 
-    @Value("${app.services.default-tenant-id:00000000-0000-0000-0000-000000000001}")
+    @Value("${app.default-tenant-id:00000000-0000-0000-0000-000000000001}")
     private String defaultTenantId;
 
     public EddReferenceDataController(RestTemplate restTemplate) {

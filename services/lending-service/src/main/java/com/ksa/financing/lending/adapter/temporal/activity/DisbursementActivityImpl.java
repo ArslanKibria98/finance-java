@@ -304,9 +304,10 @@ public class DisbursementActivityImpl implements DisbursementActivity {
     private java.math.BigDecimal resolveFineractInterestRate(
             java.math.BigDecimal inputRate, Long loanProductId, HttpHeaders headers) {
 
-        // Convert decimal to percentage if needed (0.0385 → 3.85)
+        // Convert decimal to percentage if needed (0.0125 → 1.25).
+        // Assume decimals if <= 0.5 (50%), otherwise assume already a percentage.
         java.math.BigDecimal rateAsPercent = inputRate;
-        if (rateAsPercent != null && rateAsPercent.compareTo(java.math.BigDecimal.ONE) < 0) {
+        if (rateAsPercent != null && rateAsPercent.compareTo(new java.math.BigDecimal("0.5")) <= 0) {
             rateAsPercent = rateAsPercent.multiply(new java.math.BigDecimal("100"));
         }
 

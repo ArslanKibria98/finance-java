@@ -1,6 +1,10 @@
 package com.ksa.financing.ledger.infrastructure.persistence.repository;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.ledger.domain.model.EntryStatus;
 import com.ksa.financing.ledger.domain.model.JournalEntryAggregate;
 import com.ksa.financing.ledger.domain.model.JournalEntryId;
@@ -13,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -33,6 +38,14 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
     private final JpaJournalEntryRepository jpaRepo;
     private final JpaIdempotencyKeyRepository idempotencyRepo;
     private final JournalEntryPersistenceMapper mapper;
+
+    private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of(
+            "status", "referenceType", "referenceId", "transactionType", "entryDate"
+    );
+
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of(
+            "entryNumber", "description"
+    );
 
     @Override
     public JournalEntryAggregate save(JournalEntryAggregate entry) {
@@ -71,27 +84,82 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
     }
 
     @Override
-    public List<JournalEntryAggregate> findByReference(UUID tenantId, String referenceType, UUID referenceId) {
-        return jpaRepo.findByTenantIdAndReferenceTypeAndReferenceId(tenantId, referenceType, referenceId)
-                .stream()
-                .map(mapper::toDomain)
-                .toList();
+    public PageResponse<JournalEntryAggregate> findByReference(UUID tenantId, String referenceType, UUID referenceId, PageQuery query) {
+        log.debug("Finding journal entries by reference: {}/{} page={} size={}", 
+                referenceType, referenceId, query.page(), query.size());
+
+        Specification<JournalEntryJpaEntity> spec = (root, q, cb) -> cb.and(
+                cb.equal(root.get("tenantId"), tenantId),
+                cb.equal(root.get("referenceType"), referenceType),
+                cb.equal(root.get("referenceId"), referenceId)
+        );
+
+        Specification<JournalEntryJpaEntity> dynamic = SpecificationBuilder.<JournalEntryJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<JournalEntryJpaEntity> page = jpaRepo.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, mapper::toDomain);
     }
 
     @Override
-    public List<JournalEntryAggregate> findByDate(UUID tenantId, LocalDate entryDate) {
-        return jpaRepo.findByTenantIdAndEntryDate(tenantId, entryDate)
-                .stream()
-                .map(mapper::toDomain)
-                .toList();
+    public PageResponse<JournalEntryAggregate> findByDate(UUID tenantId, LocalDate entryDate, PageQuery query) {
+        log.debug("Finding journal entries by date: {} page={} size={}", entryDate, query.page(), query.size());
+
+        Specification<JournalEntryJpaEntity> spec = (root, q, cb) -> cb.and(
+                cb.equal(root.get("tenantId"), tenantId),
+                cb.equal(root.get("entryDate"), entryDate)
+        );
+
+        Specification<JournalEntryJpaEntity> dynamic = SpecificationBuilder.<JournalEntryJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<JournalEntryJpaEntity> page = jpaRepo.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, mapper::toDomain);
     }
 
     @Override
-    public List<JournalEntryAggregate> findByStatus(UUID tenantId, EntryStatus status) {
-        return jpaRepo.findByTenantIdAndStatus(tenantId, status.name())
-                .stream()
-                .map(mapper::toDomain)
-                .toList();
+    public PageResponse<JournalEntryAggregate> findByStatus(UUID tenantId, EntryStatus status, PageQuery query) {
+        log.debug("Finding journal entries by status: {} page={} size={}", status, query.page(), query.size());
+
+        Specification<JournalEntryJpaEntity> spec = (root, q, cb) -> cb.and(
+                cb.equal(root.get("tenantId"), tenantId),
+                cb.equal(root.get("status"), status.name())
+        );
+
+        Specification<JournalEntryJpaEntity> dynamic = SpecificationBuilder.<JournalEntryJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<JournalEntryJpaEntity> page = jpaRepo.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, mapper::toDomain);
+    }
+
+    @Override
+    public PageResponse<JournalEntryAggregate> findAllByTenant(UUID tenantId, PageQuery query) {
+        log.debug("Finding all journal entries for tenant: {} page={} size={}", tenantId, query.page(), query.size());
+
+        Specification<JournalEntryJpaEntity> spec = (root, q, cb) -> cb.equal(root.get("tenantId"), tenantId);
+
+        Specification<JournalEntryJpaEntity> dynamic = SpecificationBuilder.<JournalEntryJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<JournalEntryJpaEntity> page = jpaRepo.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, mapper::toDomain);
     }
 
     @Override
@@ -115,7 +183,7 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // NEW METHODS FOR GL QUERIES & REPORTS
+    // NEW METHODS FOR GL QUERIES & REPORTS (legacy/paginated)
     // ═════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -213,7 +281,7 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
         Object[] result = jpaRepo.sumDebitsCreditsByTenantOnDate(tenantId, date);
 
         Map<String, BigDecimal> totals = new HashMap<>();
-        if (result != null) {
+        if (result != null && result.length >= 2 && result[0] != null) {
             BigDecimal totalDebits = new BigDecimal(result[0].toString());
             BigDecimal totalCredits = new BigDecimal(result[1].toString());
             totals.put("totalDebits", totalDebits);

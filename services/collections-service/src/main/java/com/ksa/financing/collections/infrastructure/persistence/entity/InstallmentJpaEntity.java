@@ -75,6 +75,36 @@ public class InstallmentJpaEntity {
     @Column(name = "paid_date")
     private LocalDate paidDate;
 
+    @Column(name = "is_eligible_for_writeoff", nullable = false)
+    private boolean eligibleForWriteOff;
+
+    @Column(name = "eligibility_evaluated_at")
+    private LocalDateTime eligibilityEvaluatedAt;
+
+    @Column(name = "waived_penalty_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal waivedPenaltyAmount;
+
+    @Column(name = "written_off_principal", nullable = false, precision = 19, scale = 4)
+    private BigDecimal writtenOffPrincipal;
+
+    @Column(name = "written_off_profit", nullable = false, precision = 19, scale = 4)
+    private BigDecimal writtenOffProfit;
+
+    @Column(name = "written_off_fee", nullable = false, precision = 19, scale = 4)
+    private BigDecimal writtenOffFee;
+
+    @Column(name = "written_off_penalty", nullable = false, precision = 19, scale = 4)
+    private BigDecimal writtenOffPenalty;
+
+    @Column(name = "write_off_date")
+    private LocalDate writeOffDate;
+
+    @Column(name = "write_off_reason", length = 500)
+    private String writeOffReason;
+
+    @Column(name = "written_off_by")
+    private UUID writtenOffBy;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

@@ -177,7 +177,12 @@ public class ProductSettingsController {
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        log.info("Updating duration settings for product: {} tenant: {}", productId, tenantId);
+        log.info("Updating duration settings for product: {} tenant: {} payload: request={} approval={} disbursement={} repayment={}",
+                productId, tenantId,
+                request.requestDurationDays(),
+                request.approvalDurationDays(),
+                request.disbursementDurationHours(),
+                request.repaymentDurationDays());
 
         var command = new UpdateDurationSettingsCommand(
                 request.requestDurationDaysOrZero(),

@@ -6,4 +6,5 @@ import java.util.UUID;
 public interface GetBalanceUseCase {
     Wallet getByWalletId(UUID walletId);
     Wallet getByCustomerId(UUID tenantId, UUID customerId);
+    Wallet getByMobile(UUID tenantId, String mobileNumber);
 }

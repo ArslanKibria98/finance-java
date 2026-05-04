@@ -46,7 +46,7 @@ class RepaymentScheduleAggregateTest {
         @DisplayName("creates schedule with correct totals")
         void createsScheduleWithCorrectTotals() {
             var schedule = RepaymentScheduleAggregate.create(
-                    tenantId, "SCH-001", loanId,
+                    tenantId, "SCH-001", loanId, UUID.randomUUID(),
                     new BigDecimal("3000"), new BigDecimal("150"),
                     LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(3),
                     installments, createdBy);
@@ -73,7 +73,7 @@ class RepaymentScheduleAggregateTest {
         @DisplayName("throws when tenant ID is null")
         void throwsWhenTenantIdNull() {
             assertThatThrownBy(() -> RepaymentScheduleAggregate.create(
-                    null, "SCH-001", loanId,
+                    null, "SCH-001", loanId, UUID.randomUUID(),
                     new BigDecimal("3000"), new BigDecimal("150"),
                     LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(3),
                     installments, createdBy))
@@ -85,7 +85,7 @@ class RepaymentScheduleAggregateTest {
         @DisplayName("throws when schedule number is blank")
         void throwsWhenScheduleNumberBlank() {
             assertThatThrownBy(() -> RepaymentScheduleAggregate.create(
-                    tenantId, "", loanId,
+                    tenantId, "", loanId, UUID.randomUUID(),
                     new BigDecimal("3000"), new BigDecimal("150"),
                     LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(3),
                     installments, createdBy))
@@ -97,7 +97,7 @@ class RepaymentScheduleAggregateTest {
         @DisplayName("throws when principal is zero")
         void throwsWhenPrincipalZero() {
             assertThatThrownBy(() -> RepaymentScheduleAggregate.create(
-                    tenantId, "SCH-001", loanId,
+                    tenantId, "SCH-001", loanId, UUID.randomUUID(),
                     BigDecimal.ZERO, new BigDecimal("150"),
                     LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(3),
                     installments, createdBy))
@@ -299,7 +299,7 @@ class RepaymentScheduleAggregateTest {
             );
 
             var schedule = RepaymentScheduleAggregate.create(
-                    tenantId, "SCH-DUE-001", loanId,
+                    tenantId, "SCH-DUE-001", loanId, UUID.randomUUID(),
                     new BigDecimal("2000"), new BigDecimal("100"),
                     LocalDate.now().minusDays(1), LocalDate.now().plusMonths(1),
                     pastDueInstallments, createdBy);
@@ -317,7 +317,7 @@ class RepaymentScheduleAggregateTest {
 
     private RepaymentScheduleAggregate createTestSchedule() {
         return RepaymentScheduleAggregate.create(
-                tenantId, "SCH-TEST-001", loanId,
+                tenantId, "SCH-TEST-001", loanId, UUID.randomUUID(),
                 new BigDecimal("3000"), new BigDecimal("150"),
                 LocalDate.now().plusMonths(1), LocalDate.now().plusMonths(3),
                 installments, createdBy);

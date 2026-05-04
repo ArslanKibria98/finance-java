@@ -49,7 +49,10 @@ public class EvaluateFraudEventService implements EvaluateFraudEventUseCase {
         var savedEvent = fraudEventRepository.save(event);
 
         // Step 3: Load active rules for this tenant
-        var activeRules = fraudRuleRepository.findActiveByTenant(tenantId);
+        var pageQuery = new com.ksa.financing.infra.pagination.PageQuery(
+                0, 1000, java.util.List.of(), java.util.List.of(), null);
+        var rulesPage = fraudRuleRepository.findActiveByTenant(tenantId, pageQuery);
+        var activeRules = rulesPage.content();
         if (activeRules.isEmpty()) {
             log.warn("No active fraud rules found for tenant={}", tenantId);
             return buildAllowResult(tenantId, savedEvent, startTime);

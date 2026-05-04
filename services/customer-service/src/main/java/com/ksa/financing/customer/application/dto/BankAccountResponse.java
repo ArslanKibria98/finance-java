@@ -7,12 +7,17 @@ public record BankAccountResponse(
     UUID id,
     String bankName,
     String bankCode,
+    String nameEn,
+    String nameAr,
+    String iban,
     String maskedIban,
     String accountHolderName,
     String accountType,
     boolean isPrimary,
     boolean isSalaryAccount,
+    boolean salaryAccount,
     String status,
     Instant verifiedAt,
-    Instant createdAt
+    Instant createdAt,
+    int sortOrder
 ) {}

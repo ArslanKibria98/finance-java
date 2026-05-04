@@ -39,7 +39,11 @@ public class SecurityConfig {
     /**
      * Public filter chain for read-only reference data endpoints (dropdown options).
      * These are called by onboarding-service without JWT (service-to-service).
-     * Tenant identification via X-Tenant-Id header.
+     * Tenant identification via X-Tenant-Id header OR JWT claim if Authorization header is present.
+     *
+     * <p>JWT decoding is configured but optional — endpoint is accessible without auth.
+     * If a valid Bearer token is sent, it is decoded so {@code @AuthenticationPrincipal Jwt}
+     * is populated and tenant_id can be extracted from the JWT claim.
      */
     @Bean
     @Order(1)
@@ -66,6 +70,12 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .decoder(jwtDecoder())
+                    .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                )
+            )
             .build();
     }
 

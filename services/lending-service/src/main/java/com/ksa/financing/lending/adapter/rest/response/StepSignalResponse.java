@@ -6,6 +6,7 @@ import com.ksa.islamic.orchestration.activity.lending.LoanApplicationWorkflow.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Rich response returned after each signal endpoint call.
@@ -67,6 +68,7 @@ public record StepSignalResponse(
             boolean canProceed,
 
             @Schema(description = "Error message if any step failed")
+            @JsonInclude(JsonInclude.Include.ALWAYS)
             String errorMessage,
 
             @Schema(description = "Application ID (UUID)")
@@ -95,6 +97,24 @@ public record StepSignalResponse(
     ) {
         public static WorkflowState from(ApplicationStatusInfo statusInfo) {
             if (statusInfo == null) return null;
+            if ("MANUAL_REVIEW".equals(statusInfo.status())) {
+                return new WorkflowState(
+                        8,
+                        "Application Submitted",
+                        statusInfo.status(),
+                        "AWAITING_UNDERWRITER_DECISION",
+                        true,
+                        null,
+                        statusInfo.applicationId(),
+                        statusInfo.applicationNumber(),
+                        statusInfo.basicInfo(),
+                        statusInfo.bankAccount(),
+                        statusInfo.eligibility(),
+                        statusInfo.offer(),
+                        statusInfo.contract(),
+                        statusInfo.loan()
+                );
+            }
             return new WorkflowState(
                     statusInfo.stepperIndex(),
                     statusInfo.stepName(),
@@ -117,6 +137,24 @@ public record StepSignalResponse(
             if (stepInfo == null && statusInfo == null) return null;
 
             if (statusInfo != null && stepInfo != null) {
+                if ("MANUAL_REVIEW".equals(statusInfo.status())) {
+                    return new WorkflowState(
+                            8,
+                            "Application Submitted",
+                            statusInfo.status(),
+                            "AWAITING_UNDERWRITER_DECISION",
+                            true,
+                            null,
+                            statusInfo.applicationId(),
+                            statusInfo.applicationNumber(),
+                            statusInfo.basicInfo(),
+                            statusInfo.bankAccount(),
+                            statusInfo.eligibility(),
+                            statusInfo.offer(),
+                            statusInfo.contract(),
+                            statusInfo.loan()
+                    );
+                }
                 return new WorkflowState(
                         stepInfo.stepperIndex(),
                         stepInfo.stepName(),
@@ -136,6 +174,17 @@ public record StepSignalResponse(
             }
 
             if (stepInfo != null) {
+                if ("MANUAL_REVIEW".equals(stepInfo.status())) {
+                    return new WorkflowState(
+                            8,
+                            "Application Submitted",
+                            stepInfo.status(),
+                            "AWAITING_UNDERWRITER_DECISION",
+                            true,
+                            null,
+                            null, null, null, null, null, null, null, null
+                    );
+                }
                 return new WorkflowState(
                         stepInfo.stepperIndex(),
                         stepInfo.stepName(),
@@ -174,21 +223,33 @@ public record StepSignalResponse(
         String currentStatusStr = statusInfo != null ? statusInfo.status() : null;
         ApplicationStatus appStatus;
         try {
-            appStatus = currentStatusStr != null ? ApplicationStatus.valueOf(currentStatusStr) : null;
+            appStatus = currentStatusStr != null
+                    ? ApplicationStatus.valueOf(currentStatusStr.trim().toUpperCase(Locale.ROOT))
+                    : null;
         } catch (IllegalArgumentException e) {
             appStatus = null;
         }
 
-        var trackerSteps = LoanApplicationStepInfo.buildSteps(appStatus);
-        var nextAction = LoanApplicationStepInfo.getNextAction(appStatus);
-        var overallStatus = resolveOverallStatus(appStatus);
+        var trackerSteps = LoanApplicationStepInfo.buildSteps(currentStatusStr);
+        var nextAction = LoanApplicationStepInfo.getNextAction(currentStatusStr);
+        var overallStatus = resolveOverallStatus(currentStatusStr, appStatus);
 
-        // Calculate preQualification from workflow data
+        // Calculate preQualification from workflow data (prefer official offer if available)
         PreQualificationData preQual = null;
-        if (statusInfo != null && statusInfo.basicInfo() != null) {
-            var info = statusInfo.basicInfo();
-            preQual = PreQualificationData.calculate(
-                    info.requestedAmount(), info.requestedTenureMonths(), info.profitRate());
+        if (statusInfo != null) {
+            if (statusInfo.offer() != null) {
+                preQual = PreQualificationData.fromOffer(statusInfo.offer());
+            } else if (statusInfo.basicInfo() != null) {
+                var info = statusInfo.basicInfo();
+                preQual = PreQualificationData.calculateFinance(
+                        info.requestedAmount(),
+                        info.requestedTenureMonths(),
+                        info.profitRate(),
+                        info.processingFeePercent(),
+                        info.processingFeeAmount(),
+                        info.adminFeeAmount()
+                );
+            }
         }
 
         return new StepSignalResponse(
@@ -215,5 +276,12 @@ public record StepSignalResponse(
             case EXPIRED_RESUMABLE -> "expired_resumable";
             default -> "active";
         };
+    }
+
+    private static String resolveOverallStatus(String rawStatus, ApplicationStatus status) {
+        if (rawStatus != null && "MANUAL_REVIEW".equals(rawStatus.trim().toUpperCase(Locale.ROOT))) {
+            return "active";
+        }
+        return resolveOverallStatus(status);
     }
 }

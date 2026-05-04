@@ -1,0 +1,451 @@
+{
+  "info": {
+    "name": "KSA - Wallet-to-Wallet Transfers",
+    "description": "Wallet-to-wallet P2P transfer demo.\n\n**Architecture (Option A — Fineract = single source of truth):**\n- wallet-service stores: transfer audit + idempotency only\n- Fineract holds: balances + GL + every transaction\n- Balance reads + writes go to Fineract directly\n- Mobile-based recipient lookup via identity-service\n\n**Demo wallets** (real Keycloak users, all in CompanyRealm):\n- Wallet A: NID 1010219431 / PIN 147852  →  +966561343161 (10,000 SAR initial)\n- Wallet B: NID 1211111111 / PIN 147852  →  +966591591591 ( 5,000 SAR initial)\n- Wallet C: NID 1234567010 / PIN 147852  →  +966555687010 (FROZEN, 0 SAR)\n\n**Tenant**: 00000000-0000-0000-0000-000000000001\n**Realm**: CompanyRealm\n\nRun the requests in order — first \"0. Login\" auto-sets the JWT, then everything else uses it.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/wallet-service", "description": "via Kong (recommended)" },
+    { "key": "identityUrl", "value": "http://localhost:8000/identity-service" },
+    { "key": "directUrl", "value": "http://localhost:8088", "description": "wallet-service direct (bypass Kong)" },
+    { "key": "jwt", "value": "", "description": "auto-set by login request" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "walletA", "value": "22a7defd-c377-4239-bd68-a40dfb632ae8" },
+    { "key": "walletB", "value": "43564271-7ea5-4047-b36f-79afeb5d07fe" },
+    { "key": "walletC", "value": "9155a581-cccd-4e95-83ca-a17186521168" },
+    { "key": "nidA", "value": "1010219431" },
+    { "key": "nidB", "value": "1211111111" },
+    { "key": "mobileA", "value": "+966561343161" },
+    { "key": "mobileB", "value": "+966591591591" },
+    { "key": "mobileC", "value": "+966555687010" },
+    { "key": "lastTransferId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{jwt}}" }]
+  },
+  "item": [
+    {
+      "name": "0. Login as Wallet A owner (auto-sets {{jwt}})",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const resp = pm.response.json();",
+              "const data = resp.data || resp;",
+              "if (data.accessToken) {",
+              "    pm.collectionVariables.set('jwt', data.accessToken);",
+              "    console.log('JWT set: ' + data.accessToken.substring(0, 20) + '...');",
+              "}",
+              "pm.test('Login OK', () => pm.response.to.have.status(200));",
+              "pm.test('Token returned', () => pm.expect(data.accessToken).to.not.be.empty);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "postman-demo-A" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"{{nidA}}\",\n  \"pin\": \"147852\"\n}"
+        },
+        "url": "{{identityUrl}}/api/v1/auth/login-with-pin",
+        "description": "Login as NID 1010219431 / PIN 147852. Returns JWT auto-saved into {{jwt}}.\nFor logging in as Wallet B owner: change nationalId to {{nidB}} (1211111111)."
+      }
+    },
+    {
+      "name": "1. Balance — Wallet A (BEFORE) [from Fineract]",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "console.log('Wallet A balance:', d.availableBalance, d.currency);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/{{walletA}}/balance",
+        "description": "Reads balance from Fineract via wallet-service (single source of truth)."
+      }
+    },
+    {
+      "name": "2. Balance — Wallet B (BEFORE) [from Fineract]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/{{walletB}}/balance"
+      }
+    },
+    {
+      "name": "3. ✅ Lookup recipient by mobile (verify name)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "pm.test('found', () => pm.expect(d.found).to.be.true);",
+              "pm.test('canReceive', () => pm.expect(d.canReceive).to.be.true);",
+              "console.log('Recipient:', d.maskedName, '|', d.maskedMobile, '|', d.walletStatus);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/transfers/recipient?mobile={{mobileB}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "wallets", "transfers", "recipient"],
+          "query": [{ "key": "mobile", "value": "{{mobileB}}" }]
+        },
+        "description": "Verify recipient name + wallet status BEFORE confirming the transfer in UI.\nReturns: {found, walletId, walletNumber, maskedName, maskedMobile, currency, walletStatus, canReceive}"
+      }
+    },
+    {
+      "name": "4. ✅ Transfer by mobile — A → B (250 SAR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const resp = pm.response.json();",
+              "const d = resp.data || resp;",
+              "pm.collectionVariables.set('lastTransferId', d.id);",
+              "pm.test('status COMPLETED', () => pm.expect(d.status).to.eql('COMPLETED'));",
+              "pm.test('amount=250', () => pm.expect(parseFloat(d.amount)).to.eql(250));",
+              "console.log('Transfer:', d.transferNumber, '| status:', d.status, '| fineractRef:', d.fineractTransferId);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 250.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"P2P via mobile (Fineract source of truth)\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile",
+        "description": "Sender wallet resolved from JWT (sub → identity-service → customerId → wallet).\nReceiver wallet resolved from receiverMobile.\nNo wallet IDs in request body. Calls Fineract /accounttransfers atomically."
+      }
+    },
+    {
+      "name": "5. ✅ Transfer by walletId — A → B (1000 SAR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const resp = pm.response.json();",
+              "const d = resp.data || resp;",
+              "pm.collectionVariables.set('lastTransferId', d.id);",
+              "pm.test('status COMPLETED', () => pm.expect(d.status).to.eql('COMPLETED'));",
+              "console.log('Fineract transfer ref:', d.fineractTransferId);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationWalletId\": \"{{walletB}}\",\n  \"amount\": 1000.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"Lunch repayment\",\n  \"channel\": \"P2P_WALLET_ID\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers"
+      }
+    },
+    {
+      "name": "6. Get transfer by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/transfers/{{lastTransferId}}"
+      }
+    },
+    {
+      "name": "7. List transfers for Wallet A (sent + received)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/transfers/by-wallet/{{walletA}}"
+      }
+    },
+    {
+      "name": "7b. ✅ Full transaction history — Wallet A (Fineract + transfers merged)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "console.log('Total tx:', d.totalElements, '| balance:', d.currentBalance, d.currency);",
+              "(d.transactions || []).slice(0, 5).forEach((t, i) => {",
+              "  const cp = t.counterparty ? t.counterparty.walletNumber : '-';",
+              "  console.log(`  #${i+1} ${t.type} ${t.direction} ${t.amount} → ${cp}  ${t.purposeNote || ''}`);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/{{walletA}}/transactions?page=0&size=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "wallets", "{{walletA}}", "transactions"],
+          "query": [
+            { "key": "page", "value": "0" },
+            { "key": "size", "value": "20" }
+          ]
+        },
+        "description": "Returns unified bank-statement style transaction list:\n- TOP_UP / TRANSFER_OUT / TRANSFER_IN / WITHDRAWAL / FEE / OTHER\n- Each TRANSFER_* entry includes counterparty walletNumber, customerId, purposeNote, transferNumber\n- Source = Fineract savings transactions + wallet_transfers metadata, joined by amount+direction\n- Newest first, paginated"
+      }
+    },
+    {
+      "name": "7c. ✅ Full transaction history — Wallet B",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/{{walletB}}/transactions?page=0&size=20"
+      }
+    },
+    {
+      "name": "8. ❌ Self-transfer (rejected)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([400, 422]));",
+              "console.log('error:', pm.response.json().code || pm.response.json().error);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationWalletId\": \"{{walletA}}\",\n  \"amount\": 100.00\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers",
+        "description": "Expect: WALLET.TRANSFER.SELF_NOT_ALLOWED"
+      }
+    },
+    {
+      "name": "9. ❌ Insufficient balance (A → B: 1,000,000 SAR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([400, 422]));",
+              "console.log('error:', pm.response.json().code || pm.response.json().error);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationWalletId\": \"{{walletB}}\",\n  \"amount\": 1000000.00\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers",
+        "description": "Balance check is now against Fineract (single source of truth).\nExpect: WALLET.BALANCE.INSUFFICIENT"
+      }
+    },
+    {
+      "name": "10. ❌ Frozen destination (A → C)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([400, 422]));",
+              "console.log('error:', pm.response.json().code || pm.response.json().error);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationWalletId\": \"{{walletC}}\",\n  \"amount\": 50.00\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers",
+        "description": "Wallet C is FROZEN. Expect: WALLET.TRANSFER.DESTINATION_NOT_ACTIVE"
+      }
+    },
+    {
+      "name": "11. ❌ Lookup unknown mobile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK with found=false', () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().data.found).to.be.false;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/transfers/recipient?mobile=%2B966500000000",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "wallets", "transfers", "recipient"],
+          "query": [{ "key": "mobile", "value": "+966500000000" }]
+        }
+      }
+    },
+    {
+      "name": "12. ✅ Idempotency — first call (key=replay-001)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const d = pm.response.json().data;",
+              "pm.collectionVariables.set('idempotencyTransferId', d.id);",
+              "pm.test('COMPLETED', () => pm.expect(d.status).to.eql('COMPLETED'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "demo-replay-key-001" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 100.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"Idempotency test\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile"
+      }
+    },
+    {
+      "name": "13. ✅ Idempotency — replay same key (NO double-debit)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const d = pm.response.json().data;",
+              "const orig = pm.collectionVariables.get('idempotencyTransferId');",
+              "pm.test('Same transferId returned', () => pm.expect(d.id).to.eql(orig));",
+              "console.log('Original:', orig, ' | Replay:', d.id, ' (must match)');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Idempotency-Key", "value": "demo-replay-key-001" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 100.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"Idempotency replay\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile"
+      }
+    },
+    {
+      "name": "14. Balance — Wallet A (AFTER) [Fineract reflects all transfers]",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const d = pm.response.json().data;",
+              "console.log('Wallet A final balance:', d.availableBalance, d.currency);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/{{walletA}}/balance"
+      }
+    },
+    {
+      "name": "15. Balance — Wallet B (AFTER) [Fineract reflects all transfers]",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const d = pm.response.json().data;",
+              "console.log('Wallet B final balance:', d.availableBalance, d.currency);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/{{walletB}}/balance"
+      }
+    }
+  ]
+}

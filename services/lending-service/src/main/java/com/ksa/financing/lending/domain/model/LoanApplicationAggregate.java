@@ -49,6 +49,9 @@ public class LoanApplicationAggregate {
     private String purposeOfFinance;
     private String purposeOfFinanceOther;
     private BigDecimal profitRate;
+    private BigDecimal processingFeePercent;
+    private BigDecimal processingFeeAmount; // Re-used for Step 1 storage
+    private BigDecimal adminFeeAmount;      // Re-used for Step 1 storage
     private BigDecimal apr;
     private UUID partnerId;
     private UUID leadId;
@@ -210,7 +213,8 @@ public class LoanApplicationAggregate {
             UUID productId, String productCode, String productName,
             ShariaStructure shariaStructure, BigDecimal requestedAmount, int requestedTenureMonths,
             String purposeOfFinance, String purposeOfFinanceOther,
-            BigDecimal profitRate, BigDecimal apr, UUID partnerId, UUID leadId,
+            BigDecimal profitRate, BigDecimal processingFeePercent, BigDecimal processingFeeAmount,
+            BigDecimal adminFeeAmount, BigDecimal apr, UUID partnerId, UUID leadId,
             String safeWatchSessionId, String safeWatchStatus,
             String employerName, String employmentSector, String employmentStatus,
             BigDecimal basicSalary, BigDecimal totalSalary, String employmentStartDate,
@@ -256,6 +260,9 @@ public class LoanApplicationAggregate {
         agg.purposeOfFinance = purposeOfFinance;
         agg.purposeOfFinanceOther = purposeOfFinanceOther;
         agg.profitRate = profitRate;
+        agg.processingFeePercent = processingFeePercent;
+        agg.processingFeeAmount = processingFeeAmount;
+        agg.adminFeeAmount = adminFeeAmount;
         agg.apr = apr;
         agg.partnerId = partnerId;
         agg.leadId = leadId;
@@ -319,7 +326,9 @@ public class LoanApplicationAggregate {
                                  ShariaStructure shariaStructure, BigDecimal requestedAmount,
                                  int requestedTenureMonths, String purposeOfFinance,
                                  String purposeOfFinanceOther,
-                                 BigDecimal profitRate, BigDecimal apr,
+                                 BigDecimal profitRate, 
+                                 BigDecimal processingFeePercent, BigDecimal processingFeeAmount,
+                                 BigDecimal adminFeeAmount, BigDecimal apr,
                                  UUID partnerId, UUID leadId, UUID updatedBy) {
         assertTransition(ApplicationStatus.BASIC_INFO_SUBMITTED);
         if (productId == null && (productCode == null || productCode.isBlank()))
@@ -338,6 +347,9 @@ public class LoanApplicationAggregate {
         this.purposeOfFinance = purposeOfFinance;
         this.purposeOfFinanceOther = purposeOfFinanceOther;
         this.profitRate = profitRate;
+        this.processingFeePercent = processingFeePercent;
+        this.processingFeeAmount = processingFeeAmount;
+        this.adminFeeAmount = adminFeeAmount;
         this.apr = apr;
         this.partnerId = partnerId;
         this.leadId = leadId;
@@ -670,6 +682,9 @@ public class LoanApplicationAggregate {
     public String getPurposeOfFinance() { return purposeOfFinance; }
     public String getPurposeOfFinanceOther() { return purposeOfFinanceOther; }
     public BigDecimal getProfitRate() { return profitRate; }
+    public BigDecimal getProcessingFeePercent() { return processingFeePercent; }
+    public BigDecimal getProcessingFeeAmount() { return processingFeeAmount; }
+    public BigDecimal getAdminFeeAmount() { return adminFeeAmount; }
     public BigDecimal getApr() { return apr; }
     public UUID getPartnerId() { return partnerId; }
     public UUID getLeadId() { return leadId; }

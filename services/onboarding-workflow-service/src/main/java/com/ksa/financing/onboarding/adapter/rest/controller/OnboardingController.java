@@ -3,6 +3,8 @@ package com.ksa.financing.onboarding.adapter.rest.controller;
 import com.ksa.financing.onboarding.application.dto.*;
 import com.ksa.financing.onboarding.domain.model.*;
 import com.ksa.financing.onboarding.domain.port.in.*;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.onboarding.workflow.CustomerOnboardingWorkflow;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

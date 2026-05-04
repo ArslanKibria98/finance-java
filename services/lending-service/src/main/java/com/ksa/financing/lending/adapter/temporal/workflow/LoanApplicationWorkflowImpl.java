@@ -109,6 +109,9 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     private final LedgerActivity ledgerActivity =
             Workflow.newActivityStub(LedgerActivity.class, ledgerOptions);
 
+    private final ManualApprovalActivity manualApprovalActivity =
+            Workflow.newActivityStub(ManualApprovalActivity.class, defaultOptions);
+
     // ══════════════════════════════════════════════════════════════
     // WORKFLOW STATE (all mutable, preserved across signals)
     // ══════════════════════════════════════════════════════════════
@@ -194,6 +197,24 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     private String commodityTradeId;
     private boolean contractsGenerated;
 
+    // Manual approval gate state
+    private ManualReviewDecisionSignal manualApproveSignal;
+    private ManualReviewDecisionSignal manualRejectSignal;
+    private boolean manualApprovalReceived;
+    private String manualApprovalTaskId;
+    private int manualApprovalSlaDays = 2;
+    private boolean manualReviewRequired;
+
+    // Revert state
+    private int targetStepIndex = 0;
+    private boolean goBackRequested = false;
+    private String goBackReason;
+
+    // Cancellation state
+    private boolean cancelRequested = false;
+    private String cancelReason;
+    private String cancelledBy;
+
     // ══════════════════════════════════════════════════════════════
     // MAIN WORKFLOW METHOD
     // ══════════════════════════════════════════════════════════════
@@ -232,6 +253,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
 
         try {
             boolean received;
+            int currentStep = 1;
 
             // ── CREATE DRAFT APPLICATION ──
             var createResult = lendingActivity.createDraftApplication(
@@ -248,171 +270,244 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
             applicationNumber = createResult.applicationNumber();
             log.info("Draft application created: {}", applicationNumber);
 
-            // Pre-populate basicInfoData from initiate request so tracker shows requestedAmount immediately
-            if (requestedAmount != null) {
-                basicInfoData = new BasicInfoData(
-                        productId, null, null, null,
-                        requestedAmount, requestedTenureMonths, purposeOfFinance, null
-                );
-            }
-
             // ── BRD PHASE 1: SAFEWATCH AML SCREENING ──
             processSafeWatchScreening();
 
-            // ══════════ STEP 1: BASIC INFORMATION ══════════
-            updateStep(1, "Basic Information", "DRAFT", "AWAITING_INPUT");
+            // ── PRE-POPULATE PRODUCT INFO ──
+            // Fetch product config early so tracker shows correct profit rate/fees from the start
+            productValidation = productActivity.validateProduct(
+                    new ProductValidationActivity.ProductValidationInput(
+                            tenantId, productId, requestedAmount, requestedTenureMonths
+                    )
+            );
 
-            // Wait for basic info signal from user (POST /{customerId}/basic-info)
-            received = Workflow.await(STEP_TIMEOUT, () -> basicInfoReceived);
-            if (!received) {
-                return expireApplication(workflowId, "Step 1 timed out: Basic information not submitted");
+            if (!productValidation.valid()) {
+                errorMessage = productValidation.rejectionReason();
+                return compensateAndFail(workflowId, "Product validation failed: " + productValidation.rejectionReason());
             }
 
-            updateStep(1, "Basic Information", "DRAFT", "PROCESSING");
-            processBasicInfoFromInitiate();
-
-            // ══════════ STEP 2: ADD BANK ACCOUNT ══════════
-            updateStep(2, "Add Bank Account", "BANK_ACCOUNT_PENDING", "AWAITING_INPUT");
-            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
-                    tenantId, applicationId, "BANK_ACCOUNT_PENDING", createdBy));
-
-            received = Workflow.await(STEP_TIMEOUT, () -> bankAccountReceived);
-            if (!received) {
-                return expireApplication(workflowId, "Step 2 timed out: Bank account not submitted");
+            // Pre-populate basicInfoData from initiate request + product config
+            if (requestedAmount != null) {
+                basicInfoData = new BasicInfoData(
+                        productId,
+                        productValidation.productCode(),
+                        productValidation.productName(),
+                        productValidation.shariaStructure(),
+                        requestedAmount,
+                        requestedTenureMonths,
+                        purposeOfFinance,
+                        productValidation.profitRate(),
+                        productValidation.processingFeePercent(),
+                        productValidation.processingFeeAmount(),
+                        productValidation.adminFeeAmount()
+                );
+                // Also set resolvedProfitRate early for consistency
+                resolvedProfitRate = productValidation.profitRate();
             }
 
-            processBankAccount();
+            while (currentStep <= 5) {
+                // Check if cancellation was requested
+                if (cancelRequested) {
+                    return compensateAndCancel(workflowId, cancelReason);
+                }
 
-            // ── BRD PHASE 5: MASDAR EMPLOYMENT VERIFICATION ──
-            processMasdarVerification();
-
-            // ── BRD PHASE 6: AML DECLARATION ──
-            processAmlDeclaration();
-
-            // ══════════ STEP 3: CHECKING ELIGIBILITY ══════════
-            updateStep(3, "Checking Eligibility", "BANK_ACCOUNT_VERIFIED", "AWAITING_CONSENT");
-            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
-                    tenantId, applicationId, "BANK_ACCOUNT_VERIFIED", createdBy));
-
-            // Wait for SIMAH consent
-            received = Workflow.await(STEP_TIMEOUT, () -> simahConsentReceived);
-            if (!received) {
-                return expireApplication(workflowId, "Step 3 timed out: SIMAH consent not given");
-            }
-
-            if (!simahConsentSignal.consentGiven()) {
-                return cancelApplication(workflowId, "Customer declined SIMAH consent");
-            }
-
-            processEligibilityCheck();
-
-            // ══════════ STEP 4: ACCEPT OFFER ══════════
-            updateStep(4, "Accept Offer", "OFFER_PRESENTED", "AWAITING_ACCEPTANCE");
-            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
-                    tenantId, applicationId, "OFFER_PRESENTED", createdBy));
-
-            received = Workflow.await(STEP_TIMEOUT, () -> offerAccepted);
-            if (!received) {
-                return expireApplication(workflowId, "Step 4 timed out: Offer not accepted");
-            }
-
-            if (!acceptOfferSignal.accepted()) {
-                return cancelApplication(workflowId, "Customer rejected the offer");
-            }
-
-            // ── BRD: PAYMENT GUARD FRAUD CHECK ──
-            processPaymentGuardCheck();
-
-            processOfferAcceptance();
-
-            // ══════════ STEP 5: SIGN CONTRACT ══════════
-            updateStep(5, "Sign Contract", "CONTRACT_PENDING", "GENERATING_CONTRACTS");
-            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
-                    tenantId, applicationId, "CONTRACT_PENDING", createdBy));
-
-            processContractGeneration();
-
-            // 5a: Wait for contract signing authorizations
-            subStep = "AWAITING_SIGNATURE";
-            received = Workflow.await(CONTRACT_SIGNING_TIMEOUT, () -> contractSignalReceived);
-            if (!received) {
-                return compensateAndExpire(workflowId, "Contract signing timed out (24 hours)");
-            }
-
-            processContractSigning();
-
-            // 5b: OTP Verification with retry loop (BRD: max 3 attempts, 2 min timeout each)
-            status = "OTP_VERIFICATION";
-            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
-                    tenantId, applicationId, "OTP_VERIFICATION", createdBy));
-
-            boolean otpVerifiedOk = false;
-            while (otpAttemptCount < MAX_OTP_ATTEMPTS && !otpVerifiedOk) {
-                subStep = "AWAITING_OTP";
-                otpReceived = false;
-                otpSignal = null;
-
-                received = Workflow.await(OTP_TIMEOUT, () -> otpReceived);
-                if (!received) {
-                    otpAttemptCount++;
-                    lendingActivity.saveOtpAttempt(new LoanApplicationActivity.SaveOtpAttemptInput(
-                            tenantId, applicationId, createdBy));
-                    if (otpAttemptCount >= MAX_OTP_ATTEMPTS) {
-                        return compensateAndExpire(workflowId, "OTP verification timed out after " + MAX_OTP_ATTEMPTS + " attempts");
-                    }
-                    errorMessage = "OTP timed out. Attempt " + otpAttemptCount + " of " + MAX_OTP_ATTEMPTS;
-                    // Re-send OTP for next attempt
-                    contractActivity.sendSigningOtp(new ContractActivity.SendOtpInput(
-                            tenantId, customerId, mobileNumber, "CONTRACT_SIGNING"));
+                // Check if a go-back was requested while processing or at the start of a loop
+                if (goBackRequested) {
+                    log.info("Reverting workflow to step {} (Reason: {})", targetStepIndex, goBackReason);
+                    currentStep = targetStepIndex;
+                    goBackRequested = false;
+                    resetFlagsForGoBack(currentStep);
                     continue;
                 }
 
-                otpAttemptCount++;
-                lendingActivity.saveOtpAttempt(new LoanApplicationActivity.SaveOtpAttemptInput(
-                        tenantId, applicationId, createdBy));
-                otpVerifiedOk = processOtpVerificationWithRetry();
-                if (!otpVerifiedOk && otpAttemptCount >= MAX_OTP_ATTEMPTS) {
-                    return compensateAndExpire(workflowId, "OTP verification failed after " + MAX_OTP_ATTEMPTS + " attempts");
-                }
-            }
+                switch (currentStep) {
+                    case 1:
+                        // ══════════ STEP 1: BASIC INFORMATION ══════════
+                        updateStep(1, "Basic Information", "DRAFT", "AWAITING_INPUT");
 
-            // ── BRD PHASE 8: NABA NOTIFICATION (after OTP verified) ──
-            processNabaNotification();
+                        // Wait for basic info signal from user (POST /{customerId}/basic-info)
+                        received = Workflow.await(STEP_TIMEOUT, () -> basicInfoReceived || goBackRequested || cancelRequested);
+                        if (cancelRequested) continue;
+                        if (goBackRequested) continue;
+                        if (!received) {
+                            return expireApplication(workflowId, "Step 1 timed out: Basic information not submitted");
+                        }
 
-            // 5c: IVR Verification with retry loop (BRD: max 3 attempts)
-            status = "IVR_VERIFICATION";
-            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
-                    tenantId, applicationId, "IVR_VERIFICATION", createdBy));
+                        updateStep(1, "Basic Information", "DRAFT", "PROCESSING");
+                        processBasicInfoFromInitiate();
+                        currentStep = 2;
+                        break;
 
-            boolean ivrVerifiedOk = false;
-            while (ivrAttemptCount < MAX_IVR_ATTEMPTS && !ivrVerifiedOk) {
-                subStep = "AWAITING_IVR";
-                ivrReceived = false;
-                ivrSignal = null;
+                    case 2:
+                        // ══════════ STEP 2: ADD BANK ACCOUNT ══════════
+                        updateStep(2, "Add Bank Account", "BANK_ACCOUNT_PENDING", "AWAITING_INPUT");
+                        lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                                tenantId, applicationId, "BANK_ACCOUNT_PENDING", createdBy));
 
-                received = Workflow.await(IVR_TIMEOUT, () -> ivrReceived);
-                if (!received) {
-                    ivrAttemptCount++;
-                    lendingActivity.saveIvrAttempt(new LoanApplicationActivity.SaveIvrAttemptInput(
-                            tenantId, applicationId, createdBy));
-                    if (ivrAttemptCount >= MAX_IVR_ATTEMPTS) {
-                        return compensateAndExpire(workflowId, "IVR verification timed out after " + MAX_IVR_ATTEMPTS + " attempts");
-                    }
-                    errorMessage = "IVR timed out. Attempt " + ivrAttemptCount + " of " + MAX_IVR_ATTEMPTS;
-                    // Re-initiate IVR for next attempt
-                    thirdPartyActivity.initiateIvrCall(new ThirdPartyActivity.IvrInitiateInput(
-                            tenantId, applicationId, mobileNumber,
-                            customerValidation.fullName(),
-                            offerDetails.selectedAmount() != null ? offerDetails.selectedAmount() : basicInfoSignal.requestedAmount()));
-                    continue;
-                }
+                        received = Workflow.await(STEP_TIMEOUT, () -> bankAccountReceived || goBackRequested || cancelRequested);
+                        if (cancelRequested) continue;
+                        if (goBackRequested) continue;
+                        if (!received) {
+                            return expireApplication(workflowId, "Step 2 timed out: Bank account not submitted");
+                        }
 
-                ivrAttemptCount++;
-                lendingActivity.saveIvrAttempt(new LoanApplicationActivity.SaveIvrAttemptInput(
-                        tenantId, applicationId, createdBy));
-                ivrVerifiedOk = processIvrVerificationWithRetry();
-                if (!ivrVerifiedOk && ivrAttemptCount >= MAX_IVR_ATTEMPTS) {
-                    return compensateAndExpire(workflowId, "IVR verification failed after " + MAX_IVR_ATTEMPTS + " attempts");
+                        processBankAccount();
+                        currentStep = 3;
+                        break;
+
+                    case 3:
+                        // ── BRD PHASE 5: MASDAR EMPLOYMENT VERIFICATION ──
+                        processMasdarVerification();
+
+                        // ── BRD PHASE 6: AML DECLARATION ──
+                        processAmlDeclaration();
+
+                        // ══════════ STEP 3: CHECKING ELIGIBILITY ══════════
+                        updateStep(3, "Checking Eligibility", "BANK_ACCOUNT_VERIFIED", "AWAITING_CONSENT");
+                        lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                                tenantId, applicationId, "BANK_ACCOUNT_VERIFIED", createdBy));
+
+                        // Wait for SIMAH consent
+                        received = Workflow.await(STEP_TIMEOUT, () -> simahConsentReceived || goBackRequested || cancelRequested);
+                        if (cancelRequested) continue;
+                        if (goBackRequested) continue;
+                        if (!received) {
+                            return expireApplication(workflowId, "Step 3 timed out: SIMAH consent not given");
+                        }
+
+                        if (!simahConsentSignal.consentGiven()) {
+                            return cancelApplication(workflowId, "Customer declined SIMAH consent");
+                        }
+
+                        processEligibilityCheck();
+                        currentStep = 4;
+                        break;
+
+                    case 4:
+                        // ══════════ STEP 4: ACCEPT OFFER ══════════
+                        updateStep(4, "Accept Offer", "OFFER_PRESENTED", "AWAITING_ACCEPTANCE");
+                        lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                                tenantId, applicationId, "OFFER_PRESENTED", createdBy));
+
+                        received = Workflow.await(STEP_TIMEOUT, () -> offerAccepted || goBackRequested || cancelRequested);
+                        if (cancelRequested) continue;
+                        if (goBackRequested) continue;
+                        if (!received) {
+                            return expireApplication(workflowId, "Step 4 timed out: Offer not accepted");
+                        }
+
+                        if (!acceptOfferSignal.accepted()) {
+                            return cancelApplication(workflowId, "Customer rejected the offer");
+                        }
+
+                        // ── BRD: PAYMENT GUARD FRAUD CHECK ──
+                        processPaymentGuardCheck();
+
+                        processOfferAcceptance();
+                        currentStep = 5;
+                        break;
+
+                    case 5:
+                        // ══════════ STEP 5: SIGN CONTRACT ══════════
+                        updateStep(5, "Sign Contract", "CONTRACT_PENDING", "GENERATING_CONTRACTS");
+                        lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                                tenantId, applicationId, "CONTRACT_PENDING", createdBy));
+
+                        processContractGeneration();
+
+                        // 5a: Wait for contract signing authorizations
+                        subStep = "AWAITING_SIGNATURE";
+                        received = Workflow.await(CONTRACT_SIGNING_TIMEOUT, () -> contractSignalReceived || goBackRequested || cancelRequested);
+                        if (cancelRequested) continue;
+                        if (goBackRequested) continue;
+                        if (!received) {
+                            return compensateAndExpire(workflowId, "Contract signing timed out (24 hours)");
+                        }
+
+                        processContractSigning();
+
+                        // 5b: OTP Verification with retry loop
+                        status = "OTP_VERIFICATION";
+                        lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                                tenantId, applicationId, "OTP_VERIFICATION", createdBy));
+
+                        boolean otpVerifiedOk = false;
+                        while (otpAttemptCount < MAX_OTP_ATTEMPTS && !otpVerifiedOk) {
+                            subStep = "AWAITING_OTP";
+                            otpReceived = false;
+                            otpSignal = null;
+
+                            received = Workflow.await(OTP_TIMEOUT, () -> otpReceived || goBackRequested || cancelRequested);
+                            if (cancelRequested) break; 
+                            if (goBackRequested) break; // Break OTP while loop, outer switch/while will handle jump
+                            if (!received) {
+                                otpAttemptCount++;
+                                lendingActivity.saveOtpAttempt(new LoanApplicationActivity.SaveOtpAttemptInput(
+                                        tenantId, applicationId, createdBy));
+                                if (otpAttemptCount >= MAX_OTP_ATTEMPTS) {
+                                    return compensateAndExpire(workflowId, "OTP verification timed out after " + MAX_OTP_ATTEMPTS + " attempts");
+                                }
+                                errorMessage = "OTP timed out. Attempt " + otpAttemptCount + " of " + MAX_OTP_ATTEMPTS;
+                                contractActivity.sendSigningOtp(new ContractActivity.SendOtpInput(
+                                        tenantId, customerId, mobileNumber, "CONTRACT_SIGNING"));
+                                continue;
+                            }
+
+                            otpAttemptCount++;
+                            lendingActivity.saveOtpAttempt(new LoanApplicationActivity.SaveOtpAttemptInput(
+                                    tenantId, applicationId, createdBy));
+                            otpVerifiedOk = processOtpVerificationWithRetry();
+                            if (!otpVerifiedOk && otpAttemptCount >= MAX_OTP_ATTEMPTS) {
+                                return compensateAndExpire(workflowId, "OTP verification failed after " + MAX_OTP_ATTEMPTS + " attempts");
+                            }
+                        }
+                        if (goBackRequested) continue;
+
+                        // ── BRD PHASE 8: NABA NOTIFICATION ──
+                        processNabaNotification();
+
+                        // 5c: IVR Verification
+                        status = "IVR_VERIFICATION";
+                        lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                                tenantId, applicationId, "IVR_VERIFICATION", createdBy));
+
+                        boolean ivrVerifiedOk = false;
+                        while (ivrAttemptCount < MAX_IVR_ATTEMPTS && !ivrVerifiedOk) {
+                            subStep = "AWAITING_IVR";
+                            ivrReceived = false;
+                            ivrSignal = null;
+
+                            received = Workflow.await(IVR_TIMEOUT, () -> ivrReceived || goBackRequested || cancelRequested);
+                            if (cancelRequested) break;
+                            if (goBackRequested) break;
+                            if (!received) {
+                                ivrAttemptCount++;
+                                lendingActivity.saveIvrAttempt(new LoanApplicationActivity.SaveIvrAttemptInput(
+                                        tenantId, applicationId, createdBy));
+                                if (ivrAttemptCount >= MAX_IVR_ATTEMPTS) {
+                                    return compensateAndExpire(workflowId, "IVR verification timed out after " + MAX_IVR_ATTEMPTS + " attempts");
+                                }
+                                errorMessage = "IVR timed out. Attempt " + ivrAttemptCount + " of " + MAX_IVR_ATTEMPTS;
+                                thirdPartyActivity.initiateIvrCall(new ThirdPartyActivity.IvrInitiateInput(
+                                        tenantId, applicationId, mobileNumber,
+                                        customerValidation.fullName(),
+                                        offerDetails.selectedAmount() != null ? offerDetails.selectedAmount() : basicInfoSignal.requestedAmount()));
+                                continue;
+                            }
+
+                            ivrAttemptCount++;
+                            lendingActivity.saveIvrAttempt(new LoanApplicationActivity.SaveIvrAttemptInput(
+                                    tenantId, applicationId, createdBy));
+                            ivrVerifiedOk = processIvrVerificationWithRetry();
+                            if (!ivrVerifiedOk && ivrAttemptCount >= MAX_IVR_ATTEMPTS) {
+                                return compensateAndExpire(workflowId, "IVR verification failed after " + MAX_IVR_ATTEMPTS + " attempts");
+                            }
+                        }
+                        if (goBackRequested) continue;
+
+                        // Proceed to final approval and disbursement
+                        currentStep = 6;
+                        break;
                 }
             }
 
@@ -421,7 +516,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
             lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
                     tenantId, applicationId, "CONTRACT_SIGNED", createdBy));
 
-            // Product-configured disbursement delay (hours). 0 = immediate (default).
+            // Product-configured disbursement delay
             int disbursementDelayHours = productValidation != null
                     ? productValidation.disbursementDurationHours() : 0;
             if (disbursementDelayHours > 0) {
@@ -435,6 +530,51 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 Workflow.sleep(Duration.ofHours(disbursementDelayHours));
                 log.info("Disbursement delay elapsed for application {}, proceeding to disbursement",
                         applicationNumber);
+            }
+
+            // Approval check
+            var approvalOutcome = processApprovalGate(workflowId);
+            boolean manualApprovalPending = approvalOutcome == ApprovalOutcome.MANUAL_PENDING;
+            manualReviewRequired = manualApprovalPending;
+
+            if (manualApprovalPending) {
+                status = "MANUAL_REVIEW";
+                subStep = "AWAITING_UNDERWRITER_DECISION";
+                lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                        tenantId, applicationId, "MANUAL_REVIEW", createdBy));
+
+                var created = manualApprovalActivity.createManualApprovalTask(
+                        new ManualApprovalActivity.CreateTaskInput(
+                                tenantId, applicationId, applicationNumber,
+                                customerId, customerValidation != null ? customerValidation.fullName() : null,
+                                productId,
+                                productValidation != null ? productValidation.productName() : null,
+                                offerDetails != null ? offerDetails.selectedAmount() : requestedAmount,
+                                offerDetails != null ? offerDetails.tenureMonths() : requestedTenureMonths,
+                                offerDetails != null ? offerDetails.monthlyInstallment() : null,
+                                eligibilityData != null ? eligibilityData.creditScore() : null,
+                                eligibilityData != null ? eligibilityData.dbrAfter() : null,
+                                "underwriter",
+                                manualApprovalSlaDays,
+                                workflowId));
+                manualApprovalTaskId = created.taskId();
+                log.info("Created manual approval task {} with SLA deadline {}",
+                        manualApprovalTaskId, created.slaDeadline());
+
+                log.info("Application {} awaiting manual approval after customer flow completion", applicationNumber);
+                Workflow.await(() -> manualApprovalReceived || cancelRequested);
+                if (cancelRequested) {
+                    return compensateAndCancel(workflowId, cancelReason);
+                }
+                if (manualRejectSignal != null) {
+                    return cancelApplication(workflowId,
+                            manualRejectSignal.rejectionReason() != null
+                                    ? "Manually rejected: " + manualRejectSignal.rejectionReason()
+                                    : "Manually rejected");
+                }
+                status = "MANUALLY_APPROVED";
+                subStep = "APPROVED_BY_UNDERWRITER";
+                manualReviewRequired = false;
             }
 
             processLoanCreationAndDisbursement(workflowId);
@@ -458,6 +598,23 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
             throw af;
         } catch (Exception e) {
             log.error("Loan application workflow failed: {}", e.getMessage(), e);
+            // Preserve manual-review pending state; do not auto-cancel due transient/internal errors
+            // after the application has been handed off to underwriter/admin decisioning.
+            boolean awaitingManualDecision = "MANUAL_REVIEW".equals(status)
+                    && !manualApprovalReceived
+                    && manualRejectSignal == null;
+            if (manualReviewRequired || awaitingManualDecision) {
+                try {
+                    lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                            tenantId, applicationId, "MANUAL_REVIEW", createdBy));
+                } catch (Exception updateEx) {
+                    log.error("Failed to preserve MANUAL_REVIEW status after workflow error: {}", updateEx.getMessage());
+                }
+                errorMessage = null;
+                return new LoanApplicationResult(
+                        workflowId, applicationId, applicationNumber,
+                        null, null, "MANUAL_REVIEW", errorMessage);
+            }
             return compensateAndFail(workflowId, "Unexpected error: " + e.getMessage());
         }
     }
@@ -499,23 +656,36 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                     "CUSTOMER_VALIDATION_FAILED");
         }
 
-        // Resolve product details from validation (product-service is source of truth)
-        String productCode = productValidation.productCode();
-        String productName = productValidation.productName();
-        String shariaStructure = productValidation.shariaStructure();
-        BigDecimal profitRate = productValidation.profitRate();
-
-        // Save basic info to application
-        lendingActivity.saveBasicInfo(new LoanApplicationActivity.SaveBasicInfoInput(
-                tenantId, applicationId,
+        basicInfoData = new BasicInfoData(
                 productId,
-                productCode,
-                productName,
-                shariaStructure,
+                productValidation.productCode(),
+                productValidation.productName(),
+                productValidation.shariaStructure(),
                 requestedAmount,
                 requestedTenureMonths,
                 purposeOfFinance,
-                profitRate,
+                productValidation.profitRate(),
+                productValidation.processingFeePercent(),
+                productValidation.processingFeeAmount(),
+                productValidation.adminFeeAmount()
+        );
+
+        resolvedProfitRate = productValidation.profitRate();
+
+        // Update database with resolved product info
+        lendingActivity.saveBasicInfo(new LoanApplicationActivity.SaveBasicInfoInput(
+                tenantId, applicationId,
+                productId,
+                productValidation.productCode(),
+                productValidation.productName(),
+                productValidation.shariaStructure(),
+                requestedAmount,
+                requestedTenureMonths,
+                purposeOfFinance,
+                productValidation.profitRate(),
+                productValidation.processingFeePercent(),
+                productValidation.processingFeeAmount(),
+                productValidation.adminFeeAmount(),
                 null, // partnerId
                 null, // leadId
                 createdBy
@@ -526,27 +696,16 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
                 tenantId, applicationId, "BASIC_INFO_SUBMITTED", createdBy));
 
-        basicInfoData = new BasicInfoData(
-                productId,
-                productCode,
-                productName,
-                shariaStructure,
-                requestedAmount,
-                requestedTenureMonths,
-                purposeOfFinance,
-                profitRate
-        );
-
         // Synthesize basicInfoSignal so downstream methods can use it uniformly
         basicInfoSignal = new BasicInfoSignal(
                 productId,
-                productCode,
-                productName,
-                shariaStructure != null ? shariaStructure : "MURABAHA",
+                productValidation.productCode(),
+                productValidation.productName(),
+                productValidation.shariaStructure() != null ? productValidation.shariaStructure() : "MURABAHA",
                 requestedAmount,
                 requestedTenureMonths,
                 purposeOfFinance,
-                profitRate,
+                productValidation.profitRate(),
                 null, // partnerId
                 null  // leadId
         );
@@ -606,6 +765,9 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 basicInfoSignal.requestedTenureMonths(),
                 basicInfoSignal.purposeOfFinance(),
                 profitRate,
+                productValidation.processingFeePercent(),
+                productValidation.processingFeeAmount(),
+                productValidation.adminFeeAmount(),
                 basicInfoSignal.partnerId(),
                 basicInfoSignal.leadId(),
                 createdBy
@@ -624,7 +786,10 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 basicInfoSignal.requestedAmount(),
                 basicInfoSignal.requestedTenureMonths(),
                 basicInfoSignal.purposeOfFinance(),
-                profitRate
+                profitRate,
+                productValidation.processingFeePercent(),
+                productValidation.processingFeeAmount(),
+                productValidation.adminFeeAmount()
         );
 
         errorMessage = null;
@@ -905,6 +1070,52 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         errorMessage = null;
         log.info("Step 4 completed: selectedAmount={}, installment={}",
                 selectedAmount, recalc.monthlyInstallment());
+    }
+
+    private enum ApprovalOutcome { APPROVED, MANUAL_PENDING }
+
+    /**
+     * Approval gate between offer acceptance and contract generation.
+     * AUTO_APPROVAL  → continue immediately
+     * REJECTION     → cancel
+     * MANUAL_APPROVAL → create task, await signal OR SLA timer (then breach event)
+     */
+    private ApprovalOutcome processApprovalGate(String workflowId) {
+        BigDecimal selectedAmount = offerDetails != null && offerDetails.selectedAmount() != null
+                ? offerDetails.selectedAmount() : requestedAmount;
+        Integer creditScore = eligibilityData != null ? eligibilityData.creditScore() : null;
+        BigDecimal dbr = eligibilityData != null ? eligibilityData.dbrAfter() : null;
+        BigDecimal salary = eligibilityData != null ? eligibilityData.verifiedSalary() : monthlyIncome;
+
+        var decision = manualApprovalActivity.evaluateApproval(
+                new ManualApprovalActivity.EvaluateInput(
+                        tenantId, productId, selectedAmount,
+                        creditScore, dbr, salary));
+
+        log.info("Approval gate decision: {} (product={} amount={})",
+                decision.decision(), productId, selectedAmount);
+
+        if ("AUTO_APPROVAL".equals(decision.decision())) {
+            status = "AUTO_APPROVED";
+            subStep = "AUTO_APPROVED";
+            return ApprovalOutcome.APPROVED;
+        }
+
+        if ("REJECTION_SCENARIO".equals(decision.decision())) {
+            // Keep customer journey uninterrupted; underwriter/admin makes final decision later.
+            log.info("Approval rules suggested rejection for application {}, routing to MANUAL_REVIEW instead",
+                    applicationNumber);
+            errorMessage = null;
+            manualApprovalSlaDays = Math.max(1, decision.slaDays());
+            return ApprovalOutcome.MANUAL_PENDING;
+        }
+
+        // MANUAL_APPROVAL
+        manualApprovalSlaDays = Math.max(1, decision.slaDays());
+
+        // Do not block customer journey here. Workflow waits for underwriter decision later,
+        // after customer completes signing/verification steps and before disbursement.
+        return ApprovalOutcome.MANUAL_PENDING;
     }
 
     private void processContractGeneration() {
@@ -1202,10 +1413,12 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         ));
 
         if (!result.approved()) {
-            errorMessage = "PaymentGuard fraud check failed: risk=" + result.riskLevel();
-            throw ApplicationFailure.newNonRetryableFailure(
-                    "PaymentGuard fraud check rejected: " + result.status(),
-                    "PAYMENT_GUARD_REJECTED");
+            // Non-blocking at this stage: keep customer journey moving and let manual review/admin
+            // make the final decision at the end of flow.
+            errorMessage = "PaymentGuard flagged: risk=" + result.riskLevel();
+            log.warn("PaymentGuard flagged application {} at accept-offer (status={}, risk={}); continuing flow",
+                    applicationNumber, result.status(), result.riskLevel());
+            return;
         }
 
         log.info("PaymentGuard check passed: sessionId={}, risk={}", result.sessionId(), result.riskLevel());
@@ -1402,6 +1615,21 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     }
 
     @Override
+    public void approveManualReview(ManualReviewDecisionSignal signal) {
+        log.info("Signal received: approveManualReview (by={})", signal.decisionBy());
+        this.manualApproveSignal = signal;
+        this.manualApprovalReceived = true;
+    }
+
+    @Override
+    public void rejectManualReview(ManualReviewDecisionSignal signal) {
+        log.info("Signal received: rejectManualReview (by={}, reason={})",
+                signal.decisionBy(), signal.rejectionReason());
+        this.manualRejectSignal = signal;
+        this.manualApprovalReceived = true;
+    }
+
+    @Override
     public void signContract(SignContractSignal signal) {
         log.info("Signal received: signContract (digitalSig={}, sellCommodity={})",
                 signal.authorizeDigitalSignature(), signal.authorizeSellCommodity());
@@ -1424,19 +1652,32 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         this.ivrReceived = true;
     }
 
+    @Override
+    public void goBack(GoBackSignal signal) {
+        log.info("Signal received: goBack (targetStep={}, reason={})",
+                signal.targetStepIndex(), signal.reason());
+        if (signal.targetStepIndex() >= 1 && signal.targetStepIndex() <= 5) {
+            this.targetStepIndex = signal.targetStepIndex();
+            this.goBackRequested = true;
+            this.goBackReason = signal.reason();
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════
     // QUERY HANDLERS
     // ══════════════════════════════════════════════════════════════
 
     @Override
     public StepInfo getCurrentStep() {
+        var manualReview = "MANUAL_REVIEW".equals(status);
+        var responseErrorMessage = manualReview ? null : errorMessage;
         return new StepInfo(
                 stepperIndex,
                 stepName,
                 status,
                 subStep,
-                errorMessage == null,
-                errorMessage
+                manualReview || responseErrorMessage == null,
+                responseErrorMessage
         );
     }
 
@@ -1524,6 +1765,41 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
      * SAGA compensation after financial actions (post-offer acceptance).
      * Reverses commodity trades and cancels the application.
      */
+    @Override
+    public void cancel(CancelSignal signal) {
+        log.info("Cancellation signal received: {} (by: {})", signal.reason(), signal.cancelledBy());
+        this.cancelRequested = true;
+        this.cancelReason = signal.reason();
+        this.cancelledBy = signal.cancelledBy();
+    }
+
+    private LoanApplicationResult compensateAndCancel(String workflowId, String reason) {
+        log.info("Customer-initiated cancellation triggered: {} — {}", applicationId, reason);
+
+        // Compensate: reverse commodity trade
+        if (commodityTradeId != null) {
+            try {
+                thirdPartyActivity.reverseCommodityTrade(commodityTradeId);
+                log.info("SAGA: Commodity trade reversed due to cancellation: {}", commodityTradeId);
+            } catch (Exception e) {
+                log.error("SAGA: Failed to reverse commodity trade during cancellation {}: {}", commodityTradeId, e.getMessage());
+            }
+        }
+
+        // Update status in DB
+        try {
+            lendingActivity.cancelApplication(new LoanApplicationActivity.CancelInput(
+                    tenantId, applicationId, reason, cancelledBy != null ? cancelledBy : createdBy));
+        } catch (Exception e) {
+            log.error("SAGA: Failed to update application status to CANCELLED: {}", e.getMessage());
+        }
+
+        status = "CANCELLED";
+        errorMessage = reason;
+        return new LoanApplicationResult(workflowId, applicationId, applicationNumber,
+                null, null, "CANCELLED", reason);
+    }
+
     private LoanApplicationResult compensateAndExpire(String workflowId, String reason) {
         log.warn("SAGA compensation triggered: {} — {}", applicationId, reason);
 
@@ -1608,5 +1884,34 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         if (education != null) total = total.add(education);
         if (transportation != null) total = total.add(transportation);
         return total;
+    }
+
+    private void resetFlagsForGoBack(int targetStep) {
+        if (targetStep <= 1) {
+            basicInfoReceived = false;
+        }
+        if (targetStep <= 2) {
+            bankAccountReceived = false;
+        }
+        if (targetStep <= 3) {
+            simahConsentReceived = false;
+            // Clear eligibility results to force re-run
+            eligibilityData = null;
+        }
+        if (targetStep <= 4) {
+            offerAccepted = false;
+            offerDetails = null;
+        }
+        if (targetStep <= 5) {
+            contractSignalReceived = false;
+            otpReceived = false;
+            ivrReceived = false;
+            contractInfo = null;
+        }
+
+        // Reset retry counters
+        otpAttemptCount = 0;
+        ivrAttemptCount = 0;
+        errorMessage = null;
     }
 }

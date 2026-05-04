@@ -38,6 +38,7 @@ public class DelinquencyEngine {
 
     private final DunningPolicyResolver policyResolver;
     private final DelinquencyRulesResolver rulesResolver;
+    private final WriteOffEligibilityService writeOffEligibilityService;
 
     /**
      * Assess the current delinquency state of a loan's schedule against the
@@ -61,7 +62,7 @@ public class DelinquencyEngine {
                 continue;
             }
             int dpd = daysBetween(inst.getDueDate(), asOf);
-            if (dpd <= 0) continue;
+            if (dpd < 0) continue; // Skip future installments
 
             BigDecimal outstanding = inst.getOutstandingAmount();
             BigDecimal lateFee = resolved.lateFee().computeFee(outstanding, dpd);
@@ -115,45 +116,61 @@ public class DelinquencyEngine {
         schedule.markInstallmentsDue(asOf);
         schedule.markInstallmentsOverdue(asOf, graceDays);
 
-        applyLatePaymentPenalties(tenantId, schedule, asOf);
+        applyDelinquencyPenalties(tenantId, schedule, asOf);
+
+        // Automate write-off eligibility evaluation
+        writeOffEligibilityService.evaluate(tenantId, schedule, asOf);
 
         log.debug("Advanced stages for loan {} (tenant {}) using policy source={} graceDays={}",
                 schedule.getLoanId(), tenantId, resolved.source(), graceDays);
     }
 
     /**
-     * Applies the per-product LATE_PAYMENT DelinquencyRule (type=3) to every
-     * overdue installment. Idempotent — overwrites {@code Installment.latePenalty}
-     * with the currently-computed value so repeated ticks converge.
-     *
-     * Sharia: the penalty is collected through the waterfall's fee bucket and
-     * routed to the rule's {@code charityFundAccount} during settlement — never
-     * to bank revenue.
+     * Applies delinquency rules (DUE_LOAN type=2 and LATE_PAYMENT type=3) to installments.
+     * Sequentially checks which rule applies based on current DPD.
      */
-    private void applyLatePaymentPenalties(UUID tenantId, RepaymentScheduleAggregate schedule, LocalDate asOf) {
+    private void applyDelinquencyPenalties(UUID tenantId, RepaymentScheduleAggregate schedule, LocalDate asOf) {
         UUID productId = schedule.getProductId();
-        if (productId == null) {
-            return;  // no product → fall back to DunningPolicy-only flow
-        }
-        Optional<DelinquencyRule> ruleOpt = rulesResolver.rule(tenantId, productId, DelinquencyType.LATE_PAYMENT);
-        if (ruleOpt.isEmpty()) {
-            return;
-        }
-        DelinquencyRule rule = ruleOpt.get();
+        if (productId == null) return;
+
+        Optional<DelinquencyRule> dueRuleOpt = rulesResolver.rule(tenantId, productId, DelinquencyType.DUE_LOAN);
+        Optional<DelinquencyRule> lateRuleOpt = rulesResolver.rule(tenantId, productId, DelinquencyType.LATE_PAYMENT);
 
         for (Installment inst : schedule.getInstallments()) {
             if (inst.getStatus() == InstallmentStatus.PAID || inst.getStatus() == InstallmentStatus.WAIVED) {
                 continue;
             }
             int dpd = daysBetween(inst.getDueDate(), asOf);
-            if (dpd <= 0) {
-                inst.applyLatePenalty(BigDecimal.ZERO);
-                continue;
+            BigDecimal penalty = BigDecimal.ZERO;
+            String ruleApplied = "NONE";
+
+            // 1. Check Due Loan (Type 2) - Check this first as requested
+            if (dueRuleOpt.isPresent()) {
+                var rule = dueRuleOpt.get();
+                if (dpd >= rule.getFromDay() && (rule.getTillDay() == 0 || dpd <= rule.getTillDay())) {
+                    penalty = computeLatePenalty(rule, inst.getOutstandingPrincipal().add(inst.getOutstandingProfit()));
+                    ruleApplied = "DUE_LOAN (Type 2)";
+                    log.debug("Applied DUE_LOAN penalty: amount={}, isPercentage={}, inst={}, dpd={}", 
+                            penalty, rule.isPercentage(), inst.getInstallmentNumber(), dpd);
+                }
             }
-            if (rule.getTillDay() > 0 && (dpd < rule.getFromDay() || dpd > rule.getTillDay())) {
-                continue;  // outside the rule's DPD window — leave whatever was set earlier
+
+            // 2. Check Late Payment (Type 3) - Only apply if no due penalty applied or if it's explicitly overdue
+            if (penalty.compareTo(BigDecimal.ZERO) == 0 && dpd > 0 && lateRuleOpt.isPresent()) {
+                var rule = lateRuleOpt.get();
+                if (dpd >= rule.getFromDay() && (rule.getTillDay() == 0 || dpd <= rule.getTillDay())) {
+                    penalty = computeLatePenalty(rule, inst.getOutstandingPrincipal().add(inst.getOutstandingProfit()));
+                    ruleApplied = "LATE_PAYMENT (Type 3)";
+                    log.debug("Applied LATE_PAYMENT penalty: amount={}, isPercentage={}, inst={}, dpd={}", 
+                            penalty, rule.isPercentage(), inst.getInstallmentNumber(), dpd);
+                }
             }
-            BigDecimal penalty = computeLatePenalty(rule, inst.getOutstandingPrincipal().add(inst.getOutstandingProfit()));
+
+            if (penalty.compareTo(BigDecimal.ZERO) > 0 || inst.getLatePenaltyAmount().compareTo(BigDecimal.ZERO) > 0) {
+                log.info("Penalty update for loan {}: inst #{} dpd={} rule={} penalty={}", 
+                        schedule.getLoanId(), inst.getInstallmentNumber(), dpd, ruleApplied, penalty);
+            }
+
             inst.applyLatePenalty(penalty);
         }
     }
@@ -161,9 +178,12 @@ public class DelinquencyEngine {
     private BigDecimal computeLatePenalty(DelinquencyRule rule, BigDecimal overdueAmount) {
         if (rule.isPercentage()) {
             BigDecimal pct = rule.getPenaltyPercentage() != null ? rule.getPenaltyPercentage() : BigDecimal.ZERO;
-            return overdueAmount.multiply(pct)
+            BigDecimal result = overdueAmount.multiply(pct)
                     .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            log.debug("Computed percentage penalty: base={}, pct={}, result={}", overdueAmount, pct, result);
+            return result;
         }
+        log.debug("Computed fixed penalty: amount={}", rule.getPenaltyAmount());
         return rule.getPenaltyAmount() != null ? rule.getPenaltyAmount() : BigDecimal.ZERO;
     }
 

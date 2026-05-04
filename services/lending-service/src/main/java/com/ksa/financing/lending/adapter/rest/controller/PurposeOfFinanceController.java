@@ -3,6 +3,8 @@ package com.ksa.financing.lending.adapter.rest.controller;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.PurposeOfFinanceEntry;
 import com.ksa.financing.lending.domain.port.in.ManagePurposeOfFinanceUseCase;
 import io.swagger.v3.oas.annotations.Operation;
@@ -75,14 +77,16 @@ public class PurposeOfFinanceController {
     @SecuredEndpoint(obj = "purpose-of-finance", act = "read")
     @GetMapping
     @Operation(summary = "List active purposes of finance")
-    public ResponseEntity<List<PurposeOfFinanceResponse>> listActive(
+    public PageResponse<PurposeOfFinanceResponse> listActive(
             @RequestParam(defaultValue = "true") boolean activeOnly,
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        var entries = activeOnly ? useCase.listActive(tenantId) : useCase.listAll(tenantId);
-        var responses = entries.stream().map(PurposeOfFinanceResponse::from).toList();
-        return ResponseEntity.ok(responses);
+        PageResponse<PurposeOfFinanceEntry> entries = activeOnly
+                ? useCase.listActive(tenantId, pageQuery)
+                : useCase.listAll(tenantId, pageQuery);
+        return entries.map(PurposeOfFinanceResponse::from);
     }
 
     @SecuredEndpoint(obj = "purpose-of-finance", act = "delete")

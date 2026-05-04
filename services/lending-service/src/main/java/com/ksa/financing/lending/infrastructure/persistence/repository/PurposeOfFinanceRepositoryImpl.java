@@ -1,14 +1,19 @@
 package com.ksa.financing.lending.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.lending.domain.model.PurposeOfFinanceEntry;
 import com.ksa.financing.lending.domain.port.out.PurposeOfFinanceRepository;
 import com.ksa.financing.lending.infrastructure.persistence.entity.PurposeOfFinanceJpaEntity;
+import com.ksa.financing.lending.infrastructure.persistence.mapper.PurposeOfFinancePersistenceMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -16,69 +21,54 @@ import java.util.UUID;
 public class PurposeOfFinanceRepositoryImpl implements PurposeOfFinanceRepository {
 
     private final JpaPurposeOfFinanceRepository jpaRepository;
+    private final PurposeOfFinancePersistenceMapper mapper;
+
+    private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of("active", "code");
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of("nameEn", "nameAr", "code");
 
     @Override
-    @Transactional
     public PurposeOfFinanceEntry save(PurposeOfFinanceEntry entry) {
-        var entity = toEntity(entry);
-        entity = jpaRepository.save(entity);
-        return toDomain(entity);
+        var entity = mapper.toEntity(entry);
+        return mapper.toDomain(jpaRepository.save(entity));
     }
 
     @Override
     public Optional<PurposeOfFinanceEntry> findById(UUID tenantId, UUID id) {
-        return jpaRepository.findByTenantIdAndId(tenantId, id).map(this::toDomain);
+        return jpaRepository.findByTenantIdAndId(tenantId, id).map(mapper::toDomain);
     }
 
     @Override
     public Optional<PurposeOfFinanceEntry> findByCode(UUID tenantId, String code) {
-        return jpaRepository.findByTenantIdAndCode(tenantId, code).map(this::toDomain);
+        return jpaRepository.findByTenantIdAndCode(tenantId, code).map(mapper::toDomain);
     }
 
     @Override
-    public List<PurposeOfFinanceEntry> findAllActive(UUID tenantId) {
-        return jpaRepository.findByTenantIdAndActiveTrueOrderBySortOrder(tenantId)
-                .stream().map(this::toDomain).toList();
+    public PageResponse<PurposeOfFinanceEntry> findAllActive(UUID tenantId, PageQuery query) {
+        Specification<PurposeOfFinanceJpaEntity> spec = (root, q, cb) -> 
+                cb.and(cb.equal(root.get("tenantId"), tenantId), cb.equal(root.get("active"), true));
+        return findWithSpec(spec, query);
     }
 
     @Override
-    public List<PurposeOfFinanceEntry> findAll(UUID tenantId) {
-        return jpaRepository.findByTenantIdOrderBySortOrder(tenantId)
-                .stream().map(this::toDomain).toList();
+    public PageResponse<PurposeOfFinanceEntry> findAll(UUID tenantId, PageQuery query) {
+        Specification<PurposeOfFinanceJpaEntity> spec = (root, q, cb) -> cb.equal(root.get("tenantId"), tenantId);
+        return findWithSpec(spec, query);
+    }
+
+    private PageResponse<PurposeOfFinanceEntry> findWithSpec(Specification<PurposeOfFinanceJpaEntity> baseSpec, PageQuery query) {
+        Specification<PurposeOfFinanceJpaEntity> dynamic = SpecificationBuilder.<PurposeOfFinanceJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<PurposeOfFinanceJpaEntity> page = jpaRepository.findAll(baseSpec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, mapper::toDomain);
     }
 
     @Override
-    @Transactional
     public void delete(UUID tenantId, UUID id) {
         jpaRepository.deleteByTenantIdAndId(tenantId, id);
-    }
-
-    private PurposeOfFinanceJpaEntity toEntity(PurposeOfFinanceEntry entry) {
-        var entity = new PurposeOfFinanceJpaEntity();
-        entity.setId(entry.getId());
-        entity.setTenantId(entry.getTenantId());
-        entity.setCode(entry.getCode());
-        entity.setNameEn(entry.getNameEn());
-        entity.setNameAr(entry.getNameAr());
-        entity.setDescriptionEn(entry.getDescriptionEn());
-        entity.setDescriptionAr(entry.getDescriptionAr());
-        entity.setActive(entry.isActive());
-        entity.setSortOrder(entry.getSortOrder());
-        entity.setCreatedAt(entry.getCreatedAt());
-        entity.setUpdatedAt(entry.getUpdatedAt());
-        entity.setCreatedBy(entry.getCreatedBy());
-        entity.setVersion(entry.getVersion());
-        return entity;
-    }
-
-    private PurposeOfFinanceEntry toDomain(PurposeOfFinanceJpaEntity entity) {
-        return PurposeOfFinanceEntry.reconstitute(
-                entity.getId(), entity.getTenantId(), entity.getCode(),
-                entity.getNameEn(), entity.getNameAr(),
-                entity.getDescriptionEn(), entity.getDescriptionAr(),
-                entity.isActive(), entity.getSortOrder(),
-                entity.getCreatedAt(), entity.getUpdatedAt(),
-                entity.getCreatedBy(), entity.getVersion()
-        );
     }
 }

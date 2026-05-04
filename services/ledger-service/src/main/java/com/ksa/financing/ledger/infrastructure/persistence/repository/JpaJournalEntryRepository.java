@@ -4,6 +4,7 @@ import com.ksa.financing.ledger.infrastructure.persistence.entity.JournalEntryJp
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,7 +17,7 @@ import java.util.UUID;
 /**
  * Spring Data JPA repository for journal_entries table.
  */
-public interface JpaJournalEntryRepository extends JpaRepository<JournalEntryJpaEntity, UUID> {
+public interface JpaJournalEntryRepository extends JpaRepository<JournalEntryJpaEntity, UUID>, JpaSpecificationExecutor<JournalEntryJpaEntity> {
 
     Optional<JournalEntryJpaEntity> findByTenantIdAndId(UUID tenantId, UUID id);
 

@@ -5,12 +5,13 @@ import com.ksa.financing.fraud.domain.model.rule.FraudRuleId;
 import com.ksa.financing.fraud.domain.port.in.ManageFraudRulesUseCase;
 import com.ksa.financing.fraud.domain.port.out.FraudRuleRepository;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -22,14 +23,14 @@ public class ManageFraudRulesService implements ManageFraudRulesUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FraudRule> getAllRules(UUID tenantId) {
-        return fraudRuleRepository.findAllByTenant(tenantId);
+    public PageResponse<FraudRule> getAllRules(UUID tenantId, PageQuery pageQuery) {
+        return fraudRuleRepository.findAllByTenant(tenantId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<FraudRule> getActiveRules(UUID tenantId) {
-        return fraudRuleRepository.findActiveByTenant(tenantId);
+    public PageResponse<FraudRule> getActiveRules(UUID tenantId, PageQuery pageQuery) {
+        return fraudRuleRepository.findActiveByTenant(tenantId, pageQuery);
     }
 
     @Override

@@ -61,7 +61,9 @@ public class PermissionController {
     @Operation(summary = "List permissions", description = "Returns catalog-visible permissions grouped by module")
     public ResponseEntity<List<ModulePermissionsResponse>> listPermissions(@AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var perms = managePermissionUseCase.listByTenant(tenantId).stream()
+        var pageQuery = com.ksa.financing.infra.pagination.PageQuery.defaults(
+                1000, "permissionCode", com.ksa.financing.infra.pagination.SortDirection.ASC);
+        var perms = managePermissionUseCase.listByTenant(tenantId, pageQuery).content().stream()
                 .filter(Permission::isCatalogVisible)
                 .toList();
         var modules = moduleRepository.findCatalogByTenant(tenantId);
@@ -153,7 +155,7 @@ public class PermissionController {
     private List<ModulePermissionsResponse> groupByModule(List<Permission> perms, List<Module> modules) {
         // Build module lookup by ID
         Map<UUID, Module> moduleById = modules.stream()
-                .collect(Collectors.toMap(Module::getId, m -> m));
+                .collect(Collectors.toMap(Module::getId, m -> m, (a, b) -> a));
 
         // Build module lookup by code (fallback for permissions without module_id)
         Map<String, Module> moduleByCode = modules.stream()

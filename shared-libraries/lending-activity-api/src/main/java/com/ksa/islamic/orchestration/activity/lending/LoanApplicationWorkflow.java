@@ -52,6 +52,14 @@ public interface LoanApplicationWorkflow {
     @SignalMethod
     void acceptOffer(AcceptOfferSignal signal);
 
+    /** Step 4.5: Underwriter approves manual-review application (amount > threshold) */
+    @SignalMethod
+    void approveManualReview(ManualReviewDecisionSignal signal);
+
+    /** Step 4.5: Underwriter rejects manual-review application */
+    @SignalMethod
+    void rejectManualReview(ManualReviewDecisionSignal signal);
+
     /** Step 5a: Customer signs contract with authorizations */
     @SignalMethod
     void signContract(SignContractSignal signal);
@@ -63,6 +71,14 @@ public interface LoanApplicationWorkflow {
     /** Step 5c: IVR service sends callback after call verification */
     @SignalMethod
     void ivrCallback(IvrCallbackSignal signal);
+
+    /** Revert the workflow to a previous step (Step 1-4) */
+    @SignalMethod
+    void goBack(GoBackSignal signal);
+
+    /** Cancel the application (triggered by user/system) */
+    @SignalMethod
+    void cancel(CancelSignal signal);
 
     // ══════════════════════════════════════════════════════════════
     // QUERIES — UI reads current state
@@ -146,6 +162,12 @@ public interface LoanApplicationWorkflow {
             BigDecimal selectedAmount  // can be <= maxEligibleAmount
     ) {}
 
+    record ManualReviewDecisionSignal(
+            String decisionBy,     // underwriter userId
+            String notes,
+            String rejectionReason // only for reject
+    ) {}
+
     record SignContractSignal(
             boolean authorizeDigitalSignature,
             boolean authorizeSellCommodity,
@@ -160,6 +182,16 @@ public interface LoanApplicationWorkflow {
             boolean verified,
             String callId,
             String verificationStatus
+    ) {}
+
+    record GoBackSignal(
+            int targetStepIndex,
+            String reason
+    ) {}
+
+    record CancelSignal(
+            String reason,
+            String cancelledBy
     ) {}
 
     // ══════════════════════════════════════════════════════════════
@@ -202,7 +234,10 @@ public interface LoanApplicationWorkflow {
             BigDecimal requestedAmount,
             int requestedTenureMonths,
             String purposeOfFinance,
-            BigDecimal profitRate
+            BigDecimal profitRate,
+            BigDecimal processingFeePercent,
+            BigDecimal processingFeeAmount,
+            BigDecimal adminFeeAmount
     ) {}
 
     record BankAccountData(

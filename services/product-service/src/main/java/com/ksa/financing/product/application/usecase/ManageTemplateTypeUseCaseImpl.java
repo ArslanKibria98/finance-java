@@ -3,6 +3,8 @@ package com.ksa.financing.product.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.product.domain.model.TemplateType;
 import com.ksa.financing.product.domain.port.in.ManageTemplateTypeUseCase;
 import com.ksa.financing.product.domain.port.out.TemplateTypeRepository;
@@ -24,9 +26,9 @@ public class ManageTemplateTypeUseCaseImpl implements ManageTemplateTypeUseCase 
 
     @Override
     @Transactional(readOnly = true)
-    public List<TemplateType> listAll(UUID tenantId) {
+    public PageResponse<TemplateType> listAll(UUID tenantId, PageQuery pageQuery) {
         log.debug("Listing all template types for tenant={}", tenantId);
-        return templateTypeRepository.findAllByTenant(tenantId);
+        return templateTypeRepository.findAllByTenant(tenantId, pageQuery);
     }
 
     @Override

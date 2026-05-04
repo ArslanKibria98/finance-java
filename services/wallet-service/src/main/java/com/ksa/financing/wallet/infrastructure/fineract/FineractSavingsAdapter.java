@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -186,5 +187,161 @@ public class FineractSavingsAdapter implements FineractSavingsPort {
         } catch (RestClientException e) {
             log.warn("Failed to delete Fineract savings {} during compensation: {}", savingsId, e.getMessage());
         }
+    }
+
+    @Override
+    public SavingsAccountInfo getAccountInfo(Long savingsId) {
+        String url = config.getBaseUrl() + "/savingsaccounts/" + savingsId;
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<>() {});
+        Map<String, Object> body = response.getBody();
+        if (body == null) {
+            throw new RestClientException("Fineract savings " + savingsId + " not found");
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) body.get("summary");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> status = (Map<String, Object>) body.get("status");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> currency = (Map<String, Object>) body.get("currency");
+
+        return new SavingsAccountInfo(
+                savingsId,
+                toLong(body.get("clientId")),
+                (String) body.get("externalId"),
+                status != null ? (String) status.get("value") : null,
+                toBigDecimal(summary != null ? summary.get("accountBalance") : null),
+                toBigDecimal(summary != null ? summary.get("availableBalance") : null),
+                currency != null ? (String) currency.get("code") : null);
+    }
+
+    @Override
+    public Long deposit(Long savingsId, BigDecimal amount, String externalReference) {
+        String url = config.getBaseUrl() + "/savingsaccounts/" + savingsId + "/transactions?command=deposit";
+        return postSavingsTransaction(url, amount, externalReference, "deposit savingsId=" + savingsId);
+    }
+
+    @Override
+    public Long withdraw(Long savingsId, BigDecimal amount, String externalReference) {
+        String url = config.getBaseUrl() + "/savingsaccounts/" + savingsId + "/transactions?command=withdrawal";
+        return postSavingsTransaction(url, amount, externalReference, "withdraw savingsId=" + savingsId);
+    }
+
+    @Override
+    public Long transferBetweenSavings(
+            Long fromClientId, Long fromSavingsId,
+            Long toClientId,   Long toSavingsId,
+            BigDecimal amount, String description) {
+
+        String url = config.getBaseUrl() + "/accounttransfers";
+        String today = LocalDate.now().format(FINERACT_DATE);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("fromOfficeId", 1);
+        request.put("fromClientId", fromClientId);
+        request.put("fromAccountType", 2);          // 2 = savings
+        request.put("fromAccountId", fromSavingsId);
+        request.put("toOfficeId", 1);
+        request.put("toClientId", toClientId);
+        request.put("toAccountType", 2);
+        request.put("toAccountId", toSavingsId);
+        request.put("transferAmount", amount);
+        request.put("transferDate", today);
+        request.put("transferDescription", description != null ? description : "P2P");
+        request.put("locale", "en");
+        request.put("dateFormat", "dd MMMM yyyy");
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, new HttpEntity<>(request),
+                new ParameterizedTypeReference<>() {});
+
+        Map<String, Object> body = response.getBody();
+        Long resourceId = body != null ? toLong(body.get("resourceId")) : null;
+        log.info("Fineract transfer OK fromSavings={} toSavings={} amount={} resourceId={}",
+                fromSavingsId, toSavingsId, amount, resourceId);
+        return resourceId;
+    }
+
+    private Long postSavingsTransaction(String url, BigDecimal amount, String externalRef, String op) {
+        String today = LocalDate.now().format(FINERACT_DATE);
+        Map<String, Object> request = new HashMap<>();
+        request.put("locale", "en");
+        request.put("dateFormat", "dd MMMM yyyy");
+        request.put("transactionDate", today);
+        request.put("transactionAmount", amount);
+        request.put("paymentTypeId", 1);
+        if (externalRef != null) {
+            request.put("note", externalRef);
+        }
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, new HttpEntity<>(request),
+                new ParameterizedTypeReference<>() {});
+
+        Map<String, Object> body = response.getBody();
+        Long txnId = body != null ? toLong(body.get("resourceId")) : null;
+        log.info("Fineract {} OK amount={} txnId={} ref={}", op, amount, txnId, externalRef);
+        return txnId;
+    }
+
+    private static Long toLong(Object o) {
+        if (o == null) return null;
+        if (o instanceof Number n) return n.longValue();
+        try { return Long.parseLong(o.toString()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    private static BigDecimal toBigDecimal(Object o) {
+        if (o == null) return BigDecimal.ZERO;
+        if (o instanceof Number n) return new BigDecimal(n.toString());
+        try { return new BigDecimal(o.toString()); }
+        catch (NumberFormatException e) { return BigDecimal.ZERO; }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public java.util.List<SavingsTransaction> getTransactions(Long savingsId) {
+        String url = config.getBaseUrl() + "/savingsaccounts/" + savingsId + "?associations=transactions";
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null, new ParameterizedTypeReference<>() {});
+
+        Map<String, Object> body = response.getBody();
+        if (body == null) return java.util.Collections.emptyList();
+
+        Object txsRaw = body.get("transactions");
+        if (!(txsRaw instanceof java.util.List)) return java.util.Collections.emptyList();
+
+        java.util.List<Map<String, Object>> txs = (java.util.List<Map<String, Object>>) txsRaw;
+        java.util.List<SavingsTransaction> result = new java.util.ArrayList<>(txs.size());
+        for (Map<String, Object> t : txs) {
+            Map<String, Object> typeMap = (Map<String, Object>) t.getOrDefault("transactionType", java.util.Collections.emptyMap());
+            Object dateObj = t.get("date");
+            String dateStr = null;
+            if (dateObj instanceof java.util.List<?> parts && parts.size() >= 3) {
+                dateStr = String.format("%04d-%02d-%02d",
+                        ((Number) parts.get(0)).intValue(),
+                        ((Number) parts.get(1)).intValue(),
+                        ((Number) parts.get(2)).intValue());
+            } else if (dateObj != null) {
+                dateStr = dateObj.toString();
+            }
+
+            Object pd = t.get("paymentDetailData");
+            String pdStr = pd != null ? pd.toString() : null;
+
+            result.add(new SavingsTransaction(
+                    toLong(t.get("id")),
+                    (String) typeMap.get("value"),
+                    toBigDecimal(t.get("amount")),
+                    toBigDecimal(t.get("runningBalance")),
+                    dateStr,
+                    Boolean.TRUE.equals(t.get("reversed")),
+                    pdStr));
+        }
+        // Newest first (Fineract returns chronological — reverse)
+        java.util.Collections.reverse(result);
+        return result;
     }
 }

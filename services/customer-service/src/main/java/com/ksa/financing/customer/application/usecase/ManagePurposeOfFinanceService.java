@@ -6,13 +6,14 @@ import com.ksa.financing.customer.domain.port.out.PurposeOfFinanceRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -79,13 +80,13 @@ public class ManagePurposeOfFinanceService implements ManagePurposeOfFinanceUseC
     }
 
     @Override
-    public List<PurposeOfFinanceOption> getAll(UUID tenantId) {
-        return repository.findAllByTenantId(tenantId);
+    public PageResponse<PurposeOfFinanceOption> getAll(UUID tenantId, PageQuery pageQuery) {
+        return repository.findAllByTenantId(tenantId, pageQuery);
     }
 
     @Override
-    public List<PurposeOfFinanceOption> getActive(UUID tenantId) {
-        return repository.findActiveByTenantId(tenantId);
+    public PageResponse<PurposeOfFinanceOption> getActive(UUID tenantId, PageQuery pageQuery) {
+        return repository.findActiveByTenantId(tenantId, pageQuery);
     }
 
     @Override
@@ -104,9 +105,9 @@ public class ManagePurposeOfFinanceService implements ManagePurposeOfFinanceUseC
     @Transactional
     public void activate(UUID tenantId, UUID id) {
         PurposeOfFinanceOption option = repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Purpose of finance option", id.toString()));
         option.setActive(true);
-        option.setUpdatedAt(java.time.Instant.now());
+        option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
 
@@ -114,7 +115,7 @@ public class ManagePurposeOfFinanceService implements ManagePurposeOfFinanceUseC
     @Transactional
     public void delete(UUID tenantId, UUID id) {
         repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Purpose of finance option", id.toString()));
         repository.softDelete(tenantId, id);
     }
 }

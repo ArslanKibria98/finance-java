@@ -1,5 +1,7 @@
 package com.ksa.financing.identity.application.usecase;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.identity.domain.model.Employee;
 import com.ksa.financing.identity.domain.model.EmployeeStatus;
 import com.ksa.financing.identity.domain.port.in.ManageEmployeeUseCase;
@@ -16,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -90,8 +91,8 @@ public class ManageEmployeeService implements ManageEmployeeUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Employee> listByTenant(UUID tenantId) {
-        return employeeRepository.findAllByTenant(tenantId);
+    public PageResponse<Employee> listByTenant(UUID tenantId, PageQuery query) {
+        return employeeRepository.findAllByTenant(tenantId, query);
     }
 
     @Override

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 @Schema(description = "Loan application response with stepper state")
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -157,25 +158,44 @@ public record LoanApplicationResponse(
         @Schema(description = "Current maturity date from loans table (updated after reschedule)")
         @JsonFormat(pattern = "yyyy-MM-dd")
         java.time.LocalDate currentMaturityDate,
+        @Schema(description = "Current profit rate (updated after restructure)")
+        BigDecimal currentProfitRate,
 
         // Rescheduling
         @Schema(description = "Latest reschedule request ID (if any active reschedule exists)")
         String rescheduleId,
         @Schema(description = "Latest reschedule status: PENDING, AWAITING_APPROVAL, PROCESSING, APPROVED, REJECTED, CANCELLED")
-        String rescheduleStatus
+        String rescheduleStatus,
+        @Schema(description = "Latest reschedule type")
+        String rescheduleType,
+        @Schema(description = "Latest reschedule request date")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDateTime rescheduleRequestedAt,
+        @Schema(description = "Latest reschedule application date")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDateTime rescheduleAppliedAt,
+        @Schema(description = "Reschedule rejection reason or justification")
+        String rescheduleReason,
+        @Schema(description = "Detailed summary of the latest reschedule")
+        String rescheduleDetails,
+        @Schema(description = "True if the loan currently qualifies for early settlement (sourced from collections-service)")
+        Boolean earlySettlementEligible
 ) {
     public static LoanApplicationResponse from(LoanApplicationDto dto) {
-        return from(dto, null, null);
+        return from(dto, null, null, null, null, null, null, null);
     }
 
-    public static LoanApplicationResponse from(LoanApplicationDto dto, String rescheduleId, String rescheduleStatus) {
-        String displayStatus = switch (dto.status()) {
-            case "APPROVED"   -> "APPROVED";
-            case "REJECTED"   -> "REJECTED";
-            case "CANCELLED"  -> "CANCELLED";
-            case "EXPIRED"    -> "EXPIRED";
-            default           -> "IN_PROGRESS";
-        };
+    public static LoanApplicationResponse from(
+            LoanApplicationDto dto,
+            String rescheduleId,
+            String rescheduleStatus,
+            String rescheduleType,
+            LocalDateTime rescheduleRequestedAt,
+            LocalDateTime rescheduleAppliedAt,
+            String rescheduleReason,
+            String rescheduleDetails) {
+        var normalizedStatus = normalizeStatus(dto.status());
+        String displayStatus = deriveDisplayStatus(dto, normalizedStatus);
         return new LoanApplicationResponse(
                 dto.id(),
                 dto.applicationNumber(),
@@ -204,10 +224,10 @@ public record LoanApplicationResponse(
                 dto.productName(),
                 dto.shariaStructure(),
                 scale2(dto.requestedAmount()),
-                dto.requestedTenureMonths(),
+                dto.currentTenureMonths() != null ? dto.currentTenureMonths() : dto.requestedTenureMonths(),
                 dto.purposeOfFinance(),
                 dto.purposeOfFinanceOther(),
-                dto.profitRate(),
+                dto.currentProfitRate() != null ? normalizeProfitRate(dto.currentProfitRate()) : dto.profitRate(),
                 dto.apr(),
                 // SafeWatch
                 dto.safeWatchSessionId(),
@@ -237,9 +257,9 @@ public record LoanApplicationResponse(
                 scale2(dto.maxEligibleAmount()),
                 // Offer
                 scale2(dto.offeredAmount()),
-                scale2(dto.offeredMonthlyInstallment()),
+                scale2(dto.installmentAmount() != null ? dto.installmentAmount() : dto.offeredMonthlyInstallment()),
                 scale2(dto.offeredTotalProfit()),
-                scale2(dto.offeredTotalPayable()),
+                scale2(dto.totalAmount() != null ? dto.totalAmount() : dto.offeredTotalPayable()),
                 scale2(dto.processingFee()),
                 scale2(dto.adminFee()),
                 scale2(dto.acceptedAmount()),
@@ -267,12 +287,62 @@ public record LoanApplicationResponse(
                 // Current schedule (updated after reschedule)
                 dto.currentTenureMonths(),
                 dto.currentMaturityDate(),
+                dto.currentProfitRate() != null ? normalizeProfitRate(dto.currentProfitRate()) : null,
                 rescheduleId,
-                rescheduleStatus
+                rescheduleStatus,
+                rescheduleType,
+                rescheduleRequestedAt,
+                rescheduleAppliedAt,
+                rescheduleReason,
+                rescheduleDetails,
+                dto.earlySettlementEligible()
         );
+    }
+
+    private static String normalizeStatus(String status) {
+        if (status == null) {
+            return "";
+        }
+        return status.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static String deriveDisplayStatus(LoanApplicationDto dto, String normalizedStatus) {
+        // If loan is already disbursed/active, list view should show APPROVED even when app status lags.
+        if (dto.disbursementDate() != null || isActiveOrClosedLoan(dto.loanStatus())) {
+            return "APPROVED";
+        }
+        return switch (normalizedStatus) {
+            case "MANUAL_REVIEW" -> "MANUAL_REVIEW";
+            case "APPROVED" -> "APPROVED";
+            case "REJECTED" -> "REJECTED";
+            case "CANCELLED" -> "CANCELLED";
+            case "EXPIRED" -> "EXPIRED";
+            default -> "IN_PROGRESS";
+        };
+    }
+
+    private static boolean isActiveOrClosedLoan(String loanStatus) {
+        if (loanStatus == null) {
+            return false;
+        }
+        var normalizedLoanStatus = loanStatus.trim().toUpperCase(Locale.ROOT);
+        return "ACTIVE".equals(normalizedLoanStatus)
+                || "CLOSED".equals(normalizedLoanStatus)
+                || "CLOSED_OBLIGATIONS_MET".equals(normalizedLoanStatus)
+                || "OVERPAID".equals(normalizedLoanStatus);
     }
 
     private static BigDecimal scale2(BigDecimal value) {
         return value != null ? value.setScale(2, RoundingMode.HALF_UP) : null;
+    }
+
+    private static BigDecimal normalizeProfitRate(BigDecimal rate) {
+        if (rate == null) return null;
+        // If it's a decimal (e.g. 0.025), convert to percentage (2.5)
+        // If it's already a percentage (e.g. 2.5), keep it
+        if (rate.compareTo(BigDecimal.ONE) < 0) {
+            return rate.multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP);
+        }
+        return rate.setScale(2, RoundingMode.HALF_UP);
     }
 }

@@ -140,7 +140,11 @@ public class LoanRescheduleWorkflowImpl implements LoanRescheduleWorkflow {
                             request.writeOffAmount(),
                             request.profitWaiverAmount(),
                             Workflow.getInfo().getWorkflowId(),
-                            request.idempotencyKey()
+                            request.attachmentUrl(),
+                            request.idempotencyKey(),
+                            eligibility.currentTenureMonths(),
+                            eligibility.currentInstallment(),
+                            eligibility.currentMaturityDate()
                     ));
 
             // ── Step 3: Approval gate ─────────────────────────────────────

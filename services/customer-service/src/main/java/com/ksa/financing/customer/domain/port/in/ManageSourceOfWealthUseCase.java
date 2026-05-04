@@ -1,8 +1,9 @@
 package com.ksa.financing.customer.domain.port.in;
 
 import com.ksa.financing.customer.domain.model.SourceOfWealthOption;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageSourceOfWealthUseCase {
@@ -10,8 +11,8 @@ public interface ManageSourceOfWealthUseCase {
     SourceOfWealthOption create(UUID tenantId, CreateSourceOfWealthCommand command);
     SourceOfWealthOption update(UUID tenantId, UUID id, UpdateSourceOfWealthCommand command);
     SourceOfWealthOption getById(UUID tenantId, UUID id);
-    List<SourceOfWealthOption> getAll(UUID tenantId);
-    List<SourceOfWealthOption> getActive(UUID tenantId);
+    PageResponse<SourceOfWealthOption> getAll(UUID tenantId, PageQuery pageQuery);
+    PageResponse<SourceOfWealthOption> getActive(UUID tenantId, PageQuery pageQuery);
     void deactivate(UUID tenantId, UUID id);
     void activate(UUID tenantId, UUID id);
     void delete(UUID tenantId, UUID id);

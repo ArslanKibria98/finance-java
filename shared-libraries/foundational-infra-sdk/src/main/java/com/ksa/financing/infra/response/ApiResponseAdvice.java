@@ -1,6 +1,8 @@
 package com.ksa.financing.infra.response;
 
 import com.ksa.financing.infra.exception.ErrorResponse;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
@@ -75,7 +77,17 @@ public class ApiResponseAdvice implements ResponseBodyAdvice<Object> {
             return body;
         }
 
-        String failureReason = extractFailureReason(body);
+        // Paginated payload: unwrap so wire format becomes
+        //   { data: [...], pagination: {...}, message: ..., timestamp: ... }
+        // — existing keys preserved, "data" remains a flat array.
+        Object payload = body;
+        PageMetadata pagination = null;
+        if (body instanceof PageResponse<?> pageResponse) {
+            payload = pageResponse.content();
+            pagination = pageResponse.pagination();
+        }
+
+        String failureReason = extractFailureReason(payload);
         String message;
 
         if (failureReason != null && !failureReason.isBlank()) {
@@ -86,7 +98,8 @@ public class ApiResponseAdvice implements ResponseBodyAdvice<Object> {
         }
 
         return ApiResponse.builder()
-                .data(body)
+                .data(payload)
+                .pagination(pagination)
                 .message(message)
                 .timestamp(Instant.now())
                 .build();

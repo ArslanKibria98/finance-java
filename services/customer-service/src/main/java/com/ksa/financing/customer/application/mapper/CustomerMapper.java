@@ -46,21 +46,27 @@ public class CustomerMapper {
     }
 
     public static BankAccountResponse toBankAccountResponse(BankAccount ba) {
-        String maskedIban = ba.getIban() != null && ba.getIban().length() > 4
-            ? "****" + ba.getIban().substring(ba.getIban().length() - 4)
-            : ba.getIban();
+        String iban = ba.getIban();
+        String maskedIban = iban != null && iban.length() > 4
+            ? "****" + iban.substring(iban.length() - 4)
+            : iban;
         return new BankAccountResponse(
             ba.getId(),
             ba.getBankName(),
             ba.getBankCode(),
+            ba.getBankName(),
+            BankNameAr.lookup(ba.getBankCode(), ba.getBankName()),
+            iban,
             maskedIban,
             ba.getAccountHolderName(),
             ba.getAccountType(),
             ba.isPrimary(),
             ba.isSalaryAccount(),
+            ba.isSalaryAccount(),
             ba.getStatus() != null ? ba.getStatus().name() : null,
             ba.getVerifiedAt(),
-            ba.getCreatedAt()
+            ba.getCreatedAt(),
+            0
         );
     }
 

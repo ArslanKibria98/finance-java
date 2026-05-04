@@ -6,6 +6,7 @@ import com.ksa.financing.lending.domain.port.in.ManageLoanUseCase;
 import com.ksa.financing.lending.domain.port.out.EventPublisher;
 import com.ksa.financing.lending.domain.port.out.LoanApplicationRepository;
 import com.ksa.financing.lending.infrastructure.client.FraudEventNotifier;
+import com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanApplicationRepository;
 import com.ksa.islamic.orchestration.activity.lending.LoanApplicationActivity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
     private final EventPublisher eventPublisher;
     private final BankAccountLookupService bankAccountLookupService;
     private final FraudEventNotifier fraudEventNotifier;
+    private final JpaLoanApplicationRepository jpaRepository;
 
     // ══════════ APPLICATION LIFECYCLE ══════════
 
@@ -92,6 +94,9 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
                 input.purposeOfFinance(),
                 null, // purposeOfFinanceOther
                 input.profitRate(),
+                input.processingFeePercent(),
+                input.processingFeeAmount(),
+                input.adminFeeAmount(),
                 null, // apr
                 safeUuid(input.partnerId()),
                 safeUuid(input.leadId()),
@@ -212,6 +217,8 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
 
         var aggregate = findApplication(input.tenantId(), input.applicationId());
         var updatedBy = UUID.fromString(input.updatedBy());
+        var tenantUuid = UUID.fromString(input.tenantId());
+        var applicationUuid = UUID.fromString(input.applicationId());
 
         switch (input.targetStatus()) {
             case "BASIC_INFO_SUBMITTED" -> {} // Handled by saveBasicInfo
@@ -234,6 +241,15 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
             case "REJECTED" -> aggregate.reject("Workflow rejection", updatedBy);
             case "CANCELLED" -> aggregate.cancel(updatedBy);
             case "EXPIRED" -> aggregate.expire();
+            case "MANUAL_REVIEW" -> {
+                // Manual review is a workflow-level waiting state and not a domain enum transition.
+                // Persist it directly in DB to keep tracker/status APIs consistent.
+                var updated = jpaRepository.updateApplicationStatus(tenantUuid, applicationUuid, "MANUAL_REVIEW");
+                if (updated == 0) {
+                    throw new IllegalArgumentException("Application not found for MANUAL_REVIEW update: " + input.applicationId());
+                }
+                return;
+            }
             default -> throw new IllegalArgumentException("Unknown target status: " + input.targetStatus());
         }
 

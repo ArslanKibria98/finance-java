@@ -1,5 +1,7 @@
 package com.ksa.financing.risk.adapter.rest.controller;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.lov.LovCategoryType;
 import com.ksa.financing.risk.domain.model.lov.LovEntry;
 import com.ksa.financing.risk.domain.model.lov.LovSet;
@@ -22,7 +24,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -82,17 +83,21 @@ public class LovController {
     @SecuredEndpoint(obj = "risk.lov", act = "read")
     @GetMapping("/sets")
     @Operation(summary = "Get all LOV sets")
-    public List<LovSet> getAllLovSets(@AuthenticationPrincipal Jwt jwt) {
+    public PageResponse<LovSet> getAllLovSets(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
         UUID tenantId = extractTenantId(jwt);
-        return manageLovUseCase.getAllLovSets(tenantId);
+        return manageLovUseCase.getAllLovSets(tenantId, pageQuery);
     }
 
     @SecuredEndpoint(obj = "risk.lov", act = "read")
     @GetMapping("/sets/active")
     @Operation(summary = "Get all active LOV sets")
-    public List<LovSet> getActiveLovSets(@AuthenticationPrincipal Jwt jwt) {
+    public PageResponse<LovSet> getActiveLovSets(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
         UUID tenantId = extractTenantId(jwt);
-        return manageLovUseCase.getActiveLovSets(tenantId);
+        return manageLovUseCase.getActiveLovSets(tenantId, pageQuery);
     }
 
     @SecuredEndpoint(obj = "risk.lov", act = "manage")
@@ -149,21 +154,23 @@ public class LovController {
     @SecuredEndpoint(obj = "risk.lov", act = "read")
     @GetMapping("/sets/{lovSetId}/entries")
     @Operation(summary = "Get all entries for a LOV set")
-    public List<LovEntry> getEntriesByLovSet(
+    public PageResponse<LovEntry> getEntriesByLovSet(
             @PathVariable UUID lovSetId,
-            @AuthenticationPrincipal Jwt jwt) {
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
         UUID tenantId = extractTenantId(jwt);
-        return manageLovUseCase.getEntriesByLovSet(tenantId, lovSetId);
+        return manageLovUseCase.getEntriesByLovSet(tenantId, lovSetId, pageQuery);
     }
 
     @SecuredEndpoint(obj = "risk.lov", act = "read")
     @GetMapping("/sets/{lovSetId}/entries/active")
     @Operation(summary = "Get active entries for a LOV set")
-    public List<LovEntry> getActiveEntriesByLovSet(
+    public PageResponse<LovEntry> getActiveEntriesByLovSet(
             @PathVariable UUID lovSetId,
-            @AuthenticationPrincipal Jwt jwt) {
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
         UUID tenantId = extractTenantId(jwt);
-        return manageLovUseCase.getActiveEntriesByLovSet(tenantId, lovSetId);
+        return manageLovUseCase.getActiveEntriesByLovSet(tenantId, lovSetId, pageQuery);
     }
 
     @SecuredEndpoint(obj = "risk.lov", act = "manage")

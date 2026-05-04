@@ -20,7 +20,6 @@ import java.util.Map;
 public class ErrorResponse {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
     private Instant timestamp;
-    @JsonProperty("error_code")
     private int status;
     private String error;
     private String code;

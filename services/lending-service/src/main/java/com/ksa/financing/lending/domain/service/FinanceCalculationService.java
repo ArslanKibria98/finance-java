@@ -12,10 +12,10 @@ import java.time.LocalDate;
  * <ul>
  *   <li>Total Cost of Financing = principal × profitRate × (tenureMonths / 12)</li>
  *   <li>Cost of Term = principal × costOfTermPercent (if separate; else same as total cost)</li>
- *   <li>Total Payable = principal + totalCostOfFinancing</li>
+ *   <li>Total Payable = principal + totalCostOfFinancing + processingFee + adminFee</li>
  *   <li>Monthly Installment = totalPayable / tenureMonths</li>
  *   <li>First Installment Due Date = today + 30 days</li>
- *   <li>APR = annualized cost rate</li>
+ *   <li>APR = annualized cost rate (including profit and fees)</li>
  * </ul>
  */
 public final class FinanceCalculationService {
@@ -68,9 +68,11 @@ public final class FinanceCalculationService {
                 .multiply(BigDecimal.valueOf(tenureMonths))
                 .divide(TWELVE, SCALE, RM);
 
-        // BRD: Total Payable = principal + totalCostOfFinancing
+        // BRD: Total Payable = principal + totalCostOfFinancing + processingFee + adminFee
         // (costOfTerm is the same breakdown view of totalCostOfFinancing in single-rate mode)
         var totalPayable = principal.add(totalCostOfFinancing)
+                .add(safeProcFee)
+                .add(safeAdminFee)
                 .setScale(MONEY_SCALE, RM);
 
         // BRD: Monthly Installment = totalPayable / tenureMonths
@@ -80,8 +82,9 @@ public final class FinanceCalculationService {
         // BRD: First Installment Due Date = today + 30 days
         var firstInstallmentDueDate = LocalDate.now().plusDays(30);
 
-        // APR = (totalCostOfFinancing / principal) / (tenureMonths / 12) × 100
-        var apr = calculateApr(totalCostOfFinancing, principal, tenureMonths);
+        // APR = ((totalCostOfFinancing + fees) / principal) / (tenureMonths / 12) × 100
+        var totalCostWithFees = totalCostOfFinancing.add(safeProcFee).add(safeAdminFee);
+        var apr = calculateApr(totalCostWithFees, principal, tenureMonths);
 
         return new FinanceCalculationResult(
                 principal.setScale(MONEY_SCALE, RM),

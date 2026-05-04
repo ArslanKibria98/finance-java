@@ -3,6 +3,8 @@ package com.ksa.financing.ledger.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.ledger.domain.model.CoaFieldLov;
 import com.ksa.financing.ledger.domain.port.in.ManageCoaFieldLovUseCase;
 import com.ksa.financing.ledger.domain.port.out.CoaFieldLovRepository;
@@ -11,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -69,8 +70,8 @@ public class ManageCoaFieldLovUseCaseImpl implements ManageCoaFieldLovUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CoaFieldLov> list(UUID tenantId, boolean activeOnly) {
-        return activeOnly ? repository.findAllActiveByTenant(tenantId) : repository.findAllByTenant(tenantId);
+    public PageResponse<CoaFieldLov> list(UUID tenantId, boolean activeOnly, PageQuery pageQuery) {
+        return activeOnly ? repository.findAllActiveByTenant(tenantId, pageQuery) : repository.findAllByTenant(tenantId, pageQuery);
     }
 
     @Override

@@ -9,5 +9,8 @@ public enum TransactionPurpose {
     REFUND,
     REVERSAL,
     WITHDRAWAL,
-    ADJUSTMENT
+    ADJUSTMENT,
+    TRANSFER_OUT,
+    TRANSFER_IN,
+    TRANSFER_FEE
 }

@@ -41,6 +41,7 @@ public class TemporalConfig {
     private final DisbursementActivityImpl disbursementActivity;
     private final LedgerActivityImpl ledgerActivity;
     private final RescheduleActivityImpl rescheduleActivity;
+    private final ManualApprovalActivityImpl manualApprovalActivity;
 
     private WorkerFactory workerFactory;
 
@@ -82,7 +83,8 @@ public class TemporalConfig {
                 contractActivity,              // Calls middleware-third-party (contract gen, OTP)
                 disbursementActivity,          // Calls Fineract + middleware (payment gateway)
                 ledgerActivity,                // Calls ledger-service → posts GL entries → Fineract GL sync
-                rescheduleActivity             // Loan rescheduling — eligibility, schedule, Fineract proxy via ledger-service
+                rescheduleActivity,            // Loan rescheduling — eligibility, schedule, Fineract proxy via ledger-service
+                manualApprovalActivity         // Manual approval gate — evaluates rules + SLA tracking
         );
 
         log.info("Temporal worker configured for queue: {} with 9 activity implementations", taskQueue);

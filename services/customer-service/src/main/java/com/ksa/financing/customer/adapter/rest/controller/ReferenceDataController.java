@@ -19,6 +19,8 @@ import com.ksa.financing.customer.domain.port.in.ManageSourceOfWealthUseCase;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,7 +41,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -83,12 +84,12 @@ public class ReferenceDataController {
     @GetMapping("/source-of-wealth")
     @Operation(summary = "List all source of wealth options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getAllSourceOfWealth(
-            @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllSourceOfWealth(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<ReferenceDataResponse> responses = sourceOfWealthUseCase.getAll(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = sourceOfWealthUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -97,13 +98,13 @@ public class ReferenceDataController {
                description = "Returns only active options sorted by display order (for dropdown population). "
                            + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
     @ApiResponse(responseCode = "200", description = "Active options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getActiveSourceOfWealth(
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActiveSourceOfWealth(
             @AuthenticationPrincipal Jwt jwt,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
-        List<ReferenceDataResponse> responses = sourceOfWealthUseCase.getActive(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = sourceOfWealthUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -214,12 +215,12 @@ public class ReferenceDataController {
     @GetMapping("/source-of-funds")
     @Operation(summary = "List all source of funds options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getAllSourceOfFunds(
-            @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllSourceOfFunds(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<ReferenceDataResponse> responses = sourceOfFundsUseCase.getAll(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = sourceOfFundsUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -228,13 +229,13 @@ public class ReferenceDataController {
                description = "Returns only active options sorted by display order (for dropdown population). "
                            + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
     @ApiResponse(responseCode = "200", description = "Active options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getActiveSourceOfFunds(
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActiveSourceOfFunds(
             @AuthenticationPrincipal Jwt jwt,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
-        List<ReferenceDataResponse> responses = sourceOfFundsUseCase.getActive(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = sourceOfFundsUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -342,12 +343,12 @@ public class ReferenceDataController {
     @GetMapping("/source-of-income")
     @Operation(summary = "List all source of income options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getAllSourceOfIncome(
-            @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllSourceOfIncome(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<ReferenceDataResponse> responses = sourceOfIncomeUseCase.getAll(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = sourceOfIncomeUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -356,13 +357,13 @@ public class ReferenceDataController {
                description = "Returns only active options sorted by display order (for dropdown population). "
                            + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
     @ApiResponse(responseCode = "200", description = "Active options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getActiveSourceOfIncome(
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActiveSourceOfIncome(
             @AuthenticationPrincipal Jwt jwt,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
-        List<ReferenceDataResponse> responses = sourceOfIncomeUseCase.getActive(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = sourceOfIncomeUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -470,12 +471,12 @@ public class ReferenceDataController {
     @GetMapping("/purpose-of-finance")
     @Operation(summary = "List all purpose of finance options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getAllPurposeOfFinance(
-            @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllPurposeOfFinance(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<ReferenceDataResponse> responses = purposeOfFinanceUseCase.getAll(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = purposeOfFinanceUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -484,13 +485,13 @@ public class ReferenceDataController {
                description = "Returns only active options sorted by display order (for dropdown population). "
                            + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
     @ApiResponse(responseCode = "200", description = "Active options retrieved")
-    public ResponseEntity<List<ReferenceDataResponse>> getActivePurposeOfFinance(
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActivePurposeOfFinance(
             @AuthenticationPrincipal Jwt jwt,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
-        List<ReferenceDataResponse> responses = purposeOfFinanceUseCase.getActive(tenantId)
-                .stream().map(this::toResponse).toList();
+        var responses = purposeOfFinanceUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -599,12 +600,12 @@ public class ReferenceDataController {
     @GetMapping("/net-worth-ranges")
     @Operation(summary = "List all net worth range options", description = "Returns all options including inactive (admin view)")
     @ApiResponse(responseCode = "200", description = "Options retrieved")
-    public ResponseEntity<List<NetWorthRangeResponse>> getAllNetWorthRanges(
-            @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<PageResponse<NetWorthRangeResponse>> getAllNetWorthRanges(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantId(jwt);
-        List<NetWorthRangeResponse> responses = netWorthRangeUseCase.getAll(tenantId)
-                .stream().map(this::toNetWorthResponse).toList();
+        var responses = netWorthRangeUseCase.getAll(tenantId, pageQuery).map(this::toNetWorthResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -613,13 +614,13 @@ public class ReferenceDataController {
                description = "Returns only active options sorted by display order (for dropdown population). "
                            + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
     @ApiResponse(responseCode = "200", description = "Active options retrieved")
-    public ResponseEntity<List<NetWorthRangeResponse>> getActiveNetWorthRanges(
+    public ResponseEntity<PageResponse<NetWorthRangeResponse>> getActiveNetWorthRanges(
             @AuthenticationPrincipal Jwt jwt,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
 
         UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
-        List<NetWorthRangeResponse> responses = netWorthRangeUseCase.getActive(tenantId)
-                .stream().map(this::toNetWorthResponse).toList();
+        var responses = netWorthRangeUseCase.getActive(tenantId, pageQuery).map(this::toNetWorthResponse);
         return ResponseEntity.ok(responses);
     }
 
@@ -729,10 +730,18 @@ public class ReferenceDataController {
         // Fall back to X-Tenant-Id header
         var tenantHeader = httpRequest.getHeader("X-Tenant-Id");
         if (tenantHeader != null && !tenantHeader.isBlank()) {
-            return UUID.fromString(tenantHeader);
+            try {
+                return UUID.fromString(tenantHeader);
+            } catch (IllegalArgumentException ex) {
+                throw new BusinessException(
+                        ErrorCodes.BAD_REQUEST,
+                        "Invalid X-Tenant-Id header format (must be UUID): " + tenantHeader,
+                        "Invalid X-Tenant-Id header format (must be UUID): " + tenantHeader);
+            }
         }
         throw new BusinessException(
-                ErrorCodes.INVALID_CREDENTIALS,
+                ErrorCodes.BAD_REQUEST,
+                "Tenant identification required: provide JWT with tenant_id claim or X-Tenant-Id header",
                 "Tenant identification required: provide JWT with tenant_id claim or X-Tenant-Id header");
     }
 

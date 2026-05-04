@@ -1,5 +1,9 @@
 package com.ksa.financing.onboarding.application.usecase;
 
+import com.google.protobuf.ByteString;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.onboarding.domain.model.OnboardingState;
 import com.ksa.financing.onboarding.domain.model.OnboardingStep;
 import com.ksa.financing.onboarding.domain.port.in.GetOnboardingStatusUseCase;
@@ -18,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @Service
@@ -170,20 +175,23 @@ public class GetOnboardingStatusService implements GetOnboardingStatusUseCase {
     }
 
     @Override
-    public List<OnboardingState> listActiveOnboardings() {
-        log.info("Listing all active onboarding workflows from Temporal");
-        List<OnboardingState> results = new ArrayList<>();
+    public PageResponse<OnboardingState> listActiveOnboardings(PageQuery pageQuery) {
+        log.info("Listing active onboarding workflows (page={}, size={})", pageQuery.page(), pageQuery.size());
+        List<OnboardingState> content = new ArrayList<>();
 
         try {
-            ListWorkflowExecutionsRequest request = ListWorkflowExecutionsRequest.newBuilder()
+            var requestBuilder = ListWorkflowExecutionsRequest.newBuilder()
                     .setNamespace(temporalNamespace)
                     .setQuery("WorkflowType = 'CustomerOnboardingWorkflow'")
-                    .setPageSize(500)
-                    .build();
+                    .setPageSize(pageQuery.size());
+
+            if (pageQuery.pageToken() != null && !pageQuery.pageToken().isBlank()) {
+                requestBuilder.setNextPageToken(ByteString.copyFrom(Base64.getDecoder().decode(pageQuery.pageToken())));
+            }
 
             ListWorkflowExecutionsResponse response = workflowClient.getWorkflowServiceStubs()
                     .blockingStub()
-                    .listWorkflowExecutions(request);
+                    .listWorkflowExecutions(requestBuilder.build());
 
             for (WorkflowExecutionInfo info : response.getExecutionsList()) {
                 String wfId = info.getExecution().getWorkflowId();
@@ -191,22 +199,35 @@ public class GetOnboardingStatusService implements GetOnboardingStatusUseCase {
                     CustomerOnboardingWorkflow wf = workflowClient.newWorkflowStub(
                             CustomerOnboardingWorkflow.class, wfId);
                     OnboardingState state = wf.getState();
-                    results.add(state);
+                    content.add(state);
                 } catch (Exception e) {
                     log.warn("Could not query workflow {}: {}", wfId, e.getMessage());
                     OnboardingState errorState = new OnboardingState();
                     errorState.setWorkflowId(wfId);
                     errorState.setCurrentStep(OnboardingStep.INITIATED);
                     errorState.setFailureReason("Query failed: " + e.getMessage());
-                    results.add(errorState);
+                    content.add(errorState);
                 }
             }
 
-            log.info("Found {} active onboarding workflows", results.size());
+            String nextPageToken = response.getNextPageToken().isEmpty() ? null 
+                    : Base64.getEncoder().encodeToString(response.getNextPageToken().toByteArray());
+
+            PageMetadata metadata = new PageMetadata(
+                    pageQuery.page(),
+                    pageQuery.size(),
+                    0L, // Total elements not easily available in Temporal list
+                    0,  // Total pages not easily available
+                    pageQuery.page() == 0,
+                    nextPageToken == null,
+                    content.isEmpty(),
+                    nextPageToken
+            );
+
+            return new PageResponse<>(content, metadata);
         } catch (Exception e) {
             log.error("Failed to list workflows from Temporal: {}", e.getMessage(), e);
+            return PageResponse.empty(pageQuery.page(), pageQuery.size());
         }
-
-        return results;
     }
 }

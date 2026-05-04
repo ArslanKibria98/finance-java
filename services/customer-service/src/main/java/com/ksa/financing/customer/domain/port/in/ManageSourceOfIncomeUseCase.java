@@ -1,8 +1,9 @@
 package com.ksa.financing.customer.domain.port.in;
 
 import com.ksa.financing.customer.domain.model.SourceOfIncomeOption;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageSourceOfIncomeUseCase {
@@ -10,8 +11,8 @@ public interface ManageSourceOfIncomeUseCase {
     SourceOfIncomeOption create(UUID tenantId, CreateSourceOfIncomeCommand command);
     SourceOfIncomeOption update(UUID tenantId, UUID id, UpdateSourceOfIncomeCommand command);
     SourceOfIncomeOption getById(UUID tenantId, UUID id);
-    List<SourceOfIncomeOption> getAll(UUID tenantId);
-    List<SourceOfIncomeOption> getActive(UUID tenantId);
+    PageResponse<SourceOfIncomeOption> getAll(UUID tenantId, PageQuery pageQuery);
+    PageResponse<SourceOfIncomeOption> getActive(UUID tenantId, PageQuery pageQuery);
     void deactivate(UUID tenantId, UUID id);
     void activate(UUID tenantId, UUID id);
     void delete(UUID tenantId, UUID id);

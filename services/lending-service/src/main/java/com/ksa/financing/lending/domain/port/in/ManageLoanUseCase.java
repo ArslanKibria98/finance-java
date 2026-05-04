@@ -1,12 +1,13 @@
 package com.ksa.financing.lending.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.LoanAggregate;
 import com.ksa.financing.lending.domain.model.LoanApplicationId;
 import com.ksa.financing.lending.domain.model.ShariaStructure;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageLoanUseCase {
@@ -19,7 +20,9 @@ public interface ManageLoanUseCase {
 
     LoanAggregate getLoanByNumber(UUID tenantId, String loanNumber);
 
-    List<LoanAggregate> listLoansByCustomer(UUID tenantId, UUID customerId);
+    PageResponse<LoanAggregate> listLoansByCustomer(UUID tenantId, UUID customerId, PageQuery query);
+
+    PageResponse<LoanAggregate> listAllLoans(UUID tenantId, PageQuery query);
 
     LoanAggregate getLoanByApplicationId(UUID tenantId, UUID applicationId);
 

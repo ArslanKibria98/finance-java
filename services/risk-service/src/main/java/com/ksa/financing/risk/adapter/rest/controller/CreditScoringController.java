@@ -17,6 +17,8 @@ import com.ksa.financing.risk.domain.port.in.ManageFieldDefinitionsUseCase.Creat
 import com.ksa.financing.risk.domain.port.in.ManageFieldDefinitionsUseCase.UpdateFieldDefinitionCommand;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,11 +48,14 @@ public class CreditScoringController {
 
     @SecuredEndpoint(obj = "risk.credit-scoring", act = "read")
     @GetMapping("/field-definitions")
-    @Operation(summary = "List active field definitions", description = "Returns all active credit scoring field definitions for the tenant")
-    public List<CreditScoringFieldDefinition> getFieldDefinitions(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List active field definitions",
+            description = "Returns active credit scoring field definitions for the tenant (paginated)")
+    public PageResponse<CreditScoringFieldDefinition> getFieldDefinitions(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
         log.info("Fetching credit scoring field definitions for tenant={}", tenantId);
-        return getCreditScoringFieldsUseCase.getActiveFieldDefinitions(tenantId);
+        return getCreditScoringFieldsUseCase.getActiveFieldDefinitions(tenantId, pageQuery);
     }
 
     @SecuredEndpoint(obj = "risk.credit-scoring", act = "read")

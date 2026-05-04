@@ -1,8 +1,9 @@
 package com.ksa.financing.identity.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.identity.domain.model.Role;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageRoleUseCase {
@@ -13,7 +14,7 @@ public interface ManageRoleUseCase {
     Role create(CreateRoleCommand command);
     Role getById(UUID tenantId, UUID roleId);
     Role getByCode(UUID tenantId, String roleCode);
-    List<Role> listByTenant(UUID tenantId);
+    PageResponse<Role> listByTenant(UUID tenantId, PageQuery query);
     Role update(UUID tenantId, UUID roleId, UpdateRoleCommand command);
     void delete(UUID tenantId, UUID roleId);
 }

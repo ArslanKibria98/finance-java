@@ -1,7 +1,10 @@
 package com.ksa.financing.lending.adapter.rest.controller;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
@@ -10,6 +13,7 @@ import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.lending.infrastructure.persistence.entity.LoanRescheduleJpaEntity;
 import com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRescheduleRepository;
 import com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRepository;
+import com.ksa.financing.lending.infrastructure.persistence.repository.JpaRescheduleConfigRepository;
 import com.ksa.islamic.orchestration.activity.lending.LoanRescheduleWorkflow;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +30,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -59,6 +64,7 @@ public class LoanRescheduleController {
     private final ObjectMapper objectMapper;
     private final JpaLoanRescheduleRepository rescheduleRepository;
     private final JpaLoanRepository loanRepository;
+    private final JpaRescheduleConfigRepository configRepository;
 
     @Value("${temporal.task-queue:loan-application-queue}")
     private String taskQueue;
@@ -127,12 +133,13 @@ public class LoanRescheduleController {
                 .status("SUBMITTED")
                 .requestedBy(parseUuidSafely(requestedBy))
                 .justification(request.justification())
-                .requestedSkipMonth(request.requestedSkipMonth())
+                .requestedSkipMonth(request.skipMonth())
                 .extensionMonths(request.extensionMonths())
                 .holidayMonths(request.holidayMonths())
                 .newProfitRate(request.newProfitRate())
                 .writeOffAmount(request.writeOffAmount())
                 .profitWaiverAmount(request.profitWaiverAmount())
+                .attachmentUrl(request.attachment())
                 .workflowId(workflowId)
                 .idempotencyKey(idempotencyKey)
                 .createdBy(parseUuidSafely(requestedBy))
@@ -149,13 +156,14 @@ public class LoanRescheduleController {
                 request.rescheduleType(),
                 requestedBy,
                 request.justification(),
-                request.requestedSkipMonth() != null ? request.requestedSkipMonth().toString() : null,
+                request.skipMonth() != null ? request.skipMonth().toString() : null,
                 request.extensionMonths(),
                 request.holidayMonths(),
                 request.newProfitRate(),
                 request.writeOffAmount(),
                 request.profitWaiverAmount(),
                 request.outstandingPrincipal(),
+                request.attachment(),
                 idempotencyKey,
                 requestedBy
         );
@@ -217,23 +225,13 @@ public class LoanRescheduleController {
                 ? ChronoUnit.MONTHS.between(disbursementDate, LocalDate.now()) : 0;
         int currentDpd     = loan.getCurrentDpd()     != null ? loan.getCurrentDpd()     : 0;
         int currentTenure  = loan.getTenureMonths()   != null ? loan.getTenureMonths()   : 0;
-        int ifrs9Stage     = loan.getIfrs9Stage()     != null ? loan.getIfrs9Stage()     : 1;
 
         // ── Existing reschedules ────────────────────────────────────
         var existing = rescheduleRepository.findByTenantIdAndLoanId(UUID.fromString(tenantId), loan.getId());
-        var activeStatuses = List.of("PENDING", "SUBMITTED", "PROCESSING");
+        var activeStatuses = List.of("PENDING", "SUBMITTED", "PROCESSING", "AWAITING_APPROVAL");
 
-        var approvedSkips = existing.stream()
-                .filter(r -> "SKIP_PAYMENT".equals(r.getRescheduleType()) && "APPROVED".equals(r.getStatus()))
-                .toList();
-        int skipCount = approvedSkips.size();
-        LocalDate lastSkipMonth = approvedSkips.stream()
-                .map(LoanRescheduleJpaEntity::getRequestedSkipMonth)
-                .filter(Objects::nonNull)
-                .max(Comparator.naturalOrder())
-                .orElse(null);
-        long monthsSinceLastSkip = lastSkipMonth != null
-                ? ChronoUnit.MONTHS.between(lastSkipMonth, LocalDate.now()) : 999;
+        // ── Fetch Global Configs ────────────────────────────────────
+        var globalConfigs = configRepository.findByTenantIdAndActiveTrue(UUID.fromString(tenantId));
 
         // ── Build root response ─────────────────────────────────────
         var root = objectMapper.createObjectNode();
@@ -255,284 +253,80 @@ public class LoanRescheduleController {
 
         var options = root.putArray("rescheduleOptions");
 
-        // ══ 1. SKIP PAYMENT ══════════════════════════════════════════
-        boolean hasActiveSkip = existing.stream().anyMatch(r ->
-                "SKIP_PAYMENT".equals(r.getRescheduleType()) && activeStatuses.contains(r.getStatus()));
+        for (var config : globalConfigs) {
+            var opt = options.addObject();
+            opt.put("type",            config.getRescheduleType());
+            opt.put("label",           config.getLabelEn());
+            opt.put("labelAr",         config.getLabelAr());
+            opt.put("description",     config.getDescriptionEn());
+            opt.put("descriptionAr",   config.getDescriptionAr());
+            opt.put("requiresApproval", config.isRequiresApproval());
+            if (config.getApproverRole() != null) {
+                opt.put("approver", config.getApproverRole());
+            }
 
-        var skipReasons = new ArrayList<String>();
-        // Availability checks disabled — always show as available for frontend testing
-        // if (loanAgeMonths < 3)          skipReasons.add("Loan must be at least 3 months old (current: " + loanAgeMonths + " months)");
-        // if (currentDpd > 0)             skipReasons.add("No arrears allowed (current DPD: " + currentDpd + " days)");
-        // if (skipCount >= 2)             skipReasons.add("Maximum 2 skips already used (" + skipCount + "/2)");
-        // if (monthsSinceLastSkip < 6)    skipReasons.add("Must wait 6 months between skips (" + (6 - monthsSinceLastSkip) + " months remaining)");
-        if (hasActiveSkip)              skipReasons.add("A skip payment request is already in progress");
+            // Availability Logic
+            var unavailableReasons = new ArrayList<String>();
+            boolean hasActive = existing.stream().anyMatch(r ->
+                    config.getRescheduleType().equals(r.getRescheduleType()) && activeStatuses.contains(r.getStatus()));
+            if (hasActive) {
+                unavailableReasons.add("A request of this type is already in progress");
+            }
 
-        LocalDate nextDue = (loan.getFirstDueDate() != null)
-                ? loan.getFirstDueDate().plusMonths(
-                        Math.max(0, ChronoUnit.MONTHS.between(loan.getFirstDueDate(), LocalDate.now()) + 1))
-                : LocalDate.now().plusMonths(1).withDayOfMonth(1);
+            // Parse Fields from Config
+            try {
+                if (config.getFieldsConfig() != null) {
+                    var fields = (ArrayNode) objectMapper.readTree(config.getFieldsConfig());
+                    
+                    // Inject dynamic validation context into fields
+                    injectDynamicContextIntoFields(fields, config.getRescheduleType(), loan);
+                    
+                    opt.set("fields", fields);
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse fieldsConfig for {}: {}", config.getRescheduleType(), e.getMessage());
+                opt.putArray("fields");
+            }
 
-        var skipOpt = options.addObject();
-        skipOpt.put("type",            "SKIP_PAYMENT");
-        skipOpt.put("label",           "Skip Payment");
-        skipOpt.put("labelAr",         "تأجيل قسط");
-        skipOpt.put("description",     "Move one installment to end of tenure. No extra profit charged (Sharia-compliant).");
-        skipOpt.put("descriptionAr",   "تأجيل قسط واحد إلى نهاية مدة التمويل دون أي رسوم إضافية.");
-        skipOpt.put("available",       skipReasons.isEmpty());
-        skipOpt.put("requiresApproval", false);
-        skipOpt.put("skipsUsed",       skipCount);
-        skipOpt.put("skipsRemaining",  Math.max(0, 2 - skipCount));
-        if (!skipReasons.isEmpty()) {
-            var reasons = skipOpt.putArray("unavailableReasons");
-            skipReasons.forEach(reasons::add);
+            opt.put("available", unavailableReasons.isEmpty());
+            if (!unavailableReasons.isEmpty()) {
+                var reasons = opt.putArray("unavailableReasons");
+                unavailableReasons.forEach(reasons::add);
+            }
         }
-        var skipFields = skipOpt.putArray("fields");
-        var skipMonthField = skipFields.addObject();
-        skipMonthField.put("name",     "requestedSkipMonth");
-        skipMonthField.put("type",     "DATE");
-        skipMonthField.put("label",    "Month to Skip");
-        skipMonthField.put("labelAr",  "الشهر المراد تأجيله");
-        skipMonthField.put("required", true);
-        skipMonthField.put("hint",     "Select the upcoming installment month you want to skip.");
-        var skipVal = skipMonthField.putObject("validation");
-        skipVal.put("minDate",   nextDue.withDayOfMonth(1).toString());
-        skipVal.put("maxDate",   loan.getMaturityDate() != null
-                ? loan.getMaturityDate().minusMonths(1).withDayOfMonth(1).toString() : null);
-        skipVal.put("format",    "YYYY-MM-01");
-        skipVal.put("note",      "Must be a future installment month. Use first day of month.");
-
-        var skipJustField = skipFields.addObject();
-        skipJustField.put("name",        "justification");
-        skipJustField.put("type",        "TEXT");
-        skipJustField.put("label",       "Reason for Skip (Optional)");
-        skipJustField.put("labelAr",     "سبب التأجيل (اختياري)");
-        skipJustField.put("placeholder", "Briefly mention why you want to skip this installment...");
-        skipJustField.put("required",    false);
-        skipJustField.put("hint",        "Optional — helps us serve you better.");
-        var skipJustVal = skipJustField.putObject("validation");
-        skipJustVal.put("minLength", 0);
-        skipJustVal.put("maxLength", 300);
-
-        // ══ 2. TENURE EXTENSION ══════════════════════════════════════
-        boolean hasActiveTenure = existing.stream().anyMatch(r ->
-                "TENURE_EXTENSION".equals(r.getRescheduleType()) && activeStatuses.contains(r.getStatus()));
-        int maxExtension = Math.min(12, Math.max(0, 72 - currentTenure));
-
-        var tenureReasons = new ArrayList<String>();
-        // Availability checks disabled — always show as available for frontend testing
-        // if (loanAgeMonths < 6)    tenureReasons.add("Loan must be at least 6 months old (current: " + loanAgeMonths + " months)");
-        // if (currentDpd > 30)      tenureReasons.add("DPD must be ≤ 30 days (current: " + currentDpd + " days)");
-        // if (ifrs9Stage >= 3)      tenureReasons.add("Not available for high-risk (D/E grade) loans");
-        // if (maxExtension <= 0)    tenureReasons.add("Maximum 72-month total tenure already reached");
-        if (hasActiveTenure)      tenureReasons.add("A tenure extension request is already in progress");
-
-        var tenureOpt = options.addObject();
-        tenureOpt.put("type",            "TENURE_EXTENSION");
-        tenureOpt.put("label",           "Tenure Extension");
-        tenureOpt.put("labelAr",         "تمديد مدة التمويل");
-        tenureOpt.put("description",     "Extend your loan tenure to reduce your monthly installment.");
-        tenureOpt.put("descriptionAr",   "تمديد مدة التمويل لتقليل قيمة القسط الشهري.");
-        tenureOpt.put("available",       tenureReasons.isEmpty());
-        tenureOpt.put("requiresApproval", true);
-        tenureOpt.put("approver",        "OPERATIONS_HEAD");
-        tenureOpt.put("approvalLabel",   "Operations Head Approval");
-        if (!tenureReasons.isEmpty()) {
-            var reasons = tenureOpt.putArray("unavailableReasons");
-            tenureReasons.forEach(reasons::add);
-        }
-        var tenureFields = tenureOpt.putArray("fields");
-
-        var extField = tenureFields.addObject();
-        extField.put("name",        "extensionMonths");
-        extField.put("type",        "INTEGER");
-        extField.put("label",       "Extension Duration");
-        extField.put("labelAr",     "مدة التمديد");
-        extField.put("placeholder", "Enter months (1–" + maxExtension + ")");
-        extField.put("unit",        "months");
-        extField.put("required",    true);
-        extField.put("hint",        "Extending tenure reduces monthly installment but increases total profit paid.");
-        var extVal = extField.putObject("validation");
-        extVal.put("min",                   1);
-        extVal.put("max",                   maxExtension);
-        extVal.put("step",                  1);
-        extVal.put("currentTenureMonths",   currentTenure);
-        extVal.put("maxTotalTenureMonths",  72);
-        extVal.put("note",                  "Total tenure cannot exceed 72 months");
-
-        var tenureJustField = tenureFields.addObject();
-        tenureJustField.put("name",        "justification");
-        tenureJustField.put("type",        "TEXT");
-        tenureJustField.put("label",       "Reason for Extension");
-        tenureJustField.put("labelAr",     "سبب طلب التمديد");
-        tenureJustField.put("placeholder", "Describe your financial hardship or reason for requesting tenure extension...");
-        tenureJustField.put("required",    true);
-        tenureJustField.put("hint",        "Reviewed by the operations team. Be specific about your financial situation.");
-        var tenureJustVal = tenureJustField.putObject("validation");
-        tenureJustVal.put("minLength", 20);
-        tenureJustVal.put("maxLength", 500);
-
-        var tenureHardshipField = tenureFields.addObject();
-        tenureHardshipField.put("name",     "hardshipDeclaration");
-        tenureHardshipField.put("type",     "BOOLEAN");
-        tenureHardshipField.put("label",    "I declare that I am experiencing financial hardship");
-        tenureHardshipField.put("labelAr",  "أقر بأنني أمر بظروف مالية صعبة");
-        tenureHardshipField.put("required", true);
-        tenureHardshipField.put("hint",     "Required by SAMA regulations for tenure extension approval.");
-
-        // ══ 3. PAYMENT HOLIDAY ═══════════════════════════════════════
-        boolean hasActiveHoliday = existing.stream().anyMatch(r ->
-                "PAYMENT_HOLIDAY".equals(r.getRescheduleType()) && activeStatuses.contains(r.getStatus()));
-
-        var holidayReasons = new ArrayList<String>();
-        // Availability checks disabled — always show as available for frontend testing
-        // if (loanAgeMonths < 3) holidayReasons.add("Loan must be at least 3 months old (current: " + loanAgeMonths + " months)");
-        if (hasActiveHoliday)  holidayReasons.add("A payment holiday request is already in progress");
-
-        var holidayOpt = options.addObject();
-        holidayOpt.put("type",            "PAYMENT_HOLIDAY");
-        holidayOpt.put("label",           "Payment Holiday");
-        holidayOpt.put("labelAr",         "إجازة سداد");
-        holidayOpt.put("description",     "Pause payments for up to 3 months. No extra profit accrues (Sharia-compliant).");
-        holidayOpt.put("descriptionAr",   "أوقف أقساطك مؤقتاً لمدة تصل إلى 3 أشهر دون احتساب أرباح إضافية.");
-        holidayOpt.put("available",       holidayReasons.isEmpty());
-        holidayOpt.put("requiresApproval", true);
-        holidayOpt.put("approver",        "OPERATIONS_HEAD");
-        holidayOpt.put("approvalLabel",   "Operations Head Approval");
-        if (!holidayReasons.isEmpty()) {
-            var reasons = holidayOpt.putArray("unavailableReasons");
-            holidayReasons.forEach(reasons::add);
-        }
-        var holidayFields = holidayOpt.putArray("fields");
-
-        var holidayMonthsField = holidayFields.addObject();
-        holidayMonthsField.put("name",        "holidayMonths");
-        holidayMonthsField.put("type",        "INTEGER");
-        holidayMonthsField.put("label",       "Holiday Duration");
-        holidayMonthsField.put("labelAr",     "مدة الإجازة");
-        holidayMonthsField.put("placeholder", "Enter months (1–3)");
-        holidayMonthsField.put("unit",        "months");
-        holidayMonthsField.put("required",    true);
-        holidayMonthsField.put("hint",        "Tenure will be extended by the number of holiday months.");
-        var holidayVal = holidayMonthsField.putObject("validation");
-        holidayVal.put("min",  1);
-        holidayVal.put("max",  3);
-        holidayVal.put("step", 1);
-        holidayVal.put("note", "Maximum 3 months payment holiday allowed per request");
-
-        var holidayJustField = holidayFields.addObject();
-        holidayJustField.put("name",        "justification");
-        holidayJustField.put("type",        "TEXT");
-        holidayJustField.put("label",       "Justification");
-        holidayJustField.put("labelAr",     "المبرر");
-        holidayJustField.put("placeholder", "Explain why you need a payment holiday...");
-        holidayJustField.put("required",    true);
-        holidayJustField.put("hint",        "Mandatory for operations head review and approval.");
-        var holidayJustVal = holidayJustField.putObject("validation");
-        holidayJustVal.put("minLength", 20);
-        holidayJustVal.put("maxLength", 500);
-
-        // ══ 4. FULL RESTRUCTURING ════════════════════════════════════
-        boolean hasActiveRestructure = existing.stream().anyMatch(r ->
-                "RESTRUCTURING".equals(r.getRescheduleType()) && activeStatuses.contains(r.getStatus()));
-
-        var restructureReasons = new ArrayList<String>();
-        // Availability checks disabled — always show as available for frontend testing
-        // if (currentDpd <= 90)     restructureReasons.add("Full restructuring requires DPD > 90 days or documented financial distress (current DPD: " + currentDpd + " days)");
-        if (hasActiveRestructure) restructureReasons.add("A restructuring request is already in progress");
-
-        int maxRestExtension = Math.min(12, Math.max(0, 72 - currentTenure));
-        String currentProfitRate = loan.getProfitRate() != null ? loan.getProfitRate().toPlainString() : "0";
-        String maxReducedRate    = loan.getProfitRate() != null
-                ? loan.getProfitRate().subtract(BigDecimal.ONE).max(BigDecimal.ONE).toPlainString() : "29.00";
-
-        var restructureOpt = options.addObject();
-        restructureOpt.put("type",            "RESTRUCTURING");
-        restructureOpt.put("label",           "Full Restructuring");
-        restructureOpt.put("labelAr",         "إعادة هيكلة كاملة");
-        restructureOpt.put("description",     "Complete loan restructure for financial distress. Options: principal reduction, profit rate reduction, tenure extension, or combination.");
-        restructureOpt.put("descriptionAr",   "إعادة هيكلة شاملة للتمويل في حالات الضائقة المالية: تخفيض الأصل أو الربح أو تمديد المدة أو مزيج.");
-        restructureOpt.put("available",       restructureReasons.isEmpty());
-        restructureOpt.put("requiresApproval", true);
-        restructureOpt.put("approver",        "CREDIT_COMMITTEE");
-        restructureOpt.put("approvalLabel",   "Credit Committee Approval");
-        if (!restructureReasons.isEmpty()) {
-            var reasons = restructureOpt.putArray("unavailableReasons");
-            restructureReasons.forEach(reasons::add);
-        }
-        var restructureFields = restructureOpt.putArray("fields");
-
-        // restructuringOption — SELECT
-        var restTypeField = restructureFields.addObject();
-        restTypeField.put("name",        "restructuringOption");
-        restTypeField.put("type",        "SELECT");
-        restTypeField.put("label",       "Restructuring Option");
-        restTypeField.put("labelAr",     "خيار إعادة الهيكلة");
-        restTypeField.put("required",    true);
-        restTypeField.put("hint",        "Select the type of restructuring you need. Bank will assess feasibility.");
-        var restOpts = restTypeField.putArray("options");
-        restOpts.addObject().put("value", "REDUCE_PRINCIPAL").put("label", "Principal Reduction (Write-off)").put("labelAr", "تخفيض الأصل (شطب جزئي)");
-        restOpts.addObject().put("value", "REDUCE_PROFIT_RATE").put("label", "Profit Rate Reduction").put("labelAr", "تخفيض معدل الربح");
-        restOpts.addObject().put("value", "EXTEND_TENURE").put("label", "Tenure Extension").put("labelAr", "تمديد مدة التمويل");
-        restOpts.addObject().put("value", "COMBINATION").put("label", "Combination (Multiple Options)").put("labelAr", "مزيج من الخيارات");
-
-        // extensionMonths — conditional on EXTEND_TENURE / COMBINATION
-        var restExtField = restructureFields.addObject();
-        restExtField.put("name",        "extensionMonths");
-        restExtField.put("type",        "INTEGER");
-        restExtField.put("label",       "Extension Months");
-        restExtField.put("labelAr",     "عدد أشهر التمديد");
-        restExtField.put("unit",        "months");
-        restExtField.put("required",    false);
-        restExtField.put("conditional", true);
-        restExtField.put("showWhen",    "restructuringOption IN [EXTEND_TENURE, COMBINATION]");
-        restExtField.put("hint",        "Only fill if requesting tenure extension as part of restructure.");
-        var restExtVal = restExtField.putObject("validation");
-        restExtVal.put("min",                  1);
-        restExtVal.put("max",                  maxRestExtension);
-        restExtVal.put("step",                 1);
-        restExtVal.put("maxTotalTenureMonths", 72);
-        restExtVal.put("currentTenureMonths",  currentTenure);
-
-        // newProfitRate — conditional on REDUCE_PROFIT_RATE / COMBINATION
-        var newRateField = restructureFields.addObject();
-        newRateField.put("name",        "newProfitRate");
-        newRateField.put("type",        "DECIMAL");
-        newRateField.put("label",       "Requested New Profit Rate (%)");
-        newRateField.put("labelAr",     "معدل الربح المقترح (%)");
-        newRateField.put("required",    false);
-        newRateField.put("conditional", true);
-        newRateField.put("showWhen",    "restructuringOption IN [REDUCE_PROFIT_RATE, COMBINATION]");
-        newRateField.put("hint",        "Bank may offer a different rate. Current rate: " + currentProfitRate + "%");
-        var rateVal = newRateField.putObject("validation");
-        rateVal.put("min",          "1.00");
-        rateVal.put("max",          maxReducedRate);
-        rateVal.put("decimalPlaces", 2);
-        rateVal.put("currentRate",  currentProfitRate);
-        rateVal.put("note",         "Requested rate must be less than current rate (" + currentProfitRate + "%)");
-
-        // justification
-        var restJustField = restructureFields.addObject();
-        restJustField.put("name",        "justification");
-        restJustField.put("type",        "TEXT");
-        restJustField.put("label",       "Financial Distress Explanation");
-        restJustField.put("labelAr",     "شرح الوضع المالي");
-        restJustField.put("placeholder", "Describe your situation in detail — income loss, medical condition, legal matter, etc.");
-        restJustField.put("required",    true);
-        restJustField.put("hint",        "Reviewed by credit committee. Be as detailed as possible.");
-        var restJustVal = restJustField.putObject("validation");
-        restJustVal.put("minLength", 50);
-        restJustVal.put("maxLength", 1000);
-
-        // hardshipDeclaration
-        var restHardshipField = restructureFields.addObject();
-        restHardshipField.put("name",     "hardshipDeclaration");
-        restHardshipField.put("type",     "BOOLEAN");
-        restHardshipField.put("label",    "I declare I am under documented financial distress or legal proceedings");
-        restHardshipField.put("labelAr",  "أقر بأنني في ضائقة مالية موثقة أو إجراءات قانونية");
-        restHardshipField.put("required", true);
-        restHardshipField.put("hint",     "Required for credit committee review per SAMA guidelines.");
 
         return ResponseEntity.ok(root);
+    }
+
+    private void injectDynamicContextIntoFields(ArrayNode fields, String type, com.ksa.financing.lending.infrastructure.persistence.entity.LoanJpaEntity loan) {
+        for (var field : fields) {
+            if (field.isObject()) {
+                var obj = (ObjectNode) field;
+                var name = obj.path("name").asText();
+                var validation = obj.has("validation") ? (ObjectNode) obj.get("validation") : null;
+
+                if ("SKIP_PAYMENT".equals(type) || "PAYMENT_HOLIDAY".equals(type)) {
+                    if ("skipmonth".equals(name) && validation != null) {
+                        LocalDate nextDue = (loan.getFirstDueDate() != null)
+                                ? loan.getFirstDueDate().plusMonths(
+                                        Math.max(0, ChronoUnit.MONTHS.between(loan.getFirstDueDate(), LocalDate.now()) + 1))
+                                : LocalDate.now().plusMonths(1).withDayOfMonth(1);
+                        validation.put("minDate", nextDue.withDayOfMonth(1).toString());
+                        validation.put("maxDate", loan.getMaturityDate() != null
+                                ? loan.getMaturityDate().minusMonths(1).withDayOfMonth(1).toString() : null);
+                    }
+                }
+
+                if ("TENURE_EXTENSION".equals(type) || "RESTRUCTURING".equals(type)) {
+                    if ("extensionMonths".equals(name) && validation != null) {
+                        int currentTenure = loan.getTenureMonths() != null ? loan.getTenureMonths() : 0;
+                        int maxExtension = Math.min(12, Math.max(0, 72 - currentTenure));
+                        validation.put("max", maxExtension);
+                        validation.put("currentTenureMonths", currentTenure);
+                    }
+                }
+            }
+        }
     }
 
     @GetMapping
@@ -550,16 +344,39 @@ public class LoanRescheduleController {
 
         var arrayNode = objectMapper.createArrayNode();
         for (var r : list) {
-            arrayNode.add(objectMapper.createObjectNode()
+            var node = objectMapper.createObjectNode()
                     .put("rescheduleId", r.getId().toString())
                     .put("applicationId", applicationId.toString())
                     .put("loanId", r.getLoanId().toString())
                     .put("rescheduleType", r.getRescheduleType())
                     .put("status", r.getStatus())
+                    .put("justification", r.getJustification())
                     .put("requestedSkipMonth", r.getRequestedSkipMonth() != null ? r.getRequestedSkipMonth().toString() : null)
                     .put("extensionMonths", r.getExtensionMonths())
                     .put("holidayMonths", r.getHolidayMonths())
-                    .put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : null));
+                    .put("newProfitRate", r.getNewProfitRate() != null ? r.getNewProfitRate().toPlainString() : null)
+                    .put("writeOffAmount", r.getWriteOffAmount() != null ? r.getWriteOffAmount().toPlainString() : null)
+                    .put("profitWaiverAmount", r.getProfitWaiverAmount() != null ? r.getProfitWaiverAmount().toPlainString() : null)
+                    .put("newTenureMonths", r.getNewTenureMonths())
+                    .put("newInstallmentAmount", r.getNewInstallmentAmount() != null ? r.getNewInstallmentAmount().toPlainString() : null)
+                    .put("newMaturityDate", r.getNewMaturityDate() != null ? r.getNewMaturityDate().toString() : null)
+                    .put("attachmentUrl", r.getAttachmentUrl())
+                    .put("details", generateRescheduleDetails(r));
+
+            // Add 'before' block for consistency
+            ObjectNode before = objectMapper.createObjectNode();
+            before.put("tenureMonths", r.getOldTenureMonths());
+            before.put("installmentAmount", r.getOldInstallmentAmount() != null ? r.getOldInstallmentAmount().toPlainString() : null);
+            before.put("maturityDate", r.getOldMaturityDate() != null ? r.getOldMaturityDate().toString() : null);
+            node.set("before", before);
+
+            node.put("approverRole", r.getApproverRole())
+                    .put("approvalNotes", r.getApprovalNotes())
+                    .put("rejectionReason", r.getRejectionReason())
+                    .put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : null)
+                    .put("appliedAt", r.getAppliedAt() != null ? r.getAppliedAt().toString() : null)
+                    .put("rejectedAt", r.getRejectedAt() != null ? r.getRejectedAt().toString() : null);
+            arrayNode.add(node);
         }
 
         var response = objectMapper.createObjectNode();
@@ -586,15 +403,28 @@ public class LoanRescheduleController {
         String tenantId = extractTenantId(jwt);
         var record = findReschedule(tenantId, applicationId, rescheduleId);
 
-        // Guard: can only approve PENDING reschedules
-        if (!"PENDING".equals(record.getStatus()) && !"SUBMITTED".equals(record.getStatus())) {
+        // Guard: can only approve PENDING / AWAITING_APPROVAL reschedules
+        if (!"PENDING".equals(record.getStatus()) && !"SUBMITTED".equals(record.getStatus())
+                && !"AWAITING_APPROVAL".equals(record.getStatus())) {
             throw new BusinessException(ErrorCodes.CONFLICT,
                     "Cannot approve reschedule in status: " + record.getStatus()
-                    + ". Only PENDING reschedules can be approved.");
+                    + ". Only PENDING or AWAITING_APPROVAL reschedules can be approved.");
         }
 
         log.info("Approval signal: rescheduleId={} workflowId={} by={}", rescheduleId, record.getWorkflowId(), jwt.getSubject());
 
+        // Persist approver info (but do NOT overwrite status yet — workflow may already be APPROVED)
+        record.setApproverId(parseUuidSafely(jwt.getSubject()));
+        record.setApproverRole(request.approverRole());
+        record.setApprovalNotes(request.approvalNotes());
+        record.setApprovedAt(java.time.OffsetDateTime.now());
+        // Only set AWAITING_APPROVAL if status is PENDING/SUBMITTED — don't downgrade APPROVED
+        if ("PENDING".equals(record.getStatus()) || "SUBMITTED".equals(record.getStatus())) {
+            record.setStatus("AWAITING_APPROVAL");
+        }
+        rescheduleRepository.save(record);
+
+        boolean signalSent = false;
         try {
             var workflow = workflowClient.newWorkflowStub(LoanRescheduleWorkflow.class, record.getWorkflowId());
             workflow.approve(new LoanRescheduleWorkflow.ApprovalSignal(
@@ -602,22 +432,30 @@ public class LoanRescheduleController {
                     request.approverRole(),
                     request.approvalNotes()
             ));
+            signalSent = true;
         } catch (WorkflowNotFoundException e) {
-            log.warn("Workflow not found for reschedule {}: {}", rescheduleId, e.getMessage());
-            throw new BusinessException(ErrorCodes.CONFLICT,
-                    "Reschedule workflow has already completed or does not exist. Current status: " + record.getStatus());
+            // Workflow already completed — this is OK, just read the result from DB
+            log.info("Workflow already completed for reschedule {} — reading result from DB", rescheduleId);
         } catch (Exception e) {
-            log.error("Failed to send approval signal for reschedule {}: {}", rescheduleId, e.getMessage());
-            throw new BusinessException(ErrorCodes.INTERNAL_ERROR,
-                    "Failed to send approval signal: " + e.getMessage());
+            // Check if it's a "workflow already completed" error (Temporal sends this as a generic exception sometimes)
+            if (e.getMessage() != null && e.getMessage().contains("already completed")) {
+                log.info("Workflow already completed for reschedule {} — reading result from DB", rescheduleId);
+            } else {
+                log.error("Failed to send approval signal for reschedule {}: {}", rescheduleId, e.getMessage());
+                throw new BusinessException(ErrorCodes.INTERNAL_ERROR,
+                        "Failed to send approval signal: " + e.getMessage());
+            }
         }
 
-        // Poll DB until workflow completes (APPROVED/REJECTED) or timeout (15s)
+        // Poll DB until workflow completes (APPROVED/REJECTED) or timeout (45s)
         String finalStatus = "PROCESSING";
         String newTenureMonths = null;
         String newInstallmentAmount = null;
         String newMaturityDate = null;
-        for (int i = 0; i < 30; i++) {
+
+        // If signal was sent, poll for workflow completion; if not, check DB immediately
+        int maxPolls = signalSent ? 90 : 2;
+        for (int i = 0; i < maxPolls; i++) {
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
             var updated = rescheduleRepository.findById(rescheduleId).orElse(null);
             if (updated != null && ("APPROVED".equals(updated.getStatus()) || "REJECTED".equals(updated.getStatus()) || "FAILED".equals(updated.getStatus()))) {
@@ -629,6 +467,45 @@ public class LoanRescheduleController {
             }
         }
 
+        // Fallback: still not APPROVED/REJECTED — sync from Temporal workflow result directly
+        if (!"APPROVED".equals(finalStatus) && !"REJECTED".equals(finalStatus)) {
+            log.warn("DB not yet updated for rescheduleId={} — attempting to sync from Temporal result", rescheduleId);
+            try {
+                var completedWorkflow = workflowClient.newUntypedWorkflowStub(record.getWorkflowId());
+                var result = completedWorkflow.getResult(5, java.util.concurrent.TimeUnit.SECONDS, LoanRescheduleWorkflow.RescheduleResult.class);
+                if (result != null) {
+                    finalStatus = result.status() != null ? result.status() : "PROCESSING";
+                    if (result.newTenureMonths() > 0) newTenureMonths = String.valueOf(result.newTenureMonths());
+                    if (result.newInstallmentAmount() != null) newInstallmentAmount = result.newInstallmentAmount().toPlainString();
+                    if (result.newMaturityDate() != null) newMaturityDate = result.newMaturityDate();
+
+                    // Sync the stale DB record with Temporal's authoritative result
+                    if ("APPROVED".equals(finalStatus)) {
+                        var stale = rescheduleRepository.findById(rescheduleId).orElse(null);
+                        if (stale != null && !"APPROVED".equals(stale.getStatus())) {
+                            stale.setStatus("APPROVED");
+                            if (result.newTenureMonths() > 0) stale.setNewTenureMonths(result.newTenureMonths());
+                            if (result.newInstallmentAmount() != null) stale.setNewInstallmentAmount(result.newInstallmentAmount());
+                            if (result.newMaturityDate() != null) stale.setNewMaturityDate(java.time.LocalDate.parse(result.newMaturityDate()));
+                            stale.setAppliedAt(java.time.OffsetDateTime.now());
+                            rescheduleRepository.save(stale);
+                            log.info("Synced stale DB record from Temporal result: rescheduleId={}", rescheduleId);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Could not sync from Temporal result for rescheduleId={}: {}", rescheduleId, ex.getMessage());
+                // Last resort: just return what DB has
+                var latest = rescheduleRepository.findById(rescheduleId).orElse(null);
+                if (latest != null) {
+                    finalStatus = latest.getStatus();
+                    if (latest.getNewTenureMonths() != null) newTenureMonths = latest.getNewTenureMonths().toString();
+                    if (latest.getNewInstallmentAmount() != null) newInstallmentAmount = latest.getNewInstallmentAmount().toPlainString();
+                    if (latest.getNewMaturityDate() != null) newMaturityDate = latest.getNewMaturityDate().toString();
+                }
+            }
+        }
+
         var response = objectMapper.createObjectNode()
                 .put("rescheduleId", rescheduleId.toString())
                 .put("applicationId", applicationId.toString())
@@ -637,8 +514,10 @@ public class LoanRescheduleController {
                 .put("newInstallmentAmount", newInstallmentAmount)
                 .put("newMaturityDate", newMaturityDate)
                 .put("message", "APPROVED".equals(finalStatus)
-                        ? "Reschedule approved successfully."
-                        : "Approval signal sent. Current status: " + finalStatus);
+                        ? "Reschedule approved and schedule updated successfully."
+                        : "PROCESSING".equals(finalStatus) || "AWAITING_APPROVAL".equals(finalStatus)
+                            ? "Approval signal sent. Workflow is processing — use status endpoint to poll."
+                            : "Current status: " + finalStatus);
 
         return ResponseEntity.ok(response);
     }
@@ -725,17 +604,32 @@ public class LoanRescheduleController {
                 .put("loanId", record.getLoanId().toString())
                 .put("rescheduleType", record.getRescheduleType())
                 .put("status", record.getStatus())
+                .put("justification", record.getJustification())
                 .put("requestedSkipMonth", record.getRequestedSkipMonth() != null ? record.getRequestedSkipMonth().toString() : null)
                 .put("extensionMonths", record.getExtensionMonths())
                 .put("holidayMonths", record.getHolidayMonths())
+                .put("newProfitRate", record.getNewProfitRate() != null ? record.getNewProfitRate().toPlainString() : null)
+                .put("writeOffAmount", record.getWriteOffAmount() != null ? record.getWriteOffAmount().toPlainString() : null)
+                .put("profitWaiverAmount", record.getProfitWaiverAmount() != null ? record.getProfitWaiverAmount().toPlainString() : null)
                 .put("newTenureMonths", record.getNewTenureMonths())
                 .put("newInstallmentAmount", record.getNewInstallmentAmount() != null ? record.getNewInstallmentAmount().toPlainString() : null)
                 .put("newMaturityDate", record.getNewMaturityDate() != null ? record.getNewMaturityDate().toString() : null)
-                .put("approverRole", record.getApproverRole())
+                .put("details", generateRescheduleDetails(record));
+
+        // Add 'before' block
+        ObjectNode before = objectMapper.createObjectNode();
+        before.put("tenureMonths", record.getOldTenureMonths());
+        before.put("installmentAmount", record.getOldInstallmentAmount() != null ? record.getOldInstallmentAmount().toPlainString() : null);
+        before.put("maturityDate", record.getOldMaturityDate() != null ? record.getOldMaturityDate().toString() : null);
+        response.set("before", before);
+
+        response.put("approverRole", record.getApproverRole())
                 .put("approvalNotes", record.getApprovalNotes())
                 .put("rejectionReason", record.getRejectionReason())
                 .put("createdAt", record.getCreatedAt() != null ? record.getCreatedAt().toString() : null)
-                .put("updatedAt", record.getUpdatedAt() != null ? record.getUpdatedAt().toString() : null);
+                .put("updatedAt", record.getUpdatedAt() != null ? record.getUpdatedAt().toString() : null)
+                .put("appliedAt", record.getAppliedAt() != null ? record.getAppliedAt().toString() : null)
+                .put("rejectedAt", record.getRejectedAt() != null ? record.getRejectedAt().toString() : null);
 
         // Also try Temporal query for live status (in-flight workflows only)
         try {
@@ -757,13 +651,14 @@ public class LoanRescheduleController {
             String rescheduleType,           // SKIP_PAYMENT | TENURE_EXTENSION | PAYMENT_HOLIDAY | RESTRUCTURING
             String loanNumber,
             String justification,
-            LocalDate requestedSkipMonth,    // SKIP_PAYMENT only
+            @JsonProperty("skipmonth") LocalDate skipMonth,
             Integer extensionMonths,         // TENURE_EXTENSION only
             Integer holidayMonths,           // PAYMENT_HOLIDAY only
             BigDecimal newProfitRate,        // RESTRUCTURING only
             BigDecimal writeOffAmount,       // RESTRUCTURING only
             BigDecimal profitWaiverAmount,   // RESTRUCTURING only
             BigDecimal outstandingPrincipal,
+            @JsonProperty("attachment") String attachment,
             String idempotencyKey
     ) {}
 
@@ -779,6 +674,57 @@ public class LoanRescheduleController {
     // ══════════════════════════════════════════════════════════════
     // Private helpers
     // ══════════════════════════════════════════════════════════════
+
+    private String generateRescheduleDetails(LoanRescheduleJpaEntity r) {
+        StringBuilder sb = new StringBuilder();
+        String type = r.getRescheduleType();
+
+        Integer oldTenure = r.getOldTenureMonths();
+        LocalDate oldMaturity = r.getOldMaturityDate();
+        BigDecimal oldInstallment = r.getOldInstallmentAmount();
+
+        // Fallback for older records
+        try {
+            if (oldTenure == null || oldMaturity == null || oldInstallment == null) {
+                var loanOpt = loanRepository.findById(r.getLoanId());
+                if (loanOpt.isPresent()) {
+                    var loan = loanOpt.get();
+                    if (oldTenure == null) oldTenure = loan.getTenureMonths();
+                    if (oldMaturity == null) oldMaturity = loan.getMaturityDate();
+                    if (oldInstallment == null) oldInstallment = loan.getInstallmentAmount();
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if ("SKIP_PAYMENT".equals(type)) {
+            sb.append("Requested to skip installment for ").append(r.getRequestedSkipMonth() != null ? r.getRequestedSkipMonth().getMonth().name() + " " + r.getRequestedSkipMonth().getYear() : "selected month").append(". ");
+            sb.append("Action: The skipped month is moved to the end of the schedule. ");
+            sb.append("Total tenure remains ").append(oldTenure != null ? oldTenure : "?").append(" months, ");
+            sb.append("but maturity date is extended to ").append(r.getNewMaturityDate() != null ? r.getNewMaturityDate() : "a later date").append(".");
+        } else if ("TENURE_EXTENSION".equals(type)) {
+            sb.append("Loan tenure extended by ").append(r.getExtensionMonths()).append(" months. ");
+            sb.append("Configuration: Tenure changed from ").append(oldTenure != null ? oldTenure : "?").append(" to ").append(r.getNewTenureMonths()).append(" months. ");
+            sb.append("Result: Monthly installment reduced from ").append(scale2(oldInstallment)).append(" to ").append(scale2(r.getNewInstallmentAmount())).append(" SAR.");
+        } else if ("PAYMENT_HOLIDAY".equals(type)) {
+            sb.append("Payment holiday granted for ").append(r.getHolidayMonths()).append(" months. ");
+            sb.append("Impact: Next installments are paused, and maturity is extended to ").append(r.getNewMaturityDate()).append(".");
+        } else if ("RESTRUCTURING".equals(type)) {
+            sb.append("Loan restructuring performed for financial relief. ");
+            if (r.getWriteOffAmount() != null && r.getWriteOffAmount().compareTo(BigDecimal.ZERO) > 0) {
+                sb.append("Benefit: Principal write-off of ").append(scale2(r.getWriteOffAmount())).append(" SAR applied. ");
+            }
+            if (r.getNewProfitRate() != null) {
+                sb.append("Change: Profit rate updated to ").append(r.getNewProfitRate().multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)).append("%. ");
+            }
+            sb.append("Impact: Monthly payment adjusted from ").append(scale2(oldInstallment)).append(" to ").append(scale2(r.getNewInstallmentAmount())).append(" SAR.");
+        }
+
+        return sb.toString();
+    }
+
+    private BigDecimal scale2(BigDecimal val) {
+        return val != null ? val.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+    }
 
     private String extractTenantId(Jwt jwt) {
         String tenantId = jwt != null ? jwt.getClaimAsString("tenant_id") : null;

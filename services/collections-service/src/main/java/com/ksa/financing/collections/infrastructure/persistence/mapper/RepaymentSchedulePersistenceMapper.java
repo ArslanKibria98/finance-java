@@ -82,6 +82,16 @@ public class RepaymentSchedulePersistenceMapper {
                 existing.setStatus(inst.getStatus().name());
                 existing.setDpd(inst.getDpd());
                 existing.setPaidDate(inst.getPaidDate());
+                existing.setEligibleForWriteOff(inst.isEligibleForWriteOff());
+                existing.setEligibilityEvaluatedAt(inst.getEligibilityEvaluatedAt());
+                existing.setWaivedPenaltyAmount(inst.getWaivedPenaltyAmount());
+                existing.setWrittenOffPrincipal(inst.getWrittenOffPrincipal());
+                existing.setWrittenOffProfit(inst.getWrittenOffProfit());
+                existing.setWrittenOffFee(inst.getWrittenOffFee());
+                existing.setWrittenOffPenalty(inst.getWrittenOffPenalty());
+                existing.setWriteOffDate(inst.getWriteOffDate());
+                existing.setWriteOffReason(inst.getWriteOffReason());
+                existing.setWrittenOffBy(inst.getWrittenOffBy());
                 existing.setUpdatedAt(LocalDateTime.now());
             } else {
                 managed.getInstallments().add(toInstallmentJpa(inst, managed));
@@ -100,6 +110,16 @@ public class RepaymentSchedulePersistenceMapper {
         entity.setStatus(newData.getStatus());
         entity.setDpd(newData.getDpd());
         entity.setPaidDate(newData.getPaidDate());
+        entity.setEligibleForWriteOff(newData.isEligibleForWriteOff());
+        entity.setEligibilityEvaluatedAt(newData.getEligibilityEvaluatedAt());
+        entity.setWaivedPenaltyAmount(newData.getWaivedPenaltyAmount());
+        entity.setWrittenOffPrincipal(newData.getWrittenOffPrincipal());
+        entity.setWrittenOffProfit(newData.getWrittenOffProfit());
+        entity.setWrittenOffFee(newData.getWrittenOffFee());
+        entity.setWrittenOffPenalty(newData.getWrittenOffPenalty());
+        entity.setWriteOffDate(newData.getWriteOffDate());
+        entity.setWriteOffReason(newData.getWriteOffReason());
+        entity.setWrittenOffBy(newData.getWrittenOffBy());
         entity.setUpdatedAt(LocalDateTime.now());
     }
 
@@ -123,6 +143,16 @@ public class RepaymentSchedulePersistenceMapper {
         entity.setStatus(inst.getStatus().name());
         entity.setDpd(inst.getDpd());
         entity.setPaidDate(inst.getPaidDate());
+        entity.setEligibleForWriteOff(inst.isEligibleForWriteOff());
+        entity.setEligibilityEvaluatedAt(inst.getEligibilityEvaluatedAt());
+        entity.setWaivedPenaltyAmount(inst.getWaivedPenaltyAmount() != null ? inst.getWaivedPenaltyAmount() : java.math.BigDecimal.ZERO);
+        entity.setWrittenOffPrincipal(inst.getWrittenOffPrincipal() != null ? inst.getWrittenOffPrincipal() : java.math.BigDecimal.ZERO);
+        entity.setWrittenOffProfit(inst.getWrittenOffProfit() != null ? inst.getWrittenOffProfit() : java.math.BigDecimal.ZERO);
+        entity.setWrittenOffFee(inst.getWrittenOffFee() != null ? inst.getWrittenOffFee() : java.math.BigDecimal.ZERO);
+        entity.setWrittenOffPenalty(inst.getWrittenOffPenalty() != null ? inst.getWrittenOffPenalty() : java.math.BigDecimal.ZERO);
+        entity.setWriteOffDate(inst.getWriteOffDate());
+        entity.setWriteOffReason(inst.getWriteOffReason());
+        entity.setWrittenOffBy(inst.getWrittenOffBy());
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         return entity;
@@ -151,7 +181,7 @@ public class RepaymentSchedulePersistenceMapper {
     }
 
     public Installment toInstallmentDomain(InstallmentJpaEntity entity) {
-        return Installment.reconstitute(
+        var inst = Installment.reconstitute(
                 entity.getId(),
                 entity.getTenantId(),
                 entity.getSchedule() != null ? entity.getSchedule().getId() : null,
@@ -170,5 +200,17 @@ public class RepaymentSchedulePersistenceMapper {
                 InstallmentStatus.valueOf(entity.getStatus()),
                 entity.getDpd(),
                 entity.getPaidDate());
+        inst.hydrateWriteOffState(
+                entity.isEligibleForWriteOff(),
+                entity.getEligibilityEvaluatedAt(),
+                entity.getWaivedPenaltyAmount(),
+                entity.getWrittenOffPrincipal(),
+                entity.getWrittenOffProfit(),
+                entity.getWrittenOffFee(),
+                entity.getWrittenOffPenalty(),
+                entity.getWriteOffDate(),
+                entity.getWriteOffReason(),
+                entity.getWrittenOffBy());
+        return inst;
     }
 }

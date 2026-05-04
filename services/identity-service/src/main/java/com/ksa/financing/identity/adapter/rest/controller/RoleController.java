@@ -9,6 +9,8 @@ import com.ksa.financing.identity.domain.port.in.ManageRoleUseCase.CreateRoleCom
 import com.ksa.financing.identity.domain.port.in.ManageRoleUseCase.UpdateRoleCommand;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -54,10 +56,12 @@ public class RoleController {
     @SecuredEndpoint(obj = "roles", act = "read")
     @GetMapping
     @Operation(summary = "List roles", description = "Returns all roles for the tenant")
-    public ResponseEntity<List<RoleResponse>> listRoles(@AuthenticationPrincipal Jwt jwt) {
+    public PageResponse<RoleResponse> listRoles(
+            PageQuery query,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var roles = manageRoleUseCase.listByTenant(tenantId);
-        return ResponseEntity.ok(roles.stream().map(this::toResponse).toList());
+        var page = manageRoleUseCase.listByTenant(tenantId, query);
+        return page.map(this::toResponse);
     }
 
     @SecuredEndpoint(obj = "roles", act = "read")

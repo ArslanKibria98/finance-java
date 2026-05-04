@@ -123,6 +123,9 @@ public class LoanRescheduleJpaEntity {
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
+    @Column(name = "attachment_url", length = 1000)
+    private String attachmentUrl;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

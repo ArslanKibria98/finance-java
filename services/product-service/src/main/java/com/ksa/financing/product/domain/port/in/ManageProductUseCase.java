@@ -1,5 +1,7 @@
 package com.ksa.financing.product.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.product.domain.model.Product;
 import com.ksa.financing.product.domain.model.ProductType;
 import java.math.BigDecimal;
@@ -11,6 +13,7 @@ public interface ManageProductUseCase {
     Product getById(UUID tenantId, UUID productId);
     Product getById(UUID productId);
     List<Product> listByTenant(UUID tenantId);
+    PageResponse<Product> listByTenant(UUID tenantId, PageQuery query);
     Product updateBasicInfo(UUID tenantId, UUID productId, UpdateBasicInfoCommand command);
     ActivationResultDto activate(UUID tenantId, UUID productId);
     void deactivate(UUID tenantId, UUID productId);

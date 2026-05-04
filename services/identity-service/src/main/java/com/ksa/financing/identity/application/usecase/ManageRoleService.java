@@ -1,5 +1,7 @@
 package com.ksa.financing.identity.application.usecase;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.identity.domain.model.Role;
 import com.ksa.financing.identity.domain.port.in.ManageRoleUseCase;
 import com.ksa.financing.identity.domain.port.out.RoleRepository;
@@ -13,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -66,8 +67,8 @@ public class ManageRoleService implements ManageRoleUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Role> listByTenant(UUID tenantId) {
-        return roleRepository.findAllByTenant(tenantId);
+    public PageResponse<Role> listByTenant(UUID tenantId, PageQuery query) {
+        return roleRepository.findAllByTenant(tenantId, query);
     }
 
     @Override

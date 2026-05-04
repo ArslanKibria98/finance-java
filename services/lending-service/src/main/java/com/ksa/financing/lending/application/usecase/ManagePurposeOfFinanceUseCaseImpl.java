@@ -2,6 +2,8 @@ package com.ksa.financing.lending.application.usecase;
 
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.PurposeOfFinanceEntry;
 import com.ksa.financing.lending.domain.port.in.ManagePurposeOfFinanceUseCase;
 import com.ksa.financing.lending.domain.port.out.PurposeOfFinanceRepository;
@@ -10,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -59,14 +60,14 @@ public class ManagePurposeOfFinanceUseCaseImpl implements ManagePurposeOfFinance
 
     @Override
     @Transactional(readOnly = true)
-    public List<PurposeOfFinanceEntry> listActive(UUID tenantId) {
-        return repository.findAllActive(tenantId);
+    public PageResponse<PurposeOfFinanceEntry> listActive(UUID tenantId, PageQuery query) {
+        return repository.findAllActive(tenantId, query);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<PurposeOfFinanceEntry> listAll(UUID tenantId) {
-        return repository.findAll(tenantId);
+    public PageResponse<PurposeOfFinanceEntry> listAll(UUID tenantId, PageQuery query) {
+        return repository.findAll(tenantId, query);
     }
 
     @Override

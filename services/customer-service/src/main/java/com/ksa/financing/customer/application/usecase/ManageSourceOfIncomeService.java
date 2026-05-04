@@ -6,13 +6,14 @@ import com.ksa.financing.customer.domain.port.out.SourceOfIncomeRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -79,13 +80,13 @@ public class ManageSourceOfIncomeService implements ManageSourceOfIncomeUseCase 
     }
 
     @Override
-    public List<SourceOfIncomeOption> getAll(UUID tenantId) {
-        return repository.findAllByTenantId(tenantId);
+    public PageResponse<SourceOfIncomeOption> getAll(UUID tenantId, PageQuery pageQuery) {
+        return repository.findAllByTenantId(tenantId, pageQuery);
     }
 
     @Override
-    public List<SourceOfIncomeOption> getActive(UUID tenantId) {
-        return repository.findActiveByTenantId(tenantId);
+    public PageResponse<SourceOfIncomeOption> getActive(UUID tenantId, PageQuery pageQuery) {
+        return repository.findActiveByTenantId(tenantId, pageQuery);
     }
 
     @Override
@@ -104,9 +105,9 @@ public class ManageSourceOfIncomeService implements ManageSourceOfIncomeUseCase 
     @Transactional
     public void activate(UUID tenantId, UUID id) {
         SourceOfIncomeOption option = repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Source of income option", id.toString()));
         option.setActive(true);
-        option.setUpdatedAt(java.time.Instant.now());
+        option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
 
@@ -114,7 +115,7 @@ public class ManageSourceOfIncomeService implements ManageSourceOfIncomeUseCase 
     @Transactional
     public void delete(UUID tenantId, UUID id) {
         repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Source of income option", id.toString()));
         repository.softDelete(tenantId, id);
     }
 }

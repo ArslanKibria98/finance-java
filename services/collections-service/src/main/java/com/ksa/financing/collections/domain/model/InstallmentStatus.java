@@ -8,5 +8,6 @@ public enum InstallmentStatus {
     PARTIALLY_PAID,
     PAID,
     WAIVED,
-    DEFERRED
+    DEFERRED,
+    WRITTEN_OFF
 }

@@ -7,6 +7,8 @@ import com.ksa.financing.fraud.domain.port.in.ManageFraudRulesUseCase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +18,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -30,22 +31,24 @@ public class FraudRuleController {
 
     @SecuredEndpoint(obj = "fraud.rules", act = "read")
     @GetMapping
-    @Operation(summary = "List all fraud rules", description = "Returns all fraud rules for the tenant")
-    public List<FraudRuleConfigDto> getAllRules(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all fraud rules (paginated)", description = "Returns a paginated list of fraud rules for the tenant")
+    public PageResponse<FraudRuleConfigDto> getAllRules(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        return manageFraudRulesUseCase.getAllRules(tenantId).stream()
-                .map(FraudEventMapper::toRuleConfigDto)
-                .toList();
+        return manageFraudRulesUseCase.getAllRules(tenantId, pageQuery)
+                .map(FraudEventMapper::toRuleConfigDto);
     }
 
     @SecuredEndpoint(obj = "fraud.rules", act = "read")
     @GetMapping("/active")
-    @Operation(summary = "List active fraud rules", description = "Returns only active fraud rules")
-    public List<FraudRuleConfigDto> getActiveRules(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List active fraud rules (paginated)", description = "Returns a paginated list of only active fraud rules")
+    public PageResponse<FraudRuleConfigDto> getActiveRules(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        return manageFraudRulesUseCase.getActiveRules(tenantId).stream()
-                .map(FraudEventMapper::toRuleConfigDto)
-                .toList();
+        return manageFraudRulesUseCase.getActiveRules(tenantId, pageQuery)
+                .map(FraudEventMapper::toRuleConfigDto);
     }
 
     @SecuredEndpoint(obj = "fraud.rules", act = "read")

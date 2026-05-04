@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -161,7 +162,8 @@ public class RescheduleActivityImpl implements RescheduleActivity {
 
         log.info("Eligibility check passed: loanId={} age={}mo type={}", input.loanId(), loanAgeMonths, input.rescheduleType());
 
-        return new EligibilityResult(true, null, currentTenure, installment, outstanding, loanAgeMonths, 0, 0);
+        return new EligibilityResult(true, null, currentTenure, installment, outstanding, 
+                loanAgeMonths, 0, 0, loan.getMaturityDate());
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -180,6 +182,9 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                 var rec = existing.get();
                 if ("SUBMITTED".equals(rec.getStatus())) {
                     rec.setStatus("PENDING");
+                    rec.setOldTenureMonths(input.oldTenureMonths());
+                    rec.setOldInstallmentAmount(input.oldInstallmentAmount());
+                    rec.setOldMaturityDate(input.oldMaturityDate());
                     rescheduleRepository.save(rec);
                     log.info("Upgraded SUBMITTED→PENDING for reschedule id={}", rec.getId());
                 } else {
@@ -203,8 +208,12 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                 .newProfitRate(input.newProfitRate())
                 .writeOffAmount(input.writeOffAmount())
                 .profitWaiverAmount(input.profitWaiverAmount())
+                .attachmentUrl(input.attachmentUrl())
                 .workflowId(input.workflowId())
                 .idempotencyKey(input.idempotencyKey())
+                .oldTenureMonths(input.oldTenureMonths())
+                .oldInstallmentAmount(input.oldInstallmentAmount())
+                .oldMaturityDate(input.oldMaturityDate())
                 .createdBy(input.requestedBy() != null ? parseUuidSafely(input.requestedBy()) : null)
                 .build();
 
@@ -230,18 +239,25 @@ public class RescheduleActivityImpl implements RescheduleActivity {
 
         return switch (input.rescheduleType()) {
             case "SKIP_PAYMENT" -> {
-                // Move one installment to end — tenure increases by 1 month
-                int newTenure = currentTenure + 1;
-                BigDecimal newInstallment = calculateInstallment(principal, profitRate, newTenure);
-                LocalDate newMaturity = LocalDate.now().plusMonths(newTenure);
+                // Tenure (installment count) remains same, but maturity extends by 1 month
+                int newTenure = currentTenure; 
+                BigDecimal newInstallment = loan.getInstallmentAmount() != null 
+                        ? loan.getInstallmentAmount() : calculateFlatInstallment(principal, profitRate, currentTenure);
+                LocalDate newMaturity = loan.getMaturityDate() != null 
+                        ? loan.getMaturityDate().plusMonths(1) 
+                        : LocalDate.now().plusMonths(newTenure + 1); // +1 because we skipped a month
                 yield new ScheduleResult(newTenure, newInstallment, newMaturity);
             }
 
             case "TENURE_EXTENSION" -> {
                 int extensionMonths = input.extensionMonths() != null ? input.extensionMonths() : 0;
                 int newTenure = currentTenure + extensionMonths;
-                BigDecimal newInstallment = calculateInstallment(principal, profitRate, newTenure);
-                LocalDate newMaturity = LocalDate.now().plusMonths(newTenure);
+                
+                // For Murabaha/Tawarruq, we use the Flat Profit formula from FinanceCalculationService
+                BigDecimal newInstallment = calculateFlatInstallment(principal, profitRate, newTenure);
+                LocalDate newMaturity = loan.getMaturityDate() != null 
+                        ? loan.getMaturityDate().plusMonths(extensionMonths)
+                        : LocalDate.now().plusMonths(newTenure);
                 yield new ScheduleResult(newTenure, newInstallment, newMaturity);
             }
 
@@ -251,7 +267,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                 int newTenure = currentTenure + holidayMonths;
                 // Installment stays the same, just pushed out
                 BigDecimal sameInstallment = loan.getInstallmentAmount() != null
-                        ? loan.getInstallmentAmount() : calculateInstallment(principal, profitRate, currentTenure);
+                        ? loan.getInstallmentAmount() : calculateFlatInstallment(principal, profitRate, currentTenure);
                 LocalDate newMaturity = LocalDate.now().plusMonths(newTenure);
                 yield new ScheduleResult(newTenure, sameInstallment, newMaturity);
             }
@@ -267,8 +283,8 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                     }
                 }
                 int newTenure = currentTenure; // tenure unchanged unless specified
-                BigDecimal newInstallment = calculateInstallment(effectivePrincipal, profitRate, newTenure);
-                LocalDate newMaturity = LocalDate.now().plusMonths(newTenure);
+                BigDecimal newInstallment = calculateFlatInstallment(effectivePrincipal, profitRate, newTenure);
+                LocalDate newMaturity = loan.getMaturityDate() != null ? loan.getMaturityDate() : LocalDate.now().plusMonths(newTenure);
                 yield new ScheduleResult(newTenure, newInstallment, newMaturity);
             }
 
@@ -351,6 +367,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
     // ══════════════════════════════════════════════════════════════
 
     @Override
+    @Transactional
     public void markApplied(MarkAppliedInput input) {
         log.info("Marking reschedule as APPROVED: rescheduleId={}", input.rescheduleId());
 
@@ -381,6 +398,20 @@ public class RescheduleActivityImpl implements RescheduleActivity {
             if (input.newMaturityDate() != null) {
                 loan.setMaturityDate(LocalDate.parse(input.newMaturityDate()));
             }
+            // Propagate profit rate if changed
+            if (entity.getNewProfitRate() != null) {
+                loan.setProfitRate(entity.getNewProfitRate());
+            }
+            // Propagate write-off to principal if applicable
+            if (entity.getWriteOffAmount() != null && entity.getWriteOffAmount().compareTo(BigDecimal.ZERO) > 0) {
+                loan.setPrincipalAmount(loan.getPrincipalAmount().subtract(entity.getWriteOffAmount()));
+            }
+            // Propagate profit waiver if applicable
+            if (entity.getProfitWaiverAmount() != null && entity.getProfitWaiverAmount().compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal oldProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
+                loan.setProfitAmount(oldProfit.subtract(entity.getProfitWaiverAmount()));
+            }
+
             loan.setUpdatedAt(java.time.LocalDateTime.now());
             loanRepository.save(loan);
             log.info("Loan updated after reschedule: loanId={} newTenure={} newInstallment={}",
@@ -390,10 +421,12 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         }
 
         // ── Update amortization schedule for SKIP_PAYMENT ──────────────
-        // Mark the skipped installment, shift all future unpaid installments by +1 month,
-        // and add a new installment at the end (equal to the skipped one).
+        // Mark the skipped installment. Tenure and amounts remain unchanged.
         if ("SKIP_PAYMENT".equals(entity.getRescheduleType()) && entity.getRequestedSkipMonth() != null) {
             applySkipPaymentToSchedule(entity);
+        } else {
+            // For other types (Tenure Extension, Restructuring), regenerate the whole schedule
+            regenerateAmortizationSchedule(entity, input);
         }
 
         log.info("Reschedule marked APPROVED: id={}", input.rescheduleId());
@@ -445,26 +478,28 @@ public class RescheduleActivityImpl implements RescheduleActivity {
     // ══════════════════════════════════════════════════════════════
 
     /**
-     * Skip Payment: mark the requested month as SKIPPED, shift all future PENDING
-     * installments' due dates forward by 1 month, then add a new installment copy
-     * at the end (same amounts as the skipped one, Sharia-compliant — no extra profit).
+     * Skip Payment: mark the requested month as SKIPPED. The loan tenure and 
+     * installments remain unchanged. Subsequent payments continue on their 
+     * original schedule.
      */
     protected void applySkipPaymentToSchedule(LoanRescheduleJpaEntity reschedule) {
         UUID loanId = reschedule.getLoanId();
-        UUID tenantId = reschedule.getTenantId();
         LocalDate skipMonth = reschedule.getRequestedSkipMonth().withDayOfMonth(1);
 
         log.info("Applying skip payment to amortization schedule: loanId={} skipMonth={}", loanId, skipMonth);
+
+        // Ensure schedule is materialized if it's currently empty (sync fallback)
+        materializeAmortizationIfEmpty(loanId);
 
         var activeInstallments = amortizationRepository
                 .findByLoanIdAndActiveOrderByInstallmentNumberAsc(loanId, true);
 
         if (activeInstallments.isEmpty()) {
-            log.warn("No active amortization schedule found for loanId={} — skip not applied to schedule", loanId);
+            log.warn("No active amortization schedule found for loanId={} after materialization attempt — skip not applied to schedule", loanId);
             return;
         }
 
-        // Find the installment whose due_date falls in the skip month
+        // 1. Find and DEACTIVATE the installment whose due_date falls in the skip month
         AmortizationScheduleJpaEntity skippedRow = null;
         for (var row : activeInstallments) {
             if (row.getDueDate().getYear() == skipMonth.getYear()
@@ -480,68 +515,80 @@ public class RescheduleActivityImpl implements RescheduleActivity {
             return;
         }
 
-        // Mark the skipped installment
+        // Deactivate the skipped installment so it "disappears" from active schedule
         skippedRow.setPaymentStatus("SKIPPED");
         skippedRow.setSkipped(true);
+        skippedRow.setActive(false); // Remove from active list as requested
         amortizationRepository.save(skippedRow);
+        log.info("Skipped installment deactivated: loanId={} installment={}", loanId, skippedRow.getInstallmentNumber());
 
-        // Shift all PENDING installments that come AFTER the skipped one by +1 month
-        int skippedNumber = skippedRow.getInstallmentNumber();
-        for (var row : activeInstallments) {
-            if (row.getInstallmentNumber() > skippedNumber && "PENDING".equals(row.getPaymentStatus())) {
-                row.setDueDate(row.getDueDate().plusMonths(1));
-                amortizationRepository.save(row);
-            }
-        }
+        // 2. Add a NEW installment at the end of the schedule
+        AmortizationScheduleJpaEntity lastRow = activeInstallments.get(activeInstallments.size() - 1);
+        int newInstallmentNumber = lastRow.getInstallmentNumber() + 1;
+        LocalDate newDueDate = lastRow.getDueDate().plusMonths(1);
 
-        // Find the last installment to use as template for the new deferred one
-        var lastInstallment = activeInstallments.stream()
-                .filter(r -> "PENDING".equals(r.getPaymentStatus()) || r.getInstallmentNumber() == activeInstallments.size())
-                .max((a, b) -> Integer.compare(a.getInstallmentNumber(), b.getInstallmentNumber()))
-                .orElse(skippedRow);
-
-        Integer maxVersion = amortizationRepository.findMaxScheduleVersionByLoanId(loanId);
-        int scheduleVersion = maxVersion != null ? maxVersion : 1;
-
-        // Add new deferred installment at the end (same amounts as skipped — no extra profit, Sharia)
-        var deferred = AmortizationScheduleJpaEntity.builder()
-                .tenantId(tenantId)
+        var newRow = AmortizationScheduleJpaEntity.builder()
+                .tenantId(skippedRow.getTenantId())
                 .loanId(loanId)
-                .scheduleVersion(scheduleVersion)
+                .scheduleVersion(skippedRow.getScheduleVersion())
                 .active(true)
-                .installmentNumber(lastInstallment.getInstallmentNumber() + 1)
-                .dueDate(lastInstallment.getDueDate().plusMonths(1))
-                .openingPrincipal(lastInstallment.getClosingPrincipal())
+                .installmentNumber(newInstallmentNumber)
+                .dueDate(newDueDate)
+                .openingPrincipal(lastRow.getClosingPrincipal())
                 .principalComponent(skippedRow.getPrincipalComponent())
-                .profitComponent(java.math.BigDecimal.ZERO)  // Sharia: no extra profit on deferred installment
-                .totalInstallment(skippedRow.getPrincipalComponent())  // Only principal, no extra profit
-                .closingPrincipal(java.math.BigDecimal.ZERO)
-                .cumulativePrincipal(lastInstallment.getCumulativePrincipal().add(skippedRow.getPrincipalComponent()))
-                .cumulativeProfit(lastInstallment.getCumulativeProfit())  // No additional profit
-                .calculationMethod(skippedRow.getCalculationMethod())
+                .profitComponent(skippedRow.getProfitComponent())
+                .totalInstallment(skippedRow.getTotalInstallment())
+                .closingPrincipal(lastRow.getClosingPrincipal().subtract(skippedRow.getPrincipalComponent()).max(BigDecimal.ZERO))
+                .cumulativePrincipal(lastRow.getCumulativePrincipal().add(skippedRow.getPrincipalComponent()))
+                .cumulativeProfit(lastRow.getCumulativeProfit().add(skippedRow.getProfitComponent()))
+                .calculationMethod("SKIP_POSTPONED")
                 .paymentStatus("PENDING")
                 .skipped(false)
                 .build();
 
-        amortizationRepository.save(deferred);
+        amortizationRepository.save(newRow);
 
-        log.info("Skip payment applied to schedule: loanId={} skippedInstallment={} newLastInstallment={}",
-                loanId, skippedNumber, deferred.getInstallmentNumber());
+        log.info("New installment added at end of schedule: loanId={} installment={} dueDate={}",
+                loanId, newInstallmentNumber, newDueDate);
     }
 
     /**
-     * Equal installment formula (EMI):
-     *   PMT = P * [r(1+r)^n] / [(1+r)^n - 1]
-     * r = monthly profit rate; n = tenure months
+     * Simple Profit (Flat Rate) formula as per FinanceCalculationService:
+     *   Profit = Principal * AnnualRate * (TenureMonths / 12)
+     *   Total = Principal + Profit
+     *   Installment = Total / TenureMonths
      */
-    private BigDecimal calculateInstallment(BigDecimal principal, BigDecimal annualRate, int tenureMonths) {
+    private BigDecimal calculateFlatInstallment(BigDecimal principal, BigDecimal annualRate, int tenureMonths) {
+        if (principal == null || principal.compareTo(BigDecimal.ZERO) == 0 || tenureMonths == 0) {
+            return BigDecimal.ZERO;
+        }
+        
+        BigDecimal rate = annualRate != null ? annualRate : BigDecimal.ZERO;
+        if (rate.compareTo(BigDecimal.ONE) >= 0) {
+            rate = rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP);
+        }
+
+        // Profit = P * r * (n/12)
+        BigDecimal profit = principal
+                .multiply(rate)
+                .multiply(BigDecimal.valueOf(tenureMonths))
+                .divide(BigDecimal.valueOf(12), 10, RoundingMode.HALF_UP);
+
+        BigDecimal total = principal.add(profit);
+        
+        return total.divide(BigDecimal.valueOf(tenureMonths), 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * EMI formula (retained only if some products need it, but renamed)
+     */
+    private BigDecimal calculateAmortizedInstallment(BigDecimal principal, BigDecimal annualRate, int tenureMonths) {
         if (principal == null || principal.compareTo(BigDecimal.ZERO) == 0 || tenureMonths == 0) {
             return BigDecimal.ZERO;
         }
         if (annualRate == null || annualRate.compareTo(BigDecimal.ZERO) == 0) {
-            return principal.divide(BigDecimal.valueOf(tenureMonths), 6, RoundingMode.HALF_UP);
+            return principal.divide(BigDecimal.valueOf(tenureMonths), 2, RoundingMode.HALF_UP);
         }
-        // Convert annual rate to monthly decimal (e.g. 5% → 0.05 → 0.004167/month)
         BigDecimal r = annualRate;
         if (r.compareTo(BigDecimal.ONE) >= 0) {
             r = r.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP);
@@ -553,7 +600,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         double n = tenureMonths;
         double pmt = pD * (rD * Math.pow(1 + rD, n)) / (Math.pow(1 + rD, n) - 1);
 
-        return BigDecimal.valueOf(pmt).setScale(6, RoundingMode.HALF_UP);
+        return BigDecimal.valueOf(pmt).setScale(2, RoundingMode.HALF_UP);
     }
 
     private int minLoanAge(String type) {
@@ -563,7 +610,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
 
     private EligibilityResult ineligible(String reason) {
         log.warn("Ineligible for reschedule: {}", reason);
-        return new EligibilityResult(false, reason, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, 0);
+        return new EligibilityResult(false, reason, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, 0, null);
     }
 
     private HttpHeaders buildLedgerProxyHeaders(String tenantId, String idempotencyKey) {
@@ -583,6 +630,169 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         } catch (Exception e) {
             log.warn("Could not parse UUID from '{}', using null", value);
             return null;
+        }
+    }
+
+    /**
+     * Populates amortization_schedules with a computed schedule if it's empty for this loan.
+     * This handles cases where the loan was created but the schedule wasn't properly synced/materialized.
+     */
+    private void materializeAmortizationIfEmpty(UUID loanId) {
+        var loan = loanRepository.findById(loanId).orElse(null);
+        if (loan == null) return;
+
+        var existing = amortizationRepository
+                .findByLoanIdAndActiveOrderByInstallmentNumberAsc(loan.getId(), true);
+        if (!existing.isEmpty()) return;
+        
+        if (loan.getTenureMonths() == null || loan.getTenureMonths() <= 0 || loan.getPrincipalAmount() == null) {
+            log.warn("Cannot materialize schedule for loanId={}: missing tenure or principal", loanId);
+            return;
+        }
+
+        log.info("Materializing amortization schedule for loanId={} as it is empty", loanId);
+
+        var startDate = loan.getDisbursementDate() != null
+                ? loan.getDisbursementDate().plusMonths(1)
+                : LocalDate.now().plusMonths(1);
+
+        var principal = loan.getPrincipalAmount();
+        var totalProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
+        var tenure = loan.getTenureMonths();
+        
+        var monthlyPrincipal = principal.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
+        var monthlyProfit = totalProfit.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
+        var monthlyTotal = monthlyPrincipal.add(monthlyProfit);
+
+        BigDecimal cumulativePrincipal = BigDecimal.ZERO;
+        BigDecimal cumulativeProfit = BigDecimal.ZERO;
+        BigDecimal closing = principal;
+        
+        for (int n = 1; n <= tenure; n++) {
+            var opening = closing;
+            closing = closing.subtract(monthlyPrincipal);
+            cumulativePrincipal = cumulativePrincipal.add(monthlyPrincipal);
+            cumulativeProfit = cumulativeProfit.add(monthlyProfit);
+
+            var row = AmortizationScheduleJpaEntity.builder()
+                    .tenantId(loan.getTenantId())
+                    .loanId(loan.getId())
+                    .scheduleVersion(1)
+                    .active(true)
+                    .installmentNumber(n)
+                    .dueDate(startDate.plusMonths(n - 1L))
+                    .openingPrincipal(opening)
+                    .principalComponent(monthlyPrincipal)
+                    .profitComponent(monthlyProfit)
+                    .totalInstallment(monthlyTotal)
+                    .closingPrincipal(closing.max(BigDecimal.ZERO))
+                    .cumulativePrincipal(cumulativePrincipal)
+                    .cumulativeProfit(cumulativeProfit)
+                    .calculationMethod("REDUCING_BALANCE")
+                    .paymentStatus("PENDING")
+                    .skipped(false)
+                    .build();
+            amortizationRepository.save(row);
+        }
+    }
+
+    /**
+     * Regenerates the amortization schedule for a loan after restructuring or tenure extension.
+     */
+    private void regenerateAmortizationSchedule(LoanRescheduleJpaEntity reschedule, MarkAppliedInput input) {
+        UUID loanId = reschedule.getLoanId();
+        log.info("Regenerating amortization schedule for reschedule: loanId={} type={}", loanId, reschedule.getRescheduleType());
+
+        // 1. Deactivate current schedule
+        amortizationRepository.deactivateAllByLoanId(loanId);
+
+        // 2. Fetch updated loan terms
+        var loan = loanRepository.findById(loanId).orElseThrow();
+        int tenure = input.newTenureMonths();
+        
+        if (tenure <= 0) {
+            log.warn("Cannot regenerate schedule for loanId={}: tenure is 0. Using current loan tenure.", loanId);
+            tenure = loan.getTenureMonths() != null ? loan.getTenureMonths() : 0;
+        }
+        
+        if (tenure <= 0) {
+            log.error("Failed to regenerate schedule for loanId={}: tenure is still 0", loanId);
+            return;
+        }
+
+        BigDecimal principal = loan.getPrincipalAmount();
+        BigDecimal totalProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
+        
+        log.info("Regenerating schedule with principal={} totalProfit={} tenure={}", principal, totalProfit, tenure);
+
+        int holidayMonths = "PAYMENT_HOLIDAY".equals(reschedule.getRescheduleType()) && reschedule.getHolidayMonths() != null 
+                ? reschedule.getHolidayMonths() : 0;
+        int payingMonths = tenure - holidayMonths;
+        if (payingMonths <= 0) payingMonths = tenure; // fallback
+
+        // Distribution based on actual paying months
+        BigDecimal monthlyPrincipal = principal.divide(BigDecimal.valueOf(payingMonths), 6, RoundingMode.HALF_UP);
+        BigDecimal monthlyProfit = totalProfit.divide(BigDecimal.valueOf(payingMonths), 6, RoundingMode.HALF_UP);
+        BigDecimal monthlyTotal = input.newInstallmentAmount() != null ? input.newInstallmentAmount() : monthlyPrincipal.add(monthlyProfit);
+
+        Integer maxVersion = amortizationRepository.findMaxScheduleVersionByLoanId(loanId);
+        int newVersion = (maxVersion != null ? maxVersion : 0) + 1;
+        
+        LocalDate startDate = LocalDate.now().plusMonths(1);
+        LocalDate holidayStart = reschedule.getRequestedSkipMonth();
+        BigDecimal cumulativePrincipal = BigDecimal.ZERO;
+        BigDecimal cumulativeProfit = BigDecimal.ZERO;
+        BigDecimal closing = principal;
+        for (int n = 1; n <= tenure; n++) {
+            LocalDate currentDueDate = startDate.plusMonths(n - 1L);
+            boolean isHoliday = false;
+
+            if (holidayMonths > 0) {
+                if (holidayStart != null) {
+                    long monthsFromStart = java.time.temporal.ChronoUnit.MONTHS.between(
+                            holidayStart.withDayOfMonth(1), currentDueDate.withDayOfMonth(1));
+                    if (monthsFromStart >= 0 && monthsFromStart < holidayMonths) {
+                        isHoliday = true;
+                    }
+                } else {
+                    if (n <= holidayMonths) isHoliday = true;
+                }
+            }
+
+            BigDecimal currentMonthlyPrincipal = monthlyPrincipal;
+            BigDecimal currentMonthlyProfit = monthlyProfit;
+            BigDecimal currentMonthlyTotal = monthlyTotal;
+
+            if (isHoliday) {
+                currentMonthlyPrincipal = BigDecimal.ZERO;
+                currentMonthlyProfit = BigDecimal.ZERO;
+                currentMonthlyTotal = BigDecimal.ZERO;
+            }
+
+            var opening = closing;
+            closing = closing.subtract(currentMonthlyPrincipal);
+            cumulativePrincipal = cumulativePrincipal.add(currentMonthlyPrincipal);
+            cumulativeProfit = cumulativeProfit.add(currentMonthlyProfit);
+
+            var row = AmortizationScheduleJpaEntity.builder()
+                    .tenantId(loan.getTenantId())
+                    .loanId(loan.getId())
+                    .scheduleVersion(newVersion)
+                    .active(true)
+                    .installmentNumber(n)
+                    .dueDate(startDate.plusMonths(n - 1L))
+                    .openingPrincipal(opening)
+                    .principalComponent(currentMonthlyPrincipal)
+                    .profitComponent(currentMonthlyProfit)
+                    .totalInstallment(currentMonthlyTotal)
+                    .closingPrincipal(closing.max(BigDecimal.ZERO))
+                    .cumulativePrincipal(cumulativePrincipal)
+                    .cumulativeProfit(cumulativeProfit)
+                    .calculationMethod("RESTRUCTURED")
+                    .paymentStatus("PENDING")
+                    .skipped(isHoliday)
+                    .build();
+            amortizationRepository.save(row);
         }
     }
 }

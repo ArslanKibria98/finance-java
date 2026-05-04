@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.adapter.rest.response.InstallmentScheduleResponse;
+import com.ksa.financing.lending.adapter.rest.response.InvoiceDetailResponse;
 import com.ksa.financing.lending.adapter.rest.response.LoanContractResponse;
 import com.ksa.financing.lending.adapter.rest.response.LoanOverviewResponse;
 import com.ksa.financing.lending.adapter.rest.response.LoanResponse;
@@ -53,6 +56,9 @@ public class LoanController {
 
     @Value("${app.services.collections-service-url:${COLLECTIONS_SERVICE_URL:http://collections-service:8099}}")
     private String collectionsServiceUrl;
+
+    @Value("${app.services.customer-service-url:${CUSTOMER_SERVICE_URL:http://customer-service:8084}}")
+    private String customerServiceUrl;
 
     @Value("${app.services.fineract-username:#{null}}")
     private String fineractUsername;
@@ -342,37 +348,48 @@ public class LoanController {
     }
 
     @SecuredEndpoint(obj = "loans", act = "read")
+    @GetMapping
+    @Operation(summary = "List all loans for tenant (paginated)")
+    public PageResponse<LoanResponse> listAllLoans(
+            PageQuery pageQuery,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        return useCase.listAllLoans(tenantId, pageQuery)
+                .map(l -> LoanResponse.from(mapper.toDto(l), null));
+    }
+
+    @SecuredEndpoint(obj = "loans", act = "read")
     @GetMapping("/customer/{customerId}")
     @Operation(summary = "List loans by customer")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Loans listed")
     })
-    public ResponseEntity<List<LoanResponse>> listLoansByCustomer(
+    public PageResponse<LoanResponse> listLoansByCustomer(
             @PathVariable(name = "customerId") UUID customerId,
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
 
         var tenantId = extractTenantId(jwt);
-        var loans = useCase.listLoansByCustomer(tenantId, customerId);
+        var page = useCase.listLoansByCustomer(tenantId, customerId, pageQuery);
+        var loans = page.content();
         var dtos = mapper.toDtos(loans);
 
         var loanIds = loans.stream()
                 .map(l -> l.getId() != null ? l.getId().getValue() : null)
                 .filter(java.util.Objects::nonNull)
                 .toList();
+
         var eligibility = fetchEarlySettlementEligibility(loanIds, jwt);
 
-        var responses = new java.util.ArrayList<LoanResponse>(dtos.size());
+        var enrichedContent = new java.util.ArrayList<LoanResponse>(dtos.size());
         for (int i = 0; i < dtos.size(); i++) {
             UUID lid = loans.get(i).getId() != null ? loans.get(i).getId().getValue() : null;
             Boolean flag = lid != null ? eligibility.get(lid) : null;
-            responses.add(LoanResponse.from(dtos.get(i), flag));
+            enrichedContent.add(LoanResponse.from(dtos.get(i), flag));
         }
 
-        return ResponseEntity
-                .ok()
-                .header("X-Correlation-ID", correlationId)
-                .body(responses);
+        return new PageResponse<>(enrichedContent, page.pagination());
     }
 
     /**
@@ -427,7 +444,7 @@ public class LoanController {
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        var loans = useCase.listLoansByCustomer(tenantId, customerId);
+        var loans = useCase.listLoansByCustomer(tenantId, customerId, new PageQuery(0, 1000, null, null, null)).content();
 
         var activeLoans = new java.util.ArrayList<LoanOverviewResponse.LoanSummary>();
         var completedLoans = new java.util.ArrayList<LoanOverviewResponse.LoanSummary>();
@@ -496,10 +513,9 @@ public class LoanController {
         var loan = useCase.getLoan(tenantId, UUID.fromString(loanId));
         var collectionsSnapshots = fetchCollectionsSnapshotsByInstallment(loanId, jwt);
         var collectionsStatusByInstallment = collectionsSnapshots.entrySet().stream()
-                .filter(e -> e.getValue() != null && e.getValue().get("status") != null)
-                .collect(java.util.stream.Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> e.getValue().get("status").toString()));
+                .map(entry -> Map.entry(entry.getKey(), getMapValueAsString(entry.getValue(), "status")))
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         var dbSchedules = amortizationScheduleRepository.findByLoanIdAndActiveOrderByInstallmentNumberAsc(
                 UUID.fromString(loanId), true);
 
@@ -545,7 +561,7 @@ public class LoanController {
         @ApiResponse(responseCode = "400", description = "Invalid invoiceId format"),
         @ApiResponse(responseCode = "404", description = "Invoice not found")
     })
-    public ResponseEntity<InstallmentScheduleResponse> getInvoiceDetail(
+    public ResponseEntity<InvoiceDetailResponse> getInvoiceDetail(
             @PathVariable("invoiceId") String invoiceId,
             @AuthenticationPrincipal Jwt jwt) {
 
@@ -566,14 +582,14 @@ public class LoanController {
         var loan = useCase.getLoan(tenantId, loanEntity.getId());
         var collectionsSnapshots = fetchCollectionsSnapshotsByInstallment(loanId, jwt);
         var collectionsStatusByInstallment = collectionsSnapshots.entrySet().stream()
-                .filter(e -> e.getValue() != null && e.getValue().get("status") != null)
-                .collect(java.util.stream.Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> e.getValue().get("status").toString()));
+                .map(entry -> Map.entry(entry.getKey(), getMapValueAsString(entry.getValue(), "status")))
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         var dbSchedules = amortizationScheduleRepository.findByLoanIdAndActiveOrderByInstallmentNumberAsc(
                 loanEntity.getId(), true);
 
+        InstallmentScheduleResponse installment;
         if (!dbSchedules.isEmpty()) {
             var row = dbSchedules.stream()
                     .filter(s -> s.getInstallmentNumber() == installmentNumber)
@@ -585,7 +601,7 @@ public class LoanController {
             status = normalizeInstallmentStatus(status);
             var isPaid = "PAID".equalsIgnoreCase(status) || "COMPLETED".equalsIgnoreCase(status);
 
-            return ResponseEntity.ok(new InstallmentScheduleResponse(
+            installment = new InstallmentScheduleResponse(
                     invoiceId,
                     row.getInstallmentNumber(),
                     row.getDueDate(),
@@ -598,16 +614,91 @@ public class LoanController {
                     isPaid ? row.getTotalInstallment() : null,
                     isPaid,
                     collectionsSnapshots.get(row.getInstallmentNumber())
-            ));
+            );
+        } else {
+            // Fallback: no amortization rows in DB — build legacy schedule and pick matching row
+            var legacy = buildLegacyInstallmentSchedule(loanId, mapper.toDto(loan), collectionsStatusByInstallment, collectionsSnapshots);
+            installment = legacy.stream()
+                    .filter(r -> r.installmentNumber() == installmentNumber)
+                    .findFirst()
+                    .orElseThrow(() -> NotFoundException.forEntity("Invoice", invoiceId));
         }
 
-        // Fallback: no amortization rows in DB — build legacy schedule and pick matching row
-        var legacy = buildLegacyInstallmentSchedule(loanId, mapper.toDto(loan), collectionsStatusByInstallment, collectionsSnapshots);
-        return legacy.stream()
-                .filter(r -> r.installmentNumber() == installmentNumber)
-                .findFirst()
-                .map(ResponseEntity::ok)
-                .orElseThrow(() -> NotFoundException.forEntity("Invoice", invoiceId));
+        // Enrich with Customer and Company data
+        var customer = fetchCustomerDetail(loanEntity.getCustomerId(), jwt);
+        var company = new InvoiceDetailResponse.Company(
+                "Factoring Valley",
+                "Saudi Arabia",
+                "222",
+                "info@factoringvalley.com",
+                "+966 123456789",
+                "https://finova.com/logo.png" // Placeholder logo
+        );
+
+        var recipient = new InvoiceDetailResponse.Customer(
+                getMapValueAsString(customer, "fullName", "Customer " + loanEntity.getCustomerId()),
+                getMapValueAsString(customer, "email", ""),
+                getMapValueAsString(customer, "phone", ""),
+                getMapValueAsString(customer, "nationalId", ""),
+                loanEntity.getCustomerId().toString()
+        );
+
+        var vatPercent = new BigDecimal("15.00");
+        var totalAfterVat = installment.installmentAmount();
+        var totalBeforeVat = totalAfterVat.divide(BigDecimal.ONE.add(vatPercent.divide(new BigDecimal("100"))), 2, RoundingMode.HALF_UP);
+        var vatAmount = totalAfterVat.subtract(totalBeforeVat);
+
+        var lineItems = List.of(new InvoiceDetailResponse.LineItem(
+                loan.getProductCode() != null ? loan.getProductCode() + " Installment" : "Microban Revenue",
+                1,
+                totalBeforeVat,
+                vatPercent
+        ));
+
+        // Stub PDF download URL
+        var pdfDownloadUrl = "/api/v1/loans/invoices/" + invoiceId + "/download";
+
+        return ResponseEntity.ok(new InvoiceDetailResponse(
+                invoiceId.replace("INV-", "FINV"), // Match screenshot FINV prefix
+                LocalDate.now(),
+                installment.dueDate(),
+                "B2C",
+                company,
+                recipient,
+                lineItems,
+                totalBeforeVat,
+                vatPercent,
+                vatAmount,
+                totalAfterVat,
+                pdfDownloadUrl,
+                installment.invoiceId(),
+                installment.installmentNumber(),
+                installment.installmentAmount(),
+                installment.principalComponent(),
+                installment.profitComponent(),
+                installment.outstandingBalance(),
+                installment.paymentStatus(),
+                installment.paidDate(),
+                installment.paidAmount(),
+                installment.receiptAvailable(),
+                installment.delinquency()
+        ));
+    }
+
+    private Map<String, Object> fetchCustomerDetail(UUID customerId, Jwt jwt) {
+        try {
+            var headers = new HttpHeaders();
+            headers.setBearerAuth(jwt.getTokenValue());
+            var url = customerServiceUrl + "/api/v1/customers/" + customerId;
+            var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                var body = response.getBody();
+                return (Map<String, Object>) body.getOrDefault("data", body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch customer detail for {}: {}", customerId, e.getMessage());
+        }
+        return null;
     }
 
     private List<InstallmentScheduleResponse> buildLegacyInstallmentSchedule(
@@ -668,10 +759,9 @@ public class LoanController {
 
     private Map<Integer, String> fetchCollectionsStatusesByInstallment(String loanId, Jwt jwt) {
         return fetchCollectionsSnapshotsByInstallment(loanId, jwt).entrySet().stream()
-                .filter(e -> e.getValue() != null && e.getValue().get("status") != null)
-                .collect(java.util.stream.Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> e.getValue().get("status").toString()));
+                .map(entry -> Map.entry(entry.getKey(), getMapValueAsString(entry.getValue(), "status")))
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
@@ -961,6 +1051,18 @@ public class LoanController {
                 false,
                 "PDF generation pending — document-service not yet implemented"
         );
+    }
+
+    private String getMapValueAsString(Map<String, Object> source, String key) {
+        return getMapValueAsString(source, key, null);
+    }
+
+    private String getMapValueAsString(Map<String, Object> source, String key, String defaultValue) {
+        if (source == null) {
+            return defaultValue;
+        }
+        var value = source.get(key);
+        return value != null ? value.toString() : defaultValue;
     }
 
     private UUID extractTenantId(Jwt jwt) {

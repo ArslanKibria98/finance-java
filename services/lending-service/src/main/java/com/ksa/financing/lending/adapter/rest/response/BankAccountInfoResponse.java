@@ -14,7 +14,7 @@ public record BankAccountInfoResponse(
         List<BankAccountItem> accounts
 ) {
 
-    @Schema(description = "Individual bank account details")
+    @Schema(description = "Individual bank account details (same shape as customer-service BankAccountResponse)")
     public record BankAccountItem(
             @Schema(description = "Bank name (e.g., Al Rajhi Bank)")
             String bankName,
@@ -24,6 +24,9 @@ public record BankAccountInfoResponse(
 
             @Schema(description = "Full IBAN")
             String iban,
+
+            @Schema(description = "Masked IBAN (****1234)")
+            String maskedIban,
 
             @Schema(description = "Account holder name")
             String accountHolderName,
@@ -36,5 +39,11 @@ public record BankAccountInfoResponse(
 
             @Schema(description = "Verification status (VERIFIED, PENDING_VERIFICATION, etc.)")
             String status
-    ) {}
+    ) {
+        public static String maskIban(String iban) {
+            return iban != null && iban.length() > 4
+                    ? "****" + iban.substring(iban.length() - 4)
+                    : iban;
+        }
+    }
 }

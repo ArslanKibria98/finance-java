@@ -1,15 +1,22 @@
 package com.ksa.financing.customer.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.port.out.CustomerRepository;
 import com.ksa.financing.customer.infrastructure.persistence.entity.CustomerJpaEntity;
 import com.ksa.financing.customer.infrastructure.persistence.mapper.CustomerPersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -18,6 +25,14 @@ import java.util.UUID;
 public class CustomerRepositoryImpl implements CustomerRepository {
 
     private final JpaCustomerRepository jpaRepository;
+
+    private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of(
+            "kycStatus", "lifecycleStage", "gender", "nationality", "residencyType", "country", "nafathVerified"
+    );
+
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of(
+            "fullName", "firstName", "lastName", "nationalId", "mobileNumber", "email", "cifNumber"
+    );
 
     @Override
     public Customer save(Customer customer) {
@@ -89,34 +104,83 @@ public class CustomerRepositoryImpl implements CustomerRepository {
     }
 
     @Override
-    public List<Customer> findAll() {
-        log.debug("Finding all customers (cross-tenant)");
-        return jpaRepository.findByDeletedAtIsNull().stream()
-                .map(CustomerPersistenceMapper::toDomain)
-                .toList();
+    public PageResponse<Customer> findAll(PageQuery query) {
+        log.debug("Finding all customers (cross-tenant) page={} size={}", query.page(), query.size());
+        
+        Specification<CustomerJpaEntity> notDeleted = (root, q, cb) -> cb.isNull(root.get("deletedAt"));
+        
+        Specification<CustomerJpaEntity> dynamic = SpecificationBuilder.<CustomerJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<CustomerJpaEntity> page = jpaRepository.findAll(notDeleted.and(dynamic), query.toPageable());
+        return PageResponse.from(page, CustomerPersistenceMapper::toDomain);
     }
 
     @Override
-    public List<Customer> findAllByTenantId(UUID tenantId) {
-        log.debug("Finding all customers for tenant: {}", tenantId);
-        return jpaRepository.findByTenantIdAndDeletedAtIsNull(tenantId).stream()
-                .map(CustomerPersistenceMapper::toDomain)
-                .toList();
+    public PageResponse<Customer> findAllByTenantId(UUID tenantId, PageQuery query) {
+        log.debug("Finding all customers for tenant: {} page={} size={}", tenantId, query.page(), query.size());
+        
+        Specification<CustomerJpaEntity> spec = (root, q, cb) -> cb.and(
+                cb.equal(root.get("tenantId"), tenantId),
+                cb.isNull(root.get("deletedAt"))
+        );
+        
+        Specification<CustomerJpaEntity> dynamic = SpecificationBuilder.<CustomerJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<CustomerJpaEntity> page = jpaRepository.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, CustomerPersistenceMapper::toDomain);
     }
 
     @Override
-    public List<Customer> findByLifecycleStage(UUID tenantId, String lifecycleStage) {
-        log.debug("Finding customers by lifecycle stage: {} for tenant: {}", lifecycleStage, tenantId);
-        return jpaRepository.findByTenantIdAndLifecycleStageAndDeletedAtIsNull(tenantId, lifecycleStage).stream()
-                .map(CustomerPersistenceMapper::toDomain)
-                .toList();
+    public PageResponse<Customer> findByLifecycleStage(UUID tenantId, String lifecycleStage, PageQuery query) {
+        log.debug("Finding customers by lifecycle stage: {} for tenant: {} page={} size={}", 
+                lifecycleStage, tenantId, query.page(), query.size());
+        
+        Specification<CustomerJpaEntity> spec = (root, q, cb) -> cb.and(
+                cb.equal(root.get("tenantId"), tenantId),
+                cb.equal(root.get("lifecycleStage"), lifecycleStage),
+                cb.isNull(root.get("deletedAt"))
+        );
+        
+        Specification<CustomerJpaEntity> dynamic = SpecificationBuilder.<CustomerJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<CustomerJpaEntity> page = jpaRepository.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, CustomerPersistenceMapper::toDomain);
     }
 
     @Override
-    public List<Customer> findByKycStatus(UUID tenantId, String kycStatus) {
-        log.debug("Finding customers by KYC status: {} for tenant: {}", kycStatus, tenantId);
-        return jpaRepository.findByTenantIdAndKycStatusAndDeletedAtIsNull(tenantId, kycStatus).stream()
-                .map(CustomerPersistenceMapper::toDomain)
-                .toList();
+    public PageResponse<Customer> findByKycStatus(UUID tenantId, String kycStatus, PageQuery query) {
+        log.debug("Finding customers by KYC status: {} for tenant: {} page={} size={}", 
+                kycStatus, tenantId, query.page(), query.size());
+        
+        Specification<CustomerJpaEntity> spec = (root, q, cb) -> cb.and(
+                cb.equal(root.get("tenantId"), tenantId),
+                cb.equal(root.get("kycStatus"), kycStatus),
+                cb.isNull(root.get("deletedAt"))
+        );
+        
+        Specification<CustomerJpaEntity> dynamic = SpecificationBuilder.<CustomerJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<CustomerJpaEntity> page = jpaRepository.findAll(spec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, CustomerPersistenceMapper::toDomain);
     }
 }

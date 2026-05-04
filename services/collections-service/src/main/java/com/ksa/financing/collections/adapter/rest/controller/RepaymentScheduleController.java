@@ -150,6 +150,7 @@ public class RepaymentScheduleController {
                 schedule.getFirstDueDate(),
                 schedule.getLastDueDate(),
                 schedule.isFullyPaid(),
+                installments.stream().anyMatch(InstallmentResponse::earlySettlementEligible),
                 schedule.getCreatedAt(),
                 installments
         );
@@ -193,7 +194,14 @@ public class RepaymentScheduleController {
                 matchOpt.map(m -> m.discountAmount()).orElse(null),
                 matchOpt.map(m -> m.validUntilDay()).orElse(null),
                 totalDiscount,
-                payable
+                payable,
+                i.isEligibleForWriteOff(),
+                i.getWrittenOffPrincipal(),
+                i.getWrittenOffProfit(),
+                i.getWrittenOffFee(),
+                i.getWrittenOffPenalty(),
+                i.getWriteOffDate(),
+                i.getWriteOffReason()
         );
     }
 }

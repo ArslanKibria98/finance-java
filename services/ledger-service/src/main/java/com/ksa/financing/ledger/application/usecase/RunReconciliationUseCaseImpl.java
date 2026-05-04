@@ -36,7 +36,7 @@ public class RunReconciliationUseCaseImpl implements RunReconciliationUseCase {
     public ReconciliationSummary run(UUID tenantId, LocalDate reconciliationDate) {
         log.info("Running GL reconciliation for tenant={} date={}", tenantId, reconciliationDate);
 
-        List<AccountAggregate> accounts = accountRepository.findAllByTenant(tenantId);
+        List<AccountAggregate> accounts = accountRepository.findAllByTenant(tenantId, com.ksa.financing.infra.pagination.PageQuery.defaults(2000, "accountCode", com.ksa.financing.infra.pagination.SortDirection.ASC)).content();
 
         int matched = 0;
         int discrepancies = 0;

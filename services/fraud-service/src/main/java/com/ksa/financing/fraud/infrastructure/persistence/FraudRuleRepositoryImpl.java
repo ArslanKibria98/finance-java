@@ -4,6 +4,9 @@ import com.ksa.financing.fraud.domain.model.fraud.FraudBlockType;
 import com.ksa.financing.fraud.domain.model.fraud.FraudDecision;
 import com.ksa.financing.fraud.domain.model.rule.*;
 import com.ksa.financing.fraud.domain.port.out.FraudRuleRepository;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,17 +30,38 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
     private final ObjectMapper objectMapper;
 
     @Override
-    public List<FraudRule> findActiveByTenant(UUID tenantId) {
-        return jdbcTemplate.query(
-                "SELECT * FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY priority",
-                ruleMapper(), tenantId);
+    public PageResponse<FraudRule> findActiveByTenant(UUID tenantId, PageQuery pageQuery) {
+        String countSql = "SELECT count(*) FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE'";
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, tenantId)).orElse(0L);
+
+        String sql = "SELECT * FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY priority LIMIT ? OFFSET ?";
+        List<FraudRule> content = jdbcTemplate.query(sql, ruleMapper(), tenantId, pageQuery.size(), pageQuery.page() * pageQuery.size());
+
+        return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
     }
 
     @Override
-    public List<FraudRule> findAllByTenant(UUID tenantId) {
-        return jdbcTemplate.query(
-                "SELECT * FROM fraud_rules WHERE tenant_id = ? ORDER BY priority",
-                ruleMapper(), tenantId);
+    public PageResponse<FraudRule> findAllByTenant(UUID tenantId, PageQuery pageQuery) {
+        String countSql = "SELECT count(*) FROM fraud_rules WHERE tenant_id = ?";
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, tenantId)).orElse(0L);
+
+        String sql = "SELECT * FROM fraud_rules WHERE tenant_id = ? ORDER BY priority LIMIT ? OFFSET ?";
+        List<FraudRule> content = jdbcTemplate.query(sql, ruleMapper(), tenantId, pageQuery.size(), pageQuery.page() * pageQuery.size());
+
+        return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
+    }
+
+    private PageMetadata buildMetadata(PageQuery query, long totalElements) {
+        int totalPages = (int) Math.ceil((double) totalElements / query.size());
+        return new PageMetadata(
+                query.page(),
+                query.size(),
+                totalElements,
+                totalPages,
+                query.page() == 0,
+                query.page() >= totalPages - 1,
+                totalElements == 0
+        );
     }
 
     @Override

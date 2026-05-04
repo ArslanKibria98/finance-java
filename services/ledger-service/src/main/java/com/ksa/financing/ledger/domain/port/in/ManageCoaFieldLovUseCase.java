@@ -1,8 +1,9 @@
 package com.ksa.financing.ledger.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.ledger.domain.model.CoaFieldLov;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageCoaFieldLovUseCase {
@@ -13,7 +14,7 @@ public interface ManageCoaFieldLovUseCase {
 
     CoaFieldLov getById(UUID tenantId, UUID fieldLovId);
 
-    List<CoaFieldLov> list(UUID tenantId, boolean activeOnly);
+    PageResponse<CoaFieldLov> list(UUID tenantId, boolean activeOnly, PageQuery pageQuery);
 
     CoaFieldLov deactivate(UUID tenantId, UUID fieldLovId);
 

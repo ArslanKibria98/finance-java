@@ -1,9 +1,9 @@
 package com.ksa.financing.risk.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.MobileBlacklistEntry;
 import com.ksa.financing.risk.domain.model.NidBlacklistEntry;
-
-import java.util.List;
 
 public interface ManageBlacklistUseCase {
 
@@ -13,7 +13,7 @@ public interface ManageBlacklistUseCase {
 
     NidBlacklistEntry getNidStatus(String nationalId);
 
-    List<NidBlacklistEntry> listNidBlacklist();
+    PageResponse<NidBlacklistEntry> listNidBlacklist(PageQuery pageQuery);
 
     MobileBlacklistEntry blacklistMobile(String mobileNumber, String reason);
 
@@ -21,5 +21,5 @@ public interface ManageBlacklistUseCase {
 
     MobileBlacklistEntry getMobileStatus(String mobileNumber);
 
-    List<MobileBlacklistEntry> listMobileBlacklist();
+    PageResponse<MobileBlacklistEntry> listMobileBlacklist(PageQuery pageQuery);
 }

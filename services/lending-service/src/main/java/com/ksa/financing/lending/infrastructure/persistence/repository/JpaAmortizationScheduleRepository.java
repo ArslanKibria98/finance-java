@@ -19,11 +19,11 @@ public interface JpaAmortizationScheduleRepository extends JpaRepository<Amortiz
     List<AmortizationScheduleJpaEntity> findByLoanIdAndActiveAndPaymentStatusOrderByInstallmentNumberAsc(
             UUID loanId, boolean active, String paymentStatus);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE AmortizationScheduleJpaEntity a SET a.active = false WHERE a.loanId = :loanId AND a.active = true")
     void deactivateAllByLoanId(@Param("loanId") UUID loanId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE AmortizationScheduleJpaEntity a SET a.dueDate = :newDueDate WHERE a.id = :id")
     void updateDueDate(@Param("id") UUID id, @Param("newDueDate") LocalDate newDueDate);
 

@@ -8,6 +8,8 @@ import com.ksa.financing.product.domain.model.TemplateType;
 import com.ksa.financing.product.domain.port.in.ManageTemplateTypeUseCase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,14 +36,14 @@ public class TemplateTypeController {
 
     @SecuredEndpoint(obj = "template-types", act = "read")
     @GetMapping
-    @Operation(summary = "List all template types", description = "Returns all active template types for the tenant")
-    public ResponseEntity<List<TemplateTypeResponse>> listAll(
+    @Operation(summary = "List all template types", description = "Returns all active template types for the tenant (paginated)")
+    public PageResponse<TemplateTypeResponse> listAll(
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        var types = manageTemplateTypeUseCase.listAll(tenantId);
-        var response = types.stream().map(TemplateTypeMapper::toResponse).toList();
-        return ResponseEntity.ok(response);
+        return manageTemplateTypeUseCase.listAll(tenantId, pageQuery)
+                .map(TemplateTypeMapper::toResponse);
     }
 
     @SecuredEndpoint(obj = "template-types", act = "read")

@@ -6,13 +6,14 @@ import com.ksa.financing.customer.domain.port.out.NetWorthRangeRepository;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -83,13 +84,13 @@ public class ManageNetWorthRangeService implements ManageNetWorthRangeUseCase {
     }
 
     @Override
-    public List<NetWorthRangeOption> getAll(UUID tenantId) {
-        return repository.findAllByTenantId(tenantId);
+    public PageResponse<NetWorthRangeOption> getAll(UUID tenantId, PageQuery pageQuery) {
+        return repository.findAllByTenantId(tenantId, pageQuery);
     }
 
     @Override
-    public List<NetWorthRangeOption> getActive(UUID tenantId) {
-        return repository.findActiveByTenantId(tenantId);
+    public PageResponse<NetWorthRangeOption> getActive(UUID tenantId, PageQuery pageQuery) {
+        return repository.findActiveByTenantId(tenantId, pageQuery);
     }
 
     @Override
@@ -108,9 +109,9 @@ public class ManageNetWorthRangeService implements ManageNetWorthRangeUseCase {
     @Transactional
     public void activate(UUID tenantId, UUID id) {
         NetWorthRangeOption option = repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Net worth range option", id.toString()));
         option.setActive(true);
-        option.setUpdatedAt(java.time.Instant.now());
+        option.setUpdatedAt(Instant.now());
         repository.save(option);
     }
 
@@ -118,7 +119,7 @@ public class ManageNetWorthRangeService implements ManageNetWorthRangeUseCase {
     @Transactional
     public void delete(UUID tenantId, UUID id) {
         repository.findById(tenantId, id)
-                .orElseThrow(() -> NotFoundException.forEntity("option", id.toString()));
+                .orElseThrow(() -> NotFoundException.forEntity("Net worth range option", id.toString()));
         repository.softDelete(tenantId, id);
     }
 }

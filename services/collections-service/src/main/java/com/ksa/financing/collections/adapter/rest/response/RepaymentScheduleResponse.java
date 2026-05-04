@@ -19,6 +19,7 @@ public record RepaymentScheduleResponse(
         LocalDate firstDueDate,
         LocalDate lastDueDate,
         boolean fullyPaid,
+        boolean earlySettlementEligible,
         LocalDateTime createdAt,
         List<InstallmentResponse> installments
 ) {}

@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.middleware.application.dto.RequestLogResponse;
 import com.ksa.financing.middleware.domain.model.ApiRequestLog;
 
@@ -10,6 +12,6 @@ public interface ManageRequestLogUseCase {
     ApiRequestLog create(ApiRequestLog log);
     RequestLogResponse getById(UUID tenantId, UUID id);
     RequestLogResponse getByRequestId(UUID tenantId, String requestId);
-    List<RequestLogResponse> listAll(UUID tenantId, int page, int size);
-    List<RequestLogResponse> listByProvider(UUID tenantId, List<UUID> apiIds, int page, int size);
+    PageResponse<RequestLogResponse> listAll(UUID tenantId, PageQuery query);
+    PageResponse<RequestLogResponse> listByProvider(UUID tenantId, List<UUID> apiIds, PageQuery query);
 }

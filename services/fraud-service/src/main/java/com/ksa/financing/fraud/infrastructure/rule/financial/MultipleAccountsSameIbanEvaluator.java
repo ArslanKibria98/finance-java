@@ -1,0 +1,46 @@
+package com.ksa.financing.fraud.infrastructure.rule.financial;
+
+import com.ksa.financing.fraud.domain.model.fraud.FraudEvent;
+import com.ksa.financing.fraud.domain.model.fraud.FraudEventType;
+import com.ksa.financing.fraud.domain.model.rule.FraudRule;
+import com.ksa.financing.fraud.domain.model.rule.FraudRuleId;
+import com.ksa.financing.fraud.domain.model.rule.RuleEvaluationResult;
+import com.ksa.financing.fraud.domain.port.out.FraudEventRepository;
+import com.ksa.financing.fraud.domain.service.FraudRuleEvaluator;
+import com.ksa.financing.fraud.infrastructure.rule.EvaluatorScores;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+/**
+ * FIN_001 — Multiple Accounts Disbursing to Same IBAN.
+ * Trigger: 2+ distinct customer accounts disbursed to same IBAN.
+ */
+@Component
+@RequiredArgsConstructor
+public class MultipleAccountsSameIbanEvaluator implements FraudRuleEvaluator {
+
+    private final FraudEventRepository fraudEventRepository;
+
+    @Override
+    public FraudRuleId getRuleId() {
+        return FraudRuleId.FIN_001;
+    }
+
+    @Override
+    public RuleEvaluationResult evaluate(FraudEvent event, FraudRule rule) {
+        if (event.eventType() != FraudEventType.DISBURSEMENT
+                || event.disbursementIban() == null) {
+            return RuleEvaluationResult.notTriggered(rule.ruleId());
+        }
+        int min = rule.getParameterInt("min_distinct_accounts", 2);
+        long count = fraudEventRepository.countDistinctCustomersByIban(
+                event.disbursementIban(),
+                event.eventTimestamp().minusYears(1));
+        if (count < min) {
+            return RuleEvaluationResult.notTriggered(rule.ruleId());
+        }
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+                count + " distinct accounts share IBAN " + event.disbursementIban(),
+                EvaluatorScores.forDecision(rule.defaultAction()));
+    }
+}

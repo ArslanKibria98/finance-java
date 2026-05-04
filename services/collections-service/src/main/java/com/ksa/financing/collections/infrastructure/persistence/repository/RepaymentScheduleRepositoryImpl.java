@@ -7,6 +7,7 @@ import com.ksa.financing.collections.infrastructure.persistence.mapper.Repayment
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,6 +44,13 @@ public class RepaymentScheduleRepositoryImpl implements RepaymentScheduleReposit
     public Optional<RepaymentScheduleAggregate> findActiveByLoanId(UUID tenantId, UUID loanId) {
         return jpaRepository.findActiveByTenantIdAndLoanId(tenantId, loanId)
                 .map(mapper::toDomain);
+    }
+
+    @Override
+    public List<RepaymentScheduleAggregate> findAllActive() {
+        return jpaRepository.findAllActive().stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 
     @Override

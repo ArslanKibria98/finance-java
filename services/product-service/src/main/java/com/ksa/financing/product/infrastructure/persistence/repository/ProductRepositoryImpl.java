@@ -1,15 +1,22 @@
 package com.ksa.financing.product.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.product.domain.model.*;
 import com.ksa.financing.product.domain.port.out.ProductRepository;
+import com.ksa.financing.product.infrastructure.persistence.entity.ProductJpaEntity;
 import com.ksa.financing.product.infrastructure.persistence.mapper.CountryPersistenceMapper;
 import com.ksa.financing.product.infrastructure.persistence.mapper.ProductPersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -21,6 +28,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class ProductRepositoryImpl implements ProductRepository {
+
+    private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of(
+            "productCode", "nameEn", "nameAr", "productType", "targetSegment",
+            "masterCategoryId", "subCategoryId", "shariaStructure", "status",
+            "wizardStep", "wizardCompleted", "visibleToCustomers", "visibleToPartners",
+            "countryId", "createdAt", "updatedAt"
+    );
+
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of(
+            "productCode", "nameEn", "nameAr", "notificationEmail"
+    );
 
     private final JpaProductRepository jpaProductRepository;
     private final JpaAdminFeeSlabRepository jpaAdminFeeSlabRepository;
@@ -123,6 +141,69 @@ private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigR
         });
 
         return products;
+    }
+
+    @Override
+    public PageResponse<Product> findAllByTenant(UUID tenantId, PageQuery query) {
+        log.debug("Listing products page={} size={} for tenantId={}",
+                query.page(), query.size(), tenantId);
+
+        Specification<ProductJpaEntity> tenantAndNotDeleted = (root, q, cb) ->
+                cb.and(
+                        cb.equal(root.get("tenantId"), tenantId),
+                        cb.isNull(root.get("deletedAt"))
+                );
+
+        Specification<ProductJpaEntity> dynamic = SpecificationBuilder.<ProductJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<ProductJpaEntity> page = jpaProductRepository.findAll(
+                tenantAndNotDeleted.and(dynamic),
+                query.toPageable());
+
+        List<Product> products = page.getContent().stream()
+                .map(ProductPersistenceMapper::toDomain)
+                .toList();
+
+        // Same enrichment as the unpaginated path — keeps response keys identical.
+        products.forEach(this::enrichForListing);
+
+        return new PageResponse<>(products, com.ksa.financing.infra.pagination.PageMetadata.from(page));
+    }
+
+    private void enrichForListing(Product product) {
+        if (product.getCountryId() != null) {
+            jpaCountryRepository.findById(product.getCountryId())
+                    .map(CountryPersistenceMapper::toDomain)
+                    .ifPresent(product::setCountry);
+        }
+        if (product.getMasterCategoryId() != null) {
+            jpaMasterCategoryRepository.findById(product.getMasterCategoryId())
+                    .ifPresent(cat -> {
+                        product.setMasterCategoryNameEn(cat.getNameEn());
+                        product.setMasterCategoryNameAr(cat.getNameAr());
+                    });
+        }
+        if (product.getSubCategoryId() != null) {
+            jpaSubCategoryRepository.findById(product.getSubCategoryId())
+                    .ifPresent(sub -> {
+                        product.setSubCategoryNameEn(sub.getNameEn());
+                        product.setSubCategoryNameAr(sub.getNameAr());
+                    });
+        }
+        var slabs = jpaAdminFeeSlabRepository
+                .findByProductIdAndTenantIdOrderBySortOrder(product.getId(), product.getTenantId())
+                .stream()
+                .map(s -> new AdminFeeSlab(s.getId(), s.getMinAmount(), s.getMaxAmount(),
+                        s.getProfitPercentage(), s.getProcessingFee(), s.getAdminFee(),
+                        s.getPartnerScope(), s.getStatus(), s.getSortOrder(),
+                        s.getMinTenure(), s.getMaxTenure()))
+                .toList();
+        product.setAdminFeeSlabs(slabs);
     }
 
     @Override

@@ -1,8 +1,9 @@
 package com.ksa.financing.identity.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.identity.domain.model.Employee;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageEmployeeUseCase {
@@ -11,7 +12,7 @@ public interface ManageEmployeeUseCase {
 
     Employee getById(UUID tenantId, UUID employeeId);
 
-    List<Employee> listByTenant(UUID tenantId);
+    PageResponse<Employee> listByTenant(UUID tenantId, PageQuery query);
 
     Employee update(UUID tenantId, UUID employeeId, UpdateEmployeeCommand command);
 

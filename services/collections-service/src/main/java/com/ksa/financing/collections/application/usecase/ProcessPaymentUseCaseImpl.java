@@ -97,6 +97,19 @@ public class ProcessPaymentUseCaseImpl implements ProcessPaymentUseCase {
 
         if (scheduleOpt.isPresent()) {
             schedule = scheduleOpt.get();
+
+            // Fix: Run delinquency assessment BEFORE payment application.
+            // This ensures latest penalties (Type 2/3) are reflected in totalAmount
+            // before the waterfall tries to settle them.
+            var assessment = delinquencyEngine.tickAndAssess(
+                    command.tenantId(), null /* productCode hook */,
+                    schedule, LocalDate.now());
+            
+            eventPublisher.publishAll(List.<Object>of(assessment));
+            log.info("Delinquency assessed loan={} dpd={} stage={} simah={} policy={}",
+                    schedule.getLoanId(), assessment.loanDpd(), assessment.loanStage(),
+                    assessment.reportToSimah(), assessment.policySource());
+
             List<RepaymentScheduleAggregate.PaymentAllocation> allocations;
             if (payment.getInstallmentId() != null) {
                 allocations = schedule.applyPaymentToInstallment(
@@ -106,18 +119,6 @@ public class ProcessPaymentUseCaseImpl implements ProcessPaymentUseCase {
             }
             allocationRepository.saveAll(command.tenantId(), allocations);
             allocationCount = allocations.size();
-
-            // Dynamic delinquency flow: consult admin-configured policy (product-specific
-            // → tenant default → built-in). Advances installment stages using the policy's
-            // grace period, then assesses the loan for Simah reporting, agent assignment,
-            // wallet freeze, and late-fee computation (swept to charity fund per Sharia).
-            var assessment = delinquencyEngine.tickAndAssess(
-                    command.tenantId(), null /* productCode hook */,
-                    schedule, LocalDate.now());
-            eventPublisher.publishAll(List.<Object>of(assessment));
-            log.info("Delinquency assessed loan={} dpd={} stage={} simah={} policy={}",
-                    schedule.getLoanId(), assessment.loanDpd(), assessment.loanStage(),
-                    assessment.reportToSimah(), assessment.policySource());
 
             scheduleRepository.save(schedule);
         } else {

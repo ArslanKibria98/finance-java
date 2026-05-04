@@ -1,8 +1,9 @@
 package com.ksa.financing.lending.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.LoanApplicationAggregate;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -14,7 +15,13 @@ public interface ManageLoanApplicationUseCase {
 
     LoanApplicationAggregate getApplication(UUID tenantId, UUID applicationId);
 
-    List<LoanApplicationAggregate> listApplications(UUID tenantId);
+    PageResponse<LoanApplicationAggregate> listApplications(UUID tenantId, PageQuery query);
 
-    List<LoanApplicationAggregate> listApplicationsByCustomer(UUID tenantId, UUID customerId);
+    PageResponse<LoanApplicationAggregate> listApplicationsByCustomer(UUID tenantId, UUID customerId, PageQuery query);
+
+    /**
+     * Cancel a non-terminal application directly in DB.
+     * Used by the cancel endpoint and auto-cancel-on-re-initiate logic.
+     */
+    void cancelApplication(UUID tenantId, UUID applicationId, UUID cancelledBy);
 }

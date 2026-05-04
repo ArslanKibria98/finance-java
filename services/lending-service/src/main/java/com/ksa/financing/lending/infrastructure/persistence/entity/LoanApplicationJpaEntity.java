@@ -106,6 +106,15 @@ public class LoanApplicationJpaEntity {
     @Column(name = "profit_rate", precision = 10, scale = 8)
     private BigDecimal profitRate;
 
+    @Column(name = "processing_fee_percent", precision = 10, scale = 8)
+    private BigDecimal processingFeePercent;
+
+    @Column(name = "processing_fee_amount", precision = 20, scale = 6)
+    private BigDecimal processingFeeAmount;
+
+    @Column(name = "admin_fee_amount", precision = 20, scale = 6)
+    private BigDecimal adminFeeAmount;
+
     @Column(name = "apr", precision = 10, scale = 8)
     private BigDecimal apr;
 

@@ -1,5 +1,7 @@
 package com.ksa.financing.risk.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.assessment.AssessmentAnswer;
 import com.ksa.financing.risk.domain.model.assessment.AssessmentSession;
 import com.ksa.financing.risk.domain.model.assessment.ScoreBreakdown;
@@ -20,7 +22,7 @@ public interface RunAssessmentUseCase {
 
     AssessmentSession getSession(UUID tenantId, UUID sessionId);
 
-    List<AssessmentSession> getSessionsByEntity(UUID tenantId, String entityReference);
+    PageResponse<AssessmentSession> getSessionsByEntity(UUID tenantId, String entityReference, PageQuery pageQuery);
 
     List<AssessmentAnswer> getAnswersBySession(UUID tenantId, UUID sessionId);
 

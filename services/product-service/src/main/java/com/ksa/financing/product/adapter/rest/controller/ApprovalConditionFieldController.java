@@ -6,6 +6,8 @@ import com.ksa.financing.product.domain.port.in.ManageApprovalConditionFieldsUse
 import com.ksa.financing.product.domain.port.in.ManageApprovalConditionFieldsUseCase.UpdateFieldCommand;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,7 +21,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -34,13 +35,13 @@ public class ApprovalConditionFieldController {
     @SecuredEndpoint(obj = "approval-condition-fields", act = "read")
     @GetMapping
     @Operation(summary = "List all approval condition fields",
-            description = "Returns all active field definitions with predefined options for dropdown population")
-    public ResponseEntity<List<ApprovalConditionFieldDefinition>> listFields(
+            description = "Returns active field definitions with predefined options (paginated)")
+    public PageResponse<ApprovalConditionFieldDefinition> listFields(
+            PageQuery pageQuery,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        var fields = useCase.listFieldDefinitions(tenantId);
-        return ResponseEntity.ok(fields);
+        return useCase.listFieldDefinitions(tenantId, pageQuery);
     }
 
     @SecuredEndpoint(obj = "approval-condition-fields", act = "read")

@@ -1,5 +1,9 @@
 package com.ksa.financing.product.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.product.domain.model.MasterCategory;
 import com.ksa.financing.product.domain.model.SubCategory;
 import com.ksa.financing.product.domain.port.out.CategoryRepository;
@@ -8,16 +12,35 @@ import com.ksa.financing.product.infrastructure.persistence.entity.SubCategoryJp
 import com.ksa.financing.product.infrastructure.persistence.mapper.CategoryPersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
 @Slf4j
 public class CategoryRepositoryImpl implements CategoryRepository {
+
+    private static final Set<String> MASTER_ALLOWED_FILTER_FIELDS = Set.of(
+            "code", "nameEn", "nameAr", "isActive"
+    );
+
+    private static final Set<String> MASTER_SEARCHABLE_FIELDS = Set.of(
+            "code", "nameEn", "nameAr", "descriptionEn", "descriptionAr"
+    );
+
+    private static final Set<String> SUB_ALLOWED_FILTER_FIELDS = Set.of(
+            "code", "nameEn", "nameAr", "isActive", "masterCategoryId"
+    );
+
+    private static final Set<String> SUB_SEARCHABLE_FIELDS = Set.of(
+            "code", "nameEn", "nameAr"
+    );
 
     private final JpaMasterCategoryRepository jpaMasterCategoryRepository;
     private final JpaSubCategoryRepository jpaSubCategoryRepository;
@@ -31,6 +54,31 @@ public class CategoryRepositoryImpl implements CategoryRepository {
                 .stream()
                 .map(CategoryPersistenceMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public PageResponse<MasterCategory> findAllMasterCategories(UUID tenantId, PageQuery pageQuery) {
+        log.debug("Listing master categories with pagination for tenantId={}", tenantId);
+
+        Specification<MasterCategoryJpaEntity> tenantSpec = (root, query, cb) ->
+                cb.equal(root.get("tenantId"), tenantId);
+
+        Specification<MasterCategoryJpaEntity> dynamic = SpecificationBuilder.<MasterCategoryJpaEntity>builder()
+                .filters(pageQuery.filters())
+                .allowedFilterFields(MASTER_ALLOWED_FILTER_FIELDS)
+                .search(pageQuery.search())
+                .searchableFields(MASTER_SEARCHABLE_FIELDS)
+                .build();
+
+        Page<MasterCategoryJpaEntity> page = jpaMasterCategoryRepository.findAll(
+                tenantSpec.and(dynamic),
+                pageQuery.toPageable());
+
+        List<MasterCategory> content = page.getContent().stream()
+                .map(CategoryPersistenceMapper::toDomain)
+                .toList();
+
+        return new PageResponse<>(content, PageMetadata.from(page));
     }
 
     @Override
@@ -90,6 +138,34 @@ public class CategoryRepositoryImpl implements CategoryRepository {
                 .stream()
                 .map(CategoryPersistenceMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public PageResponse<SubCategory> findSubCategoriesByMaster(UUID tenantId, UUID masterCategoryId, PageQuery pageQuery) {
+        log.debug("Listing sub-categories with pagination for masterCategoryId={}, tenantId={}", masterCategoryId, tenantId);
+
+        Specification<SubCategoryJpaEntity> masterAndTenant = (root, query, cb) ->
+                cb.and(
+                        cb.equal(root.get("tenantId"), tenantId),
+                        cb.equal(root.get("masterCategoryId"), masterCategoryId)
+                );
+
+        Specification<SubCategoryJpaEntity> dynamic = SpecificationBuilder.<SubCategoryJpaEntity>builder()
+                .filters(pageQuery.filters())
+                .allowedFilterFields(SUB_ALLOWED_FILTER_FIELDS)
+                .search(pageQuery.search())
+                .searchableFields(SUB_SEARCHABLE_FIELDS)
+                .build();
+
+        Page<SubCategoryJpaEntity> page = jpaSubCategoryRepository.findAll(
+                masterAndTenant.and(dynamic),
+                pageQuery.toPageable());
+
+        List<SubCategory> content = page.getContent().stream()
+                .map(CategoryPersistenceMapper::toDomain)
+                .toList();
+
+        return new PageResponse<>(content, PageMetadata.from(page));
     }
 
     @Override

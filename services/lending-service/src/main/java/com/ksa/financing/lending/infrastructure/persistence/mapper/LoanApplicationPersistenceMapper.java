@@ -4,6 +4,8 @@ import com.ksa.financing.lending.domain.model.*;
 import com.ksa.financing.lending.infrastructure.persistence.entity.LoanApplicationJpaEntity;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
+
 /**
  * Maps between LoanApplicationAggregate domain model and JPA entity.
  * Keeps domain layer independent of persistence concerns.
@@ -46,6 +48,9 @@ public class LoanApplicationPersistenceMapper {
         entity.setPurposeOfFinance(agg.getPurposeOfFinance());
         entity.setPurposeOfFinanceOther(agg.getPurposeOfFinanceOther());
         entity.setProfitRate(agg.getProfitRate());
+        entity.setProcessingFeePercent(agg.getProcessingFeePercent());
+        entity.setProcessingFeeAmount(agg.getProcessingFeeAmount());
+        entity.setAdminFeeAmount(agg.getAdminFeeAmount());
         entity.setApr(agg.getApr());
         entity.setPartnerId(agg.getPartnerId());
         entity.setLeadId(agg.getLeadId());
@@ -162,6 +167,9 @@ public class LoanApplicationPersistenceMapper {
                 e.getPurposeOfFinance(),
                 e.getPurposeOfFinanceOther(),
                 e.getProfitRate(),
+                e.getProcessingFeePercent(),
+                e.getProcessingFeeAmount(),
+                e.getAdminFeeAmount(),
                 e.getApr(),
                 e.getPartnerId(),
                 e.getLeadId(),
@@ -215,9 +223,9 @@ public class LoanApplicationPersistenceMapper {
                 e.getPaymentGuardSessionId(),
                 e.getPaymentGuardStatus(),
                 // Status
-                ApplicationStatus.valueOf(e.getStatus()),
+                toDomainStatus(e.getStatus()),
                 e.getWorkflowId(),
-                e.getCurrentStage(),
+                resolveCurrentStage(e.getStatus(), e.getCurrentStage()),
                 e.getSubmittedAt(),
                 e.getExpiresAt(),
                 e.getIdempotencyKey(),
@@ -235,5 +243,36 @@ public class LoanApplicationPersistenceMapper {
         agg.setDisbursementScheduledAt(e.getDisbursementScheduledAt());
 
         return agg;
+    }
+
+    private ApplicationStatus toDomainStatus(String persistedStatus) {
+        if (persistedStatus == null || persistedStatus.isBlank()) {
+            return ApplicationStatus.DRAFT;
+        }
+        var normalizedStatus = persistedStatus.trim().toUpperCase(Locale.ROOT);
+        if ("MANUAL_REVIEW".equals(normalizedStatus)) {
+            // Manual review is a workflow-only state; domain aggregate remains at signed stage.
+            return ApplicationStatus.CONTRACT_SIGNED;
+        }
+        try {
+            return ApplicationStatus.valueOf(normalizedStatus);
+        } catch (IllegalArgumentException ex) {
+            return ApplicationStatus.DRAFT;
+        }
+    }
+
+    private String resolveCurrentStage(String persistedStatus, String persistedCurrentStage) {
+        if (persistedCurrentStage != null && !persistedCurrentStage.isBlank()) {
+            return persistedCurrentStage;
+        }
+        if (persistedStatus == null || persistedStatus.isBlank()) {
+            return persistedCurrentStage;
+        }
+        var normalizedStatus = persistedStatus.trim().toUpperCase(Locale.ROOT);
+        if ("MANUAL_REVIEW".equals(normalizedStatus)) {
+            // Backward compatibility for historical rows where stage was not persisted.
+            return "MANUAL_REVIEW";
+        }
+        return persistedCurrentStage;
     }
 }

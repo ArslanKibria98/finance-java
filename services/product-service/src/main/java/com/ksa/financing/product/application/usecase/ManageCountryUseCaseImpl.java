@@ -3,6 +3,8 @@ package com.ksa.financing.product.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.product.domain.model.Country;
 import com.ksa.financing.product.domain.port.in.ManageCountryUseCase;
 import com.ksa.financing.product.domain.port.out.CountryRepository;
@@ -12,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,44 +25,44 @@ public class ManageCountryUseCaseImpl implements ManageCountryUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Country> listCountries(UUID tenantId) {
-        log.debug("Listing countries for tenant: {}", tenantId);
-        return countryRepository.findAllByTenant(tenantId);
+    public PageResponse<Country> listCountries(UUID tenantId, PageQuery pageQuery) {
+        log.debug("Listing countries with pagination for tenant: {}", tenantId);
+        return countryRepository.findAllByTenant(tenantId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Country> listGccCountries(UUID tenantId) {
-        log.debug("Listing GCC countries for tenant: {}", tenantId);
-        return countryRepository.findGccByTenant(tenantId);
+    public PageResponse<Country> listGccCountries(UUID tenantId, PageQuery pageQuery) {
+        log.debug("Listing GCC countries with pagination for tenant: {}", tenantId);
+        return countryRepository.findGccByTenant(tenantId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Country> listArabLeagueCountries(UUID tenantId) {
-        log.debug("Listing Arab League countries for tenant: {}", tenantId);
-        return countryRepository.findArabLeagueByTenant(tenantId);
+    public PageResponse<Country> listArabLeagueCountries(UUID tenantId, PageQuery pageQuery) {
+        log.debug("Listing Arab League countries with pagination for tenant: {}", tenantId);
+        return countryRepository.findArabLeagueByTenant(tenantId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Country> listSanctionedCountries(UUID tenantId) {
-        log.debug("Listing sanctioned countries for tenant: {}", tenantId);
-        return countryRepository.findSanctionedByTenant(tenantId);
+    public PageResponse<Country> listSanctionedCountries(UUID tenantId, PageQuery pageQuery) {
+        log.debug("Listing sanctioned countries with pagination for tenant: {}", tenantId);
+        return countryRepository.findSanctionedByTenant(tenantId, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Country> listByRegion(UUID tenantId, String region) {
-        log.debug("Listing countries for tenant: {} region: {}", tenantId, region);
-        return countryRepository.findByRegion(tenantId, region);
+    public PageResponse<Country> listByRegion(UUID tenantId, String region, PageQuery pageQuery) {
+        log.debug("Listing countries by region={} with pagination for tenant: {}", region, tenantId);
+        return countryRepository.findByRegion(tenantId, region, pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Country> listByRiskTier(UUID tenantId, String riskTier) {
-        log.debug("Listing countries for tenant: {} riskTier: {}", tenantId, riskTier);
-        return countryRepository.findByRiskTier(tenantId, riskTier);
+    public PageResponse<Country> listByRiskTier(UUID tenantId, String riskTier, PageQuery pageQuery) {
+        log.debug("Listing countries by riskTier={} with pagination for tenant: {}", riskTier, tenantId);
+        return countryRepository.findByRiskTier(tenantId, riskTier, pageQuery);
     }
 
     @Override

@@ -1,8 +1,9 @@
 package com.ksa.financing.lending.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.domain.model.PurposeOfFinanceEntry;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ManagePurposeOfFinanceUseCase {
@@ -15,9 +16,9 @@ public interface ManagePurposeOfFinanceUseCase {
 
     PurposeOfFinanceEntry getById(UUID tenantId, UUID id);
 
-    List<PurposeOfFinanceEntry> listActive(UUID tenantId);
+    PageResponse<PurposeOfFinanceEntry> listActive(UUID tenantId, PageQuery query);
 
-    List<PurposeOfFinanceEntry> listAll(UUID tenantId);
+    PageResponse<PurposeOfFinanceEntry> listAll(UUID tenantId, PageQuery query);
 
     void delete(UUID tenantId, UUID id);
 }

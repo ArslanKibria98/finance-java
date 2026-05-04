@@ -3,6 +3,8 @@ package com.ksa.financing.product.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.product.domain.model.Product;
 import com.ksa.financing.product.domain.model.ProductStatus;
 import com.ksa.financing.product.domain.port.in.ManageProductUseCase;
@@ -108,6 +110,12 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
     @Transactional(readOnly = true)
     public List<Product> listByTenant(UUID tenantId) {
         return productRepository.findAllByTenant(tenantId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<Product> listByTenant(UUID tenantId, PageQuery query) {
+        return productRepository.findAllByTenant(tenantId, query);
     }
 
     @Override

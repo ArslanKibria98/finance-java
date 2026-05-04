@@ -1,13 +1,19 @@
 package com.ksa.financing.identity.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.identity.domain.model.Employee;
 import com.ksa.financing.identity.domain.port.out.EmployeeRepository;
+import com.ksa.financing.identity.infrastructure.persistence.entity.EmployeeJpaEntity;
 import com.ksa.financing.identity.infrastructure.persistence.mapper.EmployeePersistenceMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -15,6 +21,9 @@ import java.util.UUID;
 public class EmployeeRepositoryImpl implements EmployeeRepository {
 
     private final JpaEmployeeRepository jpaEmployeeRepository;
+
+    private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of("department", "jobTitle", "status");
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of("fullName", "email", "mobileNumber");
 
     @Override
     public Employee save(Employee employee) {
@@ -30,10 +39,18 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
     }
 
     @Override
-    public List<Employee> findAllByTenant(UUID tenantId) {
-        return jpaEmployeeRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .map(EmployeePersistenceMapper::toDomain)
-                .toList();
+    public PageResponse<Employee> findAllByTenant(UUID tenantId, PageQuery query) {
+        Specification<EmployeeJpaEntity> tenantSpec = (root, q, cb) -> cb.equal(root.get("tenantId"), tenantId);
+        
+        Specification<EmployeeJpaEntity> dynamic = SpecificationBuilder.<EmployeeJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(ALLOWED_FILTER_FIELDS)
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<EmployeeJpaEntity> page = jpaEmployeeRepository.findAll(tenantSpec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, EmployeePersistenceMapper::toDomain);
     }
 
     @Override

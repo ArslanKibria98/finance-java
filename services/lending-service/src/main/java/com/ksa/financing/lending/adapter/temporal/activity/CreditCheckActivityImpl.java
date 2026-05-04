@@ -212,10 +212,9 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
         log.info("Activity: Calculating offer for structure={}, amount={}",
                 input.shariaStructure(), input.principalAmount());
 
-        // Use BRD V1.8 formula (same as initiate endpoint) for consistent values
-        // Auto-detect: if value > 1, treat as percentage and convert to decimal
+        // Normalize rate: assume decimals if <= 0.5 (50%), otherwise assume percentage (e.g. 2.5)
         BigDecimal rate = input.profitRate();
-        BigDecimal decimalRate = rate.compareTo(BigDecimal.ONE) > 0
+        BigDecimal decimalRate = (rate != null && rate.compareTo(new BigDecimal("0.5")) > 0)
                 ? rate.movePointLeft(2)
                 : rate;
 
@@ -295,7 +294,8 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
      */
     private BigDecimal normalizeRate(BigDecimal rate) {
         if (rate == null) return BigDecimal.ZERO;
-        return rate.compareTo(BigDecimal.ONE) > 0
+        // Normalize: if > 0.5, assume it's a percentage (e.g., 2.5, 0.75) and convert to decimal (0.025, 0.0075)
+        return rate.compareTo(new BigDecimal("0.5")) > 0
                 ? rate.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)
                 : rate;
     }

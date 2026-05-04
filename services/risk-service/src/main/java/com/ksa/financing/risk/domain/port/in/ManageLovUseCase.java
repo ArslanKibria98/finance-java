@@ -1,11 +1,12 @@
 package com.ksa.financing.risk.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.lov.LovEntry;
 import com.ksa.financing.risk.domain.model.lov.LovCategoryType;
 import com.ksa.financing.risk.domain.model.lov.LovSet;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 public interface ManageLovUseCase {
@@ -17,9 +18,9 @@ public interface ManageLovUseCase {
 
     LovSet getLovSetById(UUID tenantId, UUID lovSetId);
 
-    List<LovSet> getAllLovSets(UUID tenantId);
+    PageResponse<LovSet> getAllLovSets(UUID tenantId, PageQuery pageQuery);
 
-    List<LovSet> getActiveLovSets(UUID tenantId);
+    PageResponse<LovSet> getActiveLovSets(UUID tenantId, PageQuery pageQuery);
 
     void deactivateLovSet(UUID tenantId, UUID lovSetId);
 
@@ -28,9 +29,9 @@ public interface ManageLovUseCase {
 
     LovEntry updateLovEntry(UUID tenantId, UUID entryId, UpdateLovEntryCommand command);
 
-    List<LovEntry> getEntriesByLovSet(UUID tenantId, UUID lovSetId);
+    PageResponse<LovEntry> getEntriesByLovSet(UUID tenantId, UUID lovSetId, PageQuery pageQuery);
 
-    List<LovEntry> getActiveEntriesByLovSet(UUID tenantId, UUID lovSetId);
+    PageResponse<LovEntry> getActiveEntriesByLovSet(UUID tenantId, UUID lovSetId, PageQuery pageQuery);
 
     void deactivateLovEntry(UUID tenantId, UUID entryId);
 

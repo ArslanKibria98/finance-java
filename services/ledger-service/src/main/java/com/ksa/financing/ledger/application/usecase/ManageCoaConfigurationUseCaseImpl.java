@@ -188,8 +188,8 @@ public class ManageCoaConfigurationUseCaseImpl implements ManageCoaConfiguration
     public ValidationResult validate(UUID tenantId, UUID profileId) {
         var profile = ensureProfile(tenantId, profileId);
         var mappings = configurationRepository.findMappingsByProfileId(tenantId, profileId);
-        var activeFields = fieldLovRepository.findAllActiveByTenant(tenantId);
-        var allFields = fieldLovRepository.findAllByTenant(tenantId);
+        var activeFields = fieldLovRepository.findAllActiveByTenant(tenantId, com.ksa.financing.infra.pagination.PageQuery.defaults(1000, "displayOrder", com.ksa.financing.infra.pagination.SortDirection.ASC)).content();
+        var allFields = fieldLovRepository.findAllByTenant(tenantId, com.ksa.financing.infra.pagination.PageQuery.defaults(1000, "displayOrder", com.ksa.financing.infra.pagination.SortDirection.ASC)).content();
         var fieldsById = allFields.stream().collect(java.util.stream.Collectors.toMap(f -> f.getId(), f -> f));
 
         var mappedFieldIds = mappings.stream().map(CoaConfigurationMapping::coaFieldId).collect(java.util.stream.Collectors.toSet());

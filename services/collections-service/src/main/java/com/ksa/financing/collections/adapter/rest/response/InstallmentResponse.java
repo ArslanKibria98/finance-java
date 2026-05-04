@@ -30,5 +30,13 @@ public record InstallmentResponse(
         // Computed: absolute discount (percentage × outstanding, or flat amount)
         BigDecimal earlySettlementTotalDiscount,
         // Computed: totalAmount - earlySettlementTotalDiscount when eligible, else totalAmount
-        BigDecimal payableAmount
+        BigDecimal payableAmount,
+        // Write-off fields
+        boolean isEligibleForWriteOff,
+        BigDecimal writtenOffPrincipal,
+        BigDecimal writtenOffProfit,
+        BigDecimal writtenOffFee,
+        BigDecimal writtenOffPenalty,
+        LocalDate writeOffDate,
+        String writeOffReason
 ) {}

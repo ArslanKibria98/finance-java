@@ -1,5 +1,7 @@
 package com.ksa.financing.middleware.adapter.rest.controller;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.middleware.application.dto.RequestLogResponse;
 import com.ksa.financing.middleware.domain.port.in.ManageRequestLogUseCase;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +11,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -37,11 +38,10 @@ public class RequestLogController {
 
     @SecuredEndpoint(obj = "middleware.logs", act = "read")
     @GetMapping
-    public ResponseEntity<List<RequestLogResponse>> listAll(@RequestParam(defaultValue = "0") int page,
-                                                             @RequestParam(defaultValue = "20") int size,
-                                                             @AuthenticationPrincipal Jwt jwt) {
+    public PageResponse<RequestLogResponse> listAll(PageQuery query,
+                                                     @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(manageRequestLogUseCase.listAll(tenantId, page, size));
+        return manageRequestLogUseCase.listAll(tenantId, query);
     }
 
     private UUID extractTenantId(Jwt jwt) {

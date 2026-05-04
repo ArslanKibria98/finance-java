@@ -143,6 +143,91 @@ public class FraudEventRepositoryImpl implements FraudEventRepository {
         return count != null ? count : 0;
     }
 
+    @Override
+    public long countByCustomerAndTypeBetween(UUID tenantId, String customerId, String eventType,
+                                              LocalDateTime from, LocalDateTime to) {
+        var count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fraud_events WHERE tenant_id = ? AND customer_id = ? " +
+                "AND event_type = ?::fraud_event_type AND event_timestamp >= ? AND event_timestamp < ?",
+                Long.class, tenantId, customerId, eventType,
+                Timestamp.valueOf(from), Timestamp.valueOf(to));
+        return count != null ? count : 0;
+    }
+
+    @Override
+    public List<FraudEvent> findDuplicateApplications(UUID tenantId, String customerId,
+                                                      String productType, BigDecimal amount,
+                                                      LocalDateTime since) {
+        return jdbcTemplate.query(
+                "SELECT * FROM fraud_events WHERE tenant_id = ? AND customer_id = ? " +
+                "AND event_type = 'LOAN_APPLICATION' AND loan_product_type = ? " +
+                "AND transaction_amount = ? AND event_timestamp >= ? " +
+                "ORDER BY event_timestamp DESC",
+                EVENT_MAPPER, tenantId, customerId, productType, amount, Timestamp.valueOf(since));
+    }
+
+    @Override
+    public long countDistinctCustomersByIban(String iban, LocalDateTime since) {
+        var count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT customer_id) FROM fraud_events " +
+                "WHERE disbursement_iban = ? AND event_timestamp >= ?",
+                Long.class, iban, Timestamp.valueOf(since));
+        return count != null ? count : 0;
+    }
+
+    @Override
+    public List<FraudEvent> findByIpAddress(String ipAddress, LocalDateTime since) {
+        return jdbcTemplate.query(
+                "SELECT * FROM fraud_events WHERE ip_address = ? AND event_timestamp >= ? " +
+                "ORDER BY event_timestamp DESC",
+                EVENT_MAPPER, ipAddress, Timestamp.valueOf(since));
+    }
+
+    @Override
+    public long countDistinctCardsByCustomer(UUID tenantId, String customerId, LocalDateTime since) {
+        var count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT card_last4) FROM fraud_events " +
+                "WHERE tenant_id = ? AND customer_id = ? AND card_last4 IS NOT NULL " +
+                "AND event_timestamp >= ?",
+                Long.class, tenantId, customerId, Timestamp.valueOf(since));
+        return count != null ? count : 0;
+    }
+
+    @Override
+    public List<FraudEvent> findRecentByType(UUID tenantId, String customerId,
+                                             String eventType, int limit) {
+        return jdbcTemplate.query(
+                "SELECT * FROM fraud_events WHERE tenant_id = ? AND customer_id = ? " +
+                "AND event_type = ?::fraud_event_type ORDER BY event_timestamp DESC LIMIT ?",
+                EVENT_MAPPER, tenantId, customerId, eventType, limit);
+    }
+
+    @Override
+    public List<FraudEvent> findLastNByCustomer(UUID tenantId, String customerId, int limit) {
+        return jdbcTemplate.query(
+                "SELECT * FROM fraud_events WHERE tenant_id = ? AND customer_id = ? " +
+                "ORDER BY event_timestamp DESC LIMIT ?",
+                EVENT_MAPPER, tenantId, customerId, limit);
+    }
+
+    @Override
+    public long countReversalsForCustomer(UUID tenantId, String customerId) {
+        var count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fraud_events WHERE tenant_id = ? AND customer_id = ? " +
+                "AND transaction_type = 'PAYMENT_REVERSAL'",
+                Long.class, tenantId, customerId);
+        return count != null ? count : 0;
+    }
+
+    @Override
+    public long countReversalsForLoan(UUID tenantId, String customerId, String loanApplicationId) {
+        var count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fraud_events WHERE tenant_id = ? AND customer_id = ? " +
+                "AND loan_application_id = ? AND transaction_type = 'PAYMENT_REVERSAL'",
+                Long.class, tenantId, customerId, loanApplicationId);
+        return count != null ? count : 0;
+    }
+
     private static final RowMapper<FraudEvent> EVENT_MAPPER = (rs, rowNum) -> {
         var deviceInfo = new DeviceInfo(
                 rs.getString("device_id"),

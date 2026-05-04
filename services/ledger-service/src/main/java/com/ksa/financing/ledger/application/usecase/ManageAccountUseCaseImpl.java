@@ -3,6 +3,8 @@ package com.ksa.financing.ledger.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.ledger.domain.model.AccountAggregate;
 import com.ksa.financing.ledger.domain.model.AccountId;
 import com.ksa.financing.ledger.domain.port.in.ManageAccountUseCase;
@@ -13,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -102,8 +103,8 @@ public class ManageAccountUseCaseImpl implements ManageAccountUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AccountAggregate> listByTenant(UUID tenantId) {
-        return accountRepository.findAllByTenant(tenantId);
+    public PageResponse<AccountAggregate> listByTenant(UUID tenantId, PageQuery query) {
+        return accountRepository.findAllByTenant(tenantId, query);
     }
 
     @Override
