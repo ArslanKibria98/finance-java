@@ -13,6 +13,10 @@ public interface JpaCustomerRepository extends JpaRepository<CustomerJpaEntity, 
     Optional<CustomerJpaEntity> findByIdAndTenantIdAndDeletedAtIsNull(UUID id, UUID tenantId);
 
     Optional<CustomerJpaEntity> findByIdAndDeletedAtIsNull(UUID id);
+    
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select c from CustomerJpaEntity c where c.id = :id and c.deletedAt is null")
+    Optional<CustomerJpaEntity> findWithLockById(UUID id);
 
     Optional<CustomerJpaEntity> findByCifNumberAndTenantIdAndDeletedAtIsNull(String cifNumber, UUID tenantId);
 

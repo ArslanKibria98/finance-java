@@ -18,8 +18,9 @@ public class UnifonicMockProvider implements MockResponseProvider {
     @Override
     public MockResponseResult getMockResponse(String apiCode, String requestBody) {
         return switch (apiCode) {
-            case "UNIFONIC_SEND_OTP" -> smsResponse();
-            case "UNIFONIC_IVR" -> ivrInitiate();
+            case "UNIFONIC_SEND_OTP", "UNIFONIC_OTP_SEND" -> smsResponse();
+            case "UNIFONIC_OTP_VERIFY" -> otpVerifyResponse();
+            case "UNIFONIC_IVR", "UNIFONIC_IVR_CALL" -> ivrInitiate();
             case "UNIFONIC_IVR_STATUS" -> ivrStatus();
             default -> fallbackResponse();
         };
@@ -44,6 +45,17 @@ public class UnifonicMockProvider implements MockResponseProvider {
                     "callId": "%s"
                 }
                 """.formatted(callId);
+        return new MockResponseResult(200, body, HEADERS);
+    }
+
+    private MockResponseResult otpVerifyResponse() {
+        var body = """
+                {
+                    "Status": "Verified",
+                    "MessageId": "MSG-%s",
+                    "verified": true
+                }
+                """.formatted(UUID.randomUUID().toString().substring(0, 8));
         return new MockResponseResult(200, body, HEADERS);
     }
 

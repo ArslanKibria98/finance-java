@@ -86,7 +86,12 @@ private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
                                 BigDecimal revenueThreshold, BigDecimal maxDbrPct,
                                 String dbrMethod, String dbrExceptions,
                                 BigDecimal maxDti, Integer minAge, Integer maxAge,
-                                BigDecimal gdbrPercentage) {
+                                BigDecimal gdbrPercentage,
+                                Boolean penaltyWaiverAllowed,
+                                Integer maxPenaltyWaiversAllowed,
+                                BigDecimal minFinancingAmount,
+                                BigDecimal maxFinancingAmount,
+                                BigDecimal vatPercentage) {
         log.debug("Saving fee settings for productId={}", productId);
         var now = OffsetDateTime.now(ZoneOffset.UTC);
 
@@ -107,6 +112,11 @@ private final JpaTermsConditionsRepository jpaTermsConditionsRepository;
         entity.setMinAge(minAge);
         entity.setMaxAge(maxAge);
         entity.setGdbrPercentage(gdbrPercentage);
+        entity.setPenaltyWaiverAllowed(penaltyWaiverAllowed);
+        entity.setMaxPenaltyWaiversAllowed(maxPenaltyWaiversAllowed);
+        entity.setMinFinancingAmount(minFinancingAmount);
+        entity.setMaxFinancingAmount(maxFinancingAmount);
+        entity.setVatPercentage(vatPercentage);
         entity.setUpdatedAt(now);
 
         jpaFeeSettingsRepository.save(entity);

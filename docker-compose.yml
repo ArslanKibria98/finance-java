@@ -171,7 +171,7 @@ services:
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - xpack.security.enabled=false
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
@@ -549,6 +549,7 @@ services:
       TEMPORAL_SERVER_PORT: 7233
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
     depends_on:
       postgres:
         condition: service_healthy
@@ -593,6 +594,7 @@ services:
       FINERACT_PASSWORD: password
       FINERACT_TENANT_ID: default
       FINERACT_SAVINGS_PRODUCT_ID: 1
+      CUSTOMER_SERVICE_URL: http://customer-service:8084
     depends_on:
       postgres:
         condition: service_healthy
@@ -669,6 +671,7 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       FRAUD_SERVICE_URL: http://fraud-service:8092
       PRODUCT_SERVICE_URL: http://product-service:8091
+      MIDDLEWARE_SERVICE_URL: http://middleware-third-party:8093
     depends_on:
       postgres:
         condition: service_healthy
@@ -792,6 +795,7 @@ services:
       MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
       NOTIFICATION_SERVICE_URL: http://notification-service:8096
       LEDGER_SERVICE_URL: http://ledger-service:8095
+      WALLET_SERVICE_URL: http://wallet-service:8088
       GL_ACCOUNT_LOANS_RECEIVABLE: "1200"
       GL_ACCOUNT_BANK_DISBURSEMENT: "1010"
       GL_ACCOUNT_PROFIT_RECEIVABLE: "1300"
@@ -843,6 +847,8 @@ services:
       KAFKA_TOPIC_LEDGER_ENTRY_POSTED: financing.ledger.entry.posted
       KAFKA_TOPIC_LEDGER_ENTRY_SYNCED: financing.ledger.entry.synced
       KAFKA_TOPIC_RECONCILIATION_DISCREPANCY: financing.reconciliation.discrepancy
+      # GL account code for the balancing leg of admin-movements API (COA must exist for each tenant)
+      LEDGER_ADMIN_ADJUSTMENT_OFFSET_ACCOUNT_CODE: ${LEDGER_ADMIN_ADJUSTMENT_OFFSET_ACCOUNT_CODE:-3000}
     depends_on:
       postgres:
         condition: service_healthy

@@ -64,6 +64,8 @@ public class AdminDunningPolicyController {
                 request.autoAssignAgent(),
                 request.agentAssignmentDpd(),
                 request.walletFreezeDpd(),
+                request.penaltyWaiverAllowed(),
+                defaultInt(request.maxPenaltyWaiversAllowed(), 1),
                 userId);
 
         var policy = manageUseCase.createPolicy(command);
@@ -96,6 +98,8 @@ public class AdminDunningPolicyController {
                 request.autoAssignAgent(),
                 request.agentAssignmentDpd(),
                 request.walletFreezeDpd(),
+                request.penaltyWaiverAllowed(),
+                request.maxPenaltyWaiversAllowed(),
                 userId);
 
         return ResponseEntity.ok(toResponse(manageUseCase.updatePolicy(command)));
@@ -145,16 +149,22 @@ public class AdminDunningPolicyController {
     }
 
     @GetMapping
-    @Operation(summary = "List dunning policies for the current tenant")
+    @Operation(summary = "List dunning policies for the current tenant. Optional ?search= filters by policyName, productCode, description (case-insensitive LIKE).")
     @SecuredEndpoint(obj = "dunning.policies", act = "read")
     public ResponseEntity<List<DunningPolicyResponse>> list(
             @RequestParam(value = "activeOnly", required = false, defaultValue = "false") boolean activeOnly,
+            @RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(
-                manageUseCase.listPolicies(tenantId, activeOnly).stream()
-                        .map(this::toResponse)
-                        .toList());
+        String term = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        var responses = manageUseCase.listPolicies(tenantId, activeOnly).stream()
+                .map(this::toResponse)
+                .filter(p -> term == null
+                        || (p.policyName() != null && p.policyName().toLowerCase().contains(term))
+                        || (p.productCode() != null && p.productCode().toLowerCase().contains(term))
+                        || (p.description() != null && p.description().toLowerCase().contains(term)))
+                .toList();
+        return ResponseEntity.ok(responses);
     }
 
     @DeleteMapping("/{policyId}")
@@ -298,6 +308,7 @@ public class AdminDunningPolicyController {
                 lf.flatAmount(), lf.percentage(), lf.minDpd(), lf.maxAmount(), lf.charityFundAccount(),
                 s.enabled(), s.reportDpd(), s.defaultStatusDpd(),
                 p.isAutoAssignAgent(), p.getAgentAssignmentDpd(), p.getWalletFreezeDpd(),
+                p.isPenaltyWaiverAllowed(), p.getMaxPenaltyWaiversAllowed(),
                 p.getStageActions(),
                 p.getVersion(), p.getCreatedAt(), p.getUpdatedAt(),
                 p.getCreatedBy(), p.getUpdatedBy());

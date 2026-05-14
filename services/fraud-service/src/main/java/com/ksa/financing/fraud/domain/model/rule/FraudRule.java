@@ -17,6 +17,8 @@ public record FraudRule(
     String detectionLogic,
     FraudDecision defaultAction,
     FraudBlockType blockType,
+    UUID blockCodeId,
+    String blockCode,
     FraudRuleStatus status,
     List<RuleParameter> parameters,
     int priority,

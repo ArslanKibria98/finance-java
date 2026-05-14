@@ -8,6 +8,7 @@ import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.lending.adapter.rest.request.*;
 import com.ksa.financing.lending.adapter.rest.response.ApplicationTrackerResponse;
 import com.ksa.financing.lending.adapter.rest.response.BankAccountInfoResponse;
+import com.ksa.financing.lending.adapter.rest.response.InstallmentScheduleResponse;
 import com.ksa.financing.lending.adapter.rest.response.LoanApplicationResponse;
 import com.ksa.financing.lending.adapter.rest.response.LoanApplicationStepInfo;
 import com.ksa.financing.lending.adapter.rest.response.PreQualificationData;
@@ -52,6 +53,10 @@ import java.util.UUID;
 @Tag(name = "Loan Applications", description = "Loan application workflow endpoints (signal-driven)")
 public class LoanApplicationController {
 
+    // Sub-halala rounding tolerance for "loan fully paid" detection. Payment allocation
+    // can leave at most a few halalas (< 1 SAR) outstanding due to rounding to 2 dp.
+    private static final java.math.BigDecimal FULLY_PAID_TOLERANCE = new java.math.BigDecimal("1.00");
+
     private final ManageLoanApplicationUseCase useCase;
     private final com.ksa.financing.lending.domain.port.in.ManageLoanUseCase loanUseCase;
     private final com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase checkEligibilityUseCase;
@@ -60,6 +65,7 @@ public class LoanApplicationController {
     private final BankAccountLookupService bankAccountLookupService;
     private final com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort;
     private final com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRescheduleRepository rescheduleRepository;
+    private final com.ksa.financing.lending.infrastructure.persistence.repository.JpaAmortizationScheduleRepository amortizationScheduleRepository;
     private final org.springframework.web.client.RestTemplate restTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
@@ -80,6 +86,7 @@ public class LoanApplicationController {
                                       BankAccountLookupService bankAccountLookupService,
                                       com.ksa.financing.lending.domain.port.out.ProductConfigPort productConfigPort,
                                       com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRescheduleRepository rescheduleRepository,
+                                      com.ksa.financing.lending.infrastructure.persistence.repository.JpaAmortizationScheduleRepository amortizationScheduleRepository,
                                       org.springframework.web.client.RestTemplate restTemplate,
                                       com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.useCase = useCase;
@@ -90,6 +97,7 @@ public class LoanApplicationController {
         this.bankAccountLookupService = bankAccountLookupService;
         this.productConfigPort = productConfigPort;
         this.rescheduleRepository = rescheduleRepository;
+        this.amortizationScheduleRepository = amortizationScheduleRepository;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
     }
@@ -848,7 +856,9 @@ public class LoanApplicationController {
         log.info("Request to cancel application: {} by user: {}", applicationId, userId);
 
         // 1. Check if cancellable (before disbursement)
-        if (app.getStatus() == ApplicationStatus.DISBURSING || app.getStatus() == ApplicationStatus.APPROVED) {
+        if (app.getStatus() == ApplicationStatus.DISBURSING
+                || app.getStatus() == ApplicationStatus.APPROVED
+                || app.getStatus() == ApplicationStatus.DISBURSED) {
             throw new BusinessException(ErrorCodes.BAD_REQUEST, "Application cannot be cancelled after disbursement has initiated");
         }
 
@@ -1066,8 +1076,15 @@ public class LoanApplicationController {
         var applications = useCase.listApplicationsByCustomer(
                 tenantId, customerId, new PageQuery(0, 100, null, null, null));
 
+        // Include APPROVED (disbursed) apps too — only exclude REJECTED / CANCELLED / EXPIRED.
+        // Customer's most recent successful application should still surface here.
         var inProgressOpt = applications.content().stream()
-                .filter(app -> !app.getStatus().isTerminal())
+                .filter(app -> {
+                    var s = app.getStatus();
+                    return s != ApplicationStatus.REJECTED
+                            && s != ApplicationStatus.CANCELLED
+                            && s != ApplicationStatus.EXPIRED;
+                })
                 .max(java.util.Comparator.comparing(
                         LoanApplicationAggregate::getCreatedAt,
                         java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())));
@@ -1077,6 +1094,13 @@ public class LoanApplicationController {
         }
 
         var inProgress = inProgressOpt.get();
+
+        // If the linked loan is fully repaid (every installment paid/waived or loan settled/closed),
+        // hide the application from the "latest" view — customer has no outstanding loan to act on.
+        if (isLoanFullyPaid(tenantId, inProgress.getId().getValue(), jwt)) {
+            return ResponseEntity.ok(buildEnvelope(null, "No active application"));
+        }
+
         String step = inProgress.getStatus().getStepperLabel();
 
         StepSignalResponse body;
@@ -1100,10 +1124,344 @@ public class LoanApplicationController {
                 body.status(),
                 body.nextAction(),
                 body.steps(),
-                null,
+                body.preQualification(),
                 null
         );
-        return ResponseEntity.ok(buildEnvelope(slim, "success"));
+
+        var dataMap = objectMapper.convertValue(slim, new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Object>>() {});
+        dataMap.put("product", buildProductObject(tenantId, inProgress.getProductId()));
+        var currentInstallment = buildCurrentInstallmentObject(tenantId, inProgress.getId().getValue(), jwt);
+        if (currentInstallment != null) {
+            dataMap.put("currentInstallment", currentInstallment);
+        }
+        return ResponseEntity.ok(buildEnvelope(dataMap, "success"));
+    }
+
+    /**
+     * Returns the next unpaid installment for a disbursed loan in the same shape as
+     * {@link InstallmentScheduleResponse} (mirrors GET /api/v1/loans/{loanId}/installments).
+     * Returns null when no loan exists, the schedule is unavailable, or every installment is paid.
+     *
+     * Source priority:
+     *   1) Local amortization_schedule DB rows (authoritative breakdown — principal / profit / fee / closing balance)
+     *      enriched with the collections snapshot for delinquency/penalty fields.
+     *   2) collections-service live schedule (when DB rows are absent).
+     *   3) Local fallback computed from the loan aggregate so the customer view still works
+     *      before the Kafka-driven schedule lands.
+     */
+    private InstallmentScheduleResponse buildCurrentInstallmentObject(UUID tenantId, UUID applicationId, Jwt jwt) {
+        com.ksa.financing.lending.domain.model.LoanAggregate loan;
+        try {
+            loan = loanUseCase.getLoanByApplicationId(tenantId, applicationId);
+        } catch (Exception e) {
+            return null;
+        }
+
+        var loanId = loan.getId().getValue();
+        var collectionsSnapshots = fetchCollectionsSnapshotsByInstallment(loanId, jwt);
+
+        var dbSchedules = amortizationScheduleRepository
+                .findByLoanIdAndActiveOrderByInstallmentNumberAsc(loanId, true);
+
+        if (!dbSchedules.isEmpty()) {
+            for (var row : dbSchedules) {
+                var snapshot = collectionsSnapshots.get(row.getInstallmentNumber());
+                var rawStatus = snapshot != null ? jsonString(snapshot, "status") : row.getPaymentStatus();
+                var status = normalizeInstallmentStatus(rawStatus != null ? rawStatus : row.getPaymentStatus());
+                if (isPaidStatus(status)) {
+                    continue;
+                }
+                return buildFromDbRow(loanId, row, status, snapshot);
+            }
+            return null;
+        }
+
+        var fromCollections = fetchNextInstallmentFromCollections(loanId, jwt, collectionsSnapshots);
+        if (fromCollections != null) {
+            return fromCollections;
+        }
+        return computeNextInstallmentFromLoan(loanId, loan);
+    }
+
+    private InstallmentScheduleResponse buildFromDbRow(
+            UUID loanId,
+            com.ksa.financing.lending.infrastructure.persistence.entity.AmortizationScheduleJpaEntity row,
+            String status,
+            java.util.Map<String, Object> delinquencySnapshot) {
+        var invoiceId = buildInvoiceId(loanId, row.getInstallmentNumber());
+        var principal = row.getPrincipalComponent() != null ? row.getPrincipalComponent() : java.math.BigDecimal.ZERO;
+        var fee = row.getFeeComponent() != null ? row.getFeeComponent() : java.math.BigDecimal.ZERO;
+        var total = row.getTotalInstallment() != null ? row.getTotalInstallment() : java.math.BigDecimal.ZERO;
+        var profit = total.subtract(principal).subtract(fee).max(java.math.BigDecimal.ZERO);
+        var isPaid = isPaidStatus(status);
+        return new InstallmentScheduleResponse(
+                invoiceId,
+                row.getInstallmentNumber(),
+                row.getDueDate(),
+                total,
+                principal,
+                profit,
+                fee,
+                row.getClosingPrincipal(),
+                status,
+                isPaid ? java.time.LocalDate.now() : null,
+                isPaid ? total : null,
+                isPaid,
+                delinquencySnapshot
+        );
+    }
+
+    private String buildInvoiceId(UUID loanId, int installmentNumber) {
+        var prefix = loanId.toString().replace("-", "").substring(0, 8).toUpperCase();
+        return "INV-" + prefix + "-" + String.format("%03d", installmentNumber);
+    }
+
+    private boolean isPaidStatus(String status) {
+        return "PAID".equalsIgnoreCase(status) || "COMPLETED".equalsIgnoreCase(status) || "WAIVED".equalsIgnoreCase(status);
+    }
+
+    @SuppressWarnings("unchecked")
+    private java.util.Map<Integer, java.util.Map<String, Object>> fetchCollectionsSnapshotsByInstallment(UUID loanId, Jwt jwt) {
+        try {
+            var headers = new HttpHeaders();
+            headers.setBearerAuth(jwt.getTokenValue());
+            var url = collectionsServiceUrl + "/api/v1/repayment-schedules/by-loan/" + loanId;
+            var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return java.util.Map.of();
+            }
+            var installments = objectMapper.readTree(response.getBody()).path("data").path("installments");
+            if (!installments.isArray()) {
+                return java.util.Map.of();
+            }
+            var out = new java.util.HashMap<Integer, java.util.Map<String, Object>>();
+            for (var item : installments) {
+                int n = item.path("installmentNumber").asInt(-1);
+                if (n <= 0) continue;
+                out.put(n, objectMapper.convertValue(item, java.util.Map.class));
+            }
+            return out;
+        } catch (Exception e) {
+            log.debug("Collections snapshot unavailable for loanId={} ({})", loanId, e.getMessage());
+            return java.util.Map.of();
+        }
+    }
+
+    private String jsonString(java.util.Map<String, Object> map, String key) {
+        var v = map.get(key);
+        return v == null ? null : v.toString();
+    }
+
+    private String normalizeInstallmentStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "PENDING";
+        }
+        return switch (status.toUpperCase()) {
+            case "PAID", "COMPLETED", "OVERDUE", "PARTIALLY_PAID",
+                 "DUE", "GRACE_PERIOD", "WAIVED", "DEFERRED" -> status.toUpperCase();
+            default -> "PENDING";
+        };
+    }
+
+    /**
+     * Returns true when the customer has no outstanding installments on this application's loan:
+     * either the loan is in a terminal state (SETTLED/CLOSED/WRITTEN_OFF) or the collections
+     * schedule reports every installment as PAID/COMPLETED/WAIVED. Returns false when the loan
+     * is missing, the schedule is unavailable, or any installment is still due.
+     */
+    private boolean isLoanFullyPaid(UUID tenantId, UUID applicationId, Jwt jwt) {
+        com.ksa.financing.lending.domain.model.LoanAggregate loan;
+        try {
+            loan = loanUseCase.getLoanByApplicationId(tenantId, applicationId);
+        } catch (Exception e) {
+            return false;
+        }
+
+        if (loan.getStatus() != null && loan.getStatus().isTerminal()) {
+            return true;
+        }
+
+        try {
+            var headers = new HttpHeaders();
+            headers.setBearerAuth(jwt.getTokenValue());
+            var url = collectionsServiceUrl + "/api/v1/repayment-schedules/by-loan/" + loan.getId().getValue();
+            var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return false;
+            }
+            var dataNode = objectMapper.readTree(response.getBody()).path("data");
+
+            // collections-service marks the aggregate fullyPaid once every installment is settled.
+            if (dataNode.path("fullyPaid").asBoolean(false)) {
+                return true;
+            }
+
+            // Tolerate sub-halala (< 1 SAR) rounding remainders at the schedule level —
+            // payment allocation rounding can leave 0.01 SAR outstanding even when the
+            // customer has paid the full advertised installment amount.
+            var totalAmount = decimalNode(dataNode, "totalAmount");
+            var paidTotal = decimalNode(dataNode, "paidTotal");
+            if (totalAmount != null && paidTotal != null
+                    && totalAmount.subtract(paidTotal).abs().compareTo(FULLY_PAID_TOLERANCE) < 0) {
+                return true;
+            }
+
+            var installmentsNode = dataNode.path("installments");
+            if (!installmentsNode.isArray() || installmentsNode.isEmpty()) {
+                return false;
+            }
+            for (var item : installmentsNode) {
+                var status = item.path("status").asText("").toUpperCase();
+                if ("PAID".equals(status) || "COMPLETED".equals(status) || "WAIVED".equals(status)) {
+                    continue;
+                }
+                // PARTIALLY_PAID / PENDING / OVERDUE with sub-1-SAR outstanding still
+                // counts as settled for the "latest application" check.
+                var iTotal = decimalNode(item, "totalAmount");
+                var iPaid = decimalNode(item, "paidTotal");
+                if (iTotal != null && iPaid != null
+                        && iTotal.subtract(iPaid).abs().compareTo(FULLY_PAID_TOLERANCE) < 0) {
+                    continue;
+                }
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            log.debug("Could not verify full-payment state for loanId={} ({}), assuming active",
+                    loan.getId().getValue(), e.getMessage());
+            return false;
+        }
+    }
+
+    private InstallmentScheduleResponse fetchNextInstallmentFromCollections(
+            UUID loanId, Jwt jwt, java.util.Map<Integer, java.util.Map<String, Object>> snapshots) {
+        if (snapshots == null || snapshots.isEmpty()) {
+            return null;
+        }
+
+        java.util.Map<String, Object> next = null;
+        int nextNumber = Integer.MAX_VALUE;
+        for (var entry : snapshots.entrySet()) {
+            var snap = entry.getValue();
+            var status = normalizeInstallmentStatus(jsonString(snap, "status"));
+            if (isPaidStatus(status)) continue;
+            int n = entry.getKey();
+            if (n < nextNumber) {
+                nextNumber = n;
+                next = snap;
+            }
+        }
+        if (next == null) {
+            return null;
+        }
+
+        var status = normalizeInstallmentStatus(jsonString(next, "status"));
+        var isPaid = isPaidStatus(status);
+        var total = decimalFrom(next, "totalAmount");
+        var principal = decimalFrom(next, "principalAmount");
+        var profit = decimalFrom(next, "profitAmount");
+        var fee = decimalFrom(next, "feeAmount");
+        var dueDate = parseLocalDate(jsonString(next, "dueDate"));
+
+        return new InstallmentScheduleResponse(
+                buildInvoiceId(loanId, nextNumber),
+                nextNumber,
+                dueDate,
+                total,
+                principal,
+                profit,
+                fee != null ? fee : java.math.BigDecimal.ZERO,
+                null,
+                status,
+                isPaid ? java.time.LocalDate.now() : null,
+                isPaid && total != null ? total : null,
+                isPaid,
+                next
+        );
+    }
+
+    private InstallmentScheduleResponse computeNextInstallmentFromLoan(
+            UUID loanId, com.ksa.financing.lending.domain.model.LoanAggregate loan) {
+        var installmentAmount = loan.getInstallmentAmount();
+        var tenure = loan.getTenureMonths();
+        if (installmentAmount == null || tenure <= 0) {
+            return null;
+        }
+        var firstDueDate = loan.getFirstDueDate();
+        if (firstDueDate == null) {
+            var disbursement = loan.getDisbursementDate() != null
+                    ? loan.getDisbursementDate() : java.time.LocalDate.now();
+            firstDueDate = disbursement.plusMonths(1);
+        }
+
+        var today = java.time.LocalDate.now();
+        int nextNumber = 1;
+        var nextDueDate = firstDueDate;
+        while (nextNumber < tenure && nextDueDate.plusMonths(1).isBefore(today.plusDays(1))) {
+            nextNumber++;
+            nextDueDate = firstDueDate.plusMonths(nextNumber - 1);
+        }
+
+        var tenureBD = java.math.BigDecimal.valueOf(tenure);
+        var principalPortion = loan.getPrincipalAmount() != null
+                ? loan.getPrincipalAmount().divide(tenureBD, 2, java.math.RoundingMode.HALF_UP)
+                : java.math.BigDecimal.ZERO;
+        var profitPortion = loan.getProfitAmount() != null
+                ? loan.getProfitAmount().divide(tenureBD, 2, java.math.RoundingMode.HALF_UP)
+                : java.math.BigDecimal.ZERO;
+        var feePortion = installmentAmount.subtract(principalPortion).subtract(profitPortion).max(java.math.BigDecimal.ZERO);
+
+        long daysOverdue = nextDueDate.isBefore(today)
+                ? java.time.temporal.ChronoUnit.DAYS.between(nextDueDate, today) : 0L;
+        var status = daysOverdue > 0 ? "OVERDUE" : "PENDING";
+
+        return new InstallmentScheduleResponse(
+                buildInvoiceId(loanId, nextNumber),
+                nextNumber,
+                nextDueDate,
+                installmentAmount,
+                principalPortion,
+                profitPortion,
+                feePortion,
+                null,
+                status,
+                null,
+                null,
+                false,
+                null
+        );
+    }
+
+    private java.math.BigDecimal decimalFrom(java.util.Map<String, Object> source, String key) {
+        var v = source.get(key);
+        if (v == null) return null;
+        try { return new java.math.BigDecimal(v.toString()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private java.time.LocalDate parseLocalDate(String value) {
+        if (value == null || value.isBlank()) return null;
+        try { return java.time.LocalDate.parse(value); } catch (java.time.format.DateTimeParseException e) { return null; }
+    }
+
+    private java.math.BigDecimal decimalNode(com.fasterxml.jackson.databind.JsonNode node, String field) {
+        var v = node.path(field);
+        if (v.isMissingNode() || v.isNull()) return null;
+        try { return new java.math.BigDecimal(v.asText()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private java.util.Map<String, Object> buildProductObject(UUID tenantId, UUID productId) {
+        var product = new java.util.LinkedHashMap<String, Object>();
+        if (productId == null) {
+            product.put("id", null);
+            product.put("name_en", null);
+            product.put("name_ar", null);
+            return product;
+        }
+        var summary = productConfigPort.fetchProductSummary(tenantId, productId.toString()).orElse(null);
+        product.put("id", summary != null && summary.id() != null ? summary.id() : productId.toString());
+        product.put("name_en", summary != null ? summary.nameEn() : null);
+        product.put("name_ar", summary != null ? summary.nameAr() : null);
+        return product;
     }
 
     private java.util.Map<String, Object> buildEnvelope(Object data, String message) {
@@ -1136,18 +1494,7 @@ public class LoanApplicationController {
             var statusInfo = workflow.getApplicationStatus();
 
             if (statusInfo != null) {
-                BigDecimal trackerTotalPayable = statusInfo.offer() != null
-                        ? statusInfo.offer().totalPayable() : null;
-
-                // If no offer yet but basicInfo exists, calculate preliminary totalPayable
-                if (trackerTotalPayable == null && statusInfo.basicInfo() != null
-                        && statusInfo.basicInfo().requestedAmount() != null
-                        && statusInfo.basicInfo().requestedTenureMonths() > 0) {
-                    trackerTotalPayable = calculatePreliminaryTotalPayable(
-                            tenantId, statusInfo.basicInfo().requestedAmount(),
-                            statusInfo.basicInfo().requestedTenureMonths(),
-                            statusInfo.basicInfo().productId());
-                }
+                BigDecimal trackerTotalPayable = resolveTotalPayable(statusInfo);
 
                 return ResponseEntity.ok(ApplicationTrackerResponse.build(
                         statusInfo.applicationId(),
@@ -1174,11 +1521,21 @@ public class LoanApplicationController {
 
         var latest = appsPage.content().get(0);
         BigDecimal dbTotalPayable = latest.getOfferedTotalPayable();
-        if (dbTotalPayable == null && latest.getRequestedAmount() != null && latest.getRequestedTenureMonths() > 0) {
+        if (dbTotalPayable != null) {
+            BigDecimal safeAmount = latest.getAcceptedAmount() != null ? latest.getAcceptedAmount() : 
+                                    (latest.getOfferedAmount() != null ? latest.getOfferedAmount() : BigDecimal.ZERO);
+            BigDecimal safeProfit = latest.getOfferedTotalProfit() != null ? latest.getOfferedTotalProfit() : BigDecimal.ZERO;
+            BigDecimal safeProcFee = latest.getProcessingFee() != null ? latest.getProcessingFee() : BigDecimal.ZERO;
+            BigDecimal safeAdminFee = latest.getAdminFee() != null ? latest.getAdminFee() : BigDecimal.ZERO;
+            BigDecimal expectedTotal = safeAmount.add(safeProfit).add(safeProcFee).add(safeAdminFee);
+            if (safeAmount.compareTo(BigDecimal.ZERO) > 0 && dbTotalPayable.compareTo(expectedTotal) < 0) {
+                dbTotalPayable = expectedTotal;
+            }
+        } else if (latest.getRequestedAmount() != null && latest.getRequestedTenureMonths() > 0) {
             dbTotalPayable = calculatePreliminaryTotalPayable(tenantId, latest.getRequestedAmount(),
                     latest.getRequestedTenureMonths(), latest.getProductId() != null ? latest.getProductId().toString() : null);
         }
-        return ResponseEntity.ok(ApplicationTrackerResponse.build(latest));
+        return ResponseEntity.ok(ApplicationTrackerResponse.build(latest, dbTotalPayable));
     }
 
     @SecuredEndpoint(obj = "loan-applications.tracker", act = "read")
@@ -1217,11 +1574,21 @@ public class LoanApplicationController {
 
         // Fallback: build from DB aggregate
         BigDecimal aggTotalPayable = aggregate.getOfferedTotalPayable();
-        if (aggTotalPayable == null && aggregate.getRequestedAmount() != null && aggregate.getRequestedTenureMonths() > 0) {
+        if (aggTotalPayable != null) {
+            BigDecimal safeAmount = aggregate.getAcceptedAmount() != null ? aggregate.getAcceptedAmount() : 
+                                    (aggregate.getOfferedAmount() != null ? aggregate.getOfferedAmount() : BigDecimal.ZERO);
+            BigDecimal safeProfit = aggregate.getOfferedTotalProfit() != null ? aggregate.getOfferedTotalProfit() : BigDecimal.ZERO;
+            BigDecimal safeProcFee = aggregate.getProcessingFee() != null ? aggregate.getProcessingFee() : BigDecimal.ZERO;
+            BigDecimal safeAdminFee = aggregate.getAdminFee() != null ? aggregate.getAdminFee() : BigDecimal.ZERO;
+            BigDecimal expectedTotal = safeAmount.add(safeProfit).add(safeProcFee).add(safeAdminFee);
+            if (safeAmount.compareTo(BigDecimal.ZERO) > 0 && aggTotalPayable.compareTo(expectedTotal) < 0) {
+                aggTotalPayable = expectedTotal;
+            }
+        } else if (aggregate.getRequestedAmount() != null && aggregate.getRequestedTenureMonths() > 0) {
             aggTotalPayable = calculatePreliminaryTotalPayable(tenantId, aggregate.getRequestedAmount(),
                     aggregate.getRequestedTenureMonths(), aggregate.getProductId() != null ? aggregate.getProductId().toString() : null);
         }
-        return ResponseEntity.ok(ApplicationTrackerResponse.build(aggregate));
+        return ResponseEntity.ok(ApplicationTrackerResponse.build(aggregate, aggTotalPayable));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1307,7 +1674,7 @@ public class LoanApplicationController {
             if (statusInfo != null) {
                 var s = statusInfo.status();
                 // Always stop on terminal states
-                if ("APPROVED".equals(s) || "REJECTED".equals(s)
+                if ("APPROVED".equals(s) || "DISBURSED".equals(s) || "REJECTED".equals(s)
                         || "CANCELLED".equals(s) || "EXPIRED".equals(s)) {
                     break;
                 }
@@ -1398,12 +1765,21 @@ public class LoanApplicationController {
                     }
                 } catch (Exception ignored) {}
 
+                BigDecimal preliminaryTotalPayable = null;
+                if (dto.offeredTotalPayable() == null && dto.requestedAmount() != null && dto.requestedTenureMonths() > 0) {
+                    preliminaryTotalPayable = calculatePreliminaryTotalPayable(tenantId, dto.requestedAmount(), dto.requestedTenureMonths(), dto.productId());
+                }
+
                 return LoanApplicationResponse.from(enriched, rescheduleId, rescheduleStatus,
-                        rescheduleType, rescheduleRequestedAt, rescheduleAppliedAt, rescheduleReason, rescheduleDetails);
+                        rescheduleType, rescheduleRequestedAt, rescheduleAppliedAt, rescheduleReason, rescheduleDetails, preliminaryTotalPayable);
             } catch (Exception e) {
                 // No loan yet for this application
+                BigDecimal preliminaryTotalPayable = null;
+                if (dto.offeredTotalPayable() == null && dto.requestedAmount() != null && dto.requestedTenureMonths() > 0) {
+                    preliminaryTotalPayable = calculatePreliminaryTotalPayable(tenantId, dto.requestedAmount(), dto.requestedTenureMonths(), dto.productId());
+                }
                 return LoanApplicationResponse.from(dto, rescheduleId, rescheduleStatus,
-                        rescheduleType, rescheduleRequestedAt, rescheduleAppliedAt, rescheduleReason, rescheduleDetails);
+                        rescheduleType, rescheduleRequestedAt, rescheduleAppliedAt, rescheduleReason, rescheduleDetails, preliminaryTotalPayable);
             }
         }).toList();
 
@@ -1429,7 +1805,18 @@ public class LoanApplicationController {
 
     private BigDecimal resolveTotalPayable(ApplicationStatusInfo statusInfo) {
         if (statusInfo.offer() != null && statusInfo.offer().totalPayable() != null) {
-            return statusInfo.offer().totalPayable();
+            BigDecimal totalPayable = statusInfo.offer().totalPayable();
+            BigDecimal safeAmount = statusInfo.offer().selectedAmount() != null ? statusInfo.offer().selectedAmount() :
+                                    (statusInfo.offer().maxAmount() != null ? statusInfo.offer().maxAmount() : BigDecimal.ZERO);
+            BigDecimal safeProfit = statusInfo.offer().totalProfit() != null ? statusInfo.offer().totalProfit() : BigDecimal.ZERO;
+            BigDecimal safeProcFee = statusInfo.offer().processingFee() != null ? statusInfo.offer().processingFee() : BigDecimal.ZERO;
+            BigDecimal safeAdminFee = statusInfo.offer().adminFee() != null ? statusInfo.offer().adminFee() : BigDecimal.ZERO;
+            
+            BigDecimal expectedTotal = safeAmount.add(safeProfit).add(safeProcFee).add(safeAdminFee);
+            if (safeAmount.compareTo(BigDecimal.ZERO) > 0 && totalPayable.compareTo(expectedTotal) < 0) {
+                return expectedTotal;
+            }
+            return totalPayable;
         }
         if (statusInfo.basicInfo() != null) {
             var bi = statusInfo.basicInfo();
@@ -1453,17 +1840,28 @@ public class LoanApplicationController {
             return null;
         }
         BigDecimal profitRate = new BigDecimal("0.025");
+        BigDecimal processingFeeAmount = BigDecimal.ZERO;
+        BigDecimal adminFeeAmount = BigDecimal.ZERO;
+
         try {
             var config = productConfigPort.fetchProductConfig(tenantId, productId, amount, tenureMonths);
             if (config.profitRate() != null) {
                 BigDecimal rate = config.profitRate();
                 profitRate = rate.compareTo(BigDecimal.ONE) > 0 ? rate.movePointLeft(2) : rate;
             }
+            if (config.processingFeeAmount() != null && config.processingFeeAmount().compareTo(BigDecimal.ZERO) > 0) {
+                processingFeeAmount = config.processingFeeAmount();
+            } else if (config.processingFeePercent() != null && config.processingFeePercent().compareTo(BigDecimal.ZERO) > 0) {
+                processingFeeAmount = amount.multiply(config.processingFeePercent()).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+            }
+            if (config.adminFeeAmount() != null) {
+                adminFeeAmount = config.adminFeeAmount();
+            }
         } catch (Exception ignored) {}
 
         try {
             var calc = com.ksa.financing.lending.domain.service.FinanceCalculationService.calculate(
-                    amount, profitRate, null, tenureMonths, null, null);
+                    amount, profitRate, null, tenureMonths, processingFeeAmount, adminFeeAmount);
             return calc.hasErrors() ? amount : calc.totalPayable();
         } catch (Exception e) {
             log.debug("Preliminary totalPayable calculation failed, returning amount: {}", e.getMessage());
@@ -1565,6 +1963,7 @@ public class LoanApplicationController {
         var steps = LoanApplicationStepInfo.buildSteps(statusStr);
         var nextAction = LoanApplicationStepInfo.getNextAction(statusStr);
         var overallStatus = switch (agg.getStatus()) {
+            case AWAIT_DISBURSED -> "await_disbursement";
             case APPROVED -> "approved";
             case REJECTED -> "rejected";
             case CANCELLED -> "cancelled";

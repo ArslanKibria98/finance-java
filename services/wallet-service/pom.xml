@@ -53,6 +53,11 @@
             <artifactId>wallet-activity-api</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <dependency>
+            <groupId>com.ksa.islamic.finance</groupId>
+            <artifactId>ledger-fineract-client-sdk</artifactId>
+            <version>1.0.0</version>
+        </dependency>
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

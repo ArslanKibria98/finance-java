@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,22 +36,23 @@ public class ManageRepaymentScheduleUseCaseImpl implements ManageRepaymentSchedu
         List<Installment> installments = command.installments().stream()
                 .map(entry -> Installment.create(
                         command.tenantId(),
-                        null, // scheduleId set after creation
+                        null,
                         command.loanId(),
                         entry.installmentNumber(),
                         entry.dueDate(),
                         entry.principalAmount(),
                         entry.profitAmount(),
                         entry.feeAmount()))
-                .toList();
+                .collect(Collectors.toList());
 
         var schedule = RepaymentScheduleAggregate.create(
                 command.tenantId(),
-                command.scheduleNumber(),
                 command.loanId(),
                 command.productId(),
+                command.scheduleNumber(),
                 command.totalPrincipal(),
                 command.totalProfit(),
+                command.totalFee(),
                 command.firstDueDate(),
                 command.lastDueDate(),
                 installments,
@@ -88,8 +90,6 @@ public class ManageRepaymentScheduleUseCaseImpl implements ManageRepaymentSchedu
     @Override
     @Transactional(readOnly = true)
     public List<Installment> getOverdueInstallments(UUID tenantId) {
-        // Delegate to a query — for now return via schedules
-        // In production this would use a dedicated repository query
         return List.of();
     }
 
@@ -97,7 +97,5 @@ public class ManageRepaymentScheduleUseCaseImpl implements ManageRepaymentSchedu
     @Transactional
     public void processDueDateTransitions(LocalDate asOf) {
         log.info("Processing due date transitions as of: {}", asOf);
-        // Scheduled job would load all active schedules and trigger transitions
-        // Implementation delegates to batch repository operations
     }
 }

@@ -98,8 +98,18 @@ app:
       timeout-ms: ${GOV_API_TIMEOUT:30000}
       retry-max-attempts: ${GOV_API_RETRY_ATTEMPTS:3}
     verification-queue: ${KYC_VERIFICATION_QUEUE:financing.kyc.verification}
+  middleware:
+    # Route all third-party stub calls through middleware-third-party so each
+    # request/response lands in client_request_{test|dev|prod} for audit.
+    base-url: ${MIDDLEWARE_THIRD_PARTY_URL:http://localhost:8093}
+    timeout-ms: ${MIDDLEWARE_TIMEOUT_MS:30000}
 
 ksa:
   authorization:
     enabled: true
     cache-key-prefix: casbin:policies
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true

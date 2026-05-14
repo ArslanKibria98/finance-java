@@ -65,7 +65,7 @@ public class CoordinatedSpikeEvaluator implements FraudRuleEvaluator {
         if (distinct.size() < min) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 distinct.size() + " distinct customers share attributes in " + windowHours + "h",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

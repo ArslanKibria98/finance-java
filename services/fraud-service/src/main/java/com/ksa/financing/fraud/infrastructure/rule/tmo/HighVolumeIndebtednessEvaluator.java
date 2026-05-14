@@ -41,7 +41,7 @@ public class HighVolumeIndebtednessEvaluator implements FraudRuleEvaluator {
         if (count <= max) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 count + " indebtedness requests in " + days + " days",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

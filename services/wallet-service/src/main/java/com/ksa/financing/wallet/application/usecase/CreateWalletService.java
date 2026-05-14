@@ -7,7 +7,7 @@ import com.ksa.financing.wallet.domain.model.WalletStatus;
 import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
 import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
-import com.ksa.financing.wallet.infrastructure.fineract.FineractWalletConfig;
+import com.ksa.financing.wallet.infrastructure.fineract.WalletFineractFeatureFlag;
 import com.ksa.islamic.orchestration.common.TaskQueue;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.WorkflowClient;
@@ -30,12 +30,12 @@ public class CreateWalletService implements CreateWalletUseCase {
     private final WalletRepository walletRepository;
     private final EventPublisherPort eventPublisher;
     private final WorkflowClient workflowClient;
-    private final FineractWalletConfig fineractConfig;
+    private final WalletFineractFeatureFlag fineractConfig;
 
     public CreateWalletService(WalletRepository walletRepository,
                                EventPublisherPort eventPublisher,
                                WorkflowClient workflowClient,
-                               FineractWalletConfig fineractConfig) {
+                               WalletFineractFeatureFlag fineractConfig) {
         this.walletRepository = walletRepository;
         this.eventPublisher = eventPublisher;
         this.workflowClient = workflowClient;
@@ -63,7 +63,13 @@ public class CreateWalletService implements CreateWalletUseCase {
         wallet.setSingleTopUpLimit(new BigDecimal("10000"));
         wallet.setTodayTopUpAmount(BigDecimal.ZERO);
         wallet.setMonthTopUpAmount(BigDecimal.ZERO);
-        wallet.setIban(command.iban() != null ? command.iban() : generateIban());
+        // IBAN: prefer caller-supplied. Otherwise, when Fineract sync is enabled we leave
+        // it null at creation and the FineractSync activity derives a deterministic IBAN
+        // from the Fineract savings account id (see FineractSyncActivityImpl.linkWalletToFineract).
+        // For mock/disabled mode we fall back to a random IBAN so the field stays populated.
+        wallet.setIban(command.iban() != null
+                ? command.iban()
+                : (fineractConfig.isEnabled() ? null : generateIban()));
         wallet.setAutoDebitEnabled(true);
 
         Wallet saved = walletRepository.save(wallet);

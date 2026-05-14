@@ -29,6 +29,7 @@ public class RepaymentScheduleAggregate {
     private final int totalInstallments;
     private final BigDecimal totalPrincipal;
     private final BigDecimal totalProfit;
+    private final BigDecimal totalFee;
     private final BigDecimal totalAmount;
 
     private final LocalDate firstDueDate;
@@ -43,6 +44,7 @@ public class RepaymentScheduleAggregate {
     private RepaymentScheduleAggregate(RepaymentScheduleId id, UUID tenantId,
                                         String scheduleNumber, UUID loanId,
                                         BigDecimal totalPrincipal, BigDecimal totalProfit,
+                                        BigDecimal totalFee,
                                         LocalDate firstDueDate, LocalDate lastDueDate,
                                         List<Installment> installments) {
         this.id = id;
@@ -51,7 +53,8 @@ public class RepaymentScheduleAggregate {
         this.loanId = loanId;
         this.totalPrincipal = totalPrincipal;
         this.totalProfit = totalProfit;
-        this.totalAmount = totalPrincipal.add(totalProfit);
+        this.totalFee = totalFee != null ? totalFee : BigDecimal.ZERO;
+        this.totalAmount = totalPrincipal.add(totalProfit).add(this.totalFee);
         this.firstDueDate = firstDueDate;
         this.lastDueDate = lastDueDate;
         this.installments = new ArrayList<>(installments);
@@ -63,10 +66,10 @@ public class RepaymentScheduleAggregate {
 
     // ==================== FACTORY METHOD ====================
 
-    public static RepaymentScheduleAggregate create(UUID tenantId, String scheduleNumber,
-                                                     UUID loanId, UUID productId,
+    public static RepaymentScheduleAggregate create(UUID tenantId, UUID loanId, UUID productId, String scheduleNumber,
                                                      BigDecimal totalPrincipal,
                                                      BigDecimal totalProfit,
+                                                     BigDecimal totalFee,
                                                      LocalDate firstDueDate,
                                                      LocalDate lastDueDate,
                                                      List<Installment> installments,
@@ -82,7 +85,7 @@ public class RepaymentScheduleAggregate {
 
         var schedule = new RepaymentScheduleAggregate(
                 RepaymentScheduleId.generate(), tenantId, scheduleNumber, loanId,
-                totalPrincipal, totalProfit, firstDueDate, lastDueDate, installments);
+                totalPrincipal, totalProfit, totalFee, firstDueDate, lastDueDate, installments);
         schedule.productId = productId;
         schedule.createdBy = createdBy;
 
@@ -98,13 +101,14 @@ public class RepaymentScheduleAggregate {
                                                            int version, boolean active,
                                                            BigDecimal totalPrincipal,
                                                            BigDecimal totalProfit,
+                                                           BigDecimal totalFee,
                                                            LocalDate firstDueDate,
                                                            LocalDate lastDueDate,
                                                            List<Installment> installments,
                                                            LocalDateTime createdAt,
                                                            UUID createdBy) {
         var schedule = new RepaymentScheduleAggregate(id, tenantId, scheduleNumber, loanId,
-                totalPrincipal, totalProfit, firstDueDate, lastDueDate, installments);
+                totalPrincipal, totalProfit, totalFee, firstDueDate, lastDueDate, installments);
         schedule.productId = productId;
         schedule.version = version;
         schedule.active = active;
@@ -439,6 +443,7 @@ public class RepaymentScheduleAggregate {
     public int getTotalInstallments() { return totalInstallments; }
     public BigDecimal getTotalPrincipal() { return totalPrincipal; }
     public BigDecimal getTotalProfit() { return totalProfit; }
+    public BigDecimal getTotalFee() { return totalFee; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public LocalDate getFirstDueDate() { return firstDueDate; }
     public LocalDate getLastDueDate() { return lastDueDate; }

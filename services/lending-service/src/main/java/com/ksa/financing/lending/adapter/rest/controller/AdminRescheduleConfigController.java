@@ -30,10 +30,29 @@ public class AdminRescheduleConfigController {
 
     @GetMapping
     @SecuredEndpoint(obj = "admin.reschedule-configs", act = "read")
-    @Operation(summary = "List all global reschedule configurations")
-    public ResponseEntity<List<RescheduleConfigJpaEntity>> listConfigs(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all global reschedule configurations (filterable by free-text ?search=)")
+    public ResponseEntity<List<RescheduleConfigJpaEntity>> listConfigs(
+            @RequestParam(required = false) String search,
+            @AuthenticationPrincipal Jwt jwt) {
         String tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(configRepository.findByTenantIdAndActiveTrue(UUID.fromString(tenantId)));
+        var configs = configRepository.findByTenantIdAndActiveTrue(UUID.fromString(tenantId));
+        if (search != null && !search.isBlank()) {
+            String term = search.trim().toLowerCase();
+            configs = configs.stream().filter(c -> matchesSearch(c, term)).toList();
+        }
+        return ResponseEntity.ok(configs);
+    }
+
+    private boolean matchesSearch(RescheduleConfigJpaEntity c, String term) {
+        return contains(c.getRescheduleType(), term)
+                || contains(c.getLabelEn(), term)
+                || contains(c.getLabelAr(), term)
+                || contains(c.getDescriptionEn(), term)
+                || contains(c.getDescriptionAr(), term);
+    }
+
+    private boolean contains(String f, String term) {
+        return f != null && f.toLowerCase().contains(term);
     }
 
     @PutMapping("/{type}")

@@ -30,7 +30,10 @@ public class NafathVerificationActivityImpl implements NafathVerificationActivit
                     new InitiateNafathUseCase.InitiateNafathCommand(
                             tenantUuid,
                             input.nationalId(),
-                            Activity.getExecutionContext().getInfo().getActivityId()
+                            Activity.getExecutionContext().getInfo().getActivityId(),
+                            input.customerId(),
+                            input.applicationId(),
+                            input.contextType() != null ? input.contextType() : "ONBOARDING"
                     )
             );
 

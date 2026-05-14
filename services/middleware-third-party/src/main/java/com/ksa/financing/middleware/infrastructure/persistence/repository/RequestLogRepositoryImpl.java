@@ -5,7 +5,7 @@ import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.middleware.domain.model.ApiRequestLog;
 import com.ksa.financing.middleware.domain.port.out.RequestLogRepository;
-import com.ksa.financing.middleware.infrastructure.persistence.entity.RequestLogJpaEntity;
+import com.ksa.financing.middleware.infrastructure.persistence.entity.ApiRequestLogJpaEntity;
 import com.ksa.financing.middleware.infrastructure.persistence.mapper.MiddlewarePersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,34 +57,34 @@ public class RequestLogRepositoryImpl implements RequestLogRepository {
 
     @Override
     public PageResponse<ApiRequestLog> findAll(UUID tenantId, PageQuery query) {
-        Specification<RequestLogJpaEntity> tenantSpec = (root, q, cb) -> cb.equal(root.get("tenantId"), tenantId);
+        Specification<ApiRequestLogJpaEntity> tenantSpec = (root, q, cb) -> cb.equal(root.get("tenantId"), tenantId);
 
-        Specification<RequestLogJpaEntity> dynamic = SpecificationBuilder.<RequestLogJpaEntity>builder()
+        Specification<ApiRequestLogJpaEntity> dynamic = SpecificationBuilder.<ApiRequestLogJpaEntity>builder()
                 .filters(query.filters())
                 .allowedFilterFields(ALLOWED_FILTER_FIELDS)
                 .search(query.search())
                 .searchableFields(SEARCHABLE_FIELDS)
                 .build();
 
-        Page<RequestLogJpaEntity> page = jpaRepository.findAll(tenantSpec.and(dynamic), query.toPageable());
+        Page<ApiRequestLogJpaEntity> page = jpaRepository.findAll(tenantSpec.and(dynamic), query.toPageable());
         return PageResponse.from(page, mapper::toDomain);
     }
 
     @Override
     public PageResponse<ApiRequestLog> findByApiIdIn(UUID tenantId, List<UUID> apiIds, PageQuery query) {
-        Specification<RequestLogJpaEntity> spec = (root, q, cb) -> cb.and(
+        Specification<ApiRequestLogJpaEntity> spec = (root, q, cb) -> cb.and(
                 cb.equal(root.get("tenantId"), tenantId),
                 root.get("apiId").in(apiIds)
         );
 
-        Specification<RequestLogJpaEntity> dynamic = SpecificationBuilder.<RequestLogJpaEntity>builder()
+        Specification<ApiRequestLogJpaEntity> dynamic = SpecificationBuilder.<ApiRequestLogJpaEntity>builder()
                 .filters(query.filters())
                 .allowedFilterFields(ALLOWED_FILTER_FIELDS)
                 .search(query.search())
                 .searchableFields(SEARCHABLE_FIELDS)
                 .build();
 
-        Page<RequestLogJpaEntity> page = jpaRepository.findAll(spec.and(dynamic), query.toPageable());
+        Page<ApiRequestLogJpaEntity> page = jpaRepository.findAll(spec.and(dynamic), query.toPageable());
         return PageResponse.from(page, mapper::toDomain);
     }
 }

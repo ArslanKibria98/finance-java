@@ -17,6 +17,7 @@ public interface ManageRepaymentScheduleUseCase {
             String scheduleNumber,
             BigDecimal totalPrincipal,
             BigDecimal totalProfit,
+            BigDecimal totalFee,
             LocalDate firstDueDate,
             LocalDate lastDueDate,
             List<InstallmentEntry> installments,

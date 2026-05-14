@@ -30,6 +30,8 @@ public interface JpaJournalEntryRepository extends JpaRepository<JournalEntryJpa
 
     List<JournalEntryJpaEntity> findByTenantIdAndEntryDate(UUID tenantId, LocalDate entryDate);
 
+    Page<JournalEntryJpaEntity> findByTenantIdAndEntryDate(UUID tenantId, LocalDate entryDate, Pageable pageable);
+
     List<JournalEntryJpaEntity> findByTenantIdAndStatus(UUID tenantId, String status);
 
     @Query("SELECT e FROM JournalEntryJpaEntity e WHERE e.tenantId = :tenantId AND e.fineractSynced = false")
@@ -58,6 +60,43 @@ public interface JpaJournalEntryRepository extends JpaRepository<JournalEntryJpa
             Pageable pageable);
 
     /**
+     * Day book — single date with optional case-insensitive search across
+     * entry number, description, reference type, transaction type.
+     */
+    @Query("SELECT e FROM JournalEntryJpaEntity e " +
+           "WHERE e.tenantId = :tenantId " +
+           "AND e.entryDate = :date " +
+           "AND (:search IS NULL OR " +
+           "     LOWER(e.entryNumber) LIKE :search OR " +
+           "     LOWER(e.description) LIKE :search OR " +
+           "     LOWER(e.referenceType) LIKE :search OR " +
+           "     LOWER(e.transactionType) LIKE :search)")
+    Page<JournalEntryJpaEntity> findForDayBook(
+            @Param("tenantId") UUID tenantId,
+            @Param("date") LocalDate date,
+            @Param("search") String search,
+            Pageable pageable);
+
+    /**
+     * Day book — date range with optional case-insensitive search.
+     */
+    @Query("SELECT e FROM JournalEntryJpaEntity e " +
+           "WHERE e.tenantId = :tenantId " +
+           "AND e.entryDate >= :fromDate AND e.entryDate <= :toDate " +
+           "AND (:search IS NULL OR " +
+           "     LOWER(e.entryNumber) LIKE :search OR " +
+           "     LOWER(e.description) LIKE :search OR " +
+           "     LOWER(e.referenceType) LIKE :search OR " +
+           "     LOWER(e.transactionType) LIKE :search) " +
+           "ORDER BY e.entryDate DESC, e.createdAt DESC")
+    Page<JournalEntryJpaEntity> findForDayBookRange(
+            @Param("tenantId") UUID tenantId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("search") String search,
+            Pageable pageable);
+
+    /**
      * Find all entries for tenant in date range (no pagination — for reports).
      */
     @Query("SELECT e FROM JournalEntryJpaEntity e " +
@@ -77,13 +116,20 @@ public interface JpaJournalEntryRepository extends JpaRepository<JournalEntryJpa
            "AND e.entryDate >= :fromDate AND e.entryDate <= :toDate " +
            "AND (:referenceType IS NULL OR e.referenceType = :referenceType) " +
            "AND (:status IS NULL OR CAST(e.status as string) = :status) " +
+           "AND (:search IS NULL OR " +
+           "     LOWER(e.entryNumber) LIKE :search OR " +
+           "     LOWER(e.description) LIKE :search OR " +
+           "     LOWER(e.referenceType) LIKE :search OR " +
+           "     LOWER(e.transactionType) LIKE :search) " +
            "ORDER BY e.entryDate ASC, e.entryNumber ASC")
-    List<JournalEntryJpaEntity> findForVouchersReport(
+    Page<JournalEntryJpaEntity> findForVouchersReport(
             @Param("tenantId") UUID tenantId,
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate,
             @Param("referenceType") String referenceType,
-            @Param("status") String status);
+            @Param("status") String status,
+            @Param("search") String search,
+            Pageable pageable);
 
     /**
      * Find entries by tenant and reference type (LOAN, REPAY, ACCRUAL, etc).

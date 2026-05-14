@@ -67,6 +67,14 @@ public final class ErrorCodes {
         public static final String AML_FLAGGED       = "RISK.AML.FLAGGED";
         public static final String SANCTIONS_MATCH   = "RISK.SANCTIONS.MATCH";
         public static final String VELOCITY_EXCEEDED = "RISK.VELOCITY.EXCEEDED";
+
+        // Blacklist guard codes — emitted by SDK middleware on pre-auth checks
+        public static final String BLACKLIST_NID     = "RISK.BLACKLIST.NID_BLOCKED";
+        public static final String BLACKLIST_MOBILE  = "RISK.BLACKLIST.MOBILE_BLOCKED";
+        public static final String BLACKLIST_DEVICE  = "RISK.BLACKLIST.DEVICE_BLOCKED";
+        public static final String BLACKLIST_USER    = "RISK.BLACKLIST.USER_BLOCKED";
+        public static final String BLACKLIST_IP      = "RISK.BLACKLIST.IP_BLOCKED";
+        public static final String BLACKLIST_GENERIC = "RISK.BLACKLIST.BLOCKED";
     }
 
     // ── Loan ────────────────────────────────────────────────────────
@@ -118,5 +126,15 @@ public final class ErrorCodes {
         public static final String DOCUMENT_NOT_FOUND     = "PRODUCT.DOCUMENT.NOT_FOUND";
         public static final String CONFIG_NOT_FOUND       = "PRODUCT.CONFIG.NOT_FOUND";
         public static final String HAS_ACTIVE_LOANS       = "PRODUCT.DELETE.HAS_ACTIVE_LOANS";
+    }
+
+    // ── Collections ────────────────────────────────────────────────
+
+    public static final class Collections {
+        private Collections() {}
+        public static final String WAIVER_NOT_ALLOWED = "COLLECTIONS.PENALTY.WAIVER_NOT_ALLOWED";
+        public static final String WAIVER_LIMIT_EXCEEDED = "COLLECTIONS.PENALTY.WAIVER_LIMIT_EXCEEDED";
+        public static final String NO_PENALTY_TO_WAIVE = "COLLECTIONS.PENALTY.NONE_REMAINING";
+        public static final String SCHEDULE_NOT_SEEDED = "COLLECTIONS.SCHEDULE.NOT_SEEDED";
     }
 }

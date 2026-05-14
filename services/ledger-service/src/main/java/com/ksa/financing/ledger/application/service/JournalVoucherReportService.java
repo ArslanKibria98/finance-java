@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
 import com.ksa.financing.ledger.application.dto.JournalVoucherReportResponse;
 import com.ksa.financing.ledger.application.dto.JournalVoucherReportResponse.VoucherItem;
 import com.ksa.financing.ledger.application.dto.JournalVoucherReportResponse.VoucherLine;
@@ -10,6 +12,7 @@ import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaAccount
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaJournalEntryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,19 +41,24 @@ public class JournalVoucherReportService {
                                                  LocalDate fromDate,
                                                  LocalDate toDate,
                                                  String referenceType,
-                                                 String status) {
-        log.info("Generating journal vouchers report: tenant={}, from={}, to={}, type={}, status={}",
-                tenantId, fromDate, toDate, referenceType, status);
+                                                 String status,
+                                                 PageQuery pageQuery) {
+        log.info("Generating journal vouchers report: tenant={}, from={}, to={}, type={}, status={}, search={}, page={}",
+                tenantId, fromDate, toDate, referenceType, status, pageQuery.search(), pageQuery.page());
 
-        List<JournalEntryJpaEntity> entries = journalEntryRepository.findForVouchersReport(
-                tenantId, fromDate, toDate, referenceType, status);
+        LocalDate effectiveFrom = fromDate != null ? fromDate : LocalDate.of(1970, 1, 1);
+        LocalDate effectiveTo = toDate != null ? toDate : LocalDate.of(9999, 12, 31);
+        String searchPattern = toLikePattern(pageQuery.search());
+
+        Page<JournalEntryJpaEntity> entryPage = journalEntryRepository.findForVouchersReport(
+                tenantId, effectiveFrom, effectiveTo, referenceType, status, searchPattern, pageQuery.toPageable());
 
         Map<UUID, AccountJpaEntity> accountCache = new HashMap<>();
-        List<VoucherItem> vouchers = new ArrayList<>(entries.size());
+        List<VoucherItem> vouchers = new ArrayList<>(entryPage.getContent().size());
         BigDecimal totalDebits = BigDecimal.ZERO;
         BigDecimal totalCredits = BigDecimal.ZERO;
 
-        for (JournalEntryJpaEntity entry : entries) {
+        for (JournalEntryJpaEntity entry : entryPage.getContent()) {
             List<VoucherLine> lines = new ArrayList<>(entry.getLines().size());
             for (JournalLineJpaEntity line : entry.getLines()) {
                 AccountJpaEntity account = accountCache.computeIfAbsent(
@@ -91,17 +99,23 @@ public class JournalVoucherReportService {
                     .build());
         }
 
-        return JournalVoucherReportResponse.builder()
-                .fromDate(fromDate)
-                .toDate(toDate)
-                .totalVouchers(vouchers.size())
-                .totalDebits(totalDebits)
-                .totalCredits(totalCredits)
-                .vouchers(vouchers)
-                .build();
+        return new JournalVoucherReportResponse(
+                fromDate,
+                toDate,
+                (int) entryPage.getTotalElements(),
+                totalDebits,
+                totalCredits,
+                vouchers,
+                PageMetadata.from(entryPage)
+        );
     }
 
     private BigDecimal nullSafe(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 }

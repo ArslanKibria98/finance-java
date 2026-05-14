@@ -3,6 +3,8 @@ package com.ksa.financing.risk.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.FraudRule;
 import com.ksa.financing.risk.domain.port.in.ManageFraudRulesUseCase;
 import com.ksa.financing.risk.domain.port.out.FraudRuleRepository;
@@ -12,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,16 +25,16 @@ public class ManageFraudRulesService implements ManageFraudRulesUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FraudRule> listAll(UUID tenantId) {
-        log.debug("Listing all fraud rules for tenant={}", tenantId);
-        return fraudRuleRepository.findAllByTenant(tenantId);
+    public PageResponse<FraudRule> listAll(UUID tenantId, PageQuery query) {
+        log.debug("Listing all fraud rules for tenant={} page={} size={}", tenantId, query.page(), query.size());
+        return fraudRuleRepository.findAllByTenant(tenantId, query);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<FraudRule> listByCategory(UUID tenantId, String category) {
-        log.debug("Listing fraud rules for tenant={} category={}", tenantId, category);
-        return fraudRuleRepository.findByCategory(tenantId, category);
+    public PageResponse<FraudRule> listByCategory(UUID tenantId, String category, PageQuery query) {
+        log.debug("Listing fraud rules for tenant={} category={} page={} size={}", tenantId, category, query.page(), query.size());
+        return fraudRuleRepository.findByCategory(tenantId, category, query);
     }
 
     @Override
@@ -88,6 +89,17 @@ public class ManageFraudRulesService implements ManageFraudRulesUseCase {
         existing.setUpdatedAt(Instant.now());
 
         return fraudRuleRepository.save(existing);
+    }
+
+    @Override
+    @Transactional
+    public void assignBlockCode(UUID tenantId, UUID id, UUID blockCodeId) {
+        log.info("Assigning block code id={} to fraud rule id={} for tenant={}", blockCodeId, id, tenantId);
+        var rule = fraudRuleRepository.findById(id)
+                .orElseThrow(() -> NotFoundException.forEntity("FraudRule", id.toString()));
+        rule.setBlockCodeId(blockCodeId);
+        rule.setUpdatedAt(Instant.now());
+        fraudRuleRepository.save(rule);
     }
 
     @Override

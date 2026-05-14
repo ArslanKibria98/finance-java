@@ -61,7 +61,8 @@ public final class AmortizationScheduleGenerator {
             SarMoney principal,
             ProfitRate profitRate,
             Tenure tenure,
-            LocalDate startDate
+            LocalDate startDate,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(principal, "Principal cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
@@ -74,7 +75,7 @@ public final class AmortizationScheduleGenerator {
 
         // Calculate total profit (flat)
         SarMoney totalProfit = profitRate.multiply(principal);
-        SarMoney totalAmount = principal.add(totalProfit);
+        SarMoney totalAmount = principal.add(totalProfit).add(feeAmount);
 
         // Calculate fixed monthly installment
         SarMoney monthlyInstallment = totalAmount.divide(tenure.months());
@@ -82,10 +83,11 @@ public final class AmortizationScheduleGenerator {
         // Calculate principal per installment (distributed evenly)
         SarMoney principalPerInstallment = principal.divide(tenure.months());
 
-        // Derive profit per installment from total minus principal to avoid rounding mismatch
-        // (independently dividing principal, profit, and total by tenure can produce
-        //  values where principal + profit != total due to independent rounding)
-        SarMoney profitPerInstallment = monthlyInstallment.subtract(principalPerInstallment);
+        // Calculate fee per installment (distributed evenly)
+        SarMoney feePerInstallment = feeAmount.divide(tenure.months());
+
+        // Derive profit per installment from total minus (principal + fee) to avoid rounding mismatch
+        SarMoney profitPerInstallment = monthlyInstallment.subtract(principalPerInstallment).subtract(feePerInstallment);
 
         List<InstallmentLine> schedule = new ArrayList<>();
         SarMoney remainingPrincipal = principal;
@@ -97,15 +99,18 @@ public final class AmortizationScheduleGenerator {
 
             SarMoney principalComponent;
             SarMoney profitComponent;
+            SarMoney feeComponent;
             SarMoney installmentAmount;
 
             // For the last installment, adjust for any rounding differences
             if (i == tenure.months()) {
                 principalComponent = remainingPrincipal;
+                feeComponent = feeAmount.subtract(feePerInstallment.multiply(i - 1));
                 profitComponent = totalProfit.subtract(cumulativeProfit);
-                installmentAmount = principalComponent.add(profitComponent);
+                installmentAmount = principalComponent.add(profitComponent).add(feeComponent);
             } else {
                 principalComponent = principalPerInstallment;
+                feeComponent = feePerInstallment;
                 profitComponent = profitPerInstallment;
                 installmentAmount = monthlyInstallment;
             }
@@ -121,6 +126,7 @@ public final class AmortizationScheduleGenerator {
                     openingPrincipal,
                     principalComponent,
                     profitComponent,
+                    feeComponent,
                     installmentAmount,
                     remainingPrincipal,
                     cumulativePrincipal,
@@ -150,7 +156,8 @@ public final class AmortizationScheduleGenerator {
             SarMoney principal,
             ProfitRate profitRate,
             Tenure tenure,
-            LocalDate startDate
+            LocalDate startDate,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(principal, "Principal cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
@@ -173,6 +180,10 @@ public final class AmortizationScheduleGenerator {
         BigDecimal denominator = onePlusRatePowerN.subtract(BigDecimal.ONE);
 
         SarMoney monthlyPayment = principal.multiply(numerator.divide(denominator, 2, RoundingMode.HALF_UP));
+        
+        // Add monthly fee component to the payment
+        SarMoney monthlyFee = feeAmount.divide(tenure.months());
+        SarMoney totalMonthlyPayment = monthlyPayment.add(monthlyFee);
 
         List<InstallmentLine> schedule = new ArrayList<>();
         SarMoney remainingPrincipal = principal;
@@ -192,6 +203,9 @@ public final class AmortizationScheduleGenerator {
             if (i == tenure.months()) {
                 principalComponent = remainingPrincipal;
                 profitComponent = monthlyPayment.subtract(principalComponent);
+                // Last installment gets the remainder of the fee
+                monthlyFee = feeAmount.subtract(monthlyFee.multiply(tenure.months() - 1));
+                totalMonthlyPayment = principalComponent.add(profitComponent).add(monthlyFee);
             }
 
             SarMoney openingPrincipal = remainingPrincipal;
@@ -210,7 +224,8 @@ public final class AmortizationScheduleGenerator {
                     openingPrincipal,
                     principalComponent,
                     profitComponent,
-                    monthlyPayment,
+                    monthlyFee,
+                    totalMonthlyPayment,
                     remainingPrincipal,
                     cumulativePrincipal,
                     cumulativeProfit
@@ -239,12 +254,14 @@ public final class AmortizationScheduleGenerator {
             SarMoney principal,
             SarMoney totalProfit,
             SarMoney[] profitSchedule,
-            LocalDate startDate
+            LocalDate startDate,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(principal, "Principal cannot be null");
         Objects.requireNonNull(totalProfit, "Total profit cannot be null");
         Objects.requireNonNull(profitSchedule, "Profit schedule cannot be null");
         Objects.requireNonNull(startDate, "Start date cannot be null");
+        Objects.requireNonNull(feeAmount, "Fee amount cannot be null");
 
         if (profitSchedule.length < 1) {
             throw new IllegalArgumentException("Profit schedule must have at least one installment");
@@ -264,6 +281,7 @@ public final class AmortizationScheduleGenerator {
 
         int tenure = profitSchedule.length;
         SarMoney principalPerInstallment = principal.divide(tenure);
+        SarMoney feePerInstallment = feeAmount.divide(tenure);
 
         List<InstallmentLine> schedule = new ArrayList<>();
         SarMoney remainingPrincipal = principal;
@@ -275,15 +293,18 @@ public final class AmortizationScheduleGenerator {
 
             SarMoney profitComponent = profitSchedule[i - 1];
             SarMoney principalComponent;
+            SarMoney monthlyFee = feePerInstallment;
 
             // For last installment, use remaining principal
             if (i == tenure) {
                 principalComponent = remainingPrincipal;
+                // Last installment gets the remainder of the fee
+                monthlyFee = feeAmount.subtract(feePerInstallment.multiply(tenure - 1));
             } else {
                 principalComponent = principalPerInstallment;
             }
 
-            SarMoney installmentAmount = principalComponent.add(profitComponent);
+            SarMoney installmentAmount = principalComponent.add(profitComponent).add(monthlyFee);
 
             SarMoney openingPrincipal = remainingPrincipal;
             remainingPrincipal = remainingPrincipal.subtract(principalComponent);
@@ -296,6 +317,7 @@ public final class AmortizationScheduleGenerator {
                     openingPrincipal,
                     principalComponent,
                     profitComponent,
+                    monthlyFee,
                     installmentAmount,
                     remainingPrincipal,
                     cumulativePrincipal,
@@ -332,14 +354,16 @@ public final class AmortizationScheduleGenerator {
     public static SarMoney calculateMonthlyInstallment(
             SarMoney principal,
             ProfitRate profitRate,
-            Tenure tenure
+            Tenure tenure,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(principal, "Principal cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
         Objects.requireNonNull(tenure, "Tenure cannot be null");
+        Objects.requireNonNull(feeAmount, "Fee amount cannot be null");
 
         SarMoney totalProfit = calculateTotalProfit(principal, profitRate);
-        SarMoney totalAmount = principal.add(totalProfit);
+        SarMoney totalAmount = principal.add(totalProfit).add(feeAmount);
         return totalAmount.divide(tenure.months());
     }
 }

@@ -5,9 +5,11 @@ import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.MobileBlacklistEntry;
 import com.ksa.financing.risk.domain.model.NidBlacklistEntry;
 
+import java.util.UUID;
+
 public interface ManageBlacklistUseCase {
 
-    NidBlacklistEntry blacklistNid(String nationalId, String reason);
+    NidBlacklistEntry blacklistNid(String nationalId, String reason, UUID blockCodeId);
 
     NidBlacklistEntry removeNid(String nationalId);
 
@@ -15,11 +17,15 @@ public interface ManageBlacklistUseCase {
 
     PageResponse<NidBlacklistEntry> listNidBlacklist(PageQuery pageQuery);
 
-    MobileBlacklistEntry blacklistMobile(String mobileNumber, String reason);
+    NidBlacklistEntry assignNidBlockCode(String nationalId, UUID blockCodeId);
+
+    MobileBlacklistEntry blacklistMobile(String mobileNumber, String reason, UUID blockCodeId);
 
     MobileBlacklistEntry removeMobile(String mobileNumber);
 
     MobileBlacklistEntry getMobileStatus(String mobileNumber);
 
     PageResponse<MobileBlacklistEntry> listMobileBlacklist(PageQuery pageQuery);
+
+    MobileBlacklistEntry assignMobileBlockCode(String mobileNumber, UUID blockCodeId);
 }

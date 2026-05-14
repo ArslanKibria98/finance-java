@@ -77,13 +77,14 @@ public class PenaltyWaiverController {
     }
 
     @GetMapping
-    @Operation(summary = "List penalty waivers — filter by loanId, installmentId, or waivedAt date range")
+    @Operation(summary = "List penalty waivers — filter by loanId, installmentId, or waivedAt date range. Optional ?search= filters by waiverType, reason, approvalReference (case-insensitive LIKE).")
     @SecuredEndpoint(obj = "penalty-waivers", act = "read")
     public ResponseEntity<List<PenaltyWaiverResponse>> list(
             @RequestParam(required = false) UUID loanId,
             @RequestParam(required = false) UUID installmentId,
             @RequestParam(required = false) LocalDate fromDate,
             @RequestParam(required = false) LocalDate toDate,
+            @RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
@@ -98,7 +99,14 @@ public class PenaltyWaiverController {
             throw new BusinessException(ErrorCodes.VALIDATION_FAILED,
                     "Provide one filter: loanId, installmentId, or fromDate+toDate");
         }
-        return ResponseEntity.ok(waivers.stream().map(this::toResponse).toList());
+        String term = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        var responses = waivers.stream().map(this::toResponse)
+                .filter(w -> term == null
+                        || (w.waiverType() != null && w.waiverType().toLowerCase().contains(term))
+                        || (w.reason() != null && w.reason().toLowerCase().contains(term))
+                        || (w.approvalReference() != null && w.approvalReference().toLowerCase().contains(term)))
+                .toList();
+        return ResponseEntity.ok(responses);
     }
 
     // ─────────────────────────────────────────────

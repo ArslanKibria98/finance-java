@@ -58,16 +58,6 @@ spring:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/islamic-financing}
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/islamic-financing/protocol/openid-connect/certs}
 
-fineract:
-  enabled: ${FINERACT_ENABLED:false}
-  base-url: ${FINERACT_BASE_URL:https://localhost:8443/fineract-provider/api/v1}
-  username: ${FINERACT_USERNAME:mifos}
-  password: ${FINERACT_PASSWORD:password}
-  tenant-id: ${FINERACT_TENANT_ID:default}
-  savings-product-id: ${FINERACT_SAVINGS_PRODUCT_ID:1}
-  connect-timeout-ms: ${FINERACT_CONNECT_TIMEOUT:5000}
-  read-timeout-ms: ${FINERACT_READ_TIMEOUT:30000}
-
 temporal:
   server:
     host: ${TEMPORAL_HOST:localhost}
@@ -119,15 +109,43 @@ app:
   tenant:
     header-name: X-Tenant-ID
     default: default
+  services:
+    customer-service-url: ${CUSTOMER_SERVICE_URL:http://localhost:8084}
   kafka:
     topics:
       customer-created: ${KAFKA_TOPIC_CUSTOMER_CREATED:financing.customer.created}
       wallet-created: ${KAFKA_TOPIC_WALLET_CREATED:financing.wallet.created}
       wallet-transaction: ${KAFKA_TOPIC_WALLET_TRANSACTION:financing.wallet.transacted}
+      withdrawal-initiated:   ${KAFKA_TOPIC_WITHDRAWAL_INITIATED:financing.wallet.withdrawal.initiated}
+      withdrawal-completed:   ${KAFKA_TOPIC_WITHDRAWAL_COMPLETED:financing.wallet.withdrawal.completed}
+      withdrawal-failed:      ${KAFKA_TOPIC_WITHDRAWAL_FAILED:financing.wallet.withdrawal.failed}
+      withdrawal-compensated: ${KAFKA_TOPIC_WITHDRAWAL_COMPENSATED:financing.wallet.withdrawal.compensated}
 
+# Wallet-service no longer talks to Fineract directly.
+# All Fineract operations are routed through ledger-service /internal/fineract-proxy/savings/**
 ksa:
   authorization:
     enabled: true
     cache-key-prefix: casbin:policies
     skip-patterns:
       - /internal/**
+  ledger:
+    client:
+      base-url: ${LEDGER_SERVICE_URL:http://ledger-service:8095}
+      caller-service: wallet-service
+      use-authenticated-endpoints: ${LEDGER_PROXY_USE_AUTH:false}
+      connect-timeout-ms: ${LEDGER_PROXY_CONNECT_TIMEOUT:5000}
+      read-timeout-ms: ${LEDGER_PROXY_READ_TIMEOUT:30000}
+  wallet:
+    fineract:
+      office-id: ${FINERACT_OFFICE_ID:1}
+      savings-product-id: ${FINERACT_SAVINGS_PRODUCT_ID:1}
+      default-tenant-id: ${DEFAULT_TENANT_ID:00000000-0000-0000-0000-000000000001}
+    bank-rails:
+      mock: ${BANK_RAILS_MOCK:true}
+      reject-above: ${BANK_RAILS_REJECT_ABOVE:50000}
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true

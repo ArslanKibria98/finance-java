@@ -94,18 +94,22 @@ public class DeviceFingerprintCheckImpl implements DeviceFingerprintCheck {
             // ON CONFLICT (device_id, nid_hash) ensures same NID/mobile just increments attempt_count on existing row
             jdbcTemplate.update(
                 """
-                INSERT INTO device_registry (device_id, device_fingerprint, nid_hash, attempt_count, last_seen_at, updated_at)
-                VALUES (?, ?, ?, 1, NOW(), NOW())
+                INSERT INTO device_registry (device_id, device_fingerprint, nid, nid_hash, mobile_number, attempt_count, last_seen_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())
                 ON CONFLICT (device_id, nid_hash)
                 DO UPDATE SET
                     device_fingerprint = COALESCE(EXCLUDED.device_fingerprint, device_registry.device_fingerprint),
+                    nid = COALESCE(EXCLUDED.nid, device_registry.nid),
+                    mobile_number = COALESCE(EXCLUDED.mobile_number, device_registry.mobile_number),
                     attempt_count = device_registry.attempt_count + 1,
                     last_seen_at = NOW(),
                     updated_at = NOW()
                 """,
                 input.deviceId(),
                 input.deviceFingerprint(),
-                identityKey
+                input.nid(),
+                identityKey,
+                input.mobileNumber()
             );
 
             log.info("Device fingerprint check passed: {} NID associations, {} recent attempts",

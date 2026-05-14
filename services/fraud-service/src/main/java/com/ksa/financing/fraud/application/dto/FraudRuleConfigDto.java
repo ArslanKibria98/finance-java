@@ -12,6 +12,8 @@ public record FraudRuleConfigDto(
     String detectionLogic,
     String defaultAction,
     String blockType,
+    UUID blockCodeId,
+    String blockCode,
     String status,
     List<RuleParameterDto> parameters,
     int priority

@@ -37,6 +37,8 @@ public record CreateDunningPolicyRequest(
         boolean autoAssignAgent,
         Integer agentAssignmentDpd,
         Integer walletFreezeDpd,
+        boolean penaltyWaiverAllowed,
+        Integer maxPenaltyWaiversAllowed,
 
         // Stage actions (stage -> arbitrary action config)
         Map<DunningStage, Map<String, Object>> stageActions

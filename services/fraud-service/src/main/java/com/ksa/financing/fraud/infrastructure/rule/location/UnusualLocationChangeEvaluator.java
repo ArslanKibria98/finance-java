@@ -61,7 +61,7 @@ public class UnusualLocationChangeEvaluator implements FraudRuleEvaluator {
         if (distance.compareTo(BigDecimal.valueOf(distanceKm)) <= 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "New device + " + distance + " km move within " + windowHours + "h",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

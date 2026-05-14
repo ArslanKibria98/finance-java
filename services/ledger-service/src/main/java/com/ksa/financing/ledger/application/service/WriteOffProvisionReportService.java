@@ -1,6 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
 import com.ksa.financing.ledger.application.dto.WriteOffProvisionReportResponse;
+import com.ksa.financing.ledger.application.service.util.AggregateValueUtil;
 import com.ksa.financing.ledger.domain.port.out.AccountRepository;
 import com.ksa.financing.ledger.infrastructure.messaging.LedgerAccountCodes;
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaJournalLineRepository;
@@ -47,10 +48,22 @@ public class WriteOffProvisionReportService {
         var provisionUuid = provisionAccount.getId().value();
 
         // Expense account: debits increase provisions. Credits reverse them (write-offs from reserve).
-        var totals = journalLineRepository.sumDebitsCreditsByAccountInRange(
-                tenantId, provisionUuid, from, to);
-        BigDecimal provisionsRaised = toBigDecimal(totals, 0);
-        BigDecimal writeOffs = toBigDecimal(totals, 1);
+        Object[] totals;
+        try {
+            totals = journalLineRepository.sumDebitsCreditsByAccountInRange(
+                    tenantId, provisionUuid, from, to);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to aggregate write-off/provision totals tenant={} period={}. Returning zeros. Cause={}",
+                    tenantId, period, ex.getMessage());
+            return WriteOffProvisionReportResponse.builder()
+                    .period(period)
+                    .totalWriteOffs(BigDecimal.ZERO)
+                    .badDebtProvisions(BigDecimal.ZERO)
+                    .restructuredLoans(BigDecimal.ZERO)
+                    .build();
+        }
+        BigDecimal provisionsRaised = AggregateValueUtil.valueAt(totals, 0);
+        BigDecimal writeOffs = AggregateValueUtil.valueAt(totals, 1);
 
         return WriteOffProvisionReportResponse.builder()
                 .period(period)
@@ -61,17 +74,17 @@ public class WriteOffProvisionReportService {
     }
 
     private LocalDate[] resolvePeriod(String period) {
+        if (period == null || period.isBlank()) {
+            // No period → return all-time totals (epoch → today).
+            return new LocalDate[] { LocalDate.of(1900, 1, 1), LocalDate.now() };
+        }
         try {
             var ym = YearMonth.parse(period);
             return new LocalDate[] { ym.atDay(1), ym.atEndOfMonth() };
-        } catch (DateTimeParseException | NullPointerException e) {
-            var ym = YearMonth.now();
-            return new LocalDate[] { ym.atDay(1), ym.atEndOfMonth() };
+        } catch (DateTimeParseException e) {
+            // Invalid period format → fall back to all-time.
+            return new LocalDate[] { LocalDate.of(1900, 1, 1), LocalDate.now() };
         }
     }
 
-    private BigDecimal toBigDecimal(Object[] row, int idx) {
-        if (row == null || row.length <= idx || row[idx] == null) return BigDecimal.ZERO;
-        return new BigDecimal(row[idx].toString());
-    }
 }

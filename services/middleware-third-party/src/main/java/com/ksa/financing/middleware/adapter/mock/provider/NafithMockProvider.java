@@ -21,7 +21,7 @@ public class NafithMockProvider implements MockResponseProvider {
     public MockResponseResult getMockResponse(String apiCode, String requestBody) {
         return switch (apiCode) {
             case "NAFITH_AUTH" -> authResponse();
-            case "NAFITH_CREATE_SANAD" -> createSanadGroup();
+            case "NAFITH_CREATE_SANAD", "NAFITH_REGISTER" -> createSanadGroup();
             case "NAFITH_SANAD_STATUS" -> sanadStatusResponse();
             case "NAFITH_DOWNLOAD_PDF" -> downloadPdfResponse();
             default -> fallbackResponse();

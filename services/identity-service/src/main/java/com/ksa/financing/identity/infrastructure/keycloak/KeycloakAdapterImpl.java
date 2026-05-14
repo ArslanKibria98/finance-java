@@ -88,15 +88,25 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         }
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(userRepresentation, headers);
-        ResponseEntity<Void> createResponse = restTemplate.postForEntity(usersUrl, request, Void.class);
-
-        // Prefer Keycloak Location header to get created user ID reliably.
         HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-        UUID keycloakUserId = extractUserIdFromLocation(createResponse.getHeaders().getLocation())
-                .orElseGet(() -> resolveCreatedUserId(usersUrl, getRequest, username, email));
+        UUID keycloakUserId;
+        try {
+            ResponseEntity<Void> createResponse = restTemplate.postForEntity(usersUrl, request, Void.class);
+            // Prefer Keycloak Location header to get created user ID reliably.
+            keycloakUserId = extractUserIdFromLocation(createResponse.getHeaders().getLocation())
+                    .orElseGet(() -> resolveCreatedUserId(usersUrl, getRequest, username, email));
+            log.info("Keycloak user created successfully with ID: {}", keycloakUserId);
+        } catch (HttpClientErrorException.Conflict conflict) {
+            // Keycloak already has this username/email (e.g. local DB was wiped or a previous
+            // onboarding attempt orphaned the Keycloak user). Recover by reusing the existing
+            // user — the caller treats this as idempotent create-or-reuse.
+            log.warn("Keycloak user already exists for username/email, reusing existing record: {}",
+                    conflict.getResponseBodyAsString());
+            keycloakUserId = resolveCreatedUserId(usersUrl, getRequest, username, email);
+        }
 
         // Keycloak 26+ ignores credentials in user creation payload.
-        // Set password separately via the reset-password endpoint.
+        // Set password separately via the reset-password endpoint (also resets for reused users).
         String resetPwUrl = usersUrl + "/" + keycloakUserId + "/reset-password";
         Map<String, Object> credential = Map.of(
                 "type", "password",
@@ -106,7 +116,6 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         HttpEntity<Map<String, Object>> pwRequest = new HttpEntity<>(credential, headers);
         restTemplate.put(resetPwUrl, pwRequest);
 
-        log.info("Keycloak user created successfully with ID: {}", keycloakUserId);
         return new KeycloakUser(keycloakUserId, username);
     }
 

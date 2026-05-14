@@ -39,7 +39,7 @@ public class EarlyRepaymentReApplyEvaluator implements FraudRuleEvaluator {
         if (count == 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "App submitted " + days + " days after early repayment",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

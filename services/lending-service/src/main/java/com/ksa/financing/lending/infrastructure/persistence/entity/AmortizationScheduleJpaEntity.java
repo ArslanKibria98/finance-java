@@ -48,6 +48,9 @@ public class AmortizationScheduleJpaEntity {
     @Column(name = "profit_component", nullable = false, precision = 20, scale = 6)
     private BigDecimal profitComponent;
 
+    @Column(name = "fee_component", nullable = false, precision = 20, scale = 6)
+    private BigDecimal feeComponent;
+
     @Column(name = "total_installment", nullable = false, precision = 20, scale = 6)
     private BigDecimal totalInstallment;
 

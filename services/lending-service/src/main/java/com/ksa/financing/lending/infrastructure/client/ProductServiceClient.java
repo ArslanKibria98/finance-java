@@ -15,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -108,6 +109,31 @@ public class ProductServiceClient implements ProductConfigPort {
         } catch (Exception e) {
             log.warn("Product-service unavailable ({}), using default config", e.getMessage());
             return defaultConfig();
+        }
+    }
+
+    @Override
+    public Optional<ProductSummary> fetchProductSummary(UUID tenantId, String productId) {
+        if (productId == null || productId.isBlank()) return Optional.empty();
+        try {
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Tenant-Id", tenantId.toString());
+
+            var url = productServiceUrl + "/api/v1/products/" + productId;
+            var response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+            var rawRoot = objectMapper.readTree(response.getBody());
+            var root = rawRoot.has("data") && rawRoot.get("data").isObject() ? rawRoot.get("data") : rawRoot;
+
+            return Optional.of(new ProductSummary(
+                    textOrNull(root, "id") != null ? textOrNull(root, "id") : productId,
+                    textOrNull(root, "nameEn"),
+                    textOrNull(root, "nameAr")
+            ));
+        } catch (Exception e) {
+            log.warn("Product-service summary unavailable for {} ({})", productId, e.getMessage());
+            return Optional.empty();
         }
     }
 

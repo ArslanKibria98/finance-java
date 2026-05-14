@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
 import com.ksa.financing.ledger.application.dto.DayBookReportResponse;
 import com.ksa.financing.ledger.application.dto.DayBookReportResponse.DayBookEntry;
 import com.ksa.financing.ledger.infrastructure.persistence.entity.AccountJpaEntity;
@@ -9,6 +11,7 @@ import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaAccount
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaJournalEntryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,25 +37,33 @@ public class DayBookReportService {
     private final JpaJournalEntryRepository journalEntryRepository;
     private final JpaAccountRepository accountRepository;
 
-    public DayBookReportResponse generate(UUID tenantId, LocalDate reportDate) {
-        log.info("Generating day book report: tenant={}, date={}", tenantId, reportDate);
+    public DayBookReportResponse generate(UUID tenantId, LocalDate reportDate, PageQuery pageQuery) {
+        log.info("Generating day book report: tenant={}, date={}, search={}, page={}",
+                tenantId, reportDate, pageQuery.search(), pageQuery.page());
 
-        List<JournalEntryJpaEntity> entries = journalEntryRepository
-                .findByTenantIdAndEntryDate(tenantId, reportDate);
-        return buildResponse(reportDate, entries, tenantId);
+        Page<JournalEntryJpaEntity> entryPage = journalEntryRepository
+                .findForDayBook(tenantId, reportDate, toLikePattern(pageQuery.search()), pageQuery.toPageable());
+        return buildResponse(reportDate, entryPage, tenantId);
     }
 
-    public DayBookReportResponse generate(UUID tenantId, LocalDate fromDate, LocalDate toDate) {
-        log.info("Generating day book report: tenant={}, from={}, to={}", tenantId, fromDate, toDate);
+    public DayBookReportResponse generate(UUID tenantId, LocalDate fromDate, LocalDate toDate, PageQuery pageQuery) {
+        log.info("Generating day book report: tenant={}, from={}, to={}, search={}, page={}",
+                tenantId, fromDate, toDate, pageQuery.search(), pageQuery.page());
 
-        List<JournalEntryJpaEntity> entries = journalEntryRepository
-                .findAllByTenantAndDateRange(tenantId, fromDate, toDate);
-        return buildResponse(fromDate, entries, tenantId);
+        Page<JournalEntryJpaEntity> entryPage = journalEntryRepository
+                .findForDayBookRange(tenantId, fromDate, toDate, toLikePattern(pageQuery.search()), pageQuery.toPageable());
+        return buildResponse(fromDate, entryPage, tenantId);
+    }
+
+    private String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     private DayBookReportResponse buildResponse(LocalDate reportDate,
-                                                List<JournalEntryJpaEntity> entries,
+                                                Page<JournalEntryJpaEntity> entryPage,
                                                 UUID tenantId) {
+        List<JournalEntryJpaEntity> entries = new ArrayList<>(entryPage.getContent());
         entries.sort(Comparator
                 .comparing(JournalEntryJpaEntity::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(JournalEntryJpaEntity::getEntryNumber, Comparator.nullsLast(Comparator.naturalOrder())));
@@ -95,14 +106,15 @@ public class DayBookReportService {
             }
         }
 
-        return DayBookReportResponse.builder()
-                .reportDate(reportDate)
-                .totalTransactions(dayBookEntries.size())
-                .totalDebits(totalDebits)
-                .totalCredits(totalCredits)
-                .difference(totalDebits.subtract(totalCredits))
-                .entries(dayBookEntries)
-                .build();
+        return new DayBookReportResponse(
+                reportDate,
+                (int) entryPage.getTotalElements(),
+                totalDebits,
+                totalCredits,
+                totalDebits.subtract(totalCredits),
+                dayBookEntries,
+                PageMetadata.from(entryPage)
+        );
     }
 
     private BigDecimal nullSafe(BigDecimal value) {

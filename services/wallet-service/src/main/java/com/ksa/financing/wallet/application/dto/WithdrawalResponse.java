@@ -1,0 +1,41 @@
+package com.ksa.financing.wallet.application.dto;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+public record WithdrawalResponse(
+        UUID id,
+        String withdrawalNumber,
+        UUID sourceWalletId,
+        String destinationIban,
+        String destinationBankName,
+        String destinationCountry,
+        String beneficiaryName,
+        BigDecimal amount,
+        BigDecimal feeAmount,
+        BigDecimal totalDebit,
+        String currency,
+        String channel,
+        String status,
+        String purposeNote,
+        String purposeCode,
+        String chargeBearer,
+        String serviceLevel,
+        String endToEndId,
+        UUID uetr,
+        String screeningRef,
+        String screeningDecision,
+        Integer screeningScore,
+        boolean eddRequired,
+        String fineractDebitTxnId,
+        String bankReference,
+        String sarieReference,
+        String errorCode,
+        String errorMessage,
+        Instant initiatedAt,
+        Instant screenedAt,
+        Instant debitedAt,
+        Instant bankSubmittedAt,
+        Instant completedAt
+) {}

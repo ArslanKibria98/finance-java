@@ -1,5 +1,7 @@
 package com.ksa.financing.risk.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.scenario.ScenarioRule;
 import com.ksa.financing.risk.domain.model.scenario.ThirdPartyCheckType;
 import com.ksa.financing.risk.domain.model.status.AccountStatus;
@@ -18,9 +20,12 @@ public interface ManageScenarioRuleUseCase {
 
     List<ScenarioRule> getAll(UUID tenantId);
 
+    PageResponse<ScenarioRule> getAll(UUID tenantId, PageQuery query);
+
     List<ScenarioRule> getActive(UUID tenantId);
 
     void deactivate(UUID tenantId, UUID ruleId);
+// ...
 
     record CreateScenarioRuleCommand(
             String scenarioName,

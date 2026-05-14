@@ -1,6 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
 import com.ksa.financing.ledger.application.dto.PortfolioSummaryReportResponse;
+import com.ksa.financing.ledger.application.service.util.AggregateValueUtil;
 import com.ksa.financing.ledger.domain.port.out.AccountRepository;
 import com.ksa.financing.ledger.infrastructure.messaging.LedgerAccountCodes;
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaJournalLineRepository;
@@ -45,13 +46,13 @@ public class PortfolioSummaryReportService {
         // In-range totals: debits = disbursements, credits = collections.
         var rangeTotals = journalLineRepository.sumDebitsCreditsByAccountInRange(
                 tenantId, receivableUuid, from, to);
-        BigDecimal disbursedInRange = toBigDecimal(rangeTotals, 0);
-        BigDecimal collectedInRange = toBigDecimal(rangeTotals, 1);
+        BigDecimal disbursedInRange = AggregateValueUtil.valueAt(rangeTotals, 0);
+        BigDecimal collectedInRange = AggregateValueUtil.valueAt(rangeTotals, 1);
 
         // Outstanding balance = cumulative debits - cumulative credits up to `to` date.
         var cumulative = journalLineRepository.sumDebitsCreditsByAccountUpToDate(
                 tenantId, receivableUuid, to);
-        BigDecimal outstanding = toBigDecimal(cumulative, 0).subtract(toBigDecimal(cumulative, 1));
+        BigDecimal outstanding = AggregateValueUtil.valueAt(cumulative, 0).subtract(AggregateValueUtil.valueAt(cumulative, 1));
         if (outstanding.compareTo(BigDecimal.ZERO) < 0) {
             outstanding = BigDecimal.ZERO;
         }
@@ -63,8 +64,8 @@ public class PortfolioSummaryReportService {
         if (provisionAccount != null && outstanding.compareTo(BigDecimal.ZERO) > 0) {
             var provisionTotals = journalLineRepository.sumDebitsCreditsByAccountUpToDate(
                     tenantId, provisionAccount.getId().value(), to);
-            BigDecimal provisions = toBigDecimal(provisionTotals, 0)
-                    .subtract(toBigDecimal(provisionTotals, 1));
+            BigDecimal provisions = AggregateValueUtil.valueAt(provisionTotals, 0)
+                    .subtract(AggregateValueUtil.valueAt(provisionTotals, 1));
             if (provisions.compareTo(BigDecimal.ZERO) > 0) {
                 delinquencyRate = provisions.multiply(BigDecimal.valueOf(100))
                         .divide(outstanding, 2, RoundingMode.HALF_UP);
@@ -80,8 +81,4 @@ public class PortfolioSummaryReportService {
                 .build();
     }
 
-    private BigDecimal toBigDecimal(Object[] row, int idx) {
-        if (row == null || row.length <= idx || row[idx] == null) return BigDecimal.ZERO;
-        return new BigDecimal(row[idx].toString());
-    }
 }

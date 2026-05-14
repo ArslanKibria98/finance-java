@@ -20,6 +20,10 @@ public record UpsertDelinquencyRuleRequest(
         Integer promisesPerYear,
         Integer promisesPerLoan,
         Boolean isCustom,
+        Integer settlementStrategy,          // 1=Invoice Based, 2=Principle Based
+        String settlementDiscountType,       // e.g. "FIXED"
+        Integer settlementMonths,
+        BigDecimal settlementAmountPerMonth,
         String charityFundAccount,
         @Valid List<ConfigItem> configs) {
 

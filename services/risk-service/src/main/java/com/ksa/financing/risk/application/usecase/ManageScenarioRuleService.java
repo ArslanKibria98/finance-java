@@ -1,6 +1,8 @@
 package com.ksa.financing.risk.application.usecase;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.scenario.ScenarioRule;
 import com.ksa.financing.risk.domain.port.in.ManageScenarioRuleUseCase;
 import com.ksa.financing.risk.domain.port.out.ScenarioRuleRepository;
@@ -88,15 +90,20 @@ public class ManageScenarioRuleService implements ManageScenarioRuleUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResponse<ScenarioRule> getAll(UUID tenantId, PageQuery query) {
+        return scenarioRuleRepository.findAllByTenantId(tenantId, query);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ScenarioRule> getActive(UUID tenantId) {
-        return scenarioRuleRepository.findActiveByTenantId(tenantId);
+        return scenarioRuleRepository.findActiveByTenantIdOrderByPriority(tenantId);
     }
 
     @Override
     @Transactional
     public void deactivate(UUID tenantId, UUID ruleId) {
-        var rule = scenarioRuleRepository.findById(tenantId, ruleId)
-                .orElseThrow(() -> NotFoundException.forEntity("ScenarioRule", ruleId.toString()));
+        var rule = getById(tenantId, ruleId);
         rule.setActive(false);
         rule.setUpdatedAt(Instant.now());
         scenarioRuleRepository.save(rule);

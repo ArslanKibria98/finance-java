@@ -38,5 +38,10 @@ public record InstallmentResponse(
         BigDecimal writtenOffFee,
         BigDecimal writtenOffPenalty,
         LocalDate writeOffDate,
-        String writeOffReason
+        String writeOffReason,
+        // Penalty-waiver fields
+        BigDecimal waivedPenaltyAmount,
+        BigDecimal remainingPenaltyAmount,
+        boolean pendingWaiverRequest,
+        BigDecimal pendingWaiverAmount
 ) {}

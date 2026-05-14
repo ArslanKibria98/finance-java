@@ -1,54 +1,65 @@
 package com.ksa.financing.kycadapter.infrastructure.stub;
 
+import com.ksa.financing.kycadapter.infrastructure.middleware.MiddlewareApiClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Stub adapter simulating the Tahakuk government API for mobile ownership verification.
- * In production, this would be replaced with an actual HTTP client calling the Tahakuk service.
+ * Tahakuk mobile-ownership verification adapter.
+ *
+ * Now routes through middleware-third-party (apiCode = TAHAQUQ_VERIFY_MOBILE)
+ * so every call is persisted in client_request_test (or _dev / _prod
+ * depending on the configured middleware client environment) for audit.
+ *
+ * The method signature is preserved so existing callers
+ * (e.g., VerifyMobileService) need no changes — the response shape stays
+ * the same: {verified, carrier, verifiedAt, nationalId, mobileNumber, ...}
+ * with extra fields from the upstream Tahaquq payload passed through.
  */
 @Component
 public class TahakukStubAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(TahakukStubAdapter.class);
 
-    /**
-     * Verify mobile number ownership against a national ID.
-     * Simulates a call to the Tahakuk government API with a 200ms delay.
-     *
-     * @param nationalId   the national ID of the individual
-     * @param mobileNumber the mobile number to verify
-     * @return a map containing verification results
-     */
+    private static final String API_CODE = "TAHAQUQ_VERIFY_MOBILE";
+
+    private final MiddlewareApiClient middlewareApiClient;
+
+    public TahakukStubAdapter(MiddlewareApiClient middlewareApiClient) {
+        this.middlewareApiClient = middlewareApiClient;
+    }
+
     public Map<String, Object> verifyMobileOwnership(String nationalId, String mobileNumber) {
-        log.info("Tahakuk stub: Verifying mobile ownership for nationalId={}, mobileNumber={}",
+        log.info("Tahaquq via middleware: verifying nationalId={}, mobile={}",
                 maskId(nationalId), maskMobile(mobileNumber));
 
-        simulateDelay(200);
-
-        Map<String, Object> result = Map.of(
-                "verified", true,
-                "carrier", "STC",
-                "verifiedAt", Instant.now().toString(),
+        var requestBody = Map.<String, Object>of(
                 "nationalId", nationalId,
                 "mobileNumber", mobileNumber
         );
 
-        log.info("Tahakuk stub: Mobile ownership verified successfully for nationalId={}", maskId(nationalId));
-        return result;
-    }
+        Map<String, Object> upstream = middlewareApiClient.invokeAsMap(
+                API_CODE, requestBody, nationalId, mobileNumber, null);
 
-    private void simulateDelay(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("Tahakuk stub: Delay interrupted");
-        }
+        // Normalize to the contract the downstream VerifyMobileService expects.
+        // Tahaquq mock returns "isOwner" – map it to "verified" for backwards compat.
+        boolean verified = Boolean.TRUE.equals(upstream.get("isOwner"))
+                || Boolean.TRUE.equals(upstream.get("verified"));
+
+        Map<String, Object> result = new LinkedHashMap<>(upstream);
+        result.put("verified", verified);
+        result.putIfAbsent("nationalId", nationalId);
+        result.putIfAbsent("mobileNumber", mobileNumber);
+        result.putIfAbsent("verifiedAt", Instant.now().toString());
+        result.putIfAbsent("carrier", "STC");
+
+        log.info("Tahaquq result: verified={}, nationalId={}", verified, maskId(nationalId));
+        return result;
     }
 
     private String maskId(String id) {

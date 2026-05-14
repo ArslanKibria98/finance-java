@@ -60,6 +60,11 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
                 input.clothingEssentials(),
                 input.education(),
                 input.transportation(),
+                safeUuid(input.productId()),
+                input.requestedAmount(),
+                input.requestedTenureMonths(),
+                input.purposeOfFinance(),
+                input.purposeOfFinanceOther(),
                 UUID.fromString(input.createdBy())
         );
 
@@ -235,9 +240,11 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
             case "OTP_VERIFICATION" -> aggregate.moveToOtpVerification(updatedBy);
             case "IVR_VERIFICATION" -> aggregate.recordOtpVerified(updatedBy);
             case "CONTRACT_SIGNED" -> aggregate.recordIvrVerified(updatedBy);
+            case "AWAIT_DISBURSED" -> aggregate.moveToAwaitDisbursed(updatedBy);
             case "LOAN_CREATING" -> aggregate.moveToLoanCreating(updatedBy);
             case "DISBURSING" -> aggregate.moveToDisbursing(updatedBy);
             case "APPROVED" -> aggregate.approve(updatedBy);
+            case "DISBURSED" -> aggregate.markDisbursed(updatedBy);
             case "REJECTED" -> aggregate.reject("Workflow rejection", updatedBy);
             case "CANCELLED" -> aggregate.cancel(updatedBy);
             case "EXPIRED" -> aggregate.expire();
@@ -313,6 +320,7 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
                 ShariaStructure.valueOf(input.shariaStructure()),
                 input.principalAmount(),
                 input.profitAmount(),
+                input.processingFee().add(input.adminFee()),
                 input.profitRate(),
                 input.tenureMonths(),
                 input.installmentAmount()

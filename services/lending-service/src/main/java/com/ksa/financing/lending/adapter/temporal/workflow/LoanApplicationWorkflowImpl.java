@@ -40,6 +40,9 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     private static final Duration IVR_TIMEOUT = Duration.ofMinutes(10);
     private static final int MAX_OTP_ATTEMPTS = 3;   // BRD: max 3 OTP attempts
     private static final int MAX_IVR_ATTEMPTS = 3;   // BRD: max 3 IVR attempts
+    // Grace window after approval (auto or manual) before disbursement begins;
+    // application surfaces an AWAIT_DISBURSED state during this period.
+    private static final Duration POST_APPROVAL_DISBURSEMENT_DELAY = Duration.ofMinutes(1);
 
     // ══════════════════════════════════════════════════════════════
     // ACTIVITY STUBS
@@ -263,6 +266,8 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                             0, 0,
                             foodGroceries, utilities, healthcare, communication,
                             housingRent, clothingEssentials, education, transportation,
+                            productId, requestedAmount, requestedTenureMonths,
+                            purposeOfFinance, request.purposeOfFinanceOther(),
                             createdBy, workflowId
                     )
             );
@@ -577,13 +582,34 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 manualReviewRequired = false;
             }
 
+            // Post-approval grace window: application sits in AWAIT_DISBURSED for 1 minute
+            // before LOAN_CREATING / DISBURSING begin. Applies to both auto-approved and
+            // manually-approved paths so customers always see an "awaiting disbursement"
+            // state before funds move.
+            status = "AWAIT_DISBURSED";
+            subStep = "AWAITING_DISBURSEMENT";
+            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                    tenantId, applicationId, "AWAIT_DISBURSED", createdBy));
+            updateStep(5, "Sign Contract", "AWAIT_DISBURSED", "AWAITING_DISBURSEMENT");
+            log.info("Application {} entering AWAIT_DISBURSED, sleeping {} before disbursement",
+                    applicationNumber, POST_APPROVAL_DISBURSEMENT_DELAY);
+            Workflow.sleep(POST_APPROVAL_DISBURSEMENT_DELAY);
+
             processLoanCreationAndDisbursement(workflowId);
 
             // ══════════ DONE ══════════
+            // Application is first APPROVED, then transitions to DISBURSED once the
+            // wallet credit + GL post + mark-disbursed steps inside Phase 6 complete.
+            // Customers see "approved" briefly while disbursement settles, then "disbursed".
             status = "APPROVED";
             subStep = "COMPLETED";
             lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
                     tenantId, applicationId, "APPROVED", createdBy));
+
+            status = "DISBURSED";
+            subStep = "FUNDS_TRANSFERRED";
+            lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
+                    tenantId, applicationId, "DISBURSED", createdBy));
 
             log.info("Loan application workflow completed. Application: {}, Loan: {}",
                     applicationNumber, loanInfo != null ? loanInfo.loanNumber() : "N/A");
@@ -592,7 +618,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                     workflowId, applicationId, applicationNumber,
                     loanInfo != null ? loanInfo.loanId() : null,
                     loanInfo != null ? loanInfo.loanNumber() : null,
-                    "APPROVED", null);
+                    "DISBURSED", null);
 
         } catch (ApplicationFailure af) {
             throw af;
@@ -819,23 +845,32 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                     "IBAN_VERIFICATION_FAILED");
         }
 
+        // Verifier may return nulls when external Tarabut is unavailable (mock fallback);
+        // fall back to caller-supplied bank info so persistence never sees blank bankName.
+        String effectiveBankCode = (ibanResult.bankCode() != null && !ibanResult.bankCode().isBlank())
+                ? ibanResult.bankCode() : bankAccountSignal.bankCode();
+        String effectiveBankName = (ibanResult.bankName() != null && !ibanResult.bankName().isBlank())
+                ? ibanResult.bankName() : bankAccountSignal.bankName();
+        String effectiveAccountHolder = (ibanResult.accountHolder() != null && !ibanResult.accountHolder().isBlank())
+                ? ibanResult.accountHolder() : customerValidation.fullName();
+
         // Save bank account to application
         lendingActivity.saveBankAccount(new LoanApplicationActivity.SaveBankAccountInput(
                 tenantId, applicationId,
-                bankAccountSignal.bankCode(),
-                ibanResult.bankName(),
+                effectiveBankCode,
+                effectiveBankName,
                 bankAccountSignal.iban(),
                 bankAccountSignal.accountNumber(),
-                ibanResult.accountHolder(),
+                effectiveAccountHolder,
                 true,
                 createdBy
         ));
 
         bankAccountData = new BankAccountData(
-                bankAccountSignal.bankCode(),
-                ibanResult.bankName(),
+                effectiveBankCode,
+                effectiveBankName,
                 bankAccountSignal.iban(),
-                ibanResult.accountHolder(),
+                effectiveAccountHolder,
                 true
         );
 
@@ -876,7 +911,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         var creditResult = creditCheckActivity.performCreditCheck(
                 new CreditCheckActivity.CreditCheckInput(
                         tenantId, nationalId, customerId,
-                        effectiveAmount
+                        applicationId, effectiveAmount
                 )
         );
 
@@ -1047,10 +1082,13 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 recalc.monthlyInstallment(),
                 recalc.totalPayable(),
                 recalc.totalProfit(),
+                recalc.processingFee(),
+                recalc.adminFee(),
                 createdBy
         ));
 
-        status = "OFFER_ACCEPTED";
+        status = "OFFER_ACCEPTED";http://46.62.226.94:8000/lending-service/api/v1/loans/9d54872f-dedc-4d41-ac8d-75d97b1d50a8/reschedules/89f13834-b3e9-42a5-88c2-0e3f8b42ef89/approve
+
         lendingActivity.updateStatus(new LoanApplicationActivity.UpdateStatusInput(
                 tenantId, applicationId, "OFFER_ACCEPTED", createdBy));
 
@@ -1446,6 +1484,8 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 basicInfoSignal.shariaStructure(),
                 selectedAmount,
                 offerDetails.totalProfit(),
+                offerDetails.processingFee(),
+                offerDetails.adminFee(),
                 resolvedProfitRate,
                 basicInfoSignal.requestedTenureMonths(),
                 offerDetails.monthlyInstallment()
@@ -1512,17 +1552,34 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
             log.warn("PaymentGuard pre-disbursement check failed ({}), proceeding with disbursement.", e.getMessage());
         }
 
-        // 6g: Disburse funds to customer IBAN
+        // 6g: Disburse funds to the customer's wallet (Fineract savings account).
+        //     Replaces the legacy IBAN bank transfer — wallet-service performs the
+        //     Fineract deposit so balance stays consistent with core banking.
         subStep = "DISBURSING_FUNDS";
-        var disbursementResult = disbursementActivity.disburseFunds(
-                new DisbursementActivity.DisburseFundsInput(
+        var walletResult = disbursementActivity.disburseToWallet(
+                new DisbursementActivity.WalletDisbursementInput(
                         tenantId, loanResult.loanId(), loanResult.loanNumber(),
+                        customerId,
                         selectedAmount,
-                        bankAccountData.iban(),
-                        bankAccountData.bankCode(),
-                        bankAccountData.accountHolder(),
                         workflowId + "-disburse"
                 )
+        );
+
+        if (!walletResult.success()) {
+            log.error("Wallet disbursement failed for loan {}: status={}",
+                    loanResult.loanNumber(), walletResult.status());
+            throw io.temporal.failure.ApplicationFailure.newFailure(
+                    "Wallet disbursement failed: " + walletResult.status(),
+                    "WalletDisbursementFailed");
+        }
+
+        var disbursementResult = new DisbursementActivity.DisbursementResult(
+                walletResult.movementId(),
+                walletResult.walletNumber(),
+                walletResult.fineractTransactionId() != null
+                        ? String.valueOf(walletResult.fineractTransactionId()) : null,
+                walletResult.status(),
+                walletResult.success()
         );
 
         // 6g-2: Post disbursement GL entry via ledger-service → Fineract GL
@@ -1731,9 +1788,10 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
 
     private LoanApplicationResult expireApplication(String workflowId, String reason) {
         log.warn("Application expired: {} — {}", applicationId, reason);
-        // Skip DB update if already in a terminal state (CANCELLED, EXPIRED, APPROVED, REJECTED)
+        // Skip DB update if already in a terminal state (CANCELLED, EXPIRED, APPROVED, DISBURSED, REJECTED)
         if (status != null && (status.equals("CANCELLED") || status.equals("EXPIRED")
-                || status.equals("APPROVED") || status.equals("REJECTED"))) {
+                || status.equals("APPROVED") || status.equals("DISBURSED")
+                || status.equals("REJECTED"))) {
             log.info("Application {} already in terminal state {}, skipping expire update", applicationId, status);
         } else {
             try {

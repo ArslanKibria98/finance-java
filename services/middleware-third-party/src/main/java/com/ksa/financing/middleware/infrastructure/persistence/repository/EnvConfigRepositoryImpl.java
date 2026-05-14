@@ -41,6 +41,12 @@ public class EnvConfigRepositoryImpl implements EnvConfigRepository {
     }
 
     @Override
+    public List<ApiEnvironmentConfig> findAllByProviderId(UUID tenantId, UUID providerId) {
+        return jpaRepository.findByProviderId(tenantId, providerId)
+                .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     public List<ApiEnvironmentConfig> findAllByTenant(UUID tenantId) {
         return jpaRepository.findByTenantIdAndDeletedAtIsNull(tenantId)
                 .stream().map(mapper::toDomain).toList();

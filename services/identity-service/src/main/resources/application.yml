@@ -101,6 +101,11 @@ ksa:
     enabled: true
     cache-key-prefix: casbin:policies
 
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true
 app:
   services:
     customer-service-url: ${CUSTOMER_SERVICE_URL:http://localhost:8084}
@@ -134,9 +139,15 @@ resilience4j:
 keycloak:
   base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
   internal-url: ${KEYCLOAK_AUTH_SERVER_URL:http://keycloak:8080}
+  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://keycloak:8080}
   realm: ${KEYCLOAK_REALM:CompanyRealm}
   user-lookup-retry-max-attempts: ${KEYCLOAK_USER_LOOKUP_RETRY_MAX_ATTEMPTS:5}
   user-lookup-retry-delay-ms: ${KEYCLOAK_USER_LOOKUP_RETRY_DELAY_MS:250}
+  bootstrap:
+    enabled: ${KEYCLOAK_BOOTSTRAP_ENABLED:true}
+    master-admin-username: ${KEYCLOAK_MASTER_ADMIN_USERNAME:admin}
+    master-admin-password: ${KEYCLOAK_MASTER_ADMIN_PASSWORD:admin}
+    target-clients: ${KEYCLOAK_BOOTSTRAP_TARGET_CLIENTS:admin-dashboard,partner-dashboard,customer-mobile-app,react-frontend}
   sso:
     client-id: ${KEYCLOAK_SSO_CLIENT_ID:react-frontend}
     redirect-uri: ${KEYCLOAK_SSO_REDIRECT_URI:http://localhost:3000/callback}

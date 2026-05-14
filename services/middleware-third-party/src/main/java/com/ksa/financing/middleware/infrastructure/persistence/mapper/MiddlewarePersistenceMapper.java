@@ -84,6 +84,8 @@ public class MiddlewarePersistenceMapper {
         domain.setStatus(toApiStatus(entity.getStatus()));
         domain.setAsync(entity.isAsync());
         domain.setTimeoutMs(entity.getTimeoutMs());
+        domain.setCostPerCall(entity.getCostPerCall());
+        domain.setCostCurrency(entity.getCostCurrency());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));
         domain.setCreatedBy(entity.getCreatedBy());
@@ -108,6 +110,8 @@ public class MiddlewarePersistenceMapper {
         entity.setStatus(toApiStatusEnum(domain.getStatus()));
         entity.setAsync(domain.isAsync());
         entity.setTimeoutMs(domain.getTimeoutMs());
+        entity.setCostPerCall(domain.getCostPerCall() != null ? domain.getCostPerCall() : java.math.BigDecimal.ZERO);
+        entity.setCostCurrency(domain.getCostCurrency() != null ? domain.getCostCurrency() : "SAR");
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
         entity.setCreatedBy(domain.getCreatedBy());
@@ -258,6 +262,88 @@ public class MiddlewarePersistenceMapper {
         entity.setNationalId(domain.getNationalId());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         return entity;
+    }
+
+    // ==================== ClientRequest (env-specific tables) ====================
+
+    public ClientRequest toDomain(ClientRequestBaseJpaEntity entity, EnvironmentType environment) {
+        if (entity == null) return null;
+        var domain = new ClientRequest();
+        domain.setId(entity.getId());
+        domain.setTenantId(entity.getTenantId());
+        domain.setApiId(entity.getApiId());
+        domain.setClientId(entity.getClientId());
+        domain.setRequestId(entity.getRequestId());
+        domain.setProviderCode(entity.getProviderCode());
+        domain.setApiCode(entity.getApiCode());
+        domain.setEnvironment(environment);
+        domain.setHttpMethod(toClientRequestHttpMethod(entity.getHttpMethod()));
+        domain.setRequestUrl(entity.getRequestUrl());
+        domain.setRequestHeaders(entity.getRequestHeaders());
+        domain.setRequestBody(entity.getRequestBody());
+        domain.setResponseStatus(entity.getResponseStatus());
+        domain.setResponseHeaders(entity.getResponseHeaders());
+        domain.setResponseBody(entity.getResponseBody());
+        domain.setStatus(toClientRequestStatus(entity.getStatus()));
+        domain.setDurationMs(entity.getDurationMs());
+        domain.setErrorMessage(entity.getErrorMessage());
+        domain.setIdempotencyKey(entity.getIdempotencyKey());
+        domain.setNationalId(entity.getNationalId());
+        domain.setMobileNumber(entity.getMobileNumber());
+        domain.setCallerService(entity.getCallerService());
+        domain.setCustomerId(entity.getCustomerId());
+        domain.setApplicationId(entity.getApplicationId());
+        domain.setContextType(entity.getContextType());
+        domain.setApiCost(entity.getApiCost());
+        domain.setCostCurrency(entity.getCostCurrency());
+        domain.setCreatedAt(toInstant(entity.getCreatedAt()));
+        return domain;
+    }
+
+    public void copyToEntity(ClientRequest domain, ClientRequestBaseJpaEntity entity) {
+        entity.setId(domain.getId());
+        entity.setTenantId(domain.getTenantId());
+        entity.setApiId(domain.getApiId());
+        entity.setClientId(domain.getClientId());
+        entity.setRequestId(domain.getRequestId());
+        entity.setProviderCode(domain.getProviderCode());
+        entity.setApiCode(domain.getApiCode());
+        entity.setHttpMethod(toClientRequestHttpMethodEnum(domain.getHttpMethod()));
+        entity.setRequestUrl(domain.getRequestUrl());
+        entity.setRequestHeaders(domain.getRequestHeaders());
+        entity.setRequestBody(domain.getRequestBody());
+        entity.setResponseStatus(domain.getResponseStatus());
+        entity.setResponseHeaders(domain.getResponseHeaders());
+        entity.setResponseBody(domain.getResponseBody());
+        entity.setStatus(toClientRequestStatusEnum(domain.getStatus()));
+        entity.setDurationMs(domain.getDurationMs());
+        entity.setErrorMessage(domain.getErrorMessage());
+        entity.setIdempotencyKey(domain.getIdempotencyKey());
+        entity.setNationalId(domain.getNationalId());
+        entity.setMobileNumber(domain.getMobileNumber());
+        entity.setCallerService(domain.getCallerService());
+        entity.setCustomerId(domain.getCustomerId());
+        entity.setApplicationId(domain.getApplicationId());
+        entity.setContextType(domain.getContextType());
+        entity.setApiCost(domain.getApiCost());
+        entity.setCostCurrency(domain.getCostCurrency());
+        entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
+    }
+
+    private HttpMethod toClientRequestHttpMethod(ClientRequestBaseJpaEntity.HttpMethodEnum e) {
+        return e != null ? HttpMethod.valueOf(e.name()) : null;
+    }
+
+    private ClientRequestBaseJpaEntity.HttpMethodEnum toClientRequestHttpMethodEnum(HttpMethod m) {
+        return m != null ? ClientRequestBaseJpaEntity.HttpMethodEnum.valueOf(m.name()) : null;
+    }
+
+    private RequestStatus toClientRequestStatus(ClientRequestBaseJpaEntity.RequestStatusEnum e) {
+        return e != null ? RequestStatus.valueOf(e.name()) : null;
+    }
+
+    private ClientRequestBaseJpaEntity.RequestStatusEnum toClientRequestStatusEnum(RequestStatus s) {
+        return s != null ? ClientRequestBaseJpaEntity.RequestStatusEnum.valueOf(s.name()) : null;
     }
 
     // ==================== CallbackResponse ====================

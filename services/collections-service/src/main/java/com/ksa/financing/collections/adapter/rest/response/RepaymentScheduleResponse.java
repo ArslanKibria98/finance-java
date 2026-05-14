@@ -12,6 +12,7 @@ public record RepaymentScheduleResponse(
         String scheduleNumber,
         BigDecimal totalPrincipal,
         BigDecimal totalProfit,
+        BigDecimal totalFee,
         BigDecimal totalAmount,
         BigDecimal paidPrincipal,
         BigDecimal paidProfit,

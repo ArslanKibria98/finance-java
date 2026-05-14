@@ -13,8 +13,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -47,33 +49,35 @@ public class EddReferenceDataController {
     }
 
     @GetMapping("/source-of-wealth")
-    @Operation(summary = "List active Source of Wealth options",
-               description = "Returns active Source of Wealth dropdown options sorted by display order. "
-                           + "Used to populate the EDD form during onboarding.")
-    public ResponseEntity<List<ReferenceDataResponse>> listSourceOfWealth() {
-        log.debug("Fetching active Source of Wealth options from customer-service");
-        var url = customerServiceUrl + "/api/v1/reference-data/source-of-wealth/active";
+    @Operation(summary = "List active Source of Wealth options. Optional ?search= forwarded to customer-service (case-insensitive LIKE on nameEn, nameAr, code).")
+    public ResponseEntity<List<ReferenceDataResponse>> listSourceOfWealth(
+            @RequestParam(required = false) String search) {
+        log.debug("Fetching active Source of Wealth options from customer-service (search={})", search);
+        var url = appendSearch(customerServiceUrl + "/api/v1/reference-data/source-of-wealth/active", search);
         return fetchReferenceData(url, "Source of Wealth");
     }
 
     @GetMapping("/source-of-funds")
-    @Operation(summary = "List active Source of Funds options",
-               description = "Returns active Source of Funds dropdown options sorted by display order. "
-                           + "Used to populate the EDD form during onboarding.")
-    public ResponseEntity<List<ReferenceDataResponse>> listSourceOfFunds() {
-        log.debug("Fetching active Source of Funds options from customer-service");
-        var url = customerServiceUrl + "/api/v1/reference-data/source-of-funds/active";
+    @Operation(summary = "List active Source of Funds options. Optional ?search= forwarded to customer-service (case-insensitive LIKE on nameEn, nameAr, code).")
+    public ResponseEntity<List<ReferenceDataResponse>> listSourceOfFunds(
+            @RequestParam(required = false) String search) {
+        log.debug("Fetching active Source of Funds options from customer-service (search={})", search);
+        var url = appendSearch(customerServiceUrl + "/api/v1/reference-data/source-of-funds/active", search);
         return fetchReferenceData(url, "Source of Funds");
     }
 
     @GetMapping("/net-worth-ranges")
-    @Operation(summary = "List active Net Worth Range options",
-               description = "Returns active Net Worth Range dropdown options sorted by display order. "
-                           + "Used to populate the EDD form during onboarding.")
-    public ResponseEntity<List<ReferenceDataResponse>> listNetWorthRanges() {
-        log.debug("Fetching active Net Worth Range options from customer-service");
-        var url = customerServiceUrl + "/api/v1/reference-data/net-worth-ranges/active";
+    @Operation(summary = "List active Net Worth Range options. Optional ?search= forwarded to customer-service (case-insensitive LIKE on nameEn, nameAr, code).")
+    public ResponseEntity<List<ReferenceDataResponse>> listNetWorthRanges(
+            @RequestParam(required = false) String search) {
+        log.debug("Fetching active Net Worth Range options from customer-service (search={})", search);
+        var url = appendSearch(customerServiceUrl + "/api/v1/reference-data/net-worth-ranges/active", search);
         return fetchReferenceData(url, "Net Worth Ranges");
+    }
+
+    private String appendSearch(String baseUrl, String search) {
+        if (search == null || search.isBlank()) return baseUrl;
+        return UriComponentsBuilder.fromHttpUrl(baseUrl).queryParam("search", search.trim()).toUriString();
     }
 
     @SuppressWarnings("unchecked")

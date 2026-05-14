@@ -3,6 +3,8 @@ package com.ksa.financing.wallet.adapter.rest.controller;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.wallet.application.dto.InitiateTransferRequest;
 import com.ksa.financing.wallet.application.dto.RecipientLookupResponse;
 import com.ksa.financing.wallet.application.dto.TransferByMobileRequest;
@@ -91,13 +93,18 @@ public class WalletTransferController {
 
     @SecuredEndpoint(obj = "wallet.transfers", act = "list")
     @GetMapping("/by-wallet/{walletId}")
-    @Operation(summary = "List transfers for a wallet (sent + received)")
-    public ResponseEntity<List<TransferResponse>> listByWallet(
+    @Operation(summary = "List transfers for a wallet (sent + received). Supports query params: page, size, search (transferNumber, status, channel, purposeNote, errorCode, errorMessage).")
+    public PageResponse<TransferResponse> listByWallet(
             @PathVariable UUID walletId,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         extractTenantId(jwt);
-        List<WalletTransfer> list = getTransferUseCase.listByWallet(walletId);
-        return ResponseEntity.ok(list.stream().map(this::toResponse).toList());
+        var page = getTransferUseCase.listByWallet(walletId, query);
+        return page.map(this::toResponse);
+    }
+
+    private static boolean contains(String f, String term) {
+        return f != null && f.toLowerCase().contains(term);
     }
 
     @SecuredEndpoint(obj = "wallet.transfers", act = "lookup")

@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -12,7 +14,8 @@ public record CollectionsDueReportResponse(
         LocalDate fromDate,
         LocalDate toDate,
         BigDecimal totalDue,
-        List<CollectionsDueItem> items
+        List<CollectionsDueItem> items,
+        @JsonIgnore PageMetadata pagination
 ) {
     @Builder
     public record CollectionsDueItem(

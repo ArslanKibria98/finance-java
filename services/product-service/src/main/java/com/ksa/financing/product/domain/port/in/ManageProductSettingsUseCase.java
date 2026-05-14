@@ -46,7 +46,12 @@ public interface ManageProductSettingsUseCase {
         BigDecimal maxDbrPercentage,
         String dbrCalculationMethod, String dbrExceptions,
         BigDecimal maxDti, Integer minAge, Integer maxAge,
-        BigDecimal gdbrPercentage
+        BigDecimal gdbrPercentage,
+        Boolean penaltyWaiverAllowed,
+        Integer maxPenaltyWaiversAllowed,
+        BigDecimal minFinancingAmount,
+        BigDecimal maxFinancingAmount,
+        BigDecimal vatPercentage
     ) {}
 
     record AdminFeeSlabCommand(

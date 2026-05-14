@@ -14,6 +14,8 @@ public record FraudEvaluationResult(
     String customerId,
     FraudDecision decision,
     FraudBlockType blockType,
+    UUID blockCodeId,
+    String blockCode,
     int compositeRiskScore,
     String riskLevel,
     List<RuleEvaluationResult> triggeredRules,

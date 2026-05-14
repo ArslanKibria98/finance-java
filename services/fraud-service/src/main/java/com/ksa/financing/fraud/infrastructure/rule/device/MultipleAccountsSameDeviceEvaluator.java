@@ -44,7 +44,7 @@ public class MultipleAccountsSameDeviceEvaluator implements FraudRuleEvaluator {
         if (count < maxAccounts) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 count + " distinct accounts on device in " + windowHours + "h",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

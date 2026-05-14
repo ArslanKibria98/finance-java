@@ -19,6 +19,7 @@ public record LoanDto(
         String commodityTransactionId,
         BigDecimal principalAmount,
         BigDecimal profitAmount,
+        BigDecimal feeAmount,
         BigDecimal totalAmount,
         BigDecimal profitRate,
         int tenureMonths,

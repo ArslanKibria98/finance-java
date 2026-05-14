@@ -3,11 +3,14 @@ package com.ksa.financing.fraud.domain.model.fraud;
 import com.ksa.financing.fraud.domain.model.rule.RuleEvaluationResult;
 
 import java.util.List;
+import java.util.UUID;
 
 public record FraudCompositeScore(
     int score,
     String riskLevel,
-    List<RuleEvaluationResult> triggeredRules
+    List<RuleEvaluationResult> triggeredRules,
+    UUID blockCodeId,
+    String blockCode
 ) {
     public static String levelFromScore(int score) {
         if (score >= 81) return "CRITICAL";

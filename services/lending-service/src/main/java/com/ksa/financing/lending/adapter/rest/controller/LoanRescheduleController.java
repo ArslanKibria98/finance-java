@@ -458,7 +458,7 @@ public class LoanRescheduleController {
         for (int i = 0; i < maxPolls; i++) {
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
             var updated = rescheduleRepository.findById(rescheduleId).orElse(null);
-            if (updated != null && ("APPROVED".equals(updated.getStatus()) || "REJECTED".equals(updated.getStatus()) || "FAILED".equals(updated.getStatus()))) {
+            if (updated != null && ("APPLIED".equals(updated.getStatus()) || "APPROVED".equals(updated.getStatus()) || "REJECTED".equals(updated.getStatus()) || "FAILED".equals(updated.getStatus()))) {
                 finalStatus = updated.getStatus();
                 if (updated.getNewTenureMonths() != null) newTenureMonths = updated.getNewTenureMonths().toString();
                 if (updated.getNewInstallmentAmount() != null) newInstallmentAmount = updated.getNewInstallmentAmount().toPlainString();
@@ -467,8 +467,8 @@ public class LoanRescheduleController {
             }
         }
 
-        // Fallback: still not APPROVED/REJECTED — sync from Temporal workflow result directly
-        if (!"APPROVED".equals(finalStatus) && !"REJECTED".equals(finalStatus)) {
+        // Fallback: still not APPLIED/APPROVED/REJECTED — sync from Temporal workflow result directly
+        if (!"APPLIED".equals(finalStatus) && !"APPROVED".equals(finalStatus) && !"REJECTED".equals(finalStatus)) {
             log.warn("DB not yet updated for rescheduleId={} — attempting to sync from Temporal result", rescheduleId);
             try {
                 var completedWorkflow = workflowClient.newUntypedWorkflowStub(record.getWorkflowId());
@@ -480,16 +480,39 @@ public class LoanRescheduleController {
                     if (result.newMaturityDate() != null) newMaturityDate = result.newMaturityDate();
 
                     // Sync the stale DB record with Temporal's authoritative result
-                    if ("APPROVED".equals(finalStatus)) {
+                    if ("APPLIED".equals(finalStatus) || "APPROVED".equals(finalStatus)) {
                         var stale = rescheduleRepository.findById(rescheduleId).orElse(null);
-                        if (stale != null && !"APPROVED".equals(stale.getStatus())) {
-                            stale.setStatus("APPROVED");
+                        if (stale != null && !"APPLIED".equals(stale.getStatus())) {
+                            stale.setStatus("APPLIED");
                             if (result.newTenureMonths() > 0) stale.setNewTenureMonths(result.newTenureMonths());
                             if (result.newInstallmentAmount() != null) stale.setNewInstallmentAmount(result.newInstallmentAmount());
                             if (result.newMaturityDate() != null) stale.setNewMaturityDate(java.time.LocalDate.parse(result.newMaturityDate()));
                             stale.setAppliedAt(java.time.OffsetDateTime.now());
                             rescheduleRepository.save(stale);
+                            
+                            // ── CRITICAL: Propagate to loans table in fallback too! ──
+                            var loanOpt = loanRepository.findById(stale.getLoanId());
+                            if (loanOpt.isPresent()) {
+                                var loan = loanOpt.get();
+                                if (stale.getNewTenureMonths() != null && stale.getNewTenureMonths() > 0) {
+                                    loan.setTenureMonths(stale.getNewTenureMonths());
+                                }
+                                if (stale.getNewInstallmentAmount() != null) {
+                                    loan.setInstallmentAmount(stale.getNewInstallmentAmount());
+                                }
+                                if (stale.getNewMaturityDate() != null) {
+                                    loan.setMaturityDate(stale.getNewMaturityDate());
+                                }
+                                if (stale.getNewProfitRate() != null) {
+                                    loan.setProfitRate(stale.getNewProfitRate());
+                                }
+                                loan.setUpdatedAt(java.time.LocalDateTime.now());
+                                loanRepository.save(loan);
+                                log.info("Loan updated via Controller fallback sync: loanId={}", stale.getLoanId());
+                            }
+                            
                             log.info("Synced stale DB record from Temporal result: rescheduleId={}", rescheduleId);
+                            finalStatus = "APPLIED";
                         }
                     }
                 }
@@ -513,7 +536,7 @@ public class LoanRescheduleController {
                 .put("newTenureMonths", newTenureMonths)
                 .put("newInstallmentAmount", newInstallmentAmount)
                 .put("newMaturityDate", newMaturityDate)
-                .put("message", "APPROVED".equals(finalStatus)
+                .put("message", "APPLIED".equals(finalStatus) || "APPROVED".equals(finalStatus)
                         ? "Reschedule approved and schedule updated successfully."
                         : "PROCESSING".equals(finalStatus) || "AWAITING_APPROVAL".equals(finalStatus)
                             ? "Approval signal sent. Workflow is processing — use status endpoint to poll."

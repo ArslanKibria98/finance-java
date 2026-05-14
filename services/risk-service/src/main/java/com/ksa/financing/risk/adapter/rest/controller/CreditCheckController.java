@@ -29,6 +29,7 @@ public class CreditCheckController {
         var tenantId = request.containsKey("tenantId") ? UUID.fromString(request.get("tenantId").toString()) : null;
         var nationalId = request.containsKey("nationalId") ? request.get("nationalId").toString() : null;
         var customerId = request.containsKey("customerId") ? request.get("customerId").toString() : null;
+        var applicationId = request.containsKey("applicationId") ? request.get("applicationId").toString() : null;
         var requestedAmount = request.containsKey("requestedAmount")
                 ? new BigDecimal(request.get("requestedAmount").toString()) : BigDecimal.ZERO;
 
@@ -37,7 +38,7 @@ public class CreditCheckController {
         }
 
         var command = new PerformCreditCheckUseCase.CreditCheckCommand(
-                tenantId, nationalId, customerId, requestedAmount);
+                tenantId, nationalId, customerId, applicationId, requestedAmount);
 
         var result = performCreditCheckUseCase.performCreditCheck(command);
 

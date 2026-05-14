@@ -33,25 +33,30 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
     public NidBlacklistEntry saveNid(NidBlacklistEntry entry) {
         var id = entry.id() != null ? entry.id() : UUID.randomUUID();
         jdbcTemplate.update("""
-            INSERT INTO nid_blacklist (id, national_id, reason, status, added_by, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO nid_blacklist (id, national_id, reason, status, added_by, block_code_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (national_id) DO UPDATE SET
                 reason = EXCLUDED.reason,
                 status = EXCLUDED.status,
+                block_code_id = EXCLUDED.block_code_id,
                 updated_at = EXCLUDED.updated_at
             """,
             id, entry.nationalId().value(), entry.reason(), entry.status().name(),
-            entry.addedBy(), Timestamp.from(entry.createdAt()), Timestamp.from(entry.updatedAt())
+            entry.addedBy(), entry.blockCodeId(), Timestamp.from(entry.createdAt()), Timestamp.from(entry.updatedAt())
         );
         return new NidBlacklistEntry(id, entry.nationalId(), entry.reason(), entry.status(),
-            entry.addedBy(), entry.createdAt(), entry.updatedAt());
+            entry.addedBy(), entry.blockCodeId(), null, entry.createdAt(), entry.updatedAt());
     }
 
     @Override
     public Optional<NidBlacklistEntry> findNidByNationalId(String nationalId) {
-        var results = jdbcTemplate.query(
-            "SELECT * FROM nid_blacklist WHERE national_id = ?", NID_MAPPER, nationalId
-        );
+        var sql = """
+            SELECT nb.*, bc.code as block_code 
+            FROM nid_blacklist nb 
+            LEFT JOIN block_codes bc ON nb.block_code_id = bc.id 
+            WHERE nb.national_id = ?
+            """;
+        var results = jdbcTemplate.query(sql, NID_MAPPER, nationalId);
         return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
     }
 
@@ -64,12 +69,37 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
     }
 
     @Override
-    public PageResponse<NidBlacklistEntry> findAllNid(PageQuery pageQuery) {
-        String countSql = "SELECT count(*) FROM nid_blacklist";
-        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class)).orElse(0L);
+    public void updateNidBlockCode(String nationalId, UUID blockCodeId) {
+        jdbcTemplate.update(
+            "UPDATE nid_blacklist SET block_code_id = ?, updated_at = ? WHERE national_id = ?",
+            blockCodeId, Timestamp.from(Instant.now()), nationalId
+        );
+    }
 
-        String sql = "SELECT * FROM nid_blacklist ORDER BY created_at DESC LIMIT ? OFFSET ?";
-        List<NidBlacklistEntry> content = jdbcTemplate.query(sql, NID_MAPPER, pageQuery.size(), pageQuery.page() * pageQuery.size());
+    @Override
+    public PageResponse<NidBlacklistEntry> findAllNid(PageQuery pageQuery) {
+        String pat = toLikePattern(pageQuery.search());
+        String where = pat == null ? ""
+                : " WHERE LOWER(national_id) LIKE ? OR LOWER(reason) LIKE ? OR LOWER(status::text) LIKE ? OR LOWER(added_by) LIKE ?";
+
+        String countSql = "SELECT count(*) FROM nid_blacklist" + where;
+        Object[] cArgs = pat == null ? new Object[0] : new Object[]{pat, pat, pat, pat};
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, cArgs)).orElse(0L);
+
+        String sql = """
+            SELECT nb.*, bc.code as block_code 
+            FROM nid_blacklist nb 
+            LEFT JOIN block_codes bc ON nb.block_code_id = bc.id 
+            """ + where.replace("national_id", "nb.national_id")
+               .replace("reason", "nb.reason")
+               .replace("status", "nb.status")
+               .replace("added_by", "nb.added_by")
+            + " ORDER BY nb.created_at DESC LIMIT ? OFFSET ?";
+        
+        Object[] qArgs = pat == null
+                ? new Object[]{pageQuery.size(), pageQuery.page() * pageQuery.size()}
+                : new Object[]{pat, pat, pat, pat, pageQuery.size(), pageQuery.page() * pageQuery.size()};
+        List<NidBlacklistEntry> content = jdbcTemplate.query(sql, NID_MAPPER, qArgs);
 
         return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
     }
@@ -89,25 +119,30 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
     public MobileBlacklistEntry saveMobile(MobileBlacklistEntry entry) {
         var id = entry.id() != null ? entry.id() : UUID.randomUUID();
         jdbcTemplate.update("""
-            INSERT INTO mobile_blacklist (id, mobile_number, reason, status, added_by, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO mobile_blacklist (id, mobile_number, reason, status, added_by, block_code_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (mobile_number) DO UPDATE SET
                 reason = EXCLUDED.reason,
                 status = EXCLUDED.status,
+                block_code_id = EXCLUDED.block_code_id,
                 updated_at = EXCLUDED.updated_at
             """,
             id, entry.mobileNumber(), entry.reason(), entry.status().name(),
-            entry.addedBy(), Timestamp.from(entry.createdAt()), Timestamp.from(entry.updatedAt())
+            entry.addedBy(), entry.blockCodeId(), Timestamp.from(entry.createdAt()), Timestamp.from(entry.updatedAt())
         );
         return new MobileBlacklistEntry(id, entry.mobileNumber(), entry.reason(), entry.status(),
-            entry.addedBy(), entry.createdAt(), entry.updatedAt());
+            entry.addedBy(), entry.blockCodeId(), null, entry.createdAt(), entry.updatedAt());
     }
 
     @Override
     public Optional<MobileBlacklistEntry> findMobileByNumber(String mobileNumber) {
-        var results = jdbcTemplate.query(
-            "SELECT * FROM mobile_blacklist WHERE mobile_number = ?", MOBILE_MAPPER, mobileNumber
-        );
+        var sql = """
+            SELECT mb.*, bc.code as block_code 
+            FROM mobile_blacklist mb 
+            LEFT JOIN block_codes bc ON mb.block_code_id = bc.id 
+            WHERE mb.mobile_number = ?
+            """;
+        var results = jdbcTemplate.query(sql, MOBILE_MAPPER, mobileNumber);
         return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
     }
 
@@ -120,14 +155,44 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
     }
 
     @Override
-    public PageResponse<MobileBlacklistEntry> findAllMobile(PageQuery pageQuery) {
-        String countSql = "SELECT count(*) FROM mobile_blacklist";
-        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class)).orElse(0L);
+    public void updateMobileBlockCode(String mobileNumber, UUID blockCodeId) {
+        jdbcTemplate.update(
+            "UPDATE mobile_blacklist SET block_code_id = ?, updated_at = ? WHERE mobile_number = ?",
+            blockCodeId, Timestamp.from(Instant.now()), mobileNumber
+        );
+    }
 
-        String sql = "SELECT * FROM mobile_blacklist ORDER BY created_at DESC LIMIT ? OFFSET ?";
-        List<MobileBlacklistEntry> content = jdbcTemplate.query(sql, MOBILE_MAPPER, pageQuery.size(), pageQuery.page() * pageQuery.size());
+    @Override
+    public PageResponse<MobileBlacklistEntry> findAllMobile(PageQuery pageQuery) {
+        String pat = toLikePattern(pageQuery.search());
+        String where = pat == null ? ""
+                : " WHERE LOWER(mobile_number) LIKE ? OR LOWER(reason) LIKE ? OR LOWER(status::text) LIKE ? OR LOWER(added_by) LIKE ?";
+
+        String countSql = "SELECT count(*) FROM mobile_blacklist" + where;
+        Object[] cArgs = pat == null ? new Object[0] : new Object[]{pat, pat, pat, pat};
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, cArgs)).orElse(0L);
+
+        String sql = """
+            SELECT mb.*, bc.code as block_code 
+            FROM mobile_blacklist mb 
+            LEFT JOIN block_codes bc ON mb.block_code_id = bc.id 
+            """ + where.replace("mobile_number", "mb.mobile_number")
+               .replace("reason", "mb.reason")
+               .replace("status", "mb.status")
+               .replace("added_by", "mb.added_by")
+            + " ORDER BY mb.created_at DESC LIMIT ? OFFSET ?";
+            
+        Object[] qArgs = pat == null
+                ? new Object[]{pageQuery.size(), pageQuery.page() * pageQuery.size()}
+                : new Object[]{pat, pat, pat, pat, pageQuery.size(), pageQuery.page() * pageQuery.size()};
+        List<MobileBlacklistEntry> content = jdbcTemplate.query(sql, MOBILE_MAPPER, qArgs);
 
         return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
+    }
+
+    private static String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     @Override
@@ -160,6 +225,8 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
         rs.getString("reason"),
         BlacklistStatus.valueOf(rs.getString("status")),
         rs.getString("added_by"),
+        rs.getObject("block_code_id", UUID.class),
+        hasColumn(rs, "block_code") ? rs.getString("block_code") : null,
         toInstant(rs.getTimestamp("created_at")),
         toInstant(rs.getTimestamp("updated_at"))
     );
@@ -170,9 +237,20 @@ public class BlacklistRepositoryImpl implements BlacklistRepository {
         rs.getString("reason"),
         BlacklistStatus.valueOf(rs.getString("status")),
         rs.getString("added_by"),
+        rs.getObject("block_code_id", UUID.class),
+        hasColumn(rs, "block_code") ? rs.getString("block_code") : null,
         toInstant(rs.getTimestamp("created_at")),
         toInstant(rs.getTimestamp("updated_at"))
     );
+
+    private static boolean hasColumn(java.sql.ResultSet rs, String columnName) {
+        try {
+            rs.findColumn(columnName);
+            return true;
+        } catch (java.sql.SQLException e) {
+            return false;
+        }
+    }
 
     private static Instant toInstant(Timestamp ts) {
         return ts != null ? ts.toInstant() : null;

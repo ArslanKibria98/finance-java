@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shared logback base for all services. Each service's logback-spring.xml
+  should <include resource="logback-ksa-base.xml"/> to inherit:
+
+    - JSON console encoder
+    - Logstash TCP appender (sends to ${LOGSTASH_HOST}:${LOGSTASH_PORT})
+    - Dedicated "api-audit" logger that ships audit events to Logstash
+    - Async appenders to avoid blocking the request thread
+
+  Required env vars (with safe defaults):
+    LOGSTASH_HOST     (default: logstash)
+    LOGSTASH_PORT     (default: 5000)
+    LOG_LEVEL         (default: INFO)
+    APP_LOG_LEVEL     (default: INFO)
+    SPRING_APP_NAME   (default: unknown-service)
+    ENV               (default: dev)
+-->
+<included>
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="unknown-service"/>
+    <property name="LOGSTASH_HOST" value="${LOGSTASH_HOST:-logstash}"/>
+    <property name="LOGSTASH_PORT" value="${LOGSTASH_PORT:-5000}"/>
+    <property name="ENV" value="${ENV:-dev}"/>
+
+    <!-- Plain JSON to stdout (picked up by Filebeat sidecar or docker logs) -->
+    <appender name="KSA_JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+            </fieldNames>
+            <customFields>{"service":"${appName}","environment":"${ENV}"}</customFields>
+            <includeMdcKeyName>correlationId</includeMdcKeyName>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>tenantId</includeMdcKeyName>
+            <includeContext>false</includeContext>
+            <includeCallerData>false</includeCallerData>
+        </encoder>
+    </appender>
+
+    <!-- Real-time ship to Logstash TCP (port 5000, json_lines codec) -->
+    <appender name="KSA_LOGSTASH_TCP" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST}:${LOGSTASH_PORT}</destination>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"${appName}","environment":"${ENV}"}</customFields>
+            <includeMdcKeyName>correlationId</includeMdcKeyName>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>tenantId</includeMdcKeyName>
+        </encoder>
+        <keepAliveDuration>5 minutes</keepAliveDuration>
+        <reconnectionDelay>10 seconds</reconnectionDelay>
+        <writeBufferSize>16384</writeBufferSize>
+    </appender>
+
+    <appender name="KSA_ASYNC_LOGSTASH" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="KSA_LOGSTASH_TCP"/>
+        <queueSize>2048</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+    </appender>
+
+    <!-- Dedicated audit logger: ships to Logstash + JSON console only. -->
+    <logger name="api-audit" level="INFO" additivity="false">
+        <appender-ref ref="KSA_JSON_CONSOLE"/>
+        <appender-ref ref="KSA_ASYNC_LOGSTASH"/>
+    </logger>
+
+</included>

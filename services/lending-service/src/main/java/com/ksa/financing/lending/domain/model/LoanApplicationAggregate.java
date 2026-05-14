@@ -168,6 +168,9 @@ public class LoanApplicationAggregate {
                                                    BigDecimal healthcare, BigDecimal communication,
                                                    BigDecimal housingRent, BigDecimal clothingEssentials,
                                                    BigDecimal education, BigDecimal transportation,
+                                                   UUID productId, BigDecimal requestedAmount,
+                                                   Integer requestedTenureMonths,
+                                                   String purposeOfFinance, String purposeOfFinanceOther,
                                                    UUID createdBy) {
         if (tenantId == null) throw new IllegalArgumentException("Tenant ID cannot be null");
         if (applicationNumber == null || applicationNumber.isBlank())
@@ -192,6 +195,14 @@ public class LoanApplicationAggregate {
         aggregate.clothingEssentials = clothingEssentials;
         aggregate.education = education;
         aggregate.transportation = transportation;
+
+        // Pre-populate intent fields from initiate so reads (e.g. /latest-application)
+        // can surface product/amount/tenure even before the Step 1 basic-info signal lands.
+        aggregate.productId = productId;
+        aggregate.requestedAmount = requestedAmount;
+        aggregate.requestedTenureMonths = requestedTenureMonths != null ? requestedTenureMonths : 0;
+        aggregate.purposeOfFinance = purposeOfFinance;
+        aggregate.purposeOfFinanceOther = purposeOfFinanceOther;
 
         aggregate.registerEvent(new LoanApplicationCreated(
                 aggregate.id, tenantId, customerId, applicationNumber
@@ -565,6 +576,13 @@ public class LoanApplicationAggregate {
 
     // ==================== STEP 6: LOAN CREATION ====================
 
+    public void moveToAwaitDisbursed(UUID updatedBy) {
+        assertTransition(ApplicationStatus.AWAIT_DISBURSED);
+        this.status = ApplicationStatus.AWAIT_DISBURSED;
+        this.updatedBy = updatedBy;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void moveToLoanCreating(UUID updatedBy) {
         assertTransition(ApplicationStatus.LOAN_CREATING);
         this.status = ApplicationStatus.LOAN_CREATING;
@@ -586,6 +604,13 @@ public class LoanApplicationAggregate {
         this.updatedAt = LocalDateTime.now();
 
         registerEvent(new LoanApplicationApproved(id, tenantId, customerId, productId, acceptedAmount));
+    }
+
+    public void markDisbursed(UUID updatedBy) {
+        assertTransition(ApplicationStatus.DISBURSED);
+        this.status = ApplicationStatus.DISBURSED;
+        this.updatedBy = updatedBy;
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void reject(String reason, UUID rejectedBy) {

@@ -32,15 +32,17 @@ public class FraudEvaluationRepositoryImpl implements FraudEvaluationRepository 
         var triggeredJson = serializeTriggeredRules(result.triggeredRules());
         jdbcTemplate.update("""
             INSERT INTO fraud_evaluations (id, tenant_id, event_id, fraud_event_id, customer_id,
-                decision, block_type, composite_risk_score, risk_level, triggered_rules,
-                block_reason, block_duration_hours, customer_message, evaluation_time_ms, evaluated_at)
-            VALUES (?, ?, ?, ?, ?, ?::fraud_decision_type, ?::fraud_block_type, ?, ?, ?::jsonb, ?, ?, ?, ?, ?)
+                decision, block_type, block_code_id, block_code, composite_risk_score, risk_level, 
+                triggered_rules, block_reason, block_duration_hours, customer_message, 
+                evaluation_time_ms, evaluated_at)
+            VALUES (?, ?, ?, ?, ?, ?::fraud_decision_type, ?::fraud_block_type, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?)
             ON CONFLICT (tenant_id, event_id) DO NOTHING
             """,
             result.id(), result.tenantId(), result.eventId(), result.fraudEventId(),
             result.customerId(),
             result.decision().name(),
             result.blockType() != null ? result.blockType().name() : null,
+            result.blockCodeId(), result.blockCode(),
             result.compositeRiskScore(), result.riskLevel(),
             triggeredJson,
             result.blockReason(), result.blockDurationHours(),
@@ -66,6 +68,8 @@ public class FraudEvaluationRepositoryImpl implements FraudEvaluationRepository 
                 rs.getString("customer_id"),
                 parseEnum(FraudDecision.class, rs.getString("decision")),
                 parseEnum(FraudBlockType.class, rs.getString("block_type")),
+                rs.getObject("block_code_id", UUID.class),
+                rs.getString("block_code"),
                 rs.getInt("composite_risk_score"),
                 rs.getString("risk_level"),
                 deserializeTriggeredRules(rs.getString("triggered_rules")),
@@ -85,6 +89,8 @@ public class FraudEvaluationRepositoryImpl implements FraudEvaluationRepository 
                     "triggered", r.triggered(),
                     "decision", r.decision() != null ? r.decision().name() : "",
                     "blockType", r.blockType() != null ? r.blockType().name() : "",
+                    "blockCodeId", r.blockCodeId() != null ? r.blockCodeId().toString() : "",
+                    "blockCode", r.blockCode() != null ? r.blockCode() : "",
                     "detail", r.detail() != null ? r.detail() : "",
                     "scoreContribution", r.scoreContribution()
             )).toList();
@@ -104,6 +110,9 @@ public class FraudEvaluationRepositoryImpl implements FraudEvaluationRepository 
                     Boolean.TRUE.equals(m.get("triggered")),
                     parseEnum(FraudDecision.class, (String) m.get("decision")),
                     parseEnum(FraudBlockType.class, (String) m.get("blockType")),
+                    m.get("blockCodeId") != null && !((String) m.get("blockCodeId")).isBlank() 
+                            ? UUID.fromString((String) m.get("blockCodeId")) : null,
+                    (String) m.get("blockCode"),
                     (String) m.get("detail"),
                     m.get("scoreContribution") instanceof Number n ? n.intValue() : 0
             )).toList();

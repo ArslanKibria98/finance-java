@@ -34,6 +34,17 @@ public class EarlySettlementMatcher {
             return Optional.empty();
         }
         int dpd = (int) (today.toEpochDay() - inst.getDueDate().toEpochDay());
+        
+        // --- Principle Based Strategy (Image 3) ---
+        if (rule.getSettlementStrategy() == com.ksa.financing.collections.domain.model.EarlySettlementStrategy.PRINCIPLE_BASED) {
+            // Principle based settlement is usually a loan-level flat discount.
+            // All future installments are considered "eligible" for this process.
+            return Optional.of(new Match(
+                    BigDecimal.ZERO, // Per-installment discount is 0 (handled at loan level)
+                    BigDecimal.ZERO,
+                    null,
+                    false));
+        }
 
         if (!rule.isCustom()) {
             if (!dpdInWindow(dpd, rule.getFromDay(), rule.getTillDay())) return Optional.empty();

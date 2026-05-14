@@ -8,12 +8,17 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
+import com.ksa.financing.infra.exception.BusinessException;
+import com.ksa.financing.infra.exception.ErrorCodes;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -22,6 +27,61 @@ import java.util.UUID;
 public class ProviderApiController {
 
     private final ManageProviderApiUseCase manageProviderApiUseCase;
+    private final JdbcTemplate jdbcTemplate;
+
+    /** Admin-only: update only the cost without touching other fields. */
+    @SecuredEndpoint(obj = "middleware.provider-apis", act = "manage")
+    @PatchMapping("/{id}/cost")
+    public ResponseEntity<Map<String, Object>> updateCost(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        if (!body.containsKey("costPerCall")) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, "costPerCall is required");
+        }
+        BigDecimal newCost = new BigDecimal(body.get("costPerCall").toString());
+        if (newCost.signum() < 0) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, "costPerCall must be >= 0");
+        }
+        String currency = body.containsKey("costCurrency") ? body.get("costCurrency").toString() : "SAR";
+
+        int affected = jdbcTemplate.update(
+                "UPDATE provider_apis SET cost_per_call = ?, cost_currency = ?, updated_at = NOW() " +
+                        "WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL",
+                newCost, currency, id, tenantId);
+        if (affected == 0) {
+            throw new BusinessException(ErrorCodes.NOT_FOUND, "API not found or already deleted: " + id);
+        }
+        return ResponseEntity.ok(Map.of("id", id, "costPerCall", newCost, "costCurrency", currency));
+    }
+
+    /** Admin-only: update cost by API code (convenience for ops console). */
+    @SecuredEndpoint(obj = "middleware.provider-apis", act = "manage")
+    @PutMapping("/by-code/{code}/cost")
+    public ResponseEntity<Map<String, Object>> updateCostByCode(
+            @PathVariable String code,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        if (!body.containsKey("costPerCall")) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, "costPerCall is required");
+        }
+        BigDecimal newCost = new BigDecimal(body.get("costPerCall").toString());
+        if (newCost.signum() < 0) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, "costPerCall must be >= 0");
+        }
+        String currency = body.containsKey("costCurrency") ? body.get("costCurrency").toString() : "SAR";
+
+        int affected = jdbcTemplate.update(
+                "UPDATE provider_apis SET cost_per_call = ?, cost_currency = ?, updated_at = NOW() " +
+                        "WHERE code = ? AND tenant_id = ? AND deleted_at IS NULL",
+                newCost, currency, code, tenantId);
+        if (affected == 0) {
+            throw new BusinessException(ErrorCodes.NOT_FOUND, "API not found for code: " + code);
+        }
+        return ResponseEntity.ok(Map.of("code", code, "costPerCall", newCost, "costCurrency", currency));
+    }
 
     @SecuredEndpoint(obj = "middleware.provider-apis", act = "manage")
     @PostMapping

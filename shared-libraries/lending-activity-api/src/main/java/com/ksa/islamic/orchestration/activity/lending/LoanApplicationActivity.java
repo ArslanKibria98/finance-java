@@ -98,6 +98,11 @@ public interface LoanApplicationActivity {
             BigDecimal clothingEssentials,
             BigDecimal education,
             BigDecimal transportation,
+            String productId,
+            BigDecimal requestedAmount,
+            Integer requestedTenureMonths,
+            String purposeOfFinance,
+            String purposeOfFinanceOther,
             String createdBy,
             String workflowId
     ) {}
@@ -181,6 +186,8 @@ public interface LoanApplicationActivity {
             BigDecimal monthlyInstallment,
             BigDecimal totalPayable,
             BigDecimal totalProfit,
+            BigDecimal processingFee,
+            BigDecimal adminFee,
             String updatedBy
     ) {}
 
@@ -215,6 +222,8 @@ public interface LoanApplicationActivity {
             String shariaStructure,
             BigDecimal principalAmount,
             BigDecimal profitAmount,
+            BigDecimal processingFee,
+            BigDecimal adminFee,
             BigDecimal profitRate,
             int tenureMonths,
             BigDecimal installmentAmount

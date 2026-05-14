@@ -116,4 +116,14 @@ public class ManageAccountUseCaseImpl implements ManageAccountUseCase {
         accountRepository.save(account);
         log.info("GL account deactivated: id={}", accountId);
     }
+
+    @Override
+    @Transactional
+    public void activate(UUID tenantId, AccountId accountId) {
+        AccountAggregate account = accountRepository.findById(tenantId, accountId)
+                .orElseThrow(() -> NotFoundException.forEntity("Account", accountId.toString()));
+        account.activate();
+        accountRepository.save(account);
+        log.info("GL account activated: id={}", accountId);
+    }
 }

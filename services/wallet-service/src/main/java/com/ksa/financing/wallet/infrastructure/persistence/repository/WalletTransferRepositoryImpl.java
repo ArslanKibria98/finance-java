@@ -1,15 +1,22 @@
 package com.ksa.financing.wallet.infrastructure.persistence.repository;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.wallet.domain.model.WalletTransfer;
 import com.ksa.financing.wallet.domain.port.out.WalletTransferRepository;
 import com.ksa.financing.wallet.infrastructure.persistence.entity.WalletTransferJpaEntity;
 import com.ksa.financing.wallet.infrastructure.persistence.mapper.WalletTransferPersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -19,6 +26,10 @@ public class WalletTransferRepositoryImpl implements WalletTransferRepository {
 
     private final JpaWalletTransferRepository jpaRepo;
     private final WalletTransferPersistenceMapper mapper;
+
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of(
+            "transferNumber", "status", "channel", "purposeNote", "errorCode", "errorMessage"
+    );
 
     @Override
     public WalletTransfer save(WalletTransfer transfer) {
@@ -51,5 +62,28 @@ public class WalletTransferRepositoryImpl implements WalletTransferRepository {
     @Override
     public List<WalletTransfer> findByDestinationWallet(UUID walletId) {
         return jpaRepo.findByDestinationWalletIdOrderByInitiatedAtDesc(walletId).stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public PageResponse<WalletTransfer> findAllByWallet(UUID walletId, PageQuery query) {
+        log.debug("Finding all transfers (sent/received) for wallet={} page={} search={}", 
+                walletId, query.page(), query.search());
+
+        Specification<WalletTransferJpaEntity> walletSpec = (root, q, cb) ->
+                cb.or(
+                        cb.equal(root.get("sourceWalletId"), walletId),
+                        cb.equal(root.get("destinationWalletId"), walletId)
+                );
+
+        Specification<WalletTransferJpaEntity> dynamic = SpecificationBuilder.<WalletTransferJpaEntity>builder()
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+
+        Page<WalletTransferJpaEntity> page = jpaRepo.findAll(
+                walletSpec.and(dynamic),
+                query.toPageable());
+
+        return PageResponse.from(page, mapper::toDomain);
     }
 }

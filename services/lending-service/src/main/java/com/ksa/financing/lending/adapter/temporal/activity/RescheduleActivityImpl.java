@@ -7,6 +7,7 @@ import com.ksa.financing.lending.infrastructure.persistence.entity.LoanJpaEntity
 import com.ksa.financing.lending.infrastructure.persistence.repository.JpaAmortizationScheduleRepository;
 import com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRescheduleRepository;
 import com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanRepository;
+import com.ksa.financing.lending.infrastructure.persistence.repository.JpaLoanApplicationRepository;
 import com.ksa.islamic.orchestration.activity.lending.RescheduleActivity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +41,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
     private final JpaLoanRepository loanRepository;
     private final JpaLoanRescheduleRepository rescheduleRepository;
     private final JpaAmortizationScheduleRepository amortizationRepository;
+    private final JpaLoanApplicationRepository applicationRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final String ledgerServiceUrl;
@@ -48,12 +50,14 @@ public class RescheduleActivityImpl implements RescheduleActivity {
             JpaLoanRepository loanRepository,
             JpaLoanRescheduleRepository rescheduleRepository,
             JpaAmortizationScheduleRepository amortizationRepository,
+            JpaLoanApplicationRepository applicationRepository,
             RestTemplate restTemplate,
             ObjectMapper objectMapper,
-            @Value("${app.services.ledger-service-url}") String ledgerServiceUrl) {
+            @Value("${app.services.ledger-service-url:${LEDGER_SERVICE_URL:http://ledger-service:8095}}") String ledgerServiceUrl) {
         this.loanRepository = loanRepository;
         this.rescheduleRepository = rescheduleRepository;
         this.amortizationRepository = amortizationRepository;
+        this.applicationRepository = applicationRepository;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.ledgerServiceUrl = ledgerServiceUrl;
@@ -237,12 +241,27 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         BigDecimal principal = loan.getPrincipalAmount() != null ? loan.getPrincipalAmount() : BigDecimal.ZERO;
         BigDecimal profitRate = input.newProfitRate() != null ? input.newProfitRate() : loan.getProfitRate();
 
+        // BRD: Reschedule must account for original fees to maintain total payable integrity
+        BigDecimal processingFee = BigDecimal.ZERO;
+        BigDecimal adminFee = BigDecimal.ZERO;
+        try {
+            var app = applicationRepository.findById(loan.getApplicationId()).orElse(null);
+            if (app != null) {
+                processingFee = app.getProcessingFee() != null ? app.getProcessingFee() : 
+                              (app.getProcessingFeeAmount() != null ? app.getProcessingFeeAmount() : BigDecimal.ZERO);
+                adminFee = app.getAdminFee() != null ? app.getAdminFee() : 
+                         (app.getAdminFeeAmount() != null ? app.getAdminFeeAmount() : BigDecimal.ZERO);
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch application fees for loanId={} during reschedule: {}", input.loanId(), e.getMessage());
+        }
+
         return switch (input.rescheduleType()) {
             case "SKIP_PAYMENT" -> {
                 // Tenure (installment count) remains same, but maturity extends by 1 month
                 int newTenure = currentTenure; 
                 BigDecimal newInstallment = loan.getInstallmentAmount() != null 
-                        ? loan.getInstallmentAmount() : calculateFlatInstallment(principal, profitRate, currentTenure);
+                        ? loan.getInstallmentAmount() : calculateFlatInstallment(principal, profitRate, currentTenure, processingFee, adminFee);
                 LocalDate newMaturity = loan.getMaturityDate() != null 
                         ? loan.getMaturityDate().plusMonths(1) 
                         : LocalDate.now().plusMonths(newTenure + 1); // +1 because we skipped a month
@@ -254,7 +273,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                 int newTenure = currentTenure + extensionMonths;
                 
                 // For Murabaha/Tawarruq, we use the Flat Profit formula from FinanceCalculationService
-                BigDecimal newInstallment = calculateFlatInstallment(principal, profitRate, newTenure);
+                BigDecimal newInstallment = calculateFlatInstallment(principal, profitRate, newTenure, processingFee, adminFee);
                 LocalDate newMaturity = loan.getMaturityDate() != null 
                         ? loan.getMaturityDate().plusMonths(extensionMonths)
                         : LocalDate.now().plusMonths(newTenure);
@@ -267,7 +286,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                 int newTenure = currentTenure + holidayMonths;
                 // Installment stays the same, just pushed out
                 BigDecimal sameInstallment = loan.getInstallmentAmount() != null
-                        ? loan.getInstallmentAmount() : calculateFlatInstallment(principal, profitRate, currentTenure);
+                        ? loan.getInstallmentAmount() : calculateFlatInstallment(principal, profitRate, currentTenure, processingFee, adminFee);
                 LocalDate newMaturity = LocalDate.now().plusMonths(newTenure);
                 yield new ScheduleResult(newTenure, sameInstallment, newMaturity);
             }
@@ -283,7 +302,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                     }
                 }
                 int newTenure = currentTenure; // tenure unchanged unless specified
-                BigDecimal newInstallment = calculateFlatInstallment(effectivePrincipal, profitRate, newTenure);
+                BigDecimal newInstallment = calculateFlatInstallment(effectivePrincipal, profitRate, newTenure, processingFee, adminFee);
                 LocalDate newMaturity = loan.getMaturityDate() != null ? loan.getMaturityDate() : LocalDate.now().plusMonths(newTenure);
                 yield new ScheduleResult(newTenure, newInstallment, newMaturity);
             }
@@ -369,12 +388,12 @@ public class RescheduleActivityImpl implements RescheduleActivity {
     @Override
     @Transactional
     public void markApplied(MarkAppliedInput input) {
-        log.info("Marking reschedule as APPROVED: rescheduleId={}", input.rescheduleId());
+        log.info("Marking reschedule as APPLIED: rescheduleId={}", input.rescheduleId());
 
         var entity = rescheduleRepository.findById(UUID.fromString(input.rescheduleId()))
                 .orElseThrow(() -> new IllegalStateException("Reschedule not found: " + input.rescheduleId()));
 
-        entity.setStatus("APPROVED");
+        entity.setStatus("APPLIED");
         entity.setNewTenureMonths(input.newTenureMonths());
         entity.setNewInstallmentAmount(input.newInstallmentAmount());
         entity.setNewMaturityDate(input.newMaturityDate() != null ? LocalDate.parse(input.newMaturityDate()) : null);
@@ -410,6 +429,38 @@ public class RescheduleActivityImpl implements RescheduleActivity {
             if (entity.getProfitWaiverAmount() != null && entity.getProfitWaiverAmount().compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal oldProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
                 loan.setProfitAmount(oldProfit.subtract(entity.getProfitWaiverAmount()));
+            }
+
+            // Recompute totalAmount + profitAmount when tenure or installment changes (TENURE_EXTENSION, RESTRUCTURING, PAYMENT_HOLIDAY).
+            // Total payable = newInstallment × newTenure; new profit = total − principal − fee.
+            String type = entity.getRescheduleType();
+            boolean recomputeTotals = ("TENURE_EXTENSION".equals(type)
+                    || "RESTRUCTURING".equals(type)
+                    || "PAYMENT_HOLIDAY".equals(type))
+                    && input.newTenureMonths() > 0
+                    && input.newInstallmentAmount() != null;
+            if (recomputeTotals) {
+                BigDecimal principal = loan.getPrincipalAmount() != null ? loan.getPrincipalAmount() : BigDecimal.ZERO;
+                BigDecimal fee = loan.getFeeAmount() != null ? loan.getFeeAmount() : BigDecimal.ZERO;
+                BigDecimal newTotal = input.newInstallmentAmount()
+                        .multiply(BigDecimal.valueOf(input.newTenureMonths()))
+                        .setScale(2, RoundingMode.HALF_UP);
+                BigDecimal newProfit = newTotal.subtract(principal).subtract(fee);
+
+                BigDecimal oldProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
+                BigDecimal profitDelta = newProfit.subtract(oldProfit);
+
+                loan.setTotalAmount(newTotal);
+                loan.setProfitAmount(newProfit);
+
+                // Roll the profit delta into outstanding so balances stay in sync.
+                BigDecimal outProfit = loan.getOutstandingProfit() != null ? loan.getOutstandingProfit() : BigDecimal.ZERO;
+                BigDecimal outTotal  = loan.getTotalOutstanding() != null ? loan.getTotalOutstanding() : BigDecimal.ZERO;
+                loan.setOutstandingProfit(outProfit.add(profitDelta).max(BigDecimal.ZERO));
+                loan.setTotalOutstanding(outTotal.add(profitDelta).max(BigDecimal.ZERO));
+
+                log.info("Recomputed loan totals after {}: totalAmount={} profitAmount={} (Δprofit={})",
+                        type, newTotal, newProfit, profitDelta);
             }
 
             loan.setUpdatedAt(java.time.LocalDateTime.now());
@@ -537,6 +588,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                 .openingPrincipal(lastRow.getClosingPrincipal())
                 .principalComponent(skippedRow.getPrincipalComponent())
                 .profitComponent(skippedRow.getProfitComponent())
+                .feeComponent(skippedRow.getFeeComponent() != null ? skippedRow.getFeeComponent() : BigDecimal.ZERO)
                 .totalInstallment(skippedRow.getTotalInstallment())
                 .closingPrincipal(lastRow.getClosingPrincipal().subtract(skippedRow.getPrincipalComponent()).max(BigDecimal.ZERO))
                 .cumulativePrincipal(lastRow.getCumulativePrincipal().add(skippedRow.getPrincipalComponent()))
@@ -558,7 +610,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
      *   Total = Principal + Profit
      *   Installment = Total / TenureMonths
      */
-    private BigDecimal calculateFlatInstallment(BigDecimal principal, BigDecimal annualRate, int tenureMonths) {
+    private BigDecimal calculateFlatInstallment(BigDecimal principal, BigDecimal annualRate, int tenureMonths, BigDecimal processingFee, BigDecimal adminFee) {
         if (principal == null || principal.compareTo(BigDecimal.ZERO) == 0 || tenureMonths == 0) {
             return BigDecimal.ZERO;
         }
@@ -572,12 +624,18 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         BigDecimal profit = principal
                 .multiply(rate)
                 .multiply(BigDecimal.valueOf(tenureMonths))
-                .divide(BigDecimal.valueOf(12), 10, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(TWELVE_INT), 10, RoundingMode.HALF_UP);
 
-        BigDecimal total = principal.add(profit);
+        BigDecimal safeProcFee = processingFee != null ? processingFee : BigDecimal.ZERO;
+        BigDecimal safeAdminFee = adminFee != null ? adminFee : BigDecimal.ZERO;
+
+        // Total Payable = Principal + Profit + Fees (as per BRD)
+        BigDecimal total = principal.add(profit).add(safeProcFee).add(safeAdminFee);
         
         return total.divide(BigDecimal.valueOf(tenureMonths), 2, RoundingMode.HALF_UP);
     }
+
+    private static final int TWELVE_INT = 12;
 
     /**
      * EMI formula (retained only if some products need it, but renamed)
@@ -658,16 +716,18 @@ public class RescheduleActivityImpl implements RescheduleActivity {
 
         var principal = loan.getPrincipalAmount();
         var totalProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
+        var totalFee = loan.getFeeAmount() != null ? loan.getFeeAmount() : BigDecimal.ZERO;
         var tenure = loan.getTenureMonths();
-        
+
         var monthlyPrincipal = principal.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
         var monthlyProfit = totalProfit.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
-        var monthlyTotal = monthlyPrincipal.add(monthlyProfit);
+        var monthlyFee = totalFee.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
+        var monthlyTotal = monthlyPrincipal.add(monthlyProfit).add(monthlyFee);
 
         BigDecimal cumulativePrincipal = BigDecimal.ZERO;
         BigDecimal cumulativeProfit = BigDecimal.ZERO;
         BigDecimal closing = principal;
-        
+
         for (int n = 1; n <= tenure; n++) {
             var opening = closing;
             closing = closing.subtract(monthlyPrincipal);
@@ -684,6 +744,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                     .openingPrincipal(opening)
                     .principalComponent(monthlyPrincipal)
                     .profitComponent(monthlyProfit)
+                    .feeComponent(monthlyFee)
                     .totalInstallment(monthlyTotal)
                     .closingPrincipal(closing.max(BigDecimal.ZERO))
                     .cumulativePrincipal(cumulativePrincipal)
@@ -722,10 +783,11 @@ public class RescheduleActivityImpl implements RescheduleActivity {
 
         BigDecimal principal = loan.getPrincipalAmount();
         BigDecimal totalProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
-        
-        log.info("Regenerating schedule with principal={} totalProfit={} tenure={}", principal, totalProfit, tenure);
+        BigDecimal totalFee = loan.getFeeAmount() != null ? loan.getFeeAmount() : BigDecimal.ZERO;
 
-        int holidayMonths = "PAYMENT_HOLIDAY".equals(reschedule.getRescheduleType()) && reschedule.getHolidayMonths() != null 
+        log.info("Regenerating schedule with principal={} totalProfit={} totalFee={} tenure={}", principal, totalProfit, totalFee, tenure);
+
+        int holidayMonths = "PAYMENT_HOLIDAY".equals(reschedule.getRescheduleType()) && reschedule.getHolidayMonths() != null
                 ? reschedule.getHolidayMonths() : 0;
         int payingMonths = tenure - holidayMonths;
         if (payingMonths <= 0) payingMonths = tenure; // fallback
@@ -733,7 +795,8 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         // Distribution based on actual paying months
         BigDecimal monthlyPrincipal = principal.divide(BigDecimal.valueOf(payingMonths), 6, RoundingMode.HALF_UP);
         BigDecimal monthlyProfit = totalProfit.divide(BigDecimal.valueOf(payingMonths), 6, RoundingMode.HALF_UP);
-        BigDecimal monthlyTotal = input.newInstallmentAmount() != null ? input.newInstallmentAmount() : monthlyPrincipal.add(monthlyProfit);
+        BigDecimal monthlyFee = totalFee.divide(BigDecimal.valueOf(payingMonths), 6, RoundingMode.HALF_UP);
+        BigDecimal monthlyTotal = input.newInstallmentAmount() != null ? input.newInstallmentAmount() : monthlyPrincipal.add(monthlyProfit).add(monthlyFee);
 
         Integer maxVersion = amortizationRepository.findMaxScheduleVersionByLoanId(loanId);
         int newVersion = (maxVersion != null ? maxVersion : 0) + 1;
@@ -761,11 +824,13 @@ public class RescheduleActivityImpl implements RescheduleActivity {
 
             BigDecimal currentMonthlyPrincipal = monthlyPrincipal;
             BigDecimal currentMonthlyProfit = monthlyProfit;
+            BigDecimal currentMonthlyFee = monthlyFee;
             BigDecimal currentMonthlyTotal = monthlyTotal;
 
             if (isHoliday) {
                 currentMonthlyPrincipal = BigDecimal.ZERO;
                 currentMonthlyProfit = BigDecimal.ZERO;
+                currentMonthlyFee = BigDecimal.ZERO;
                 currentMonthlyTotal = BigDecimal.ZERO;
             }
 
@@ -784,6 +849,7 @@ public class RescheduleActivityImpl implements RescheduleActivity {
                     .openingPrincipal(opening)
                     .principalComponent(currentMonthlyPrincipal)
                     .profitComponent(currentMonthlyProfit)
+                    .feeComponent(currentMonthlyFee)
                     .totalInstallment(currentMonthlyTotal)
                     .closingPrincipal(closing.max(BigDecimal.ZERO))
                     .cumulativePrincipal(cumulativePrincipal)

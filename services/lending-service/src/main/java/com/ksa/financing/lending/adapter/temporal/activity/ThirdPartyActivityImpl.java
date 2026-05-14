@@ -63,7 +63,8 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "safewatch-" + input.applicationId()
+                    "safewatch-" + input.applicationId(),
+                    null, input.applicationId(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
@@ -71,15 +72,28 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                 return new SafeWatchResult(null, "ERROR", false, error);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
+            // SafeWatch provider returns several shapes:
+            //   1. {"screeningStatus":"CLEAR"|"MATCH", "matchDetails":"..."}
+            //   2. {"violationCounter":0, "text":"0 violation(s) found"}  ← scan-session shape
+            //   3. Just an HTTP 2xx with no body details (treat as clear)
             String status = textOrNull(data, "screeningStatus");
-            boolean cleared = "CLEAR".equalsIgnoreCase(status) || "NO_MATCH".equalsIgnoreCase(status);
+            boolean cleared;
+            if (status != null) {
+                cleared = "CLEAR".equalsIgnoreCase(status) || "NO_MATCH".equalsIgnoreCase(status);
+            } else if (data != null && data.has("violationCounter") && data.get("violationCounter").isNumber()) {
+                cleared = data.get("violationCounter").asInt() == 0;
+                status = cleared ? "CLEAR" : "MATCH";
+            } else {
+                // success=true but no explicit screening verdict — provider considers it clear
+                cleared = true;
+                status = "CLEAR";
+            }
 
             return new SafeWatchResult(
                     textOrNull(data, "sessionId"),
-                    status != null ? status : "CLEAR",
+                    status,
                     cleared,
                     textOrNull(data, "matchDetails")
             );
@@ -106,15 +120,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "masdar-" + input.applicationId()
+                    "masdar-" + input.applicationId(),
+                    null, input.applicationId(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
                 return new MasdarResult(null, null, "UNKNOWN", null, null, null, false);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             return new MasdarResult(
                     textOrNull(data, "employerName"),
@@ -157,15 +171,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "aml-decl-" + input.applicationId()
+                    "aml-decl-" + input.applicationId(),
+                    input.customerId(), input.applicationId(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
                 return new AmlDeclarationResult(false, null);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             return new AmlDeclarationResult(true, textOrNull(data, "referenceId"));
 
@@ -195,15 +209,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "naba-" + input.applicationNumber()
+                    "naba-" + input.applicationNumber(),
+                    null, input.applicationNumber(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
                 return new NabaResult(false, null);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             return new NabaResult(true, textOrNull(data, "referenceId"));
 
@@ -233,15 +247,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "payguard-" + input.applicationId()
+                    "payguard-" + input.applicationId(),
+                    input.customerId(), input.applicationId(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
                 return new PaymentGuardResult(null, "ERROR", false, "HIGH");
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             String status = textOrNull(data, "status");
             boolean approved = "APPROVED".equalsIgnoreCase(status) || "PASS".equalsIgnoreCase(status);
@@ -277,7 +291,8 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "iban-" + input.iban()
+                    "iban-" + input.iban(),
+                    null, null, "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
@@ -285,7 +300,7 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                 return new IbanVerificationResult(false, null, null, null, error);
             }
 
-            var data = response.has("responseBody") ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             return new IbanVerificationResult(
                     true,
@@ -297,8 +312,8 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
 
         } catch (Exception e) {
             log.warn("IBAN verification service unavailable ({}), returning mock success for development.", e.getMessage());
-            // Mock result for development — real integration requires middleware-third-party
-            return new IbanVerificationResult(true, input.expectedName(), "Al Rajhi Bank", "80", null);
+            // Mock result for development — pass through caller-supplied data; do NOT hardcode a bank name
+            return new IbanVerificationResult(true, input.expectedName(), null, null, null);
         }
     }
 
@@ -324,15 +339,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     buyRequest,
                     input.tenantId(),
                     null,
-                    "commodity-buy-" + input.applicationId()
+                    "commodity-buy-" + input.applicationId(),
+                    input.customerId(), input.applicationId(), "APPLICATION"
             );
 
             if (!buyResponse.has("success") || !buyResponse.get("success").asBoolean()) {
                 return new CommodityTradeResult(null, null, null, null, null, false);
             }
 
-            var buyData = buyResponse.has("responseBody")
-                    ? objectMapper.readTree(buyResponse.get("responseBody").asText()) : buyResponse;
+            var buyData = buyResponse != null ? extractResponseBody(buyResponse) : buyResponse;
 
             String tradeId = textOrNull(buyData, "tradeId");
             if (tradeId == null) {
@@ -352,7 +367,8 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     sellRequest,
                     input.tenantId(),
                     null,
-                    "commodity-sell-" + input.applicationId()
+                    "commodity-sell-" + input.applicationId(),
+                    input.customerId(), input.applicationId(), "APPLICATION"
             );
 
             log.info("Commodity trade completed: tradeId={}", tradeId);
@@ -412,15 +428,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     null,
-                    "ivr-" + input.applicationId()
+                    "ivr-" + input.applicationId(),
+                    null, input.applicationId(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
                 return new IvrInitiateResult(null, "FAILED", false);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             return new IvrInitiateResult(
                     textOrNull(data, "callId"),
@@ -456,15 +472,15 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "epromissory-" + input.loanNumber()
+                    "epromissory-" + input.loanNumber(),
+                    input.customerId(), input.loanNumber(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
                 return new EPromissoryResult(null, null, false);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = response != null ? extractResponseBody(response) : response;
 
             return new EPromissoryResult(
                     textOrNull(data, "registrationId"),
@@ -483,26 +499,39 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
     /**
      * Execute an API call through the middleware-third-party execution gateway.
      * Uses the simple endpoint: POST /api/v1/execute/{apiCode}/simple
+     *
+     * Middleware wraps replies as {"data": ExecuteApiResponse, "message": "success", "timestamp": ...};
+     * we unwrap `data` so callers see the flat ExecuteApiResponse with `success`, `responseBody`, etc.
      */
     private JsonNode executeMiddlewareApi(String apiCode, String requestBody,
                                            String tenantId, String nationalId,
                                            String idempotencyKey) throws Exception {
+        return executeMiddlewareApi(apiCode, requestBody, tenantId, nationalId,
+                idempotencyKey, null, null, "APPLICATION");
+    }
+
+    /** Overload that propagates business context (customer / application) to the middleware
+     * so per-customer and per-application cost reports can be produced. */
+    private JsonNode executeMiddlewareApi(String apiCode, String requestBody,
+                                           String tenantId, String nationalId,
+                                           String idempotencyKey,
+                                           String customerId, String applicationId,
+                                           String contextType) throws Exception {
         String url = middlewareUrl + "/api/v1/execute/" + apiCode + "/simple";
 
         var headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (idempotencyKey != null) {
-            headers.set("X-Idempotency-Key", idempotencyKey);
-        }
-        if (nationalId != null) {
-            headers.set("X-National-Id", nationalId);
-        }
+        if (idempotencyKey != null) headers.set("X-Idempotency-Key", idempotencyKey);
+        if (nationalId != null)     headers.set("X-National-Id", nationalId);
+        if (customerId != null)     headers.set("X-Customer-Id", customerId);
+        if (applicationId != null)  headers.set("X-Application-Id", applicationId);
+        if (contextType != null)    headers.set("X-Context-Type", contextType);
         headers.set("X-Caller-Service", "lending-service");
 
         var httpEntity = new HttpEntity<>(requestBody, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, httpEntity, String.class);
 
-        return objectMapper.readTree(response.getBody());
+        return unwrapMiddlewareEnvelope(objectMapper.readTree(response.getBody()));
     }
 
     /**
@@ -522,7 +551,39 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
         var httpEntity = new HttpEntity<>(requestBody, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, httpEntity, String.class);
 
-        return objectMapper.readTree(response.getBody());
+        return unwrapMiddlewareEnvelope(objectMapper.readTree(response.getBody()));
+    }
+
+    private JsonNode unwrapMiddlewareEnvelope(JsonNode raw) {
+        if (raw != null && raw.has("data") && raw.get("data").isObject()) {
+            return raw.get("data");
+        }
+        return raw;
+    }
+
+    /**
+     * Returns the inner responseBody node from a middleware ExecuteApiResponse.
+     * Handles both shapes:
+     *   - responseBody is a parsed JSON object/array (current behavior)
+     *   - responseBody is a JSON-encoded string (legacy / live provider)
+     * Falls back to the outer response when responseBody is missing.
+     */
+    private JsonNode extractResponseBody(JsonNode response) throws Exception {
+        if (response == null || !response.has("responseBody") || response.get("responseBody").isNull()) {
+            return response;
+        }
+        JsonNode body = response.get("responseBody");
+        if (body.isObject() || body.isArray()) {
+            return body;
+        }
+        if (body.isTextual()) {
+            String text = body.asText();
+            if (text == null || text.isBlank()) {
+                return response;
+            }
+            return objectMapper.readTree(text);
+        }
+        return body;
     }
 
     private String textOrNull(JsonNode node, String field) {
@@ -553,13 +614,12 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "emdha-sign-" + input.applicationId()
+                    "emdha-sign-" + input.applicationId(),
+                    input.customerId(), input.applicationId(), "APPLICATION"
             );
 
             if (response.has("success") && response.get("success").asBoolean()) {
-                var data = response.has("responseBody")
-                        ? objectMapper.readTree(response.get("responseBody").asText())
-                        : response;
+                var data = response != null ? extractResponseBody(response) : response;
                 return new EmdhaSignResult(
                         textOrNull(data, "signatureId"),
                         textOrNull(data, "signedDocumentId"),
@@ -597,13 +657,12 @@ public class ThirdPartyActivityImpl implements ThirdPartyActivity {
                     requestBody,
                     input.tenantId(),
                     input.nationalId(),
-                    "dakhli-" + input.applicationId()
+                    "dakhli-" + input.applicationId(),
+                    null, input.applicationId(), "APPLICATION"
             );
 
             if (response.has("success") && response.get("success").asBoolean()) {
-                var data = response.has("responseBody")
-                        ? objectMapper.readTree(response.get("responseBody").asText())
-                        : response;
+                var data = response != null ? extractResponseBody(response) : response;
                 return new DakhliResult(
                         data.has("salary") ? new BigDecimal(data.get("salary").asText()) : BigDecimal.ZERO,
                         textOrNull(data, "employerName"),

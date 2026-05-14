@@ -91,6 +91,8 @@ public class ProductPersistenceMapper {
         entity.setEarlySettlementAllowed(domain.isEarlySettlementAllowed());
         entity.setWaiveUnearnedProfit(domain.isWaiveUnearnedProfit());
         entity.setMinTenureBeforeSettlement(domain.getMinTenureBeforeSettlement());
+        entity.setPenaltyWaiverAllowed(domain.isPenaltyWaiverAllowed());
+        entity.setMaxPenaltyWaiversAllowed(domain.getMaxPenaltyWaiversAllowed());
 
         // Core banking
         entity.setFineractProductId(domain.getFineractProductId());
@@ -186,6 +188,8 @@ public class ProductPersistenceMapper {
         domain.setEarlySettlementAllowed(entity.isEarlySettlementAllowed());
         domain.setWaiveUnearnedProfit(entity.isWaiveUnearnedProfit());
         domain.setMinTenureBeforeSettlement(entity.getMinTenureBeforeSettlement());
+        domain.setPenaltyWaiverAllowed(entity.isPenaltyWaiverAllowed());
+        domain.setMaxPenaltyWaiversAllowed(entity.getMaxPenaltyWaiversAllowed());
 
         // Core banking
         domain.setFineractProductId(entity.getFineractProductId());

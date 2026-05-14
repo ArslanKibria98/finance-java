@@ -63,6 +63,8 @@ public class DunningPolicyPersistenceMapper {
         e.setAutoAssignAgent(p.isAutoAssignAgent());
         e.setAgentAssignmentDpd(p.getAgentAssignmentDpd());
         e.setWalletFreezeDpd(p.getWalletFreezeDpd());
+        e.setPenaltyWaiverAllowed(p.isPenaltyWaiverAllowed());
+        e.setMaxPenaltyWaiversAllowed(p.getMaxPenaltyWaiversAllowed());
 
         e.setCreatedAt(p.getCreatedAt() != null ? p.getCreatedAt() : LocalDateTime.now());
         e.setUpdatedAt(p.getUpdatedAt());
@@ -119,6 +121,8 @@ public class DunningPolicyPersistenceMapper {
                 e.isAutoAssignAgent(),
                 e.getAgentAssignmentDpd(),
                 e.getWalletFreezeDpd(),
+                e.isPenaltyWaiverAllowed(),
+                e.getMaxPenaltyWaiversAllowed(),
                 e.getVersion(),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),

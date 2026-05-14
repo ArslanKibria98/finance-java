@@ -101,7 +101,7 @@ public class ManageProviderService implements ManageProviderUseCase {
     }
 
     private ProviderEnvironmentResponse buildEnvironmentResponse(UUID tenantId, ThirdPartyProvider provider) {
-        var apis = providerApiRepository.findAllByProviderId(tenantId, provider.getId());
+        var apis = providerApiRepository.findAllByProvider(tenantId, provider.getId());
         var configs = envConfigRepository.findAllByProviderId(tenantId, provider.getId());
         return mapper.toEnvironmentResponse(provider, apis, configs);
     }
@@ -123,7 +123,6 @@ public class ManageProviderService implements ManageProviderUseCase {
         );
         provider.setBaseUrlDev(request.baseUrlDev());
         provider.setBaseUrlProd(request.baseUrlProd());
-        provider.setActive(request.active());
 
         var saved = providerRepository.save(provider);
         log.info("Updated provider: code={}, tenantId={}", saved.getCode(), tenantId);

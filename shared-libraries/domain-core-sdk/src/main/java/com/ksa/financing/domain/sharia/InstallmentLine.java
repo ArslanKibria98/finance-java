@@ -36,6 +36,7 @@ public record InstallmentLine(
         SarMoney openingPrincipal,
         SarMoney principalComponent,
         SarMoney profitComponent,
+        SarMoney feeComponent,
         SarMoney totalInstallment,
         SarMoney closingPrincipal,
         SarMoney cumulativePrincipal,
@@ -52,16 +53,17 @@ public record InstallmentLine(
         Objects.requireNonNull(openingPrincipal, "Opening principal cannot be null");
         Objects.requireNonNull(principalComponent, "Principal component cannot be null");
         Objects.requireNonNull(profitComponent, "Profit component cannot be null");
+        Objects.requireNonNull(feeComponent, "Fee component cannot be null");
         Objects.requireNonNull(totalInstallment, "Total installment cannot be null");
         Objects.requireNonNull(closingPrincipal, "Closing principal cannot be null");
         Objects.requireNonNull(cumulativePrincipal, "Cumulative principal cannot be null");
         Objects.requireNonNull(cumulativeProfit, "Cumulative profit cannot be null");
 
-        // Validate that total equals principal + profit (allow 1 fils/0.01 SAR rounding tolerance)
-        SarMoney calculatedTotal = principalComponent.add(profitComponent);
+        // Validate that total equals principal + profit + fee (allow 1 fils/0.01 SAR rounding tolerance)
+        SarMoney calculatedTotal = principalComponent.add(profitComponent).add(feeComponent);
         if (!isWithinTolerance(calculatedTotal, totalInstallment)) {
             throw new IllegalArgumentException(
-                    String.format("Total installment must equal principal + profit. " +
+                    String.format("Total installment must equal principal + profit + fee. " +
                             "Expected: %s, Got: %s", calculatedTotal, totalInstallment)
             );
         }

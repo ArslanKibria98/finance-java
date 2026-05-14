@@ -38,43 +38,62 @@ public class ContractTemplateController {
 
     @SecuredEndpoint(obj = "contract-templates", act = "read")
     @GetMapping
-    @Operation(summary = "List all contract templates", description = "Returns all active contract templates for the tenant")
+    @Operation(summary = "List all contract templates. Optional ?search= filters by nameEn, nameAr, productName*, typeName*, language (case-insensitive LIKE).")
     public ResponseEntity<List<ContractTemplateResponse>> listAll(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
         var templates = manageContractTemplateUseCase.listAll(tenantId);
         enrichWithNames(tenantId, templates);
-        var response = templates.stream().map(ContractTemplateMapper::toResponse).toList();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(filterTemplates(templates, search));
     }
 
     @SecuredEndpoint(obj = "contract-templates", act = "read")
     @GetMapping("/product/{productId}")
-    @Operation(summary = "List contract templates by product")
+    @Operation(summary = "List contract templates by product. Optional ?search= filters by nameEn, nameAr, etc.")
     public ResponseEntity<List<ContractTemplateResponse>> listByProduct(
             @PathVariable UUID productId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
         var templates = manageContractTemplateUseCase.listByProduct(tenantId, productId);
         enrichWithNames(tenantId, templates);
-        var response = templates.stream().map(ContractTemplateMapper::toResponse).toList();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(filterTemplates(templates, search));
     }
 
     @SecuredEndpoint(obj = "contract-templates", act = "read")
     @GetMapping("/type/{typeId}")
-    @Operation(summary = "List contract templates by type")
+    @Operation(summary = "List contract templates by type. Optional ?search= filters by nameEn, nameAr, etc.")
     public ResponseEntity<List<ContractTemplateResponse>> listByType(
             @PathVariable UUID typeId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
         var templates = manageContractTemplateUseCase.listByType(tenantId, typeId);
         enrichWithNames(tenantId, templates);
-        var response = templates.stream().map(ContractTemplateMapper::toResponse).toList();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(filterTemplates(templates, search));
+    }
+
+    private List<ContractTemplateResponse> filterTemplates(java.util.List<com.ksa.financing.product.domain.model.ContractTemplate> templates, String search) {
+        String term = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        return templates.stream()
+                .map(ContractTemplateMapper::toResponse)
+                .filter(t -> term == null
+                        || c(t.nameEn(), term)
+                        || c(t.nameAr(), term)
+                        || c(t.productNameEn(), term)
+                        || c(t.productNameAr(), term)
+                        || c(t.typeNameEn(), term)
+                        || c(t.typeNameAr(), term)
+                        || c(t.language(), term))
+                .toList();
+    }
+
+    private static boolean c(String f, String t) {
+        return f != null && f.toLowerCase().contains(t);
     }
 
     @SecuredEndpoint(obj = "contract-templates", act = "read")

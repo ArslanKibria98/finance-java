@@ -123,6 +123,11 @@ ksa:
       - /api/v1/products/**
       - /api/v1/product-categories/**
 
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true
 # Temporal Workflow Configuration
 temporal:
   service-address: ${TEMPORAL_ADDRESS:localhost:7233}

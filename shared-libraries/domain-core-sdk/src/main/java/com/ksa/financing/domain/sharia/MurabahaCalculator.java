@@ -76,7 +76,8 @@ public final class MurabahaCalculator {
             SarMoney costPrice,
             ProfitRate profitRate,
             Tenure tenure,
-            LocalDate startDate
+            LocalDate startDate,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
@@ -93,15 +94,16 @@ public final class MurabahaCalculator {
         // Calculate sale price
         SarMoney salePrice = costPrice.add(profitAmount);
 
-        // Calculate monthly installment
-        SarMoney monthlyInstallment = salePrice.divide(tenure.months());
+        // Calculate monthly installment (Principal + Profit + Fee)
+        SarMoney monthlyInstallment = salePrice.add(feeAmount).divide(tenure.months());
 
         // Generate amortization schedule
         List<InstallmentLine> schedule = AmortizationScheduleGenerator.generateFlatSchedule(
                 costPrice,
                 profitRate,
                 tenure,
-                startDate
+                startDate,
+                feeAmount
         );
 
         return new MurabahaCalculation(
@@ -130,12 +132,14 @@ public final class MurabahaCalculator {
             SarMoney costPrice,
             ProfitRate profitRate,
             Tenure tenure,
-            LocalDate startDate
+            LocalDate startDate,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
         Objects.requireNonNull(tenure, "Tenure cannot be null");
         Objects.requireNonNull(startDate, "Start date cannot be null");
+        Objects.requireNonNull(feeAmount, "Fee amount cannot be null");
 
         if (costPrice.isZero() || costPrice.isNegative()) {
             throw new IllegalArgumentException("Cost price must be positive");
@@ -146,7 +150,8 @@ public final class MurabahaCalculator {
                 costPrice,
                 profitRate,
                 tenure,
-                startDate
+                startDate,
+                feeAmount
         );
 
         // Calculate totals from schedule
@@ -209,14 +214,15 @@ public final class MurabahaCalculator {
     public static SarMoney calculateMonthlyInstallment(
             SarMoney costPrice,
             ProfitRate profitRate,
-            Tenure tenure
+            Tenure tenure,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
         Objects.requireNonNull(tenure, "Tenure cannot be null");
 
         SarMoney salePrice = calculateSalePrice(costPrice, profitRate);
-        return salePrice.divide(tenure.months());
+        return salePrice.add(feeAmount).divide(tenure.months());
     }
 
     /**

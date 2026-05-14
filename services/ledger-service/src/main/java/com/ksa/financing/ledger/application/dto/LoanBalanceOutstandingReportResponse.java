@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -16,7 +18,8 @@ public record LoanBalanceOutstandingReportResponse(
     @Schema(description = "Total principal outstanding") BigDecimal totalPrincipalOutstanding,
     @Schema(description = "Total profit outstanding") BigDecimal totalProfitOutstanding,
     @Schema(description = "Total penalties outstanding") BigDecimal totalPenaltiesOutstanding,
-    @Schema(description = "Line items") List<Line> items
+    @Schema(description = "Line items") List<Line> items,
+    @Schema(description = "Pagination metadata") @JsonIgnore PageMetadata pagination
 ) {
 
     @Builder

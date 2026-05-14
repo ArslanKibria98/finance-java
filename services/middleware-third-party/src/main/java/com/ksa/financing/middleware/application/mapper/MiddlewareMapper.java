@@ -29,6 +29,24 @@ public class MiddlewareMapper {
         );
     }
 
+    /**
+     * Overload taking raw domain lists. Groups env configs by api_id then
+     * delegates to the per-api builder so callers do not have to pre-group.
+     */
+    public ProviderEnvironmentResponse toEnvironmentResponse(ThirdPartyProvider provider,
+                                                              java.util.List<ProviderApi> apis,
+                                                              java.util.List<ApiEnvironmentConfig> envConfigs) {
+        var configsByApi = envConfigs.stream()
+                .collect(java.util.stream.Collectors.groupingBy(ApiEnvironmentConfig::getApiId));
+        var apiResponses = apis.stream()
+                .map(api -> toApiWithEnvConfigsResponse(
+                        api,
+                        configsByApi.getOrDefault(api.getId(), java.util.List.of())
+                                .stream().map(this::toResponse).toList()))
+                .toList();
+        return toEnvironmentResponse(provider, apiResponses);
+    }
+
     public ProviderApiWithEnvConfigsResponse toApiWithEnvConfigsResponse(ProviderApi api,
                                                                           java.util.List<EnvConfigResponse> envConfigs) {
         return new ProviderApiWithEnvConfigsResponse(
@@ -84,6 +102,8 @@ public class MiddlewareMapper {
                 api.getStatus() != null ? api.getStatus().name() : null,
                 api.isAsync(),
                 api.getTimeoutMs(),
+                api.getCostPerCall(),
+                api.getCostCurrency(),
                 api.getCreatedAt(),
                 api.getUpdatedAt()
         );

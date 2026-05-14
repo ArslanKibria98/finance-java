@@ -54,7 +54,7 @@ public class NationalAddressMismatchEvaluator implements FraudRuleEvaluator {
         if (distance.compareTo(BigDecimal.valueOf(distanceKm)) <= 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "App location " + distance + " km from national address",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

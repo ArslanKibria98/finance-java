@@ -46,7 +46,7 @@ public class BlacklistController {
 
         UUID tenantId = extractTenantId(jwt);
         log.info("Blacklisting NID: ****{} for tenant: {}", request.nationalId().substring(Math.max(0, request.nationalId().length() - 4)), tenantId);
-        return manageBlacklistUseCase.blacklistNid(request.nationalId(), request.reason());
+        return manageBlacklistUseCase.blacklistNid(request.nationalId(), request.reason(), request.blockCodeId());
     }
 
     @SecuredEndpoint(obj = "risk.blacklist", act = "delete")
@@ -80,6 +80,19 @@ public class BlacklistController {
         return manageBlacklistUseCase.listNidBlacklist(pageQuery);
     }
 
+    @SecuredEndpoint(obj = "risk.blacklist", act = "update")
+    @PutMapping("/nid/{nationalId}/block-code")
+    @Operation(summary = "Assign block code to NID blacklist entry")
+    public NidBlacklistEntry assignNidBlockCode(
+            @PathVariable String nationalId,
+            @Valid @RequestBody AssignBlockCodeRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Assigning block code {} to NID ****{} for tenant: {}", request.blockCodeId(),
+                nationalId.substring(Math.max(0, nationalId.length() - 4)), tenantId);
+        return manageBlacklistUseCase.assignNidBlockCode(nationalId, request.blockCodeId());
+    }
+
     // ===== MOBILE BLACKLIST =====
 
     @SecuredEndpoint(obj = "risk.blacklist", act = "create")
@@ -91,7 +104,7 @@ public class BlacklistController {
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
         log.info("Blacklisting mobile: ****{} for tenant: {}", request.mobileNumber().substring(Math.max(0, request.mobileNumber().length() - 4)), tenantId);
-        return manageBlacklistUseCase.blacklistMobile(request.mobileNumber(), request.reason());
+        return manageBlacklistUseCase.blacklistMobile(request.mobileNumber(), request.reason(), request.blockCodeId());
     }
 
     @SecuredEndpoint(obj = "risk.blacklist", act = "delete")
@@ -124,6 +137,23 @@ public class BlacklistController {
         UUID tenantId = extractTenantId(jwt);
         return manageBlacklistUseCase.listMobileBlacklist(pageQuery);
     }
+
+    @SecuredEndpoint(obj = "risk.blacklist", act = "update")
+    @PutMapping("/mobile/{mobileNumber}/block-code")
+    @Operation(summary = "Assign block code to mobile blacklist entry")
+    public MobileBlacklistEntry assignMobileBlockCode(
+            @PathVariable String mobileNumber,
+            @Valid @RequestBody AssignBlockCodeRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Assigning block code {} to mobile ****{} for tenant: {}", request.blockCodeId(),
+                mobileNumber.substring(Math.max(0, mobileNumber.length() - 4)), tenantId);
+        return manageBlacklistUseCase.assignMobileBlockCode(mobileNumber, request.blockCodeId());
+    }
+
+    // ===== SHARED =====
+
+    public record AssignBlockCodeRequest(UUID blockCodeId) {}
 
     private UUID extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");

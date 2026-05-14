@@ -40,6 +40,8 @@ public class CustomerMapper {
             c.getPepStatus() != null ? c.getPepStatus().name() : null,
             c.getGlobalUid(),
             profilePictureUrl,
+            c.isBlocked(),
+            c.getBlockCodes(),
             c.getCreatedAt(),
             c.getUpdatedAt()
         );

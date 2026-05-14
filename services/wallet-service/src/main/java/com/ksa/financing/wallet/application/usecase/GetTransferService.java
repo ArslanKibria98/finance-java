@@ -1,6 +1,8 @@
 package com.ksa.financing.wallet.application.usecase;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.wallet.domain.model.WalletTransfer;
 import com.ksa.financing.wallet.domain.port.in.GetTransferUseCase;
 import com.ksa.financing.wallet.domain.port.out.WalletTransferRepository;
@@ -32,5 +34,11 @@ public class GetTransferService implements GetTransferUseCase {
         return java.util.stream.Stream.concat(sent.stream(), received.stream())
                 .sorted((a, b) -> b.getInitiatedAt().compareTo(a.getInitiatedAt()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<WalletTransfer> listByWallet(UUID walletId, PageQuery query) {
+        return transferRepository.findAllByWallet(walletId, query);
     }
 }

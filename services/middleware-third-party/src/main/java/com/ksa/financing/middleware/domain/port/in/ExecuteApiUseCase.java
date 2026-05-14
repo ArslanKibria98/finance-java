@@ -4,6 +4,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
+ * Business-context attribution attached to a middleware call so cost can be
+ * aggregated per customer, per loan application, or per onboarding session.
+ */
+
+/**
  * Input port for executing third-party API calls through the middleware gateway.
  * Resolves provider config, builds HTTP request, executes with resilience, and logs everything.
  */
@@ -21,13 +26,30 @@ public interface ExecuteApiUseCase {
      * @param headers        additional headers to merge with config
      * @param idempotencyKey optional idempotency key for deduplication
      * @param nationalId     optional NID for audit trail
+     * @param mobileNumber   optional mobile number for audit trail (OTP/IVR APIs)
      * @param callerService  calling service identifier (e.g., "lending-service")
      * @return execution result with response data
      */
     ExecutionResult execute(String secretKey, String apiCode, String requestBody,
                             Map<String, String> pathParams, Map<String, String> queryParams,
                             Map<String, String> headers, String idempotencyKey,
-                            String nationalId, String callerService);
+                            String nationalId, String mobileNumber, String callerService);
+
+    /**
+     * Extended entry point that captures business context (customer / application /
+     * onboarding) so per-customer cost reports can be produced downstream.
+     */
+    ExecutionResult execute(String secretKey, String apiCode, String requestBody,
+                            Map<String, String> pathParams, Map<String, String> queryParams,
+                            Map<String, String> headers, String idempotencyKey,
+                            String nationalId, String mobileNumber, String callerService,
+                            BusinessContext context);
+
+    record BusinessContext(UUID customerId, String applicationId, String contextType) {
+        public static BusinessContext empty() {
+            return new BusinessContext(null, null, null);
+        }
+    }
 
     record ExecutionResult(
             String requestId,

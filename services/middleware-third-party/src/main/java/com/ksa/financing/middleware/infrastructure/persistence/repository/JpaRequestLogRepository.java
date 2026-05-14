@@ -3,6 +3,7 @@ package com.ksa.financing.middleware.infrastructure.persistence.repository;
 import com.ksa.financing.middleware.infrastructure.persistence.entity.ApiRequestLogJpaEntity;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -10,7 +11,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface JpaRequestLogRepository extends JpaRepository<ApiRequestLogJpaEntity, UUID> {
+public interface JpaRequestLogRepository extends JpaRepository<ApiRequestLogJpaEntity, UUID>,
+        JpaSpecificationExecutor<ApiRequestLogJpaEntity> {
 
     Optional<ApiRequestLogJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 

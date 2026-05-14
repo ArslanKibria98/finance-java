@@ -15,7 +15,7 @@ import java.util.UUID;
 @Setter
 public class ApiEnvironmentConfigJpaEntity {
 
-    public enum EnvironmentTypeEnum { DEV, PROD }
+    public enum EnvironmentTypeEnum { TEST, DEV, PROD }
     public enum AuthTypeEnum { NONE, BASIC, BEARER, API_KEY, OAUTH2, CUSTOM }
 
     @Id

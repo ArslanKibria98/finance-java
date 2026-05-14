@@ -66,6 +66,8 @@ public final class FraudEventMapper {
                         r.ruleId().name(),
                         r.decision() != null ? r.decision().name() : null,
                         r.blockType() != null ? r.blockType().name() : null,
+                        r.blockCodeId(),
+                        r.blockCode(),
                         r.detail(),
                         r.scoreContribution()
                 ))
@@ -77,6 +79,8 @@ public final class FraudEventMapper {
                 result.customerId(),
                 result.decision().name(),
                 result.blockType() != null ? result.blockType().name() : null,
+                result.blockCodeId(),
+                result.blockCode(),
                 result.compositeRiskScore(),
                 result.riskLevel(),
                 triggeredRules,
@@ -104,6 +108,8 @@ public final class FraudEventMapper {
                 rule.detectionLogic(),
                 rule.defaultAction().name(),
                 rule.blockType() != null ? rule.blockType().name() : null,
+                rule.blockCodeId(),
+                rule.blockCode(),
                 rule.status().name(),
                 params,
                 rule.priority()

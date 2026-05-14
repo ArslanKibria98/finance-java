@@ -1,48 +1,51 @@
 package com.ksa.financing.kycadapter.infrastructure.stub;
 
+import com.ksa.financing.kycadapter.infrastructure.middleware.MiddlewareApiClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 /**
- * Stub adapter simulating the Unifonic SMS API for OTP delivery.
- * In production, this would be replaced with an actual HTTP client calling the Unifonic service.
+ * Unifonic SMS / OTP adapter.
  *
- * OTP state (code, attempts, expiry) is now managed in the otp_verifications database table.
- * This adapter is only responsible for SMS delivery.
+ * Routes through middleware-third-party (UNIFONIC_SEND_OTP) so each OTP
+ * send is persisted in client_request_test for audit and replay.
+ *
+ * Public signature is preserved; the boolean return reflects whether the
+ * middleware call succeeded.
  */
 @Component
 public class UnifonicStubAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(UnifonicStubAdapter.class);
 
-    /**
-     * Send an OTP code to the given mobile number via SMS.
-     * In production, this calls the Unifonic REST API.
-     *
-     * @param mobileNumber the mobile number to send the SMS to
-     * @param otpCode      the OTP code to include in the SMS
-     * @return true if SMS was sent successfully
-     */
-    public boolean sendSms(String mobileNumber, String otpCode) {
-        String maskedMobile = maskMobile(mobileNumber);
-        log.info("Unifonic stub: Sending OTP SMS to mobile={}", maskedMobile);
+    private static final String API_CODE = "UNIFONIC_SEND_OTP";
 
-        simulateDelay(200);
+    private final MiddlewareApiClient middlewareApiClient;
 
-        // Stub always succeeds — log the OTP for dev/test visibility
-        log.info("*** UNIFONIC STUB: OTP for {} is {} ***", maskedMobile, otpCode);
-
-        log.info("Unifonic stub: SMS sent successfully to mobile={}", maskedMobile);
-        return true;
+    public UnifonicStubAdapter(MiddlewareApiClient middlewareApiClient) {
+        this.middlewareApiClient = middlewareApiClient;
     }
 
-    private void simulateDelay(long millis) {
+    public boolean sendSms(String mobileNumber, String otpCode) {
+        String maskedMobile = maskMobile(mobileNumber);
+        log.info("Unifonic via middleware: sending OTP to mobile={}", maskedMobile);
+
+        var requestBody = Map.<String, Object>of(
+                "recipient", mobileNumber,
+                "body", "Your OTP is " + otpCode,
+                "appSid", "kyc-adapter-service"
+        );
+
         try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("Unifonic stub: Delay interrupted");
+            middlewareApiClient.invokeAsMap(API_CODE, requestBody, null, mobileNumber, null);
+            log.info("*** UNIFONIC: OTP for {} is {} ***", maskedMobile, otpCode);
+            return true;
+        } catch (Exception ex) {
+            log.error("Unifonic OTP send failed for mobile={}, error={}", maskedMobile, ex.getMessage());
+            return false;
         }
     }
 

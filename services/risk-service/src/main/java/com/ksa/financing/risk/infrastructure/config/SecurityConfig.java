@@ -1,5 +1,6 @@
 package com.ksa.financing.risk.infrastructure.config;
 
+import com.ksa.financing.infra.security.blacklist.BlacklistGuardFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,9 +16,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -40,7 +43,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
         return http
-            .securityMatcher("/api/v1/risk/internal-checks", "/api/v1/risk/aml-score", "/api/v1/risk/aml-score/customer/**", "/api/v1/credit-check", "/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+            .securityMatcher("/api/v1/risk/internal-checks", "/api/v1/risk/aml-score", "/api/v1/risk/aml-score/customer/**", "/api/v1/credit-check", "/internal/**", "/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session
@@ -53,14 +56,16 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain authenticatedFilterChain(HttpSecurity http,
                                                    AuthenticationEntryPoint authenticationEntryPoint,
-                                                   AccessDeniedHandler accessDeniedHandler) throws Exception {
-        return http
+                                                   AccessDeniedHandler accessDeniedHandler,
+                                                   ObjectProvider<BlacklistGuardFilter> blacklistGuardProvider) throws Exception {
+        var chain = http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/**").authenticated()
+                .requestMatchers("/internal/**").permitAll()
                 .anyRequest().denyAll())
             .exceptionHandling(eh -> eh
                 .authenticationEntryPoint(authenticationEntryPoint)
@@ -72,8 +77,13 @@ public class SecurityConfig {
                     .decoder(jwtDecoder())
                     .jwtAuthenticationConverter(jwtAuthenticationConverter())
                 )
-            )
-            .build();
+            );
+
+        BlacklistGuardFilter blacklistGuard = blacklistGuardProvider.getIfAvailable();
+        if (blacklistGuard != null) {
+            chain = chain.addFilterAfter(blacklistGuard, BearerTokenAuthenticationFilter.class);
+        }
+        return chain.build();
     }
 
     @Bean

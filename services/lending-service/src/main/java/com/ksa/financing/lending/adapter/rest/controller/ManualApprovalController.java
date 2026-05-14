@@ -4,7 +4,13 @@ import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.lending.adapter.rest.response.LoanApplicationStepInfo;
+import org.springframework.data.jpa.domain.Specification;
+
+import java.util.Set;
 import com.ksa.financing.lending.domain.model.ManualApprovalTask;
 import com.ksa.financing.lending.infrastructure.persistence.entity.ManualApprovalTaskJpaEntity;
 import com.ksa.financing.lending.infrastructure.persistence.repository.JpaManualApprovalTaskRepository;
@@ -46,24 +52,47 @@ public class ManualApprovalController {
     private final JpaManualApprovalTaskRepository taskRepository;
     private final WorkflowClient workflowClient;
 
+    private static final Set<String> MANUAL_APPROVAL_ALLOWED_FILTERS =
+            Set.of("status", "assignedRole", "applicationId", "customerId");
+    private static final Set<String> MANUAL_APPROVAL_SEARCHABLE_FIELDS =
+            Set.of("applicationNumber", "customerName", "productName", "assignedRole", "status");
+
     @SecuredEndpoint(obj = "manual-approvals", act = "read")
     @GetMapping
-    @Operation(summary = "List manual approval tasks (filter by status)")
-    public ResponseEntity<List<ManualApprovalTaskResponse>> list(
-            @RequestParam(defaultValue = "PENDING") String status,
+    @Operation(summary = "List manual approval tasks (paginated, filterable, searchable). " +
+            "Backwards compatible: ?status=PENDING still works. New: ?search=, ?page=, ?size=")
+    public PageResponse<ManualApprovalTaskResponse> list(
+            @RequestParam(required = false) String status,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        ManualApprovalTask.Status statusEnum;
-        try {
-            statusEnum = ManualApprovalTask.Status.valueOf(status.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCodes.BAD_REQUEST,
-                    "Invalid status: " + status + ". Allowed: PENDING, APPROVED, REJECTED, BREACHED, EXPIRED");
+
+        ManualApprovalTask.Status statusEnum = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                statusEnum = ManualApprovalTask.Status.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                        "Invalid status: " + status + ". Allowed: PENDING, APPROVED, REJECTED, BREACHED, EXPIRED");
+            }
         }
 
-        var tasks = taskRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, statusEnum);
-        return ResponseEntity.ok(tasks.stream().map(this::toResponse).toList());
+        ManualApprovalTask.Status finalStatus = statusEnum;
+        Specification<ManualApprovalTaskJpaEntity> tenantSpec = (root, q, cb) -> {
+            var tenantPred = cb.equal(root.get("tenantId"), tenantId);
+            return finalStatus != null ? cb.and(tenantPred, cb.equal(root.get("status"), finalStatus)) : tenantPred;
+        };
+
+        Specification<ManualApprovalTaskJpaEntity> dynamic = SpecificationBuilder.<ManualApprovalTaskJpaEntity>builder()
+                .filters(query.filters())
+                .allowedFilterFields(MANUAL_APPROVAL_ALLOWED_FILTERS)
+                .search(query.search())
+                .searchableFields(MANUAL_APPROVAL_SEARCHABLE_FIELDS)
+                .build();
+
+        var page = taskRepository.findAll(tenantSpec.and(dynamic), query.toPageable());
+        return PageResponse.from(page, this::toResponse);
     }
 
     @SecuredEndpoint(obj = "manual-approvals", act = "read")

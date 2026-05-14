@@ -12,5 +12,10 @@ public record FeeSettings(
     BigDecimal maxDti,
     Integer minAge,
     Integer maxAge,
-    BigDecimal gdbrPercentage
+    BigDecimal gdbrPercentage,
+    Boolean penaltyWaiverAllowed,
+    Integer maxPenaltyWaiversAllowed,
+    BigDecimal minFinancingAmount,
+    BigDecimal maxFinancingAmount,
+    BigDecimal vatPercentage
 ) {}

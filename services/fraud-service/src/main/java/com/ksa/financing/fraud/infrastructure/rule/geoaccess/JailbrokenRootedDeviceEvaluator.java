@@ -30,7 +30,7 @@ public class JailbrokenRootedDeviceEvaluator implements FraudRuleEvaluator {
         if (status != DeviceIntegrityStatus.JAILBROKEN && status != DeviceIntegrityStatus.ROOTED) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Compromised device: " + status.name(),
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

@@ -24,7 +24,7 @@ import java.util.UUID;
  * When a loan is created, automatically generates and stores the repayment schedule with installments.
  */
 @Slf4j
-//@Component // Disabled - Kafka deserialization issues
+@Component
 @RequiredArgsConstructor
 public class LoanEventListener {
 
@@ -52,6 +52,7 @@ public class LoanEventListener {
             Object principalObj = event.get("principalAmount");
             Object profitRateObj = event.get("profitRate");
             Object tenureObj = event.get("tenureMonths");
+            Object feeObj = event.get("feeAmount");
 
             if (loanIdStr == null || tenantIdStr == null || principalObj == null || profitRateObj == null || tenureObj == null) {
                 log.warn("LoanCreated event missing required fields: loanId={}, tenantId={}, principal={}, rate={}, tenure={}",
@@ -66,6 +67,7 @@ public class LoanEventListener {
             BigDecimal principalAmount = new BigDecimal(principalObj.toString());
             BigDecimal profitRateValue = new BigDecimal(profitRateObj.toString());
             Integer tenureMonths = ((Number) tenureObj).intValue();
+            BigDecimal feeAmountValue = feeObj != null ? new BigDecimal(feeObj.toString()) : BigDecimal.ZERO;
 
             log.info("Creating repayment schedule for loan: {} principal: {} profitRate: {} tenureMonths: {}",
                     loanId, principalAmount, profitRateValue, tenureMonths);
@@ -74,11 +76,12 @@ public class LoanEventListener {
             SarMoney principal = SarMoney.of(principalAmount);
             ProfitRate rate = ProfitRate.ofDecimal(profitRateValue);
             Tenure tenure = Tenure.ofMonths(tenureMonths);
+            SarMoney feeAmount = SarMoney.of(feeAmountValue);
             LocalDate startDate = LocalDate.now();
 
             // Generate amortization schedule using domain-core-sdk (flat rate Murabaha)
             var amortization = AmortizationScheduleGenerator.generateFlatSchedule(
-                    principal, rate, tenure, startDate);
+                    principal, rate, tenure, startDate, feeAmount);
 
             if (amortization == null || amortization.isEmpty()) {
                 log.error("Failed to generate amortization schedule for loan: {}", loanId);
@@ -102,7 +105,7 @@ public class LoanEventListener {
                         dueDate,
                         entry.principalComponent().getValue(),  // principal for this month
                         entry.profitComponent().getValue(),     // profit (interest) for this month
-                        BigDecimal.ZERO                         // no additional fees
+                        entry.feeComponent().getValue()         // processing/admin fee for this month
                 ));
 
                 totalProfit = totalProfit.add(entry.profitComponent().getValue());
@@ -130,6 +133,7 @@ public class LoanEventListener {
                     scheduleNumber,
                     principalAmount,
                     totalProfit,
+                    feeAmountValue,
                     firstDueDate,
                     lastDueDate,
                     installments,

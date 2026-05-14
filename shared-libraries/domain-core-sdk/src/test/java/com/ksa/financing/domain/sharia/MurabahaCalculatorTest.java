@@ -46,7 +46,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result).isNotNull();
@@ -66,7 +66,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(24);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result.profitAmount()).isEqualTo(SarMoney.of(5000.00));
@@ -84,7 +84,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(36);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result.profitAmount()).isEqualTo(SarMoney.of(30000.00));
@@ -102,7 +102,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(60);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result.profitAmount()).isEqualTo(SarMoney.of(12000.00));
@@ -120,7 +120,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         List<InstallmentLine> schedule = result.schedule();
@@ -148,7 +148,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        SarMoney monthlyInstallment = MurabahaCalculator.calculateMonthlyInstallment(costPrice, profitRate, tenure);
+        SarMoney monthlyInstallment = MurabahaCalculator.calculateMonthlyInstallment(costPrice, profitRate, tenure, SarMoney.zero());
 
         // Then
         assertThat(monthlyInstallment).isEqualTo(SarMoney.of(8750.00));
@@ -203,7 +203,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When/Then
-        assertThatThrownBy(() -> MurabahaCalculator.calculate(null, profitRate, tenure, startDate))
+        assertThatThrownBy(() -> MurabahaCalculator.calculate(null, profitRate, tenure, startDate, SarMoney.zero()))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Cost price cannot be null");
     }
@@ -216,7 +216,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When/Then
-        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, null, tenure, startDate))
+        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, null, tenure, startDate, SarMoney.zero()))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Profit rate cannot be null");
     }
@@ -229,7 +229,7 @@ class MurabahaCalculatorTest {
         ProfitRate profitRate = ProfitRate.ofPercentage(5.0);
 
         // When/Then
-        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, null, startDate))
+        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, null, startDate, SarMoney.zero()))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Tenure cannot be null");
     }
@@ -243,7 +243,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When/Then
-        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, tenure, null))
+        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, tenure, null, SarMoney.zero()))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Start date cannot be null");
     }
@@ -257,7 +257,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When/Then
-        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate))
+        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Cost price must be positive");
     }
@@ -271,7 +271,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When/Then
-        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate))
+        assertThatThrownBy(() -> MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Cost price must be positive");
     }
@@ -285,7 +285,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculateDecliningBalance(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculateDecliningBalance(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result).isNotNull();
@@ -354,7 +354,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result.profitAmount()).isEqualTo(SarMoney.of(50.00));
@@ -371,7 +371,7 @@ class MurabahaCalculatorTest {
         Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate);
+        MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
         // Then
         assertThat(result.profitAmount()).isEqualTo(SarMoney.of(50000.00));

@@ -48,9 +48,9 @@ public class BankController {
                 b.code(),
                 b.nameEn(),
                 b.nameAr(),
-                mockIban,                         // mock IBAN for demo
+                mockIban,                         // demo IBAN (reference list)
                 maskedIban,
-                "Sample Holder",                  // mock account holder
+                "Sample Holder",                  // demo account holder
                 "CURRENT",
                 false,                            // isPrimary
                 false,                            // isSalaryAccount
@@ -65,7 +65,6 @@ public class BankController {
     private static String generateMockIban(String bankCode) {
         if (bankCode == null) return null;
         String code2 = bankCode.length() >= 2 ? bankCode.substring(0, 2) : ("0" + bankCode);
-        // Deterministic check digits (00) + bank code + 18 padded digits
         String suffix = String.format("%018d", Math.abs((long) bankCode.hashCode()));
         return "SA00" + code2 + suffix;
     }

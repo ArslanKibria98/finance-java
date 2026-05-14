@@ -16,6 +16,7 @@ public record CreateRepaymentScheduleRequest(
         @NotNull String scheduleNumber,
         @NotNull @Positive BigDecimal totalPrincipal,
         @NotNull BigDecimal totalProfit,
+        BigDecimal totalFee,
         @NotNull LocalDate firstDueDate,
         @NotNull LocalDate lastDueDate,
         @NotNull @NotEmpty @Valid List<InstallmentEntryRequest> installments

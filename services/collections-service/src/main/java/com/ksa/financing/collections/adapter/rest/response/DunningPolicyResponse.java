@@ -38,6 +38,8 @@ public record DunningPolicyResponse(
         boolean autoAssignAgent,
         Integer agentAssignmentDpd,
         Integer walletFreezeDpd,
+        boolean penaltyWaiverAllowed,
+        int maxPenaltyWaiversAllowed,
 
         Map<DunningStage, Map<String, Object>> stageActions,
 

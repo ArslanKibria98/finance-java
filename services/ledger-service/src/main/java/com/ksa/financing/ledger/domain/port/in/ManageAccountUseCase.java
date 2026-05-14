@@ -26,6 +26,8 @@ public interface ManageAccountUseCase {
 
     void deactivate(UUID tenantId, AccountId accountId);
 
+    void activate(UUID tenantId, AccountId accountId);
+
     // -----------------------------------------------------------------------
     // Commands
     // -----------------------------------------------------------------------

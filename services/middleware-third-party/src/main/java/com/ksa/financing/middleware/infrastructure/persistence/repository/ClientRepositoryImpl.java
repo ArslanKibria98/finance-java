@@ -40,6 +40,12 @@ public class ClientRepositoryImpl implements ClientRepository {
     }
 
     @Override
+    public Optional<ApiClient> findByCode(String code) {
+        return jpaRepository.findFirstByCodeAndDeletedAtIsNull(code)
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public List<ApiClient> findAllByTenant(UUID tenantId) {
         return jpaRepository.findByTenantIdAndDeletedAtIsNullOrderByNameAsc(tenantId)
                 .stream().map(mapper::toDomain).toList();

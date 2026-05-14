@@ -92,7 +92,12 @@ public class ProductSettingsController {
                 request.maxDbrPercentage(),
                 request.dbrCalculationMethod(), request.dbrExceptions(),
                 request.maxDti(), request.minAge(), request.maxAge(),
-                request.gdbrPercentage()
+                request.gdbrPercentage(),
+                request.penaltyWaiverAllowed(),
+                request.maxPenaltyWaiversAllowed(),
+                request.minFinancingAmount(),
+                request.maxFinancingAmount(),
+                request.vatPercentage()
         );
 
         manageProductSettingsUseCase.updateFeeSettings(tenantId, productId, command);

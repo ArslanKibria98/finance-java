@@ -77,3 +77,8 @@ ksa:
   authorization:
     enabled: true
     cache-key-prefix: casbin:policies
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true

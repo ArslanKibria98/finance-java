@@ -29,6 +29,10 @@ public class DelinquencyRulePersistenceMapper {
         e.setPromisesPerYear(r.getPromisesPerYear());
         e.setPromisesPerLoan(r.getPromisesPerLoan());
         e.setCustom(r.isCustom());
+        e.setSettlementStrategy((short) r.getSettlementStrategy().code());
+        e.setSettlementDiscountType(r.getSettlementDiscountType());
+        e.setSettlementMonths(r.getSettlementMonths());
+        e.setSettlementAmountPerMonth(r.getSettlementAmountPerMonth());
         e.setCharityFundAccount(r.getCharityFundAccount());
         e.setChannel(r.getChannel());
         e.setRecordState((short) r.getRecordState());
@@ -53,6 +57,10 @@ public class DelinquencyRulePersistenceMapper {
                 e.getPromisesPerYear(),
                 e.getPromisesPerLoan(),
                 e.isCustom(),
+                com.ksa.financing.collections.domain.model.EarlySettlementStrategy.fromCode(e.getSettlementStrategy()),
+                e.getSettlementDiscountType(),
+                e.getSettlementMonths(),
+                e.getSettlementAmountPerMonth(),
                 e.getCharityFundAccount(),
                 e.getChannel(),
                 e.getRecordState(),

@@ -25,6 +25,7 @@ public class LoanMapper {
                 agg.getCommodityTransactionId() != null ? agg.getCommodityTransactionId().toString() : null,
                 agg.getPrincipalAmount(),
                 agg.getProfitAmount(),
+                agg.getFeeAmount(),
                 agg.getTotalAmount(),
                 agg.getProfitRate(),
                 agg.getTenureMonths(),

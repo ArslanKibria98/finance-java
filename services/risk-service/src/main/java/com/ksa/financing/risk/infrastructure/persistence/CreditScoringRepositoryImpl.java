@@ -43,9 +43,14 @@ public class CreditScoringRepositoryImpl implements CreditScoringRepository {
 
     @Override
     public PageResponse<CreditScoringFieldDefinition> findActiveFieldDefinitions(String tenantId, PageQuery pageQuery) {
+        String pat = toLikePattern(pageQuery.search());
+        String searchClause = pat == null ? ""
+                : " AND (LOWER(field_key) LIKE ? OR LOWER(name_en) LIKE ? OR LOWER(name_ar) LIKE ? OR LOWER(data_type) LIKE ?)";
+
         Long total = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM credit_scoring_field_definitions WHERE tenant_id = ?::uuid AND is_active = true",
-                Long.class, tenantId);
+                "SELECT COUNT(*) FROM credit_scoring_field_definitions WHERE tenant_id = ?::uuid AND is_active = true" + searchClause,
+                Long.class,
+                pat == null ? new Object[]{tenantId} : new Object[]{tenantId, pat, pat, pat, pat});
         long totalElements = total == null ? 0L : total;
 
         int page = pageQuery.page();
@@ -58,13 +63,16 @@ public class CreditScoringRepositoryImpl implements CreditScoringRepository {
         int offset = page * size;
         String orderBy = buildOrderByClause(pageQuery);
 
+        Object[] qArgs = pat == null
+                ? new Object[]{tenantId, size, offset}
+                : new Object[]{tenantId, pat, pat, pat, pat, size, offset};
         List<CreditScoringFieldDefinition> content = jdbcTemplate.query(
                 "SELECT id, tenant_id, field_key, name_en, name_ar, data_type, is_active, sort_order "
                         + "FROM credit_scoring_field_definitions "
-                        + "WHERE tenant_id = ?::uuid AND is_active = true "
+                        + "WHERE tenant_id = ?::uuid AND is_active = true" + searchClause + " "
                         + orderBy + " LIMIT ? OFFSET ?",
                 fieldDefinitionRowMapper(),
-                tenantId, size, offset
+                qArgs
         );
 
         int totalPages = size == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
@@ -72,6 +80,11 @@ public class CreditScoringRepositoryImpl implements CreditScoringRepository {
                 page, size, totalElements, totalPages,
                 page == 0, page >= totalPages - 1, content.isEmpty());
         return new PageResponse<>(content, metadata);
+    }
+
+    private static String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     private String buildOrderByClause(PageQuery pageQuery) {

@@ -234,6 +234,7 @@ public class TestSupportController {
             var entries = new ArrayList<InstallmentEntry>();
             BigDecimal totalPrincipal = BigDecimal.ZERO;
             BigDecimal totalProfit = BigDecimal.ZERO;
+            BigDecimal totalFee = BigDecimal.ZERO;
             LocalDate firstDueDate = null;
             LocalDate lastDueDate = null;
 
@@ -242,10 +243,14 @@ public class TestSupportController {
                 LocalDate dueDate = LocalDate.parse(item.path("dueDate").asText());
                 BigDecimal principal = item.path("principalComponent").decimalValue();
                 BigDecimal profit = item.path("profitComponent").decimalValue();
+                var feeNode = item.path("feeComponent");
+                BigDecimal fee = feeNode.isMissingNode() || feeNode.isNull()
+                        ? BigDecimal.ZERO : feeNode.decimalValue();
 
-                entries.add(new InstallmentEntry(number, dueDate, principal, profit, BigDecimal.ZERO));
+                entries.add(new InstallmentEntry(number, dueDate, principal, profit, fee));
                 totalPrincipal = totalPrincipal.add(principal);
                 totalProfit = totalProfit.add(profit);
+                totalFee = totalFee.add(fee);
                 if (firstDueDate == null || dueDate.isBefore(firstDueDate)) firstDueDate = dueDate;
                 if (lastDueDate == null || dueDate.isAfter(lastDueDate)) lastDueDate = dueDate;
             }
@@ -255,7 +260,7 @@ public class TestSupportController {
                     loanId,
                     effectiveProductId,
                     "SCH-" + loanId.toString().substring(0, 8).toUpperCase() + "-001",
-                    totalPrincipal, totalProfit,
+                    totalPrincipal, totalProfit, totalFee,
                     firstDueDate, lastDueDate,
                     entries,
                     UUID.fromString(jwt.getSubject()));

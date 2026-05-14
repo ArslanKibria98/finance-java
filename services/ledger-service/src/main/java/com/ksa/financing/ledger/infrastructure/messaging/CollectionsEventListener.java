@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,7 +29,7 @@ public class CollectionsEventListener {
             topics = "${kafka.topics.payment-completed:financing.payment.completed}",
             groupId = "${spring.application.name}"
     )
-    public void onPaymentCompleted(Object message) {
+    public void onPaymentCompleted(@Payload Map<String, Object> message) {
         try {
             Map<String, Object> event = toMap(message);
             var tenantId = uuid(event, "tenantId");
@@ -51,7 +53,7 @@ public class CollectionsEventListener {
             topics = "${kafka.topics.settlement-confirmed:financing.settlement.confirmed}",
             groupId = "${spring.application.name}"
     )
-    public void onSettlementConfirmed(Object message) {
+    public void onSettlementConfirmed(@Payload Map<String, Object> message) {
         try {
             Map<String, Object> event = toMap(message);
             var tenantId = uuid(event, "tenantId");
@@ -76,7 +78,7 @@ public class CollectionsEventListener {
             topics = "${kafka.topics.loan-overdue:financing.loan.overdue}",
             groupId = "${spring.application.name}"
     )
-    public void onLoanOverdue(Object message) {
+    public void onLoanOverdue(@Payload Map<String, Object> message) {
         try {
             Map<String, Object> event = toMap(message);
             var tenantId = uuid(event, "tenantId");
@@ -133,6 +135,12 @@ public class CollectionsEventListener {
     private LocalDate localDate(Map<String, Object> event, String key) {
         var raw = event.get(key);
         if (raw == null) return null;
+        if (raw instanceof List<?> parts && parts.size() >= 3) {
+            return LocalDate.of(
+                    ((Number) parts.get(0)).intValue(),
+                    ((Number) parts.get(1)).intValue(),
+                    ((Number) parts.get(2)).intValue());
+        }
         return LocalDate.parse(raw.toString());
     }
 }

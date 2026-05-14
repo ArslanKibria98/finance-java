@@ -57,6 +57,13 @@ public class CustomerRepositoryImpl implements CustomerRepository {
     }
 
     @Override
+    public Optional<Customer> findByIdWithLock(UUID id) {
+        log.debug("Finding customer by ID with lock: {} (cross-tenant)", id);
+        return jpaRepository.findWithLockById(id)
+                .map(CustomerPersistenceMapper::toDomain);
+    }
+
+    @Override
     public Optional<Customer> findByCifNumber(UUID tenantId, String cifNumber) {
         log.debug("Finding customer by CIF: {} for tenant: {}", cifNumber, tenantId);
         return jpaRepository.findByCifNumberAndTenantIdAndDeletedAtIsNull(cifNumber, tenantId)

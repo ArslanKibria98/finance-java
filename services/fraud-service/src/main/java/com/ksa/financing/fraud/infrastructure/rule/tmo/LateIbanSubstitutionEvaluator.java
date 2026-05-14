@@ -42,7 +42,7 @@ public class LateIbanSubstitutionEvaluator implements FraudRuleEvaluator {
         if (hoursToDisbursement < 0 || hoursToDisbursement >= minHours) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "IBAN updated " + hoursToDisbursement + "h before disbursement",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

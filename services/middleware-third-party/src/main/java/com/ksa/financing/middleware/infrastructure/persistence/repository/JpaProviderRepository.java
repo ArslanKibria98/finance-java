@@ -2,6 +2,7 @@ package com.ksa.financing.middleware.infrastructure.persistence.repository;
 
 import com.ksa.financing.middleware.infrastructure.persistence.entity.ThirdPartyProviderJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -9,7 +10,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface JpaProviderRepository extends JpaRepository<ThirdPartyProviderJpaEntity, UUID> {
+public interface JpaProviderRepository extends JpaRepository<ThirdPartyProviderJpaEntity, UUID>,
+        JpaSpecificationExecutor<ThirdPartyProviderJpaEntity> {
 
     Optional<ThirdPartyProviderJpaEntity> findByIdAndTenantIdAndDeletedAtIsNull(UUID id, UUID tenantId);
 

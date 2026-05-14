@@ -35,7 +35,7 @@ public class DisbursementUnverifiedIbanEvaluator implements FraudRuleEvaluator {
         }
         boolean unverified = "UNVERIFIED".equalsIgnoreCase(event.ibanVerificationStatus());
         if (unverified) {
-            return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+            return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                     "IBAN unverified",
                     EvaluatorScores.forDecision(rule.defaultAction()));
         }
@@ -49,7 +49,7 @@ public class DisbursementUnverifiedIbanEvaluator implements FraudRuleEvaluator {
         if (nameSimilarityPort.matches(profile.get().fullName(), event.ibanHolderName(), 0.85)) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "IBAN holder name does not match customer",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

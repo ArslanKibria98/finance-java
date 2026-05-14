@@ -236,7 +236,12 @@ private final JpaProductEnvironmentConfigRepository jpaProductEnvironmentConfigR
                         fs.getMaxDbrPercentage(),
                         fs.getDbrCalculationMethod(), fs.getDbrExceptions(),
                         fs.getMaxDti(), fs.getMinAge(), fs.getMaxAge(),
-                        fs.getGdbrPercentage())));
+                        fs.getGdbrPercentage(),
+                        fs.getPenaltyWaiverAllowed(),
+                        fs.getMaxPenaltyWaiversAllowed(),
+                        fs.getMinFinancingAmount(),
+                        fs.getMaxFinancingAmount(),
+                        fs.getVatPercentage())));
 
         // Duration Settings
         jpaProductDurationSettingsRepository.findByProductIdAndTenantId(productId, tenantId)

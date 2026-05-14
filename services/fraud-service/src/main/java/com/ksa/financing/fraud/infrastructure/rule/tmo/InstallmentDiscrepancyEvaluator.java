@@ -47,7 +47,7 @@ public class InstallmentDiscrepancyEvaluator implements FraudRuleEvaluator {
         if (diff.compareTo(threshold) <= 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Paid " + event.transactionAmount() + " vs scheduled " + expected,
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

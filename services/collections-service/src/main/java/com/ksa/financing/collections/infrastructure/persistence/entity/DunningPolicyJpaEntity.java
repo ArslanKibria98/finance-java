@@ -128,6 +128,12 @@ public class DunningPolicyJpaEntity {
     @Column(name = "wallet_freeze_dpd")
     private Integer walletFreezeDpd;
 
+    @Column(name = "penalty_waiver_allowed", nullable = false)
+    private boolean penaltyWaiverAllowed;
+
+    @Column(name = "max_penalty_waivers_allowed", nullable = false)
+    private int maxPenaltyWaiversAllowed;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

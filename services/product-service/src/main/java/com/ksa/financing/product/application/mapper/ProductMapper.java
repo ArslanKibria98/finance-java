@@ -67,6 +67,8 @@ public class ProductMapper {
                 product.isEarlySettlementAllowed(),
                 product.isWaiveUnearnedProfit(),
                 product.getMinTenureBeforeSettlement(),
+                product.isPenaltyWaiverAllowed(),
+                product.getMaxPenaltyWaiversAllowed(),
                 product.getCurrency(),
                 product.getCountryId(),
                 product.getFineractProductId(),
@@ -158,7 +160,12 @@ public class ProductMapper {
                 fs.maxDti(),
                 fs.minAge(),
                 fs.maxAge(),
-                fs.gdbrPercentage());
+                fs.gdbrPercentage(),
+                fs.penaltyWaiverAllowed(),
+                fs.maxPenaltyWaiversAllowed(),
+                fs.minFinancingAmount(),
+                fs.maxFinancingAmount(),
+                fs.vatPercentage());
     }
 
     private static DurationSettingsResponse mapDurationSettings(Product product) {

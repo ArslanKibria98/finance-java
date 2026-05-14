@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  * this activity — zero direct Fineract GL calls from other services.
  *
  * Implemented in lending-service/adapter/temporal/activity/LedgerActivityImpl.java.
- * The implementation calls ledger-service REST API (POST /api/v1/journal-entries).
+ * The implementation calls ledger-service REST API (POST /internal/v1/journal-entries).
  * Ledger-service then handles Fineract GL sync asynchronously.
  */
 @ActivityInterface

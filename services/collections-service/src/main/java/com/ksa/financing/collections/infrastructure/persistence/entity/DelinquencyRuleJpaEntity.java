@@ -61,6 +61,18 @@ public class DelinquencyRuleJpaEntity {
     @Column(name = "is_custom", nullable = false)
     private boolean isCustom;
 
+    @Column(name = "settlement_strategy", nullable = false)
+    private short settlementStrategy;
+
+    @Column(name = "settlement_discount_type", length = 20)
+    private String settlementDiscountType;
+
+    @Column(name = "settlement_months")
+    private int settlementMonths;
+
+    @Column(name = "settlement_amount_per_month", precision = 19, scale = 4)
+    private BigDecimal settlementAmountPerMonth;
+
     @Column(name = "charity_fund_account", length = 100)
     private String charityFundAccount;
 

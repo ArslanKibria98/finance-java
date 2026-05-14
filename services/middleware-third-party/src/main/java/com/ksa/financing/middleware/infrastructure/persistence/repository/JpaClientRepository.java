@@ -15,6 +15,8 @@ public interface JpaClientRepository extends JpaRepository<ApiClientJpaEntity, U
 
     Optional<ApiClientJpaEntity> findByCodeAndTenantIdAndDeletedAtIsNull(String code, UUID tenantId);
 
+    Optional<ApiClientJpaEntity> findFirstByCodeAndDeletedAtIsNull(String code);
+
     List<ApiClientJpaEntity> findByTenantIdAndDeletedAtIsNullOrderByNameAsc(UUID tenantId);
 
     boolean existsByCodeAndTenantIdAndDeletedAtIsNull(String code, UUID tenantId);

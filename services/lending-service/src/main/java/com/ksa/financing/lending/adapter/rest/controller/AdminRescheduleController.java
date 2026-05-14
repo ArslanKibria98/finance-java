@@ -47,10 +47,11 @@ public class AdminRescheduleController {
 
     @GetMapping
     @SecuredEndpoint(obj = "admin.loan-reschedules", act = "read")
-    @Operation(summary = "List all reschedule requests (admin). Filter by status or type.")
+    @Operation(summary = "List all reschedule requests (admin). Filter by status, type, or free-text search.")
     public ResponseEntity<JsonNode> listAll(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String type,
+            @RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
@@ -64,6 +65,11 @@ public class AdminRescheduleController {
             records = rescheduleRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         }
 
+        String searchTerm = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        if (searchTerm != null) {
+            records = records.stream().filter(r -> matchesSearch(r, searchTerm)).toList();
+        }
+
         ArrayNode array = objectMapper.createArrayNode();
         for (var r : records) {
             array.add(buildRecord(r));
@@ -73,9 +79,21 @@ public class AdminRescheduleController {
         response.put("total", records.size());
         response.put("filter_status", status);
         response.put("filter_type", type);
+        response.put("filter_search", search);
         response.set("reschedules", array);
 
         return ResponseEntity.ok(response);
+    }
+
+    private boolean matchesSearch(LoanRescheduleJpaEntity r, String term) {
+        return contains(r.getLoanNumber(), term)
+                || contains(r.getRescheduleType(), term)
+                || contains(r.getStatus(), term)
+                || contains(r.getJustification(), term);
+    }
+
+    private boolean contains(String f, String term) {
+        return f != null && f.toLowerCase().contains(term);
     }
 
     @GetMapping("/{rescheduleId}")

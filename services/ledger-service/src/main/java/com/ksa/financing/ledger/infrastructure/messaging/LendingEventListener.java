@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,7 +29,7 @@ public class LendingEventListener {
             topics = "${kafka.topics.loan-disbursed:financing.loan.loan-disbursed}",
             groupId = "${spring.application.name}"
     )
-    public void onLoanDisbursed(Object message) {
+    public void onLoanDisbursed(@Payload Map<String, Object> message) {
         try {
             Map<String, Object> event = toMap(message);
             var tenantId = uuid(event, "tenantId");
@@ -80,6 +82,12 @@ public class LendingEventListener {
     private LocalDate localDate(Map<String, Object> event, String key) {
         var raw = event.get(key);
         if (raw == null) return null;
+        if (raw instanceof List<?> parts && parts.size() >= 3) {
+            return LocalDate.of(
+                    ((Number) parts.get(0)).intValue(),
+                    ((Number) parts.get(1)).intValue(),
+                    ((Number) parts.get(2)).intValue());
+        }
         return LocalDate.parse(raw.toString());
     }
 }

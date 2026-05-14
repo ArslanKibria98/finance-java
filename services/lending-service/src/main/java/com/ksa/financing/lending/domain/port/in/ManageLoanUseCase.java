@@ -37,6 +37,7 @@ public interface ManageLoanUseCase {
             ShariaStructure shariaStructure,
             BigDecimal principalAmount,
             BigDecimal profitAmount,
+            BigDecimal feeAmount,
             BigDecimal profitRate,
             int tenureMonths,
             BigDecimal installmentAmount

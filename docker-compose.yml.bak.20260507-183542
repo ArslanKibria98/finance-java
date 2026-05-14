@@ -1,0 +1,999 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:18.1
+    container_name: ksa-postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ksa_financing
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ksa-network
+
+
+  # Redis Cache
+  redis:
+    image: redis:8.0.2
+    container_name: ksa-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.8.0
+    container_name: ksa-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - ksa-network
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: ksa-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Kafka Schema Registry
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.8.0
+    container_name: ksa-schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Temporal Workflow Engine
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: ksa-temporal
+    depends_on:
+      postgres:
+      
+        condition: service_healthy
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PWD=postgres
+      - POSTGRES_SEEDS=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z $(hostname -i) 7233 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - ksa-network
+
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: ksa-temporal-ui
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "8234:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000,http://65.108.31.172:7374
+    networks:
+      - ksa-network
+
+  # Keycloak Identity and Access Management
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.5.2
+    container_name: ksa-keycloak
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/ksa_financing
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KC_SPI_THEME_DEFAULT: finova
+      KC_SPI_THEME_WELCOME_THEME: keycloak
+    volumes:
+      - ./infrastructure/keycloak/themes/finova:/opt/keycloak/themes/finova
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'echo > /dev/tcp/localhost/8080' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Elasticsearch for Logging
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+    container_name: ksa-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Logstash for Log Processing
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.3.0
+    container_name: ksa-logstash
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./infrastructure/logstash/pipeline:/usr/share/logstash/pipeline
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Kibana for Log Visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.3.0
+    container_name: ksa-kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Prometheus for Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ksa-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Grafana for Metrics Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ksa-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ksa-jaeger
+    ports:
+      - "16686:16686"  # UI
+      - "14268:14268"  # Collector HTTP
+      - "14250:14250"  # Collector gRPC
+      - "6831:6831/udp"  # Agent UDP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Apache Fineract for Core Banking
+  fineract:
+    image: apache/fineract:latest
+    container_name: ksa-fineract
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8443:8443"
+    environment:
+      - FINERACT_NODE_ID=1
+      - FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME=org.postgresql.Driver
+      - FINERACT_HIKARI_JDBC_URL=jdbc:postgresql://postgres:5432/fineract_tenants
+      - FINERACT_HIKARI_USERNAME=postgres
+      - FINERACT_HIKARI_PASSWORD=postgres
+      - FINERACT_DEFAULT_TENANTDB_HOSTNAME=postgres
+      - FINERACT_DEFAULT_TENANTDB_PORT=5432
+      - FINERACT_DEFAULT_TENANTDB_UID=postgres
+      - FINERACT_DEFAULT_TENANTDB_PWD=postgres
+      - FINERACT_TENANT_HOST=postgres
+      - FINERACT_TENANT_PORT=5432
+      - FINERACT_TENANT_USERNAME=postgres
+      - FINERACT_TENANT_PASSWORD=postgres
+      - FINERACT_TENANT_IDENTIFIER=default
+      - FINERACT_TENANT_NAME=fineract_default
+      - FINERACT_TENANT_DESCRIPTION=Default Tenant
+    networks:
+      - ksa-network
+
+  # Portainer for Docker Management
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: ksa-portainer
+    restart: always
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - ksa-network
+
+  # ============================================================================
+  # KONG API GATEWAY
+  # ============================================================================
+  kong:
+    image: kong:3.9
+    container_name: ksa-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ./infrastructure/kong/kong.yml:/etc/kong/kong.yml:ro
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # ============================================================================
+  # APPLICATION SERVICES
+  # ============================================================================
+
+  # Identity Service - Registration, Auth, JWT
+  identity-service:
+    build:
+      context: ./services/identity-service
+      dockerfile: Dockerfile
+    container_name: ksa-identity-service
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/identity_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      KEYCLOAK_AUTH_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      KEYCLOAK_ADMIN_CLIENT_ID: admin-dashboard
+      KEYCLOAK_ADMIN_CLIENT_SECRET: admin-dashboard-secret
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      APP_KONG_BASE_URL: http://46.62.226.94:8000
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_BASE_URL: http://46.62.226.94:8080
+      KEYCLOAK_SSO_CLIENT_ID: react-frontend
+      KEYCLOAK_SSO_REDIRECT_URI: http://65.108.31.172:7374/callback
+      CUSTOMER_SERVICE_URL: http://customer-service:8084
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Customer Service - CIF, Employment, Bank Accounts
+  customer-service:
+    build:
+      context: ./services/customer-service
+      dockerfile: Dockerfile
+    container_name: ksa-customer-service
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/customer_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      SERVICES_GLOBAL_PROFILE_URL: http://global-profile-service:8085
+      PII_VAULT_URL: http://pii-vault-service:8086
+      PII_VAULT_MOCK: "false"
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      WALLET_SERVICE_URL: http://wallet-service:8088
+      RISK_SERVICE_URL: http://risk-service:8090
+      LENDING_SERVICE_URL: http://lending-service:8097
+      KYC_SERVICE_URL: http://kyc-adapter-service:8087
+      ONBOARDING_SERVICE_URL: http://onboarding-workflow-service:8089
+      PROFILE_PICTURE_STORAGE_PATH: /app/uploads/profile-pictures
+      PROFILE_PICTURE_BASE_URL: http://46.62.226.94:8000
+    volumes:
+      - profile-pictures:/app/uploads/profile-pictures
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8084/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Global Profile Service - Zero-PII Global Index
+  global-profile-service:
+    build:
+      context: ./services/global-profile-service
+      dockerfile: Dockerfile
+    container_name: ksa-global-profile-service
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/global_profile_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TEMPORAL_HOST: temporal
+      TEMPORAL_PORT: 7233
+      TEMPORAL_NAMESPACE: default
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8085/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # PII Vault Service - Encrypted PII Storage (internal only)
+  pii-vault-service:
+    build:
+      context: ./services/pii-vault-service
+      dockerfile: Dockerfile
+    container_name: ksa-pii-vault-service
+    ports:
+      - "8086:8086"
+    environment:
+      SERVER_PORT: 8086
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pii_vault_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      TEMPORAL_HOST: temporal
+      TEMPORAL_PORT: 7233
+      TEMPORAL_NAMESPACE: default
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      PII_VAULT_MASTER_KEY: ""
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8086/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # KYC Adapter Service - Nafath, Yakeen, Tahakuk, GOSI stubs
+  kyc-adapter-service:
+    build:
+      context: ./services/kyc-adapter-service
+      dockerfile: Dockerfile
+    container_name: ksa-kyc-adapter-service
+    ports:
+      - "8087:8087"
+    environment:
+      SERVER_PORT: 8087
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kyc_adapter_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8087/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Wallet Service - Balance, Top-up, Kafka consumer
+  wallet-service:
+    build:
+      context: ./services/wallet-service
+      dockerfile: Dockerfile
+    container_name: ksa-wallet-service
+    ports:
+      - "8088:8088"
+    environment:
+      SERVER_PORT: 8088
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/wallet_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FINERACT_ENABLED: "true"
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      FINERACT_TENANT_ID: default
+      FINERACT_SAVINGS_PRODUCT_ID: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Onboarding Workflow Service - Temporal orchestration (stateless, no DB)
+  onboarding-workflow-service:
+    build:
+      context: ./services/onboarding-workflow-service
+      dockerfile: Dockerfile
+    container_name: ksa-onboarding-workflow-service
+    ports:
+      - "8089:8089"
+    environment:
+      SERVER_PORT: 8089
+      TEMPORAL_SERVER_HOST: temporal
+      TEMPORAL_SERVER_PORT: 7233
+      TEMPORAL_NAMESPACE: default
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      IDENTITY_SERVICE_URL: http://identity-service:8083
+      CUSTOMER_SERVICE_URL: http://customer-service:8084
+      GLOBAL_PROFILE_SERVICE_URL: http://global-profile-service:8085
+      PII_VAULT_SERVICE_URL: http://pii-vault-service:8086
+      KYC_ADAPTER_SERVICE_URL: http://kyc-adapter-service:8087
+      WALLET_SERVICE_URL: http://wallet-service:8088
+      APP_SERVICES_KYC_ADAPTER_URL: http://kyc-adapter-service:8087
+      APP_SERVICES_IDENTITY_URL: http://identity-service:8083
+      APP_SERVICES_GLOBAL_PROFILE_URL: http://global-profile-service:8085
+      RISK_SERVICE_URL: http://risk-service:8090
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8089/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Risk Service - Fraud, AML, Sanctions (Phase 1 Internal Checks)
+  risk-service:
+    build:
+      context: ./services/risk-service
+      dockerfile: Dockerfile
+    container_name: ksa-risk-service
+    ports:
+      - "8090:8090"
+    environment:
+      SERVER_PORT: 8090
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/risk_service?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      FRAUD_SERVICE_URL: http://fraud-service:8092
+      PRODUCT_SERVICE_URL: http://product-service:8091
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8090/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Fraud Service - Fraud detection, rule engine, alerts and case management
+  fraud-service:
+    build:
+      context: ./services/fraud-service
+      dockerfile: Dockerfile
+    container_name: ksa-fraud-service
+    ports:
+      - "8092:8092"
+    environment:
+      SERVER_PORT: 8092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fraud_service_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8092/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Product Service - Islamic financing product catalog management
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    container_name: ksa-product-service
+    ports:
+      - "8091:8091"
+    environment:
+      SERVER_PORT: 8091
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: product_service_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      FINERACT_TENANT_ID: default
+      LEDGER_SERVICE_URL: http://ledger-service:8095
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8091/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Lending Service - Loan origination, disbursement, lifecycle
+  lending-service:
+    build:
+      context: .
+      dockerfile: services/lending-service/Dockerfile
+    container_name: ksa-lending-service
+    ports:
+      - "8097:8097"
+    environment:
+      SERVER_PORT: 8097
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: lending_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PRODUCT_SERVICE_URL: http://product-service:8091
+      CUSTOMER_SERVICE_URL: http://customer-service:8084
+      RISK_SERVICE_URL: http://risk-service:8090
+      FRAUD_SERVICE_URL: http://fraud-service:8092
+      MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
+      NOTIFICATION_SERVICE_URL: http://notification-service:8096
+      LEDGER_SERVICE_URL: http://ledger-service:8095
+      GL_ACCOUNT_LOANS_RECEIVABLE: "1200"
+      GL_ACCOUNT_BANK_DISBURSEMENT: "1010"
+      GL_ACCOUNT_PROFIT_RECEIVABLE: "1300"
+      GL_ACCOUNT_DEFERRED_INCOME: "2200"
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      FINERACT_TENANT_ID: default
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8097/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Ledger Service - Double-entry accounting ledger, Fineract GL bridge
+  ledger-service:
+    build:
+      context: .
+      dockerfile: services/ledger-service/Dockerfile
+    container_name: ksa-ledger-service
+    ports:
+      - "8095:8095"
+    environment:
+      SERVER_PORT: 8095
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ledger_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/CompanyRealm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FINERACT_BASE_URL: https://fineract:8443/fineract-provider/api/v1
+      FINERACT_TENANT_ID: default
+      FINERACT_OFFICE_ID: 1
+      FINERACT_USERNAME: mifos
+      FINERACT_PASSWORD: password
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: financing.ledger.entry.posted
+      KAFKA_TOPIC_LEDGER_ENTRY_SYNCED: financing.ledger.entry.synced
+      KAFKA_TOPIC_RECONCILIATION_DISCREPANCY: financing.reconciliation.discrepancy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8095/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Collections Service - Repayment tracking, payment processing, dunning, settlements
+  collections-service:
+    build:
+      context: .
+      dockerfile: services/collections-service/Dockerfile
+    container_name: ksa-collections-service
+    ports:
+      - "8099:8099"
+    environment:
+      SERVER_PORT: 8099
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: collections_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KSA_AUTH_ENABLED: "true"
+      CASBIN_CACHE_KEY_PREFIX: casbin:policies
+      KAFKA_TOPIC_PAYMENT_COMPLETED: financing.payment.completed
+      KAFKA_TOPIC_PAYMENT_FAILED: financing.payment.failed
+      KAFKA_TOPIC_PAYMENT_APPLIED: financing.repayment.payment-applied
+      KAFKA_TOPIC_SCHEDULE_FULLY_PAID: financing.repayment.schedule.fully-paid
+      MIDDLEWARE_BASE_URL: http://middleware-third-party:8093
+      MIDDLEWARE_SECRET_KEY: test-mock-secret-key-2026
+      HYPERPAY_WIDGET_URL: https://eu-prod.oppwa.com/v1/paymentWidgets.js
+      LOG_LEVEL: INFO
+      APP_LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8099/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Middleware Third Party Service - Third-party API middleware/proxy
+  middleware-third-party:
+    build:
+      context: .
+      dockerfile: services/middleware-third-party/Dockerfile
+    container_name: ksa-middleware-third-party
+    ports:
+      - "8093:8093"
+    environment:
+      SERVER_PORT: 8093
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: middleware_third_party_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_FLYWAY_ENABLED: "true"
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:4200,http://65.108.31.172:7374
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8093/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Unified Swagger UI - Single page, all APIs through Kong
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.18.2
+    container_name: ksa-swagger-ui
+    environment:
+      SWAGGER_JSON: /openapi/openapi.yml
+      VALIDATOR_URL: "null"
+      DEEP_LINKING: "true"
+      DISPLAY_REQUEST_DURATION: "true"
+      FILTER: "true"
+      SHOW_EXTENSIONS: "true"
+      SHOW_COMMON_EXTENSIONS: "true"
+      TRY_IT_OUT_ENABLED: "true"
+    volumes:
+      - ./infrastructure/swagger/openapi.yml:/openapi/openapi.yml:ro
+    ports:
+      - "8888:8080"
+    depends_on:
+      kong:
+        condition: service_healthy
+    networks:
+      - ksa-network
+
+  # MinIO - S3-compatible Object Storage for files/images/documents
+  minio:
+    image: minio/minio:latest
+    container_name: ksa-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9100:9000"   # API (S3-compatible) — 9000 is used by Portainer
+      - "9101:9001"   # Web Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL:-http://46.62.226.94:9100}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - ksa-network
+
+networks:
+  ksa-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
+  portainer_data:
+  profile-pictures:
+  minio_data:

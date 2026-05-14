@@ -94,7 +94,7 @@ public record ApplicationTrackerResponse(
         );
     }
 
-    public static ApplicationTrackerResponse build(LoanApplicationAggregate aggregate) {
+    public static ApplicationTrackerResponse build(LoanApplicationAggregate aggregate, BigDecimal totalPayable) {
         if (aggregate == null) return null;
 
         var currentStatusStr = aggregate.getStatus().name();
@@ -103,8 +103,10 @@ public record ApplicationTrackerResponse(
         var nextAction = LoanApplicationStepInfo.getNextAction(currentStatusStr);
         var overallStatus = resolveOverallStatus(currentStatusStr, appStatus);
 
-        // Prefer offered/accepted total payable from aggregate
-        BigDecimal totalPayable = aggregate.getOfferedTotalPayable();
+        // Use passed totalPayable if available, otherwise fallback to aggregate's offered total payable
+        if (totalPayable == null) {
+            totalPayable = aggregate.getOfferedTotalPayable();
+        }
 
         var preQual = PreQualificationData.fromAggregate(aggregate);
 
@@ -164,6 +166,7 @@ public record ApplicationTrackerResponse(
     private static String resolveOverallStatus(ApplicationStatus status) {
         if (status == null) return "active";
         return switch (status) {
+            case AWAIT_DISBURSED -> "await_disbursement";
             case APPROVED -> "approved";
             case REJECTED -> "rejected";
             case CANCELLED -> "cancelled";

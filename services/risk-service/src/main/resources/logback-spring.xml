@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="logback-ksa-base.xml"/>
+
+    <springProfile name="dev,docker,prod">
+        <root level="${LOG_LEVEL:-INFO}">
+            <appender-ref ref="KSA_JSON_CONSOLE"/>
+            <appender-ref ref="KSA_ASYNC_LOGSTASH"/>
+        </root>
+        <logger name="com.ksa.financing" level="${APP_LOG_LEVEL:-INFO}"/>
+    </springProfile>
+</configuration>

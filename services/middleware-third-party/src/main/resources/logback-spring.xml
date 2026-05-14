@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <include resource="logback-ksa-base.xml"/>
     <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="middleware-third-party"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

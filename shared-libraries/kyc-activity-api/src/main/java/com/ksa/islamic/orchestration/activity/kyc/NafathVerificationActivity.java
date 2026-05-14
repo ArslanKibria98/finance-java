@@ -21,8 +21,16 @@ public interface NafathVerificationActivity {
 
     record NafathInitiationInput(
         String nationalId,
-        String tenantId
-    ) {}
+        String tenantId,
+        String customerId,
+        String applicationId,
+        String contextType
+    ) {
+        /** Backwards-compatible constructor: defaults context to ONBOARDING. */
+        public NafathInitiationInput(String nationalId, String tenantId) {
+            this(nationalId, tenantId, null, null, "ONBOARDING");
+        }
+    }
 
     record NafathInitiationResult(
         String sessionId,

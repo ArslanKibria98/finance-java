@@ -57,6 +57,21 @@ public class FeeSettingsJpaEntity {
     @Column(name = "gdbr_percentage", precision = 5, scale = 2)
     private BigDecimal gdbrPercentage;
 
+    @Column(name = "penalty_waiver_allowed")
+    private Boolean penaltyWaiverAllowed;
+
+    @Column(name = "max_penalty_waivers_allowed")
+    private Integer maxPenaltyWaiversAllowed;
+
+    @Column(name = "min_financing_amount", precision = 19, scale = 4)
+    private BigDecimal minFinancingAmount;
+
+    @Column(name = "max_financing_amount", precision = 19, scale = 4)
+    private BigDecimal maxFinancingAmount;
+
+    @Column(name = "vat_percentage", precision = 5, scale = 2)
+    private BigDecimal vatPercentage;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

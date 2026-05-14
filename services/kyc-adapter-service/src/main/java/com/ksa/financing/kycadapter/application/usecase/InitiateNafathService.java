@@ -72,17 +72,39 @@ public class InitiateNafathService implements InitiateNafathUseCase {
         session.setAttemptCount(1);
         session.setMaxAttempts(3);
 
-        // Call Nafath stub adapter
-        Map<String, Object> nafathResponse = nafathStubAdapter.initiateSession(command.nationalId());
+        // Call Nafath stub adapter — propagate business context for cost attribution
+        Map<String, Object> nafathResponse = nafathStubAdapter.initiateSession(
+                command.nationalId(),
+                command.customerId(),
+                command.applicationId(),
+                command.contextType() != null ? command.contextType() : "ONBOARDING");
         String providerSessionId = (String) nafathResponse.get("sessionId");
-        int randomNumber = (int) nafathResponse.get("randomNumber");
+        // Nafath upstream returns `random` as a JSON string ("42") — parse defensively
+        // because the mock and the live provider use different shapes.
+        Object randomRaw = nafathResponse.get("randomNumber");
+        int randomNumber;
+        if (randomRaw instanceof Number n) {
+            randomNumber = n.intValue();
+        } else if (randomRaw != null && !randomRaw.toString().isBlank()) {
+            try {
+                randomNumber = Integer.parseInt(randomRaw.toString().trim());
+            } catch (NumberFormatException e) {
+                log.warn("Nafath returned non-numeric randomNumber: {}", randomRaw);
+                randomNumber = 0;
+            }
+        } else {
+            randomNumber = 0;
+        }
 
         session.setProviderSessionId(providerSessionId);
         session.setStatus(SessionStatus.PENDING_USER_ACTION);
 
         // Fetch user data from Nafath (third API — identity inquiry)
         // Call third Nafath API — fetch verified person demographics
-        Map<String, Object> verificationData = nafathStubAdapter.getVerificationResult(providerSessionId, command.nationalId());
+        Map<String, Object> verificationData = nafathStubAdapter.getVerificationResult(
+                providerSessionId, command.nationalId(),
+                command.customerId(), command.applicationId(),
+                command.contextType() != null ? command.contextType() : "ONBOARDING");
         log.info("Nafath verification data fetched for sessionId={}", providerSessionId);
 
         // Cache the Nafath user data response

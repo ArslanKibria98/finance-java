@@ -273,12 +273,12 @@ public class LoanRescheduleWorkflowImpl implements LoanRescheduleWorkflow {
                     glEntryNumber
             ));
 
-            status = "APPROVED";
-            log.info("Reschedule approved successfully: rescheduleId={} loanId={}", rescheduleId, request.loanId());
+            status = "APPLIED";
+            log.info("Reschedule applied successfully: rescheduleId={} loanId={}", rescheduleId, request.loanId());
 
             return new RescheduleResult(
                     rescheduleId,
-                    "APPROVED",
+                    "APPLIED",
                     scheduleResult.newTenureMonths(),
                     scheduleResult.newInstallmentAmount(),
                     scheduleResult.newMaturityDate() != null ? scheduleResult.newMaturityDate().toString() : null,

@@ -68,16 +68,33 @@ public class PartnerController {
 
     @SecuredEndpoint(obj = "partners", act = "read")
     @GetMapping
-    @Operation(summary = "List partners", description = "Returns all partners for the tenant")
+    @Operation(summary = "List partners. Optional ?search= filters by partnerCode, nameEn, nameAr, email, phone, contactPerson, status (case-insensitive LIKE).",
+            description = "Returns all partners for the tenant")
     public ResponseEntity<List<PartnerResponse>> listPartners(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        log.info("Listing partners for tenantId: {}", tenantId);
+        log.info("Listing partners for tenantId: {} (search={})", tenantId, search);
 
+        String term = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
         var partners = managePartnerUseCase.listByTenant(tenantId);
-        var response = partners.stream().map(this::toResponse).toList();
+        var response = partners.stream()
+                .map(this::toResponse)
+                .filter(p -> term == null
+                        || c(p.partnerCode(), term)
+                        || c(p.nameEn(), term)
+                        || c(p.nameAr(), term)
+                        || c(p.email(), term)
+                        || c(p.phone(), term)
+                        || c(p.contactPerson(), term)
+                        || c(p.status(), term))
+                .toList();
         return ResponseEntity.ok(response);
+    }
+
+    private static boolean c(String f, String t) {
+        return f != null && f.toLowerCase().contains(t);
     }
 
     @SecuredEndpoint(obj = "partners", act = "read")

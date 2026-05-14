@@ -1,5 +1,6 @@
 package com.ksa.financing.middleware.domain.model;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -17,6 +18,8 @@ public class ProviderApi {
     private ApiStatus status;
     private boolean async;
     private Integer timeoutMs;
+    private BigDecimal costPerCall;
+    private String costCurrency;
     private Instant createdAt;
     private Instant updatedAt;
     private UUID createdBy;
@@ -65,6 +68,8 @@ public class ProviderApi {
     public ApiStatus getStatus() { return status; }
     public boolean isAsync() { return async; }
     public Integer getTimeoutMs() { return timeoutMs; }
+    public BigDecimal getCostPerCall() { return costPerCall; }
+    public String getCostCurrency() { return costCurrency; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public UUID getCreatedBy() { return createdBy; }
@@ -85,6 +90,8 @@ public class ProviderApi {
     public void setStatus(ApiStatus status) { this.status = status; }
     public void setAsync(boolean async) { this.async = async; }
     public void setTimeoutMs(Integer timeoutMs) { this.timeoutMs = timeoutMs; }
+    public void setCostPerCall(BigDecimal costPerCall) { this.costPerCall = costPerCall; }
+    public void setCostCurrency(String costCurrency) { this.costCurrency = costCurrency; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }

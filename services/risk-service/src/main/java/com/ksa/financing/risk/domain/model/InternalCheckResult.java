@@ -11,6 +11,7 @@ public record InternalCheckResult(
     RiskLevel riskLevel,
     Set<String> flags,
     String blockReason,
+    String blockCode,
     String routeTo,
     List<CheckStepResult> stepResults,
     String failureReason

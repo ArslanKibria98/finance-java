@@ -36,6 +36,10 @@ public interface ManageDelinquencyRuleUseCase {
             int promisesPerYear,
             int promisesPerLoan,
             boolean isCustom,
+            com.ksa.financing.collections.domain.model.EarlySettlementStrategy settlementStrategy,
+            String settlementDiscountType,
+            int settlementMonths,
+            BigDecimal settlementAmountPerMonth,
             String charityFundAccount,
             List<ConfigItem> configs) {}
 

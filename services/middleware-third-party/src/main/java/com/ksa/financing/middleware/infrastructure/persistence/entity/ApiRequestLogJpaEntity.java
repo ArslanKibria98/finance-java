@@ -15,7 +15,7 @@ import java.util.UUID;
 @Setter
 public class ApiRequestLogJpaEntity {
 
-    public enum EnvironmentTypeEnum { DEV, PROD }
+    public enum EnvironmentTypeEnum { TEST, DEV, PROD }
     public enum HttpMethodEnum { GET, POST, PUT, PATCH, DELETE }
     public enum RequestStatusEnum { PENDING, SUCCESS, FAILED, TIMEOUT }
 

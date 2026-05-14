@@ -117,14 +117,28 @@ public class AccountController {
     }
 
     @SecuredEndpoint(obj = "ledger.accounts", act = "manage")
-    @DeleteMapping("/{id}/deactivate")
-    @Operation(summary = "Deactivate a GL account")
+    @PostMapping("/{id}/deactivate")
+    @Operation(summary = "Deactivate a GL account",
+            description = "Sets status to INACTIVE. Fails if the account is CLOSED.")
     public ResponseEntity<Void> deactivateAccount(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
         manageAccountUseCase.deactivate(tenantId, AccountId.of(id));
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "ledger.accounts", act = "manage")
+    @PostMapping("/{id}/activate")
+    @Operation(summary = "Activate (re-enable) a GL account",
+            description = "Sets status to ACTIVE. Fails if the account is CLOSED.")
+    public ResponseEntity<Void> activateAccount(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        var tenantId = extractTenantId(jwt);
+        manageAccountUseCase.activate(tenantId, AccountId.of(id));
         return ResponseEntity.noContent().build();
     }
 

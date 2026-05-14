@@ -35,7 +35,7 @@ public class LoanRepositoryImpl implements LoanRepository {
     );
 
     private static final Set<String> SEARCHABLE_FIELDS = Set.of(
-            "loanNumber"
+            "loanNumber", "productCode", "shariaStructure", "status"
     );
 
     @Override

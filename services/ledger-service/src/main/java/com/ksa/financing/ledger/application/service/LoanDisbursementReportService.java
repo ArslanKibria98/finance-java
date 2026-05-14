@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ksa.financing.ledger.application.dto.LoanDisbursementReportResponse;
 import com.ksa.financing.ledger.infrastructure.client.ReportDataClient;
@@ -25,21 +27,23 @@ public class LoanDisbursementReportService {
                                                    LocalDate toDate,
                                                    String productCode,
                                                    String branchOrChannel,
-                                                   String status) {
-        log.debug("Generating loan disbursement report tenant={} from={} to={} product={} branch={} status={}",
-                tenantId, fromDate, toDate, productCode, branchOrChannel, status);
+                                                   String status,
+                                                   PageQuery pageQuery) {
+        log.debug("Generating loan disbursement report tenant={} from={} to={} product={} branch={} status={} page={}",
+                tenantId, fromDate, toDate, productCode, branchOrChannel, status, pageQuery.page());
 
         // Fetch full range then apply tolerant product filter locally,
         // because UI labels (e.g. MICROFINANCE) may not match DB code/name exactly.
-        JsonNode data = reportDataClient.fetchDisbursedLoans(fromDate, toDate, null);
+        JsonNode data = reportDataClient.fetchDisbursedLoans(fromDate, toDate, null, null);
         if (data == null || !data.isArray() || data.isEmpty()) {
-            return emptyResponse(fromDate, toDate);
+            return emptyResponse(fromDate, toDate, pageQuery);
         }
 
         var statusFilter = normalize(status);
         var branchFilter = normalize(branchOrChannel);
         var productFilter = normalize(productCode);
-        var lines = new ArrayList<LoanDisbursementReportResponse.Line>();
+        var searchTerm = lowerSearch(pageQuery.search());
+        var allLines = new ArrayList<LoanDisbursementReportResponse.Line>();
         var total = BigDecimal.ZERO;
 
         for (JsonNode node : data) {
@@ -59,6 +63,17 @@ public class LoanDisbursementReportService {
                 continue;
             }
 
+            if (!matchesSearch(searchTerm,
+                    text(node, "applicationNumber"),
+                    text(node, "loanNumber"),
+                    itemProductCode,
+                    itemProductName,
+                    loanStatus,
+                    sourceBranch,
+                    text(node, "nationalId"))) {
+                continue;
+            }
+
             var amount = toBig(node, "disbursedAmount");
             var line = LoanDisbursementReportResponse.Line.builder()
                     .applicationNumber(text(node, "applicationNumber"))
@@ -75,27 +90,38 @@ public class LoanDisbursementReportService {
                     .branchOrChannel(sourceBranch)
                     .build();
 
-            lines.add(line);
+            allLines.add(line);
             total = total.add(amount);
         }
 
-        return LoanDisbursementReportResponse.builder()
-                .fromDate(fromDate)
-                .toDate(toDate)
-                .totalCount(lines.size())
-                .totalDisbursedAmount(total)
-                .items(lines)
-                .build();
+        int totalElements = allLines.size();
+        int page = pageQuery.page();
+        int size = pageQuery.size();
+        int fromIndex = Math.min(page * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<LoanDisbursementReportResponse.Line> pagedItems = allLines.subList(fromIndex, toIndex);
+
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+
+        return new LoanDisbursementReportResponse(
+                fromDate,
+                toDate,
+                totalElements,
+                total,
+                pagedItems,
+                new PageMetadata(page, size, totalElements, totalPages, page == 0, toIndex == totalElements, pagedItems.isEmpty())
+        );
     }
 
-    private LoanDisbursementReportResponse emptyResponse(LocalDate fromDate, LocalDate toDate) {
-        return LoanDisbursementReportResponse.builder()
-                .fromDate(fromDate)
-                .toDate(toDate)
-                .totalCount(0)
-                .totalDisbursedAmount(BigDecimal.ZERO)
-                .items(List.of())
-                .build();
+    private LoanDisbursementReportResponse emptyResponse(LocalDate fromDate, LocalDate toDate, PageQuery pageQuery) {
+        return new LoanDisbursementReportResponse(
+                fromDate,
+                toDate,
+                0,
+                BigDecimal.ZERO,
+                List.of(),
+                new PageMetadata(pageQuery.page(), pageQuery.size(), 0L, 0, true, true, true)
+        );
     }
 
     private boolean matchesStatus(String statusFilter, String actualStatus) {
@@ -188,5 +214,18 @@ public class LoanDisbursementReportService {
             return null;
         }
         return normalized.replaceAll("[^A-Z0-9]", "");
+    }
+
+    private String lowerSearch(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return raw.trim().toLowerCase();
+    }
+
+    private boolean matchesSearch(String term, String... fields) {
+        if (term == null) return true;
+        for (String f : fields) {
+            if (f != null && f.toLowerCase().contains(term)) return true;
+        }
+        return false;
     }
 }

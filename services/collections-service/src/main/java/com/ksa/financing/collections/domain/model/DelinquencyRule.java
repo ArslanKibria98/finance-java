@@ -44,6 +44,12 @@ public class DelinquencyRule {
     /** type=1 only: true ⇒ use earlySettlementConfigs rather than the flat amount/day fields. */
     private boolean isCustom;
 
+    // --- New fields for Principle-based Early Settlement (Image 3) ---
+    private EarlySettlementStrategy settlementStrategy = EarlySettlementStrategy.INVOICE_BASED;
+    private String settlementDiscountType;   // e.g. "FIXED"
+    private int settlementMonths;
+    private BigDecimal settlementAmountPerMonth = BigDecimal.ZERO;
+
     private String charityFundAccount;
 
     private String channel = "LMS";
@@ -80,7 +86,11 @@ public class DelinquencyRule {
                                           BigDecimal penaltyPercentage, BigDecimal penaltyAmount,
                                           int fromDay, int tillDay, int penaltyType,
                                           int promisesPerYear, int promisesPerLoan,
-                                          boolean isCustom, String charityFundAccount,
+                                          boolean isCustom,
+                                          EarlySettlementStrategy strategy,
+                                          String settlementDiscountType, int settlementMonths,
+                                          BigDecimal settlementAmountPerMonth,
+                                          String charityFundAccount,
                                           String channel, int recordState, int version,
                                           LocalDateTime created, LocalDateTime updatedAt) {
         var rule = new DelinquencyRule();
@@ -97,6 +107,10 @@ public class DelinquencyRule {
         rule.promisesPerYear = promisesPerYear;
         rule.promisesPerLoan = promisesPerLoan;
         rule.isCustom = isCustom;
+        rule.settlementStrategy = strategy != null ? strategy : EarlySettlementStrategy.INVOICE_BASED;
+        rule.settlementDiscountType = settlementDiscountType;
+        rule.settlementMonths = settlementMonths;
+        rule.settlementAmountPerMonth = settlementAmountPerMonth != null ? settlementAmountPerMonth : BigDecimal.ZERO;
         rule.charityFundAccount = charityFundAccount;
         rule.channel = channel != null ? channel : "LMS";
         rule.recordState = recordState;
@@ -137,6 +151,24 @@ public class DelinquencyRule {
             throw new IllegalStateException("isCustom applies only to EARLY_SETTLEMENT");
         }
         this.isCustom = custom;
+        touch();
+    }
+
+    public void updateSettlementStrategy(EarlySettlementStrategy strategy) {
+        if (delinquencyType != DelinquencyType.EARLY_SETTLEMENT) {
+            throw new IllegalStateException("settlementStrategy applies only to EARLY_SETTLEMENT");
+        }
+        this.settlementStrategy = strategy;
+        touch();
+    }
+
+    public void updatePrincipleBasedSettlement(String discountType, int months, BigDecimal amountPerMonth) {
+        if (delinquencyType != DelinquencyType.EARLY_SETTLEMENT) {
+            throw new IllegalStateException("principle fields apply only to EARLY_SETTLEMENT");
+        }
+        this.settlementDiscountType = discountType;
+        this.settlementMonths = months;
+        this.settlementAmountPerMonth = amountPerMonth != null ? amountPerMonth : BigDecimal.ZERO;
         touch();
     }
 

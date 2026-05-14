@@ -32,6 +32,8 @@ public record UpdateDunningPolicyRequest(
         boolean autoAssignAgent,
         Integer agentAssignmentDpd,
         Integer walletFreezeDpd,
+        Boolean penaltyWaiverAllowed,
+        Integer maxPenaltyWaiversAllowed,
 
         Map<DunningStage, Map<String, Object>> stageActions
 ) {}

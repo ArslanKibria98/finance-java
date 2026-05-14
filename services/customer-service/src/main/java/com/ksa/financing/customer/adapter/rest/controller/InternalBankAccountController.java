@@ -41,6 +41,38 @@ public class InternalBankAccountController {
         }
     }
 
+    /**
+     * Lookup customer by Keycloak user ID. Returns customer id + tenant + national id.
+     * Used by wallet-service to resolve JWT.sub (= keycloak user id) → customer.id.
+     */
+    @GetMapping("/by-keycloak/{keycloakUserId}")
+    public ResponseEntity<CustomerLookupResponse> getByKeycloakUserId(
+            @PathVariable UUID keycloakUserId) {
+        try {
+            Customer c = getCustomerUseCase.getByKeycloakUserId(keycloakUserId);
+            return ResponseEntity.ok(new CustomerLookupResponse(
+                    c.getId(),
+                    c.getTenantId(),
+                    c.getKeycloakUserId(),
+                    c.getCifNumber(),
+                    c.getNationalId(),
+                    c.getMobileNumber()
+            ));
+        } catch (Exception e) {
+            log.info("Customer not found for keycloakUserId={}", keycloakUserId);
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    public record CustomerLookupResponse(
+            UUID customerId,
+            UUID tenantId,
+            UUID keycloakUserId,
+            String cifNumber,
+            String nationalId,
+            String mobileNumber
+    ) {}
+
     @GetMapping("/exists/mobile")
     public ResponseEntity<java.util.Map<String, Boolean>> existsByMobileNumber(
             @RequestParam String mobileNumber) {

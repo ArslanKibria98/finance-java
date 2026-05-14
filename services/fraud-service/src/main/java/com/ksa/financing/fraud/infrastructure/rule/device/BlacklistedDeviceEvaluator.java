@@ -33,7 +33,7 @@ public class BlacklistedDeviceEvaluator implements FraudRuleEvaluator {
         if (!deviceBlacklistRepository.isBlacklisted(event.tenantId(), event.deviceInfo().deviceId())) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Device blacklisted: " + event.deviceInfo().deviceId(),
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

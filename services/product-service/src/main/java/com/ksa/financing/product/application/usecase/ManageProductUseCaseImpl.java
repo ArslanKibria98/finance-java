@@ -80,6 +80,8 @@ public class ManageProductUseCaseImpl implements ManageProductUseCase {
         product.setRepaymentFrequency(command.repaymentFrequency() != null ? command.repaymentFrequency() : "MONTHLY");
         product.setGracePeriodDays(command.gracePeriodDays() > 0 ? command.gracePeriodDays() : 3);
         product.setEarlySettlementAllowed(command.earlySettlementAllowed());
+        product.setPenaltyWaiverAllowed(command.penaltyWaiverAllowed());
+        product.setMaxPenaltyWaiversAllowed(command.maxPenaltyWaiversAllowed());
         product.setCountryId(command.countryId());
         product.setVisibleToPartners(true);
         product.setCreatedBy(command.createdBy());

@@ -898,12 +898,15 @@ public class OnboardingController {
     public ResponseEntity<List<Map<String, Object>>> listActiveOnboardings(
             @RequestParam(required = false) String lifecycleStage,
             @RequestParam(required = false) String currentStep,
+            @RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
-        log.info("Listing active onboardings requested by: {} (filter: lifecycleStage={}, currentStep={})",
-                jwt.getSubject(), lifecycleStage, currentStep);
+        log.info("Listing active onboardings requested by: {} (filter: lifecycleStage={}, currentStep={}, search={})",
+                jwt.getSubject(), lifecycleStage, currentStep, search);
 
-        List<OnboardingState> activeWorkflows = getOnboardingStatusUseCase.listActiveOnboardings();
+        var pageQuery = new com.ksa.financing.infra.pagination.PageQuery(0, Integer.MAX_VALUE, null, null, search);
+        List<OnboardingState> activeWorkflows = new java.util.ArrayList<>(
+                getOnboardingStatusUseCase.listActiveOnboardings(pageQuery).content());
 
         // Filter by lifecycleStage if provided
         if (lifecycleStage != null && !lifecycleStage.isBlank()) {
@@ -918,6 +921,14 @@ public class OnboardingController {
             String filter = currentStep.toUpperCase().trim();
             activeWorkflows = activeWorkflows.stream()
                     .filter(s -> s.getCurrentStep() != null && filter.equals(s.getCurrentStep().name()))
+                    .toList();
+        }
+
+        // Free-text search across nationalId, mobileNumber, workflowId, lifecycleStage, currentStep
+        if (search != null && !search.isBlank()) {
+            String term = search.trim().toLowerCase();
+            activeWorkflows = activeWorkflows.stream()
+                    .filter(s -> matchesActiveSearch(s, term))
                     .toList();
         }
 
@@ -937,6 +948,20 @@ public class OnboardingController {
         }).toList();
 
         return ResponseEntity.ok(results);
+    }
+
+    private boolean matchesActiveSearch(OnboardingState s, String term) {
+        return contains(s.getNationalId(), term)
+                || contains(s.getMobileNumber(), term)
+                || contains(s.getWorkflowId(), term)
+                || contains(s.getLifecycleStage(), term)
+                || (s.getCurrentStep() != null && contains(s.getCurrentStep().name(), term))
+                || (s.getCustomerId() != null && contains(s.getCustomerId().toString(), term))
+                || (s.getGlobalUid() != null && contains(s.getGlobalUid().toString(), term));
+    }
+
+    private static boolean contains(String f, String term) {
+        return f != null && f.toLowerCase().contains(term);
     }
 
     // ==================== Private Helpers ====================

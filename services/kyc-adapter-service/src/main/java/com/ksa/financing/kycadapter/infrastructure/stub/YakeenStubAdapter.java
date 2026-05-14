@@ -1,5 +1,6 @@
 package com.ksa.financing.kycadapter.infrastructure.stub;
 
+import com.ksa.financing.kycadapter.infrastructure.middleware.MiddlewareApiClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -9,52 +10,53 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Stub adapter simulating the Yakeen government API for identity verification.
- * Yakeen provides demographics lookup and identity verification for Saudi nationals
- * and residents via the National Information Center (NIC).
+ * Yakeen / Absher identity verification adapter.
+ *
+ * Routes through middleware-third-party (ABSHER_VERIFY_IDENTITY). The
+ * demographic envelope expected by downstream callers is preserved by
+ * back-filling well-known keys from whatever the upstream payload returns.
  */
 @Component
 public class YakeenStubAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(YakeenStubAdapter.class);
 
-    /**
-     * Verify identity and retrieve demographics for a given national ID and date of birth.
-     * Simulates a 300ms delay and returns mock demographic data.
-     *
-     * @param nationalId  the national ID to verify
-     * @param dateOfBirth the date of birth for additional verification
-     * @return a map containing demographic data
-     */
-    public Map<String, Object> verifyIdentity(String nationalId, LocalDate dateOfBirth) {
-        log.info("Yakeen stub: Verifying identity for nationalId={}, dateOfBirth={}",
-                maskId(nationalId), dateOfBirth);
+    private static final String API_CODE = "ABSHER_VERIFY_IDENTITY";
 
-        simulateDelay(300);
+    private final MiddlewareApiClient middlewareApiClient;
 
-        Map<String, Object> demographics = new LinkedHashMap<>();
-        demographics.put("fullNameAr", "\u0645\u062d\u0645\u062f \u0639\u0628\u062f\u0627\u0644\u0644\u0647 \u0627\u0644\u0631\u0627\u0634\u062f");
-        demographics.put("fullNameEn", "Mohammed Abdullah Al-Rashed");
-        demographics.put("gender", "MALE");
-        demographics.put("nationality", "SAU");
-        demographics.put("dateOfBirth", dateOfBirth != null ? dateOfBirth.toString() : null);
-        demographics.put("addressCity", "Riyadh");
-        demographics.put("addressRegion", "Riyadh Region");
-        demographics.put("idExpiryDate", LocalDate.now().plusYears(2).toString());
-        demographics.put("nationalId", nationalId);
-        demographics.put("verified", true);
-
-        log.info("Yakeen stub: Identity verified successfully for nationalId={}", maskId(nationalId));
-        return demographics;
+    public YakeenStubAdapter(MiddlewareApiClient middlewareApiClient) {
+        this.middlewareApiClient = middlewareApiClient;
     }
 
-    private void simulateDelay(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("Yakeen stub: Delay interrupted");
-        }
+    public Map<String, Object> verifyIdentity(String nationalId, LocalDate dateOfBirth) {
+        log.info("Yakeen via middleware: verifying nationalId={}, dob={}",
+                maskId(nationalId), dateOfBirth);
+
+        var requestBody = Map.<String, Object>of(
+                "nationalId", nationalId,
+                "dateOfBirth", dateOfBirth != null ? dateOfBirth.toString() : ""
+        );
+
+        Map<String, Object> upstream = middlewareApiClient.invokeAsMap(
+                API_CODE, requestBody, nationalId, null, null);
+
+        Map<String, Object> demographics = new LinkedHashMap<>(upstream);
+        demographics.putIfAbsent("nationalId", nationalId);
+        demographics.putIfAbsent("dateOfBirth", dateOfBirth != null ? dateOfBirth.toString() : null);
+        demographics.putIfAbsent("verified", true);
+        demographics.putIfAbsent("fullNameAr", upstream.get("fullName"));
+        demographics.putIfAbsent("fullNameEn", upstream.get("fullNameEn"));
+        demographics.putIfAbsent("gender", upstream.get("gender"));
+        demographics.putIfAbsent("nationality", upstream.getOrDefault("nationality", "SAU"));
+        demographics.putIfAbsent("addressCity", upstream.get("city"));
+        demographics.putIfAbsent("addressRegion", upstream.get("region"));
+        demographics.putIfAbsent("idExpiryDate",
+                upstream.getOrDefault("idExpiryDate", LocalDate.now().plusYears(2).toString()));
+
+        log.info("Yakeen result: nationalId={}, verified={}",
+                maskId(nationalId), demographics.get("verified"));
+        return demographics;
     }
 
     private String maskId(String id) {

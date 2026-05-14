@@ -3,6 +3,7 @@ package com.ksa.financing.lending.infrastructure.persistence.repository;
 import com.ksa.financing.lending.domain.model.ManualApprovalTask;
 import com.ksa.financing.lending.infrastructure.persistence.entity.ManualApprovalTaskJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
@@ -11,7 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface JpaManualApprovalTaskRepository extends JpaRepository<ManualApprovalTaskJpaEntity, UUID> {
+public interface JpaManualApprovalTaskRepository extends JpaRepository<ManualApprovalTaskJpaEntity, UUID>,
+        JpaSpecificationExecutor<ManualApprovalTaskJpaEntity> {
 
     Optional<ManualApprovalTaskJpaEntity> findByTenantIdAndId(UUID tenantId, UUID id);
 

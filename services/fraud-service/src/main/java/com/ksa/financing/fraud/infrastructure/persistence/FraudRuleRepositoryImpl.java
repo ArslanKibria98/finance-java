@@ -31,24 +31,53 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
 
     @Override
     public PageResponse<FraudRule> findActiveByTenant(UUID tenantId, PageQuery pageQuery) {
-        String countSql = "SELECT count(*) FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE'";
-        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, tenantId)).orElse(0L);
+        String searchPattern = toLikePattern(pageQuery.search());
+        String searchClause = searchPattern == null ? "" :
+                " AND (LOWER(rule_id) LIKE ? OR LOWER(scenario_name) LIKE ? OR LOWER(scenario_name_ar) LIKE ? " +
+                "      OR LOWER(category::text) LIKE ? OR LOWER(detection_logic) LIKE ? OR LOWER(status::text) LIKE ?)";
 
-        String sql = "SELECT * FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY priority LIMIT ? OFFSET ?";
-        List<FraudRule> content = jdbcTemplate.query(sql, ruleMapper(), tenantId, pageQuery.size(), pageQuery.page() * pageQuery.size());
+        String countSql = "SELECT count(*) FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE'" + searchClause;
+        Object[] countArgs = searchPattern == null
+                ? new Object[]{tenantId}
+                : new Object[]{tenantId, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern};
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, countArgs)).orElse(0L);
+
+        String sql = "SELECT * FROM fraud_rules WHERE tenant_id = ? AND status = 'ACTIVE'" + searchClause + " ORDER BY priority LIMIT ? OFFSET ?";
+        Object[] queryArgs = searchPattern == null
+                ? new Object[]{tenantId, pageQuery.size(), pageQuery.page() * pageQuery.size()}
+                : new Object[]{tenantId, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern,
+                               pageQuery.size(), pageQuery.page() * pageQuery.size()};
+        List<FraudRule> content = jdbcTemplate.query(sql, ruleMapper(), queryArgs);
 
         return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
     }
 
     @Override
     public PageResponse<FraudRule> findAllByTenant(UUID tenantId, PageQuery pageQuery) {
-        String countSql = "SELECT count(*) FROM fraud_rules WHERE tenant_id = ?";
-        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, tenantId)).orElse(0L);
+        String searchPattern = toLikePattern(pageQuery.search());
+        String searchClause = searchPattern == null ? "" :
+                " AND (LOWER(rule_id) LIKE ? OR LOWER(scenario_name) LIKE ? OR LOWER(scenario_name_ar) LIKE ? " +
+                "      OR LOWER(category::text) LIKE ? OR LOWER(detection_logic) LIKE ? OR LOWER(status::text) LIKE ?)";
 
-        String sql = "SELECT * FROM fraud_rules WHERE tenant_id = ? ORDER BY priority LIMIT ? OFFSET ?";
-        List<FraudRule> content = jdbcTemplate.query(sql, ruleMapper(), tenantId, pageQuery.size(), pageQuery.page() * pageQuery.size());
+        String countSql = "SELECT count(*) FROM fraud_rules WHERE tenant_id = ?" + searchClause;
+        Object[] countArgs = searchPattern == null
+                ? new Object[]{tenantId}
+                : new Object[]{tenantId, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern};
+        long totalElements = Optional.ofNullable(jdbcTemplate.queryForObject(countSql, Long.class, countArgs)).orElse(0L);
+
+        String sql = "SELECT * FROM fraud_rules WHERE tenant_id = ?" + searchClause + " ORDER BY priority LIMIT ? OFFSET ?";
+        Object[] queryArgs = searchPattern == null
+                ? new Object[]{tenantId, pageQuery.size(), pageQuery.page() * pageQuery.size()}
+                : new Object[]{tenantId, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern,
+                               pageQuery.size(), pageQuery.page() * pageQuery.size()};
+        List<FraudRule> content = jdbcTemplate.query(sql, ruleMapper(), queryArgs);
 
         return new PageResponse<>(content, buildMetadata(pageQuery, totalElements));
+    }
+
+    private String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     private PageMetadata buildMetadata(PageQuery query, long totalElements) {
@@ -78,10 +107,10 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
         var paramsJson = serializeParameters(rule.parameters());
         jdbcTemplate.update("""
             INSERT INTO fraud_rules (id, tenant_id, rule_id, scenario_name, scenario_name_ar,
-                category, detection_logic, default_action, block_type, status, parameters, priority,
-                created_at, updated_at)
+                category, detection_logic, default_action, block_type, block_code_id, block_code, 
+                status, parameters, priority, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?::fraud_rule_category, ?, ?::fraud_decision_type, ?::fraud_block_type,
-                ?::fraud_rule_status, ?::jsonb, ?, ?, ?)
+                ?, ?, ?::fraud_rule_status, ?::jsonb, ?, ?, ?)
             ON CONFLICT (tenant_id, rule_id) DO UPDATE SET
                 scenario_name = EXCLUDED.scenario_name,
                 parameters = EXCLUDED.parameters,
@@ -93,6 +122,7 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
             rule.category().name(), rule.detectionLogic(),
             rule.defaultAction().name(),
             rule.blockType() != null ? rule.blockType().name() : null,
+            rule.blockCodeId(), rule.blockCode(),
             rule.status().name(), paramsJson, rule.priority(),
             Timestamp.from(Instant.now()), Timestamp.from(Instant.now()));
         return rule;
@@ -125,6 +155,8 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
                     rs.getString("detection_logic"),
                     parseEnum(FraudDecision.class, rs.getString("default_action")),
                     parseEnum(FraudBlockType.class, rs.getString("block_type")),
+                    rs.getObject("block_code_id", UUID.class),
+                    rs.getString("block_code"),
                     parseEnum(FraudRuleStatus.class, rs.getString("status")),
                     params,
                     rs.getInt("priority"),

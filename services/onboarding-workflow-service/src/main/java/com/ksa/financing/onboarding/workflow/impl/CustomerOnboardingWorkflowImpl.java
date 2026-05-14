@@ -322,7 +322,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
 
             var nafathResult = nafathActivity.initiateNafath(
                     new NafathVerificationActivity.NafathInitiationInput(
-                            request.nationalId(), request.tenantId()
+                            request.nationalId(), request.tenantId(),
+                            state.getCustomerId(), workflowId, "ONBOARDING"
                     )
             );
             if (!nafathResult.initiated()) {

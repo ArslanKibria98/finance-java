@@ -89,6 +89,8 @@ public class ProductController {
                 request.repaymentFrequency(),
                 request.gracePeriodDays(),
                 request.earlySettlementAllowed(),
+                request.penaltyWaiverAllowed(),
+                request.maxPenaltyWaiversAllowed(),
                 request.countryId(),
                 userId
         );

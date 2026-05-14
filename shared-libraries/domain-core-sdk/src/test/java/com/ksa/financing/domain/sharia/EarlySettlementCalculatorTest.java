@@ -46,7 +46,7 @@ class EarlySettlementCalculatorTest {
         contractStartDate = LocalDate.of(2024, 1, 1);
 
         // Generate Murabaha calculation for test data
-        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, profitRate, tenure, contractStartDate);
+        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, profitRate, tenure, contractStartDate, SarMoney.zero());
         totalProfit = murabaha.profitAmount();
         schedule = murabaha.schedule();
         contractEndDate = contractStartDate.plusMonths(12);
@@ -287,7 +287,7 @@ class EarlySettlementCalculatorTest {
         // Given
         ProfitRate higherRate = ProfitRate.ofPercentage(10.0);
         Tenure tenure = Tenure.ofMonths(12);
-        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, higherRate, tenure, contractStartDate);
+        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, higherRate, tenure, contractStartDate, SarMoney.zero());
         LocalDate settlementDate = contractStartDate.plusMonths(6);
 
         // When
@@ -315,7 +315,7 @@ class EarlySettlementCalculatorTest {
         // Given
         ProfitRate profitRate = ProfitRate.ofPercentage(5.0);
         Tenure tenure = Tenure.ofMonths(24);
-        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, profitRate, tenure, contractStartDate);
+        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, profitRate, tenure, contractStartDate, SarMoney.zero());
         LocalDate settlementDate = contractStartDate.plusMonths(12);
 
         // When
@@ -338,7 +338,7 @@ class EarlySettlementCalculatorTest {
         // Given
         ProfitRate profitRate = ProfitRate.ofPercentage(5.0);
         Tenure tenure = Tenure.ofMonths(12);
-        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, profitRate, tenure, contractStartDate);
+        MurabahaCalculation murabaha = MurabahaCalculator.calculate(principal, profitRate, tenure, contractStartDate, SarMoney.zero());
         LocalDate settlementDate = contractStartDate.plusMonths(6);
 
         // When

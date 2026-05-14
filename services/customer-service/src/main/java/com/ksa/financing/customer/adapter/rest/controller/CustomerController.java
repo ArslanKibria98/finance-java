@@ -20,6 +20,7 @@ import com.ksa.financing.customer.domain.model.LifecycleStage;
 import com.ksa.financing.customer.domain.port.in.CreateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
+import com.ksa.financing.customer.domain.port.in.ManageCustomerBlocksUseCase;
 import com.ksa.financing.customer.domain.port.in.SubmitPepAnswerUseCase;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.out.EmploymentInfoRepository;
@@ -81,6 +82,7 @@ public class CustomerController {
     private final WalletPort walletPort;
     private final com.ksa.financing.customer.domain.port.out.PiiVaultPort piiVaultPort;
     private final GetCustomer360Service getCustomer360Service;
+    private final ManageCustomerBlocksUseCase manageCustomerBlocksUseCase;
     // TODO: Refactor to use AddEmploymentUseCase instead of direct repository access (hexagonal violation)
     private final EmploymentInfoRepository employmentInfoRepository;
 
@@ -706,6 +708,67 @@ public class CustomerController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toEmploymentResponse(saved));
     }
 
+    @SecuredEndpoint(obj = "customers.blocks", act = "create")
+    @PostMapping("/{id}/blocks")
+    @Operation(summary = "Assign block code to customer", description = "Assigns a block code to a customer, potentially blocking them")
+    public ResponseEntity<Void> assignBlockCode(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignBlockCodeRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        UUID assignedBy = UUID.fromString(jwt.getSubject());
+        log.info("Assigning block codes {} to customer {}", request.blockCodeIds(), id);
+
+        manageCustomerBlocksUseCase.assignBlockCode(tenantId, id, new ManageCustomerBlocksUseCase.AssignBlockCommand(
+                request.blockCodeIds(),
+                request.reason(),
+                request.expiresAt(),
+                assignedBy
+        ));
+
+        return ResponseEntity.ok().build();
+    }
+
+    @SecuredEndpoint(obj = "customers.blocks", act = "delete")
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}/blocks/{blockCodeIds}")
+    @Operation(summary = "Remove block codes from customer", description = "Removes specific block codes from a customer. Accepts comma-separated IDs.")
+    public ResponseEntity<Void> removeBlockCodes(
+            @PathVariable UUID id,
+            @PathVariable List<UUID> blockCodeIds,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Removing block codes {} from customer {}", blockCodeIds, id);
+
+        manageCustomerBlocksUseCase.removeBlockCode(tenantId, id, blockCodeIds);
+
+        return ResponseEntity.ok().build();
+    }
+
+    @SecuredEndpoint(obj = "customers.blocks", act = "read")
+    @GetMapping("/{id}/blocks")
+    @Operation(summary = "Get customer block history", description = "Returns all active block codes for a customer")
+    public ResponseEntity<List<com.ksa.financing.customer.domain.model.CustomerBlock>> getCustomerBlocks(
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(manageCustomerBlocksUseCase.getCustomerBlocks(id));
+    }
+
+    @SecuredEndpoint(obj = "block-codes", act = "read")
+    @GetMapping("/block-codes")
+    @Operation(summary = "Get available block codes", description = "Returns all active block codes for the tenant")
+    public ResponseEntity<List<com.ksa.financing.customer.domain.model.BlockCode>> getAvailableBlockCodes(
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID tenantId = extractTenantId(jwt);
+        return ResponseEntity.ok(manageCustomerBlocksUseCase.getAvailableBlockCodes(tenantId));
+    }
+
+    public record AssignBlockCodeRequest(
+            @jakarta.validation.constraints.NotEmpty List<UUID> blockCodeIds,
+            String reason,
+            java.time.Instant expiresAt
+    ) {}
+
     // ---- Helper methods ----
 
     private static final java.util.Map<String, EmploymentType> EMPLOYMENT_TYPE_ALIASES = java.util.Map.of(
@@ -789,6 +852,8 @@ public class CustomerController {
                 customer.getPepStatus() != null ? customer.getPepStatus().name() : null,
                 customer.getGlobalUid(),
                 profilePictureUrl,
+                customer.isBlocked(),
+                customer.getBlockCodes(),
                 customer.getCreatedAt(),
                 customer.getUpdatedAt()
         );

@@ -35,7 +35,7 @@ public class LoanApplicationRepositoryImpl implements LoanApplicationRepository 
     );
 
     private static final Set<String> SEARCHABLE_FIELDS = Set.of(
-            "applicationNumber", "nationalId", "disbursementIban"
+            "applicationNumber", "nationalId", "disbursementIban", "productCode", "status"
     );
 
     @Override

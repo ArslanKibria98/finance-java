@@ -1,0 +1,182 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1mReactor Build Order:[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] KSA Islamic Financing Platform                                     [pom]
+[[1;34mINFO[m] File Storage SDK                                                   [jar]
+[[1;34mINFO[m] Foundational Infrastructure SDK                                    [jar]
+[[1;34mINFO[m] Customer Activity API                                              [jar]
+[[1;34mINFO[m] Customer Service                                                   [jar]
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--------------< [0;36mcom.ksa.financing:ksa-financing-platform[0;1m >--------------[m
+[[1;34mINFO[m] [1mBuilding KSA Islamic Financing Platform 1.0.0-SNAPSHOT             [1/5][m
+[[1;34mINFO[m] [1m--------------------------------[ pom ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-clean-plugin:2.5:clean[m [1m(default-clean)[m @ [36mksa-financing-platform[0;1m ---[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-install-plugin:2.4:install[m [1m(default-install)[m @ [36mksa-financing-platform[0;1m ---[m
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/pom.xml to /root/.m2/repository/com/ksa/financing/ksa-financing-platform/1.0.0-SNAPSHOT/ksa-financing-platform-1.0.0-SNAPSHOT.pom
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-----------------< [0;36mcom.ksa.financing:file-storage-sdk[0;1m >-----------------[m
+[[1;34mINFO[m] [1mBuilding File Storage SDK 1.0.0-SNAPSHOT                           [2/5][m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-clean-plugin:2.5:clean[m [1m(default-clean)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Deleting /var/www/islamic-financing-platform/shared-libraries/file-storage-sdk/target
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:resources[m [1m(default-resources)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] Copying 1 resource
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.13.0:compile[m [1m(default-compile)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged source code[m.
+[[1;34mINFO[m] Compiling 7 source files with javac [debug release 21] to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:testResources[m [1m(default-testResources)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Not copying test resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.13.0:testCompile[m [1m(default-testCompile)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Not compiling test sources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-surefire-plugin:3.5.2:test[m [1m(default-test)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Tests are skipped.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-jar-plugin:2.4:jar[m [1m(default-jar)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Building jar: /var/www/islamic-financing-platform/shared-libraries/file-storage-sdk/target/file-storage-sdk-1.0.0-SNAPSHOT.jar
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-install-plugin:2.4:install[m [1m(default-install)[m @ [36mfile-storage-sdk[0;1m ---[m
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/shared-libraries/file-storage-sdk/target/file-storage-sdk-1.0.0-SNAPSHOT.jar to /root/.m2/repository/com/ksa/financing/file-storage-sdk/1.0.0-SNAPSHOT/file-storage-sdk-1.0.0-SNAPSHOT.jar
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/shared-libraries/file-storage-sdk/pom.xml to /root/.m2/repository/com/ksa/financing/file-storage-sdk/1.0.0-SNAPSHOT/file-storage-sdk-1.0.0-SNAPSHOT.pom
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--------------< [0;36mcom.ksa.financing:foundational-infra-sdk[0;1m >--------------[m
+[[1;34mINFO[m] [1mBuilding Foundational Infrastructure SDK 1.0.0-SNAPSHOT            [3/5][m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-clean-plugin:2.5:clean[m [1m(default-clean)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Deleting /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/target
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:resources[m [1m(default-resources)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] Copying 5 resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.13.0:compile[m [1m(default-compile)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged source code[m.
+[[1;34mINFO[m] Compiling 52 source files with javac [debug release 21] to target/classes
+[[1;34mINFO[m] /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/src/main/java/com/ksa/financing/infra/logging/OpenTelemetryConfig.java: /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/src/main/java/com/ksa/financing/infra/logging/OpenTelemetryConfig.java uses or overrides a deprecated API.
+[[1;34mINFO[m] /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/src/main/java/com/ksa/financing/infra/logging/OpenTelemetryConfig.java: Recompile with -Xlint:deprecation for details.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:testResources[m [1m(default-testResources)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Not copying test resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.13.0:testCompile[m [1m(default-testCompile)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Not compiling test sources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-surefire-plugin:3.5.2:test[m [1m(default-test)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Tests are skipped.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-jar-plugin:2.4:jar[m [1m(default-jar)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Building jar: /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/target/foundational-infra-sdk-1.0.0-SNAPSHOT.jar
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-install-plugin:2.4:install[m [1m(default-install)[m @ [36mfoundational-infra-sdk[0;1m ---[m
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/target/foundational-infra-sdk-1.0.0-SNAPSHOT.jar to /root/.m2/repository/com/ksa/financing/foundational-infra-sdk/1.0.0-SNAPSHOT/foundational-infra-sdk-1.0.0-SNAPSHOT.jar
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/shared-libraries/foundational-infra-sdk/pom.xml to /root/.m2/repository/com/ksa/financing/foundational-infra-sdk/1.0.0-SNAPSHOT/foundational-infra-sdk-1.0.0-SNAPSHOT.pom
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-----------< [0;36mcom.ksa.islamic.finance:customer-activity-api[0;1m >------------[m
+[[1;34mINFO[m] [1mBuilding Customer Activity API 1.0.0                               [4/5][m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-clean-plugin:3.3.2:clean[m [1m(default-clean)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Deleting /var/www/islamic-financing-platform/shared-libraries/customer-activity-api/target
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:resources[m [1m(default-resources)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] skip non existing resourceDirectory /var/www/islamic-financing-platform/shared-libraries/customer-activity-api/src/main/resources
+[[1;34mINFO[m] skip non existing resourceDirectory /var/www/islamic-financing-platform/shared-libraries/customer-activity-api/src/main/resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.15.0:compile[m [1m(default-compile)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged source code[m.
+[[1;34mINFO[m] Compiling 2 source files with javac [debug parameters release 21] to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:testResources[m [1m(default-testResources)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Not copying test resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.15.0:testCompile[m [1m(default-testCompile)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Not compiling test sources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-surefire-plugin:3.2.5:test[m [1m(default-test)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Tests are skipped.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-jar-plugin:3.4.2:jar[m [1m(default-jar)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Building jar: /var/www/islamic-financing-platform/shared-libraries/customer-activity-api/target/customer-activity-api-1.0.0.jar
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-install-plugin:3.1.3:install[m [1m(default-install)[m @ [36mcustomer-activity-api[0;1m ---[m
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/shared-libraries/customer-activity-api/pom.xml to /root/.m2/repository/com/ksa/islamic/finance/customer-activity-api/1.0.0/customer-activity-api-1.0.0.pom
+[[1;34mINFO[m] Installing /var/www/islamic-financing-platform/shared-libraries/customer-activity-api/target/customer-activity-api-1.0.0.jar to /root/.m2/repository/com/ksa/islamic/finance/customer-activity-api/1.0.0/customer-activity-api-1.0.0.jar
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-----------------< [0;36mcom.ksa.financing:customer-service[0;1m >-----------------[m
+[[1;34mINFO[m] [1mBuilding Customer Service 1.0.0-SNAPSHOT                           [5/5][m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-clean-plugin:2.5:clean[m [1m(default-clean)[m @ [36mcustomer-service[0;1m ---[m
+[[1;34mINFO[m] Deleting /var/www/islamic-financing-platform/services/customer-service/target
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:resources[m [1m(default-resources)[m @ [36mcustomer-service[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] Copying 13 resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.11.0:compile[m [1m(default-compile)[m @ [36mcustomer-service[0;1m ---[m
+[[1;34mINFO[m] Changes detected - recompiling the module! :dependency
+[[1;34mINFO[m] Compiling 146 source files with javac [debug release 21] to target/classes
+[[1;34mINFO[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/infrastructure/http/HttpGlobalProfileAdapter.java: Some input files use unchecked or unsafe operations.
+[[1;34mINFO[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/infrastructure/http/HttpGlobalProfileAdapter.java: Recompile with -Xlint:unchecked for details.
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;31mERROR[m] COMPILATION ERROR : 
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;31mERROR[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/application/mapper/CustomerMapper.java:[18,16] constructor CustomerResponse in record com.ksa.financing.customer.application.dto.CustomerResponse cannot be applied to given types;
+  required: java.util.UUID,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,boolean,boolean,java.lang.String,java.util.UUID,java.lang.String,boolean,java.util.List<java.lang.String>,java.time.Instant,java.time.Instant
+  found:    java.util.UUID,java.lang.String,c.getCusto[...] null,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,c.getGende[...] null,java.lang.String,c.getResid[...] null,java.lang.String,java.lang.String,c.getKycSt[...] null,c.getLifec[...] null,c.getRiskG[...] null,boolean,boolean,c.getPepSt[...] null,java.util.UUID,java.lang.String,java.time.Instant,java.time.Instant
+  reason: actual and formal argument lists differ in length
+[[1;31mERROR[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/application/usecase/GetCustomerService.java:[107,9] cannot find symbol
+  symbol:   class List
+  location: class com.ksa.financing.customer.application.usecase.GetCustomerService
+[[1;31mERROR[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/application/usecase/GetCustomer360Service.java:[706,16] constructor CustomerResponse in record com.ksa.financing.customer.application.dto.CustomerResponse cannot be applied to given types;
+  required: java.util.UUID,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,boolean,boolean,java.lang.String,java.util.UUID,java.lang.String,boolean,java.util.List<java.lang.String>,java.time.Instant,java.time.Instant
+  found:    java.util.UUID,java.lang.String,customer.g[...] null,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,customer.g[...] null,java.lang.String,customer.g[...] null,java.lang.String,java.lang.String,customer.g[...] null,customer.g[...] null,java.lang.String,boolean,boolean,customer.g[...] null,java.util.UUID,java.lang.String,java.time.Instant,java.time.Instant
+  reason: actual and formal argument lists differ in length
+[[1;34mINFO[m] 3 errors 
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1mReactor Summary:[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] KSA Islamic Financing Platform 1.0.0-SNAPSHOT ...... [1;32mSUCCESS[m [  0.175 s]
+[[1;34mINFO[m] File Storage SDK 1.0.0-SNAPSHOT .................... [1;32mSUCCESS[m [  2.003 s]
+[[1;34mINFO[m] Foundational Infrastructure SDK 1.0.0-SNAPSHOT ..... [1;32mSUCCESS[m [  1.779 s]
+[[1;34mINFO[m] Customer Activity API 1.0.0 ........................ [1;32mSUCCESS[m [  0.696 s]
+[[1;34mINFO[m] Customer Service 1.0.0-SNAPSHOT .................... [1;31mFAILURE[m [  2.605 s]
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;31mBUILD FAILURE[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  7.812 s
+[[1;34mINFO[m] Finished at: 2026-05-13T08:22:35Z
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;31mERROR[m] Failed to execute goal [32morg.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile[m [1m(default-compile)[m on project [36mcustomer-service[m: [1;31mCompilation failure[m: Compilation failure: 
+[[1;31mERROR[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/application/mapper/CustomerMapper.java:[18,16] constructor CustomerResponse in record com.ksa.financing.customer.application.dto.CustomerResponse cannot be applied to given types;
+[[1;31mERROR[m]   required: java.util.UUID,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,boolean,boolean,java.lang.String,java.util.UUID,java.lang.String,boolean,java.util.List<java.lang.String>,java.time.Instant,java.time.Instant
+[[1;31mERROR[m]   found:    java.util.UUID,java.lang.String,c.getCusto[...] null,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,c.getGende[...] null,java.lang.String,c.getResid[...] null,java.lang.String,java.lang.String,c.getKycSt[...] null,c.getLifec[...] null,c.getRiskG[...] null,boolean,boolean,c.getPepSt[...] null,java.util.UUID,java.lang.String,java.time.Instant,java.time.Instant
+[[1;31mERROR[m]   reason: actual and formal argument lists differ in length
+[[1;31mERROR[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/application/usecase/GetCustomerService.java:[107,9] cannot find symbol
+[[1;31mERROR[m]   symbol:   class List
+[[1;31mERROR[m]   location: class com.ksa.financing.customer.application.usecase.GetCustomerService
+[[1;31mERROR[m] /var/www/islamic-financing-platform/services/customer-service/src/main/java/com/ksa/financing/customer/application/usecase/GetCustomer360Service.java:[706,16] constructor CustomerResponse in record com.ksa.financing.customer.application.dto.CustomerResponse cannot be applied to given types;
+[[1;31mERROR[m]   required: java.util.UUID,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,boolean,boolean,java.lang.String,java.util.UUID,java.lang.String,boolean,java.util.List<java.lang.String>,java.time.Instant,java.time.Instant
+[[1;31mERROR[m]   found:    java.util.UUID,java.lang.String,customer.g[...] null,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.time.LocalDate,customer.g[...] null,java.lang.String,customer.g[...] null,java.lang.String,java.lang.String,customer.g[...] null,customer.g[...] null,java.lang.String,boolean,boolean,customer.g[...] null,java.util.UUID,java.lang.String,java.time.Instant,java.time.Instant
+[[1;31mERROR[m]   reason: actual and formal argument lists differ in length
+[[1;31mERROR[m] -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[[1;31mERROR[m] 
+[[1;31mERROR[m] After correcting the problems, you can resume the build with the command
+[[1;31mERROR[m]   [1mmvn <args> -rf :customer-service[m

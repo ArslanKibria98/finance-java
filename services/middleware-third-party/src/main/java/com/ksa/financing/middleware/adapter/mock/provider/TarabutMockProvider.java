@@ -31,7 +31,7 @@ public class TarabutMockProvider implements MockResponseProvider {
             case "TARABUT_KSA_CATEGORIZATION", "TARABUT_BAH_CATEGORIZATION" -> categoriseResponse();
             case "TARABUT_KSA_SALARY_CHECK", "TARABUT_BAH_SALARY_CHECK" -> salaryCheckResponse();
             case "TARABUT_KSA_ACCOUNT_VERIFY" -> accountVerifyResponse();
-            case "TARABUT_KSA_IBAN_MATCH" -> ibanMatchResponse();
+            case "TARABUT_KSA_IBAN_MATCH", "TARABUT_IBAN_VERIFY" -> ibanMatchResponse();
             default -> fallbackResponse();
         };
     }

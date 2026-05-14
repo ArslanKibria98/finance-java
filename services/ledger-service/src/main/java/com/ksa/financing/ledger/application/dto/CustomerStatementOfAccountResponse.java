@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -20,7 +22,8 @@ public record CustomerStatementOfAccountResponse(
     @Schema(description = "Closing balance") BigDecimal closingBalance,
     @Schema(description = "Total debits") BigDecimal totalDebits,
     @Schema(description = "Total credits") BigDecimal totalCredits,
-    @Schema(description = "Transaction entries") List<Entry> entries
+    @Schema(description = "Transaction entries") List<Entry> entries,
+    @Schema(description = "Pagination metadata") @JsonIgnore PageMetadata pagination
 ) {
 
     @Builder

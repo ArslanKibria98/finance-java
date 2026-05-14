@@ -55,6 +55,11 @@ public class Customer {
     private Instant createdAt;
     private Instant updatedAt;
     private int version;
+    private java.util.List<String> blockCodes = new java.util.ArrayList<>();
+
+    public boolean isBlocked() {
+        return !active;
+    }
 
     // Getters and setters
     public UUID getId() { return id; }
@@ -157,4 +162,6 @@ public class Customer {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public int getVersion() { return version; }
     public void setVersion(int version) { this.version = version; }
+    public java.util.List<String> getBlockCodes() { return blockCodes; }
+    public void setBlockCodes(java.util.List<String> blockCodes) { this.blockCodes = blockCodes; }
 }

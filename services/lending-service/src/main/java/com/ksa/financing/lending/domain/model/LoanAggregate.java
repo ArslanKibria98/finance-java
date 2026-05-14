@@ -29,6 +29,7 @@ public class LoanAggregate {
     // Principal and profit
     private final BigDecimal principalAmount;
     private final BigDecimal profitAmount;
+    private final BigDecimal feeAmount;
     private final BigDecimal totalAmount;
 
     // Terms
@@ -75,6 +76,7 @@ public class LoanAggregate {
                            UUID productId, String productCode,
                            ShariaStructure shariaStructure,
                            BigDecimal principalAmount, BigDecimal profitAmount,
+                           BigDecimal feeAmount,
                            BigDecimal profitRate, int tenureMonths,
                            BigDecimal installmentAmount) {
         this.id = id;
@@ -87,13 +89,14 @@ public class LoanAggregate {
         this.shariaStructure = shariaStructure;
         this.principalAmount = principalAmount;
         this.profitAmount = profitAmount;
-        this.totalAmount = principalAmount.add(profitAmount);
+        this.feeAmount = feeAmount;
+        this.totalAmount = principalAmount.add(profitAmount).add(feeAmount);
         this.profitRate = profitRate;
         this.tenureMonths = tenureMonths;
         this.installmentAmount = installmentAmount;
         this.outstandingPrincipal = principalAmount;
         this.outstandingProfit = profitAmount;
-        this.outstandingFees = BigDecimal.ZERO;
+        this.outstandingFees = feeAmount;
         this.totalOutstanding = this.totalAmount;
         this.status = LoanStatus.PENDING_DISBURSEMENT;
         this.bookingDate = LocalDate.now();
@@ -112,6 +115,7 @@ public class LoanAggregate {
                                         UUID productId, String productCode,
                                         ShariaStructure shariaStructure,
                                         BigDecimal principalAmount, BigDecimal profitAmount,
+                                        BigDecimal feeAmount,
                                         BigDecimal profitRate, int tenureMonths,
                                         BigDecimal installmentAmount) {
         if (tenantId == null) throw new IllegalArgumentException("Tenant ID cannot be null");
@@ -125,12 +129,14 @@ public class LoanAggregate {
         var loan = new LoanAggregate(
                 LoanId.generate(), tenantId, loanNumber, applicationId,
                 customerId, productId, productCode, shariaStructure,
-                principalAmount, profitAmount, profitRate, tenureMonths, installmentAmount
+                principalAmount, profitAmount, feeAmount,
+                profitRate, tenureMonths, installmentAmount
         );
 
         loan.registerEvent(new LoanCreated(
                 loan.id, tenantId, applicationId, customerId,
-                principalAmount, profitRate, tenureMonths, shariaStructure
+                principalAmount, profitAmount, feeAmount,
+                profitRate, tenureMonths, shariaStructure
         ));
 
         return loan;
@@ -143,7 +149,8 @@ public class LoanAggregate {
             LoanApplicationId applicationId, UUID customerId,
             UUID productId, String productCode, ShariaStructure shariaStructure,
             UUID commodityTransactionId,
-            BigDecimal principalAmount, BigDecimal profitAmount, BigDecimal totalAmount,
+            BigDecimal principalAmount, BigDecimal profitAmount,
+            BigDecimal feeAmount, BigDecimal totalAmount,
             BigDecimal profitRate, int tenureMonths, BigDecimal installmentAmount,
             BigDecimal outstandingPrincipal, BigDecimal outstandingProfit,
             BigDecimal outstandingFees, BigDecimal totalOutstanding,
@@ -157,7 +164,8 @@ public class LoanAggregate {
         var loan = new LoanAggregate(
                 id, tenantId, loanNumber, applicationId, customerId,
                 productId, productCode, shariaStructure,
-                principalAmount, profitAmount, profitRate, tenureMonths, installmentAmount);
+                principalAmount, profitAmount, feeAmount,
+                profitRate, tenureMonths, installmentAmount);
 
         loan.commodityTransactionId = commodityTransactionId;
         loan.outstandingPrincipal = outstandingPrincipal;
@@ -269,6 +277,7 @@ public class LoanAggregate {
     public UUID getCommodityTransactionId() { return commodityTransactionId; }
     public BigDecimal getPrincipalAmount() { return principalAmount; }
     public BigDecimal getProfitAmount() { return profitAmount; }
+    public BigDecimal getFeeAmount() { return feeAmount; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public BigDecimal getProfitRate() { return profitRate; }
     public int getTenureMonths() { return tenureMonths; }
@@ -301,7 +310,8 @@ public class LoanAggregate {
 
     public record LoanCreated(
             LoanId loanId, UUID tenantId, LoanApplicationId applicationId,
-            UUID customerId, BigDecimal principalAmount, BigDecimal profitRate,
+            UUID customerId, BigDecimal principalAmount, BigDecimal profitAmount,
+            BigDecimal feeAmount, BigDecimal profitRate,
             int tenureMonths, ShariaStructure shariaStructure
     ) {}
 

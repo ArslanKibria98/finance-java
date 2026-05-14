@@ -20,10 +20,10 @@ public class EigerMockProvider implements MockResponseProvider {
         return switch (apiCode) {
             case "EIGER_AUTH" -> authResponse();
             case "EIGER_ORDER_HOLD" -> orderHold();
-            case "EIGER_ORDER_PURCHASE" -> orderPurchase();
+            case "EIGER_ORDER_PURCHASE", "EIGER_COMMODITY_BUY" -> orderPurchase();
             case "EIGER_ORDER_PURCHASE_UPDATE" -> orderPurchase();
             case "EIGER_TRANSFER_NOTIFICATION" -> transferNotification();
-            case "EIGER_ORDER_SALE" -> orderSalePost();
+            case "EIGER_ORDER_SALE", "EIGER_COMMODITY_SELL" -> orderSalePost();
             case "EIGER_ORDER_SALE_UPDATE" -> orderSalePatch();
             default -> fallbackResponse();
         };

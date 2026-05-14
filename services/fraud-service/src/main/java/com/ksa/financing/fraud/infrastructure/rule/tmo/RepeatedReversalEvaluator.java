@@ -42,7 +42,7 @@ public class RepeatedReversalEvaluator implements FraudRuleEvaluator {
         if (perLoan < maxPerLoan && total < maxTotal) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Reversals: per-loan=" + perLoan + " total=" + total,
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

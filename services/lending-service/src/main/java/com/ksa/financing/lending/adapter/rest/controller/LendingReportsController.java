@@ -43,10 +43,14 @@ public class LendingReportsController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
             @RequestParam(required = false) String productCode,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "1000") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
         var reportDate = asOfDate != null ? asOfDate : LocalDate.now();
+        var searchPattern = toLikePattern(search);
 
         var sql = """
                 SELECT  id, loan_number, customer_id, product_code,
@@ -60,7 +64,12 @@ public class LendingReportsController {
                    AND  deleted_at IS NULL
                    AND  status IN ('ACTIVE', 'OVERDUE', 'DELINQUENT')
                    AND  (CAST(? AS text) IS NULL OR product_code = CAST(? AS text))
+                   AND  (CAST(? AS text) IS NULL
+                         OR LOWER(loan_number) LIKE CAST(? AS text)
+                         OR LOWER(CAST(customer_id AS text)) LIKE CAST(? AS text)
+                         OR LOWER(product_code) LIKE CAST(? AS text))
                  ORDER  BY loan_number
+                 LIMIT  ? OFFSET ?
                 """;
 
         var rows = jdbcTemplate.query(sql,
@@ -76,13 +85,34 @@ public class LendingReportsController {
                         rs.getBigDecimal("total_paid"),
                         rs.getString("status")
                 ),
-                tenantId, productCode, productCode);
+                tenantId, productCode, productCode,
+                searchPattern, searchPattern, searchPattern, searchPattern,
+                size, page * size);
+
+        var totalSql = """
+                SELECT  COUNT(*) AS total_count,
+                        COALESCE(SUM(outstanding_principal), 0) AS total_principal,
+                        COALESCE(SUM(outstanding_profit), 0) AS total_profit,
+                        COALESCE(SUM(outstanding_fees), 0) AS total_fees
+                  FROM  loans
+                 WHERE  tenant_id = ?
+                   AND  deleted_at IS NULL
+                   AND  status IN ('ACTIVE', 'OVERDUE', 'DELINQUENT')
+                   AND  (CAST(? AS text) IS NULL OR product_code = CAST(? AS text))
+                   AND  (CAST(? AS text) IS NULL
+                         OR LOWER(loan_number) LIKE CAST(? AS text)
+                         OR LOWER(CAST(customer_id AS text)) LIKE CAST(? AS text)
+                         OR LOWER(product_code) LIKE CAST(? AS text))
+                """;
+        var totals = jdbcTemplate.queryForMap(totalSql, tenantId, productCode, productCode,
+                searchPattern, searchPattern, searchPattern, searchPattern);
+        
+        long totalCount = ((Number) totals.get("total_count")).longValue();
+        BigDecimal totalPrincipal = (BigDecimal) totals.get("total_principal");
+        BigDecimal totalProfit = (BigDecimal) totals.get("total_profit");
+        BigDecimal totalFees = (BigDecimal) totals.get("total_fees");
 
         var items = new ArrayList<OutstandingItem>();
-        BigDecimal totalPrincipal = BigDecimal.ZERO;
-        BigDecimal totalProfit = BigDecimal.ZERO;
-        BigDecimal totalFees = BigDecimal.ZERO;
-
         for (var r : rows) {
             items.add(new OutstandingItem(
                     r.loanId(), r.loanNumber(), r.customerId(), r.productCode(),
@@ -90,16 +120,26 @@ public class LendingReportsController {
                     r.outstandingPrincipal(), r.outstandingProfit(), r.outstandingFees(),
                     r.status()
             ));
-            totalPrincipal = totalPrincipal.add(r.outstandingPrincipal());
-            totalProfit = totalProfit.add(r.outstandingProfit());
-            totalFees = totalFees.add(r.outstandingFees());
         }
 
         log.info("Outstanding balances report: tenant={} asOf={} count={} principal={}",
-                tenantId, reportDate, items.size(), totalPrincipal);
+                tenantId, reportDate, totalCount, totalPrincipal);
 
         return ResponseEntity.ok(new OutstandingBalancesResponse(
-                reportDate, items.size(), totalPrincipal, totalProfit, totalFees, items));
+                reportDate, (int)totalCount, totalPrincipal, totalProfit, totalFees, items));
+    }
+
+    @SecuredEndpoint(obj = "lending.reports", act = "read")
+    @GetMapping("/loans-by-customer")
+    @Operation(summary = "List loan IDs for a customer (used by customer-statement report)")
+    public ResponseEntity<List<UUID>> loansByCustomer(
+            @RequestParam UUID customerId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        var sql = "SELECT id FROM loans WHERE tenant_id = ? AND customer_id = ? AND deleted_at IS NULL";
+        var ids = jdbcTemplate.query(sql, (rs, rn) -> UUID.fromString(rs.getString("id")), tenantId, customerId);
+        return ResponseEntity.ok(ids);
     }
 
     @SecuredEndpoint(obj = "lending.reports", act = "read")
@@ -146,9 +186,13 @@ public class LendingReportsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(required = false) String productCode,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "1000") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        var searchPattern = toLikePattern(search);
 
         var sql = """
                 SELECT l.id,
@@ -180,7 +224,12 @@ public class LendingReportsController {
                         OR REGEXP_REPLACE(UPPER(COALESCE(la.product_name, '')), '[^A-Z0-9]', '', 'g')
                            LIKE '%' || REGEXP_REPLACE(UPPER(CAST(? AS text)), '[^A-Z0-9]', '', 'g') || '%'
                    )
+                   AND (CAST(? AS text) IS NULL
+                        OR LOWER(l.loan_number) LIKE CAST(? AS text)
+                        OR LOWER(COALESCE(la.application_number, '')) LIKE CAST(? AS text)
+                        OR LOWER(COALESCE(la.national_id, '')) LIKE CAST(? AS text))
                  ORDER BY l.disbursement_date DESC, l.loan_number
+                 LIMIT ? OFFSET ?
                 """;
 
         var rows = jdbcTemplate.query(
@@ -199,7 +248,9 @@ public class LendingReportsController {
                         rs.getString("status"),
                         rs.getString("branch_or_channel")
                 ),
-                tenantId, fromDate, toDate, productCode, productCode, productCode
+                tenantId, fromDate, toDate, productCode, productCode, productCode,
+                searchPattern, searchPattern, searchPattern, searchPattern,
+                size, page * size
         );
 
         return ResponseEntity.ok(rows);
@@ -210,6 +261,11 @@ public class LendingReportsController {
         if (claim == null) throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS,
                 "No tenant_id claim found in JWT");
         return UUID.fromString(claim);
+    }
+
+    private String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     // ── Row helper + DTOs ─────────────────────────────────────────

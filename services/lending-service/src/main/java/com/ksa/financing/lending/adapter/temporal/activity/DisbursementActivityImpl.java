@@ -33,6 +33,7 @@ public class DisbursementActivityImpl implements DisbursementActivity {
     private final String fineractTenantId;
     private final String middlewareUrl;
     private final String notificationServiceUrl;
+    private final String walletServiceUrl;
     private final FraudEventNotifier fraudEventNotifier;
 
     public DisbursementActivityImpl(
@@ -44,7 +45,8 @@ public class DisbursementActivityImpl implements DisbursementActivity {
             @Value("${app.services.fineract-password:#{null}}") String fineractPassword,
             @Value("${app.services.fineract-tenant-id:${FINERACT_TENANT_ID:default}}") String fineractTenantId,
             @Value("${app.services.middleware-url}") String middlewareUrl,
-            @Value("${app.services.notification-service-url}") String notificationServiceUrl) {
+            @Value("${app.services.notification-service-url}") String notificationServiceUrl,
+            @Value("${app.services.wallet-service-url:http://localhost:8088}") String walletServiceUrl) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.fraudEventNotifier = fraudEventNotifier;
@@ -54,6 +56,7 @@ public class DisbursementActivityImpl implements DisbursementActivity {
         this.fineractTenantId = fineractTenantId;
         this.middlewareUrl = middlewareUrl;
         this.notificationServiceUrl = notificationServiceUrl;
+        this.walletServiceUrl = walletServiceUrl;
     }
 
     @Override
@@ -362,7 +365,8 @@ public class DisbursementActivityImpl implements DisbursementActivity {
                     requestBody,
                     input.tenantId(),
                     null,
-                    input.idempotencyKey()
+                    input.idempotencyKey(),
+                    null, input.loanNumber(), "APPLICATION"
             );
 
             if (!response.has("success") || !response.get("success").asBoolean()) {
@@ -370,8 +374,7 @@ public class DisbursementActivityImpl implements DisbursementActivity {
                 return new DisbursementResult(null, null, null, "FAILED", false);
             }
 
-            var data = response.has("responseBody")
-                    ? objectMapper.readTree(response.get("responseBody").asText()) : response;
+            var data = extractResponseBody(response);
 
             String disbursementId = textOrNull(data, "disbursementId");
             String disbursementNumber = textOrNull(data, "disbursementNumber");
@@ -399,6 +402,79 @@ public class DisbursementActivityImpl implements DisbursementActivity {
             log.error("Disbursement gateway connection failed: {} - {}", e.getClass().getSimpleName(), e.getMessage(), e);
             String mockId = "MOCK-DISB-" + java.util.UUID.randomUUID().toString().substring(0, 8);
             return new DisbursementResult(mockId, "DN-MOCK-001", "PAY-MOCK-001", "SUCCESS", true);
+        }
+    }
+
+    @Override
+    public WalletDisbursementResult disburseToWallet(WalletDisbursementInput input) {
+        log.info("Activity: Crediting {} SAR to wallet for customer {} loan {}",
+                input.amount(), input.customerId(), input.loanNumber());
+
+        try {
+            String url = walletServiceUrl + "/internal/wallets/credit-from-loan";
+
+            var bodyMap = new java.util.HashMap<String, Object>();
+            bodyMap.put("customerId", input.customerId());
+            bodyMap.put("amount", input.amount());
+            bodyMap.put("purpose", "LOAN_PROCEEDS");
+            bodyMap.put("referenceType", "LOAN_DISBURSEMENT");
+            bodyMap.put("referenceId", input.loanId());
+            bodyMap.put("description", "Loan disbursement: " + input.loanNumber());
+            bodyMap.put("idempotencyKey", input.idempotencyKey());
+
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Tenant-Id", input.tenantId());
+            headers.set("X-Caller-Service", "lending-service");
+
+            var requestBody = objectMapper.writeValueAsString(bodyMap);
+            var response = restTemplate.exchange(url, HttpMethod.POST,
+                    new HttpEntity<>(requestBody, headers), String.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.error("Wallet credit failed: status={}", response.getStatusCode());
+                return new WalletDisbursementResult(null, null, null, null, null, null, "FAILED", false);
+            }
+
+            var data = objectMapper.readTree(response.getBody());
+            String walletId = textOrNull(data, "walletId");
+            String walletNumber = textOrNull(data, "walletNumber");
+            Long savingsId = data.has("fineractSavingsAccountId") && !data.get("fineractSavingsAccountId").isNull()
+                    ? data.get("fineractSavingsAccountId").asLong() : null;
+            Long fineractTxnId = data.has("fineractTransactionId") && !data.get("fineractTransactionId").isNull()
+                    ? data.get("fineractTransactionId").asLong() : null;
+            String movementId = textOrNull(data, "movementId");
+            java.math.BigDecimal newBalance = data.has("newAvailableBalance") && !data.get("newAvailableBalance").isNull()
+                    ? new java.math.BigDecimal(data.get("newAvailableBalance").asText()) : null;
+            String status = data.has("status") ? data.get("status").asText() : "COMPLETED";
+
+            log.info("Wallet credited: walletId={} walletNumber={} fineractTxnId={} newBalance={}",
+                    walletId, walletNumber, fineractTxnId, newBalance);
+
+            return new WalletDisbursementResult(
+                    walletId, walletNumber, savingsId, fineractTxnId,
+                    movementId, newBalance, status, true);
+
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // 4xx — business validation failure. Non-retryable, surface as success=false.
+            log.error("Wallet service rejected credit (non-retryable {}): body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString(), e);
+            return new WalletDisbursementResult(null, null, null, null, null, null,
+                    "FAILED: " + e.getStatusCode(), false);
+        } catch (org.springframework.web.client.HttpServerErrorException e) {
+            // 5xx — transient server error. Throw so Temporal retries the activity.
+            log.error("Wallet service server error (will retry): status={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Wallet service server error: " + e.getStatusCode(), e);
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            // Network/DNS/connection error (wallet-service down or restarting).
+            // Throw so Temporal retries with backoff — covers brief outages.
+            log.error("Wallet service unreachable (will retry): {}", e.getMessage());
+            throw new RuntimeException("Wallet service unreachable: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Wallet credit unexpected error (will retry): {} - {}",
+                    e.getClass().getSimpleName(), e.getMessage(), e);
+            throw new RuntimeException("Wallet credit failed: " + e.getMessage(), e);
         }
     }
 
@@ -440,22 +516,55 @@ public class DisbursementActivityImpl implements DisbursementActivity {
     private JsonNode executeMiddlewareApi(String apiCode, String requestBody,
                                            String tenantId, String nationalId,
                                            String idempotencyKey) throws Exception {
+        return executeMiddlewareApi(apiCode, requestBody, tenantId, nationalId, idempotencyKey,
+                null, null, "APPLICATION");
+    }
+
+    private JsonNode executeMiddlewareApi(String apiCode, String requestBody,
+                                           String tenantId, String nationalId,
+                                           String idempotencyKey,
+                                           String customerId, String applicationId,
+                                           String contextType) throws Exception {
         String url = middlewareUrl + "/api/v1/execute/" + apiCode + "/simple";
 
         var headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (idempotencyKey != null) {
-            headers.set("X-Idempotency-Key", idempotencyKey);
-        }
-        if (nationalId != null) {
-            headers.set("X-National-Id", nationalId);
-        }
+        if (idempotencyKey != null) headers.set("X-Idempotency-Key", idempotencyKey);
+        if (nationalId != null)     headers.set("X-National-Id", nationalId);
+        if (customerId != null)     headers.set("X-Customer-Id", customerId);
+        if (applicationId != null)  headers.set("X-Application-Id", applicationId);
+        if (contextType != null)    headers.set("X-Context-Type", contextType);
         headers.set("X-Caller-Service", "lending-service");
 
         var httpEntity = new HttpEntity<>(requestBody, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, httpEntity, String.class);
 
-        return objectMapper.readTree(response.getBody());
+        return unwrapMiddlewareEnvelope(objectMapper.readTree(response.getBody()));
+    }
+
+    private JsonNode unwrapMiddlewareEnvelope(JsonNode raw) {
+        if (raw != null && raw.has("data") && raw.get("data").isObject()) {
+            return raw.get("data");
+        }
+        return raw;
+    }
+
+    private JsonNode extractResponseBody(JsonNode response) throws Exception {
+        if (response == null || !response.has("responseBody") || response.get("responseBody").isNull()) {
+            return response;
+        }
+        JsonNode body = response.get("responseBody");
+        if (body.isObject() || body.isArray()) {
+            return body;
+        }
+        if (body.isTextual()) {
+            String text = body.asText();
+            if (text == null || text.isBlank()) {
+                return response;
+            }
+            return objectMapper.readTree(text);
+        }
+        return body;
     }
 
     private String textOrNull(JsonNode node, String field) {
@@ -489,13 +598,12 @@ public class DisbursementActivityImpl implements DisbursementActivity {
                     requestBody,
                     input.tenantId(),
                     null,
-                    input.idempotencyKey()
+                    input.idempotencyKey(),
+                    null, input.loanNumber(), "APPLICATION"
             );
 
             if (response.has("success") && response.get("success").asBoolean()) {
-                var data = response.has("responseBody")
-                        ? objectMapper.readTree(response.get("responseBody").asText())
-                        : response;
+                var data = extractResponseBody(response);
                 return new AnbTransferResult(
                         textOrNull(data, "transactionId"),
                         textOrNull(data, "status"),

@@ -102,6 +102,11 @@ ksa:
     redis-host: ${REDIS_HOST:localhost}
     redis-port: ${REDIS_PORT:6379}
 
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true
 kafka:
   topics:
     payment-completed: ${KAFKA_TOPIC_PAYMENT_COMPLETED:financing.payment.completed}

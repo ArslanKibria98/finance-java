@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ksa.financing.infra.pagination.PageMetadata;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -17,7 +19,8 @@ public record LedgerReportResponse(
         LocalDate fromDate,
         LocalDate toDate,
         int totalAccounts,
-        List<AccountLedger> accounts
+        List<AccountLedger> accounts,
+        @JsonIgnore PageMetadata pagination
 ) {
     @Builder
     public record AccountLedger(

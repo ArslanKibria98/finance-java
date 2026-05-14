@@ -1,0 +1,267 @@
+{
+  "info": {
+    "name": "KSA - Wallet Withdrawals (Cash-Out)",
+    "description": "Wallet → Bank IBAN withdrawal flow.\n\n**Architecture (2026-05-06):**\n- wallet-service initiates withdrawal\n- Calls ledger-service (Fineract proxy) to debit savings (audit + idempotency)\n- Submits to BankRailsPort — currently `MockSarieBankRailsAdapter` (toggle via `BANK_RAILS_MOCK`)\n- Mock rules: amount > {{rejectAbove}} OR IBAN starts with `SA00` → REJECTED + auto-refund (SAGA compensation)\n\n**Flow per request:**\n```\nClient → Kong → wallet-service\n                  → InitiateWithdrawalService (sync SAGA)\n                    1. validate (limits, balance, IBAN)\n                    2. ledger-service /internal/fineract-proxy/savings/withdraw\n                    3. BankRailsPort.submit (mock)\n                    4a. accept → COMPLETED\n                    4b. reject → ledger-service deposit refund → COMPENSATED\n```\n\n**Demo wallets** (real Keycloak users):\n- Wallet A: NID 1010219431 / PIN 147852 → +966561343161 (savings 146)\n- Wallet B: NID 1211111111 / PIN 147852 → +966591591591 (savings 150)\n\n**Tenant**: 00000000-0000-0000-0000-000000000001\n**Realm**: CompanyRealm",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  
+  "variable": [
+    { "key": "baseUrl", "value": "http://46.62.226.94:8000/wallet-service", "description": "via Kong" },
+    { "key": "identityUrl", "value": "http://46.62.226.94:8000/identity-service" },
+    { "key": "directUrl", "value": "http://localhost:8092", "description": "wallet-service direct" },
+    { "key": "jwt", "value": "", "description": "auto-set by login request" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "walletA", "value": "22a7defd-c377-4239-bd68-a40dfb632ae8" },
+    { "key": "walletB", "value": "43564271-7ea5-4047-b36f-79afeb5d07fe" },
+    { "key": "nidA", "value": "1010219431" },
+    { "key": "nidB", "value": "1211111111" },
+    { "key": "ibanValid", "value": "SA4420000001234567891234", "description": "Valid mock IBAN — accepted" },
+    { "key": "ibanReject", "value": "SA0099990001234567891234", "description": "IBAN starting with SA00 — auto-rejected by mock adapter (tests SAGA compensation)" },
+    { "key": "rejectAbove", "value": "50000", "description": "Mock rails reject any amount above this" },
+    { "key": "lastWithdrawalId", "value": "" },
+    { "key": "lastBeneficiaryId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{jwt}}" }]
+  },
+  "item": [
+    {
+      "name": "0. Login as Wallet A owner (auto-sets {{jwt}})",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const resp = pm.response.json();",
+              "const data = resp.data || resp;",
+              "if (data.accessToken) {",
+              "    pm.collectionVariables.set('jwt', data.accessToken);",
+              "    console.log('JWT set: ' + data.accessToken.substring(0, 20) + '...');",
+              "}",
+              "pm.test('Login OK', () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "postman-withdrawal-A" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"nationalId\": \"{{nidA}}\",\n  \"pin\": \"147852\"\n}" },
+        "url": "{{identityUrl}}/api/v1/auth/login-with-pin"
+      }
+    },
+
+    {
+      "name": "Beneficiaries — folder",
+      "item": [
+        {
+          "name": "1. Add IBAN beneficiary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('lastBeneficiaryId', b.id);",
+                  "console.log('Beneficiary saved id=' + b.id + ' iban=' + b.iban);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletId\": \"{{walletA}}\",\n  \"nickname\": \"My Al Rajhi acct\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"iban\": \"{{ibanValid}}\",\n  \"bankCode\": \"RJHISARI\",\n  \"bankName\": \"Al Rajhi Bank\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries"
+          }
+        },
+        {
+          "name": "2. List my beneficiaries",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries"
+          }
+        },
+        {
+          "name": "3. Get beneficiary by id",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries/{{lastBeneficiaryId}}"
+          }
+        },
+        {
+          "name": "4. Deactivate beneficiary",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries/{{lastBeneficiaryId}}"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Withdrawals — folder",
+      "item": [
+        {
+          "name": "5. ✅ Initiate withdrawal — ad-hoc IBAN (HAPPY PATH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK COMPLETED', () => pm.response.to.have.status(200));",
+                  "const w = pm.response.json();",
+                  "pm.collectionVariables.set('lastWithdrawalId', w.id);",
+                  "pm.test('status=COMPLETED', () => pm.expect(w.status).to.eql('COMPLETED'));",
+                  "pm.test('bankReference set', () => pm.expect(w.bankReference).to.match(/^MOCK-BANK-/));",
+                  "console.log('Withdrawal ' + w.withdrawalNumber + ' COMPLETED bankRef=' + w.bankReference);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-Device-Id", "value": "postman-withdrawal-A" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationIban\": \"{{ibanValid}}\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"destinationBankName\": \"Al Rajhi Bank\",\n  \"destinationBankCode\": \"RJHISARI\",\n  \"amount\": 100.00,\n  \"currency\": \"SAR\",\n  \"channel\": \"BANK_IBAN\",\n  \"purposeNote\": \"Rent payment\",\n  \"purposeCode\": \"RENT\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "6. ✅ Initiate withdrawal — using saved beneficiary",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"beneficiaryId\": \"{{lastBeneficiaryId}}\",\n  \"amount\": 200.00,\n  \"currency\": \"SAR\",\n  \"channel\": \"BANK_IBAN\",\n  \"purposeNote\": \"Salary transfer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "7. ❌ Withdrawal REJECTED → SAGA compensation (IBAN starts SA00)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+                  "console.log('Rejection captured — verify wallet balance is restored via /balance call');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationIban\": \"{{ibanReject}}\",\n  \"beneficiaryName\": \"BAD BENEFICIARY\",\n  \"amount\": 50.00,\n  \"currency\": \"SAR\",\n  \"channel\": \"BANK_IBAN\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "8. ❌ Withdrawal REJECTED → amount above mock ceiling",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationIban\": \"{{ibanValid}}\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"amount\": 60000.00,\n  \"currency\": \"SAR\",\n  \"channel\": \"BANK_IBAN\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "9. ❌ Insufficient funds",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationIban\": \"{{ibanValid}}\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"amount\": 9999999.00,\n  \"currency\": \"SAR\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "10. ✅ Idempotency replay (same key → same response)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "fixed-replay-key-001" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationIban\": \"{{ibanValid}}\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"amount\": 25.00,\n  \"currency\": \"SAR\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals",
+            "description": "Run twice — second call returns same withdrawalId without re-debiting"
+          }
+        },
+        {
+          "name": "11. Get withdrawal by id",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals/{{lastWithdrawalId}}"
+          }
+        },
+        {
+          "name": "12. List withdrawals for wallet",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals/by-wallet/{{walletA}}"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Verification",
+      "item": [
+        {
+          "name": "Wallet A balance (after withdrawals)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/wallets/{{walletA}}/balance",
+            "description": "Confirms balance change from successful withdrawals + that compensated/failed ones did NOT change balance."
+          }
+        }
+      ]
+    }
+  ]
+}

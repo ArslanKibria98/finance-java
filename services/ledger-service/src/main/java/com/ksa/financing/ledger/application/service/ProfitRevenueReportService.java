@@ -87,66 +87,17 @@ public class ProfitRevenueReportService {
     }
 
     private BigDecimal valueAt(Object[] values, int index) {
-        if (values == null || values.length <= index || values[index] == null) {
-            // Some PostgreSQL drivers may return a single composite tuple "(debit,credit)".
-            if (values != null && values.length == 1 && values[0] != null) {
-                var composite = parseCompositeTuple(values[0].toString(), index);
-                if (composite != null) {
-                    return composite;
-                }
-            }
-            return BigDecimal.ZERO;
-        }
-        var raw = values[index];
-        if (raw instanceof BigDecimal bd) {
-            return bd;
-        }
-        if (raw instanceof Number n) {
-            return BigDecimal.valueOf(n.doubleValue());
-        }
-        var asString = raw.toString().trim();
-        if (asString.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(asString);
-        } catch (NumberFormatException ex) {
-            // Guard against driver/vendor-specific tuple/scalar formatting.
-            var composite = parseCompositeTuple(asString, index);
-            if (composite != null) {
-                return composite;
-            }
-            log.warn("Unable to parse numeric aggregate value '{}' at index {}. Falling back to 0.", asString, index);
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private BigDecimal parseCompositeTuple(String value, int index) {
-        var text = value == null ? "" : value.trim();
-        if (!text.startsWith("(") || !text.endsWith(")")) {
-            return null;
-        }
-        var body = text.substring(1, text.length() - 1);
-        var parts = body.split(",");
-        if (parts.length <= index) {
-            return BigDecimal.ZERO;
-        }
-        var token = parts[index].trim();
-        if (token.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(token);
-        } catch (NumberFormatException ex) {
-            return BigDecimal.ZERO;
-        }
+        return com.ksa.financing.ledger.application.service.util.AggregateValueUtil.valueAt(values, index);
     }
 
     private LocalDate[] resolvePeriod(String period) {
+        if (period == null || period.isBlank()) {
+            return new LocalDate[] { LocalDate.of(1900, 1, 1), LocalDate.now() };
+        }
         try {
             var ym = YearMonth.parse(period);
             return new LocalDate[] { ym.atDay(1), ym.atEndOfMonth() };
-        } catch (DateTimeParseException | NullPointerException e) {
+        } catch (DateTimeParseException e) {
             var ym = YearMonth.now();
             return new LocalDate[] { ym.atDay(1), ym.atEndOfMonth() };
         }

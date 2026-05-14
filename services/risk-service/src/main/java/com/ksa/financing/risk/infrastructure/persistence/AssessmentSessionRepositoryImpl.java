@@ -30,11 +30,20 @@ public class AssessmentSessionRepositoryImpl implements AssessmentSessionReposit
     @Override
     public PageResponse<AssessmentSession> findByEntityReference(UUID tenantId, String entityReference, PageQuery pageQuery) {
         var pageable = pageQuery.toPageable();
-        if (tenantId == null) {
-            var page = jpa.findAllByEntityReference(entityReference, pageable);
-            return PageResponse.from(page, RiskPersistenceMapper::toDomain);
-        }
-        var page = jpa.findAllByTenantIdAndEntityReference(tenantId, entityReference, pageable);
+        String search = pageQuery.search();
+        org.springframework.data.jpa.domain.Specification<com.ksa.financing.risk.infrastructure.persistence.entity.AssessmentSessionJpaEntity> baseSpec =
+                (root, q, cb) -> {
+                    var entRefPred = cb.equal(root.get("entityReference"), entityReference);
+                    return tenantId == null ? entRefPred : cb.and(cb.equal(root.get("tenantId"), tenantId), entRefPred);
+                };
+        org.springframework.data.jpa.domain.Specification<com.ksa.financing.risk.infrastructure.persistence.entity.AssessmentSessionJpaEntity> dynamic =
+                com.ksa.financing.infra.pagination.SpecificationBuilder
+                        .<com.ksa.financing.risk.infrastructure.persistence.entity.AssessmentSessionJpaEntity>builder()
+                        .filters(pageQuery.filters())
+                        .search(search)
+                        .searchableFields(java.util.Set.of("entityReference", "status", "riskLevel"))
+                        .build();
+        var page = jpa.findAll(baseSpec.and(dynamic), pageable);
         return PageResponse.from(page, RiskPersistenceMapper::toDomain);
     }
     @Override

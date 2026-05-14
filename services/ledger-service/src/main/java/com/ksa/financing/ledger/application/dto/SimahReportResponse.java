@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 
 import java.time.LocalDate;
@@ -10,7 +12,8 @@ import java.util.UUID;
 public record SimahReportResponse(
         String period,
         LocalDate generatedDate,
-        List<SimahReportItem> items
+        List<SimahReportItem> items,
+        @JsonIgnore PageMetadata pagination
 ) {
     @Builder
     public record SimahReportItem(

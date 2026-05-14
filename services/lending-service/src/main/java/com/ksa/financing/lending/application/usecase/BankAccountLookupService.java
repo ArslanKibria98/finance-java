@@ -49,67 +49,33 @@ public class BankAccountLookupService {
         BankAccountInfoResponse legacy = lookupBankAccounts(customerId, nationalId, tenantId, bearerToken);
         java.util.List<BankResponse> out = new java.util.ArrayList<>();
         
-        if (legacy != null && legacy.accounts() != null && !legacy.accounts().isEmpty()) {
-            for (BankAccountItem a : legacy.accounts()) {
-                String iban = a.iban();
-                if (iban == null) {
-                    iban = generateMockIban(a.bankCode());
-                }
-                String maskedIban = a.maskedIban() != null ? a.maskedIban() : BankAccountItem.maskIban(iban);
-                String holder = a.accountHolderName();
-                if (holder == null || holder.isEmpty()) {
-                    holder = "Sample Holder";
-                }
+        if (legacy == null || legacy.accounts() == null || legacy.accounts().isEmpty()) {
+            return out;
+        }
 
-                out.add(new BankResponse(
-                        null,
-                        a.bankName(),
-                        a.bankCode(),
-                        a.bankName(),
-                        com.ksa.financing.lending.application.util.BankNameAr.lookup(a.bankCode(), a.bankName()),
-                        iban,
-                        maskedIban,
-                        holder,
-                        a.accountType() != null ? a.accountType() : "CURRENT",
-                        false,
-                        a.salaryAccount(),
-                        a.salaryAccount(),
-                        a.status() != null ? a.status() : "ACTIVE",
-                        null,
-                        null,
-                        0));
-            }
-        } else {
-            // Mock account for demo if none found
-            String bankCode = "80"; // Al Rajhi
-            String bankName = "Al Rajhi Bank";
-            String iban = generateMockIban(bankCode);
+        for (BankAccountItem a : legacy.accounts()) {
+            String iban = a.iban();
+            String maskedIban = a.maskedIban() != null ? a.maskedIban() : BankAccountItem.maskIban(iban);
+
             out.add(new BankResponse(
                     null,
-                    bankName,
-                    bankCode,
-                    bankName,
-                    com.ksa.financing.lending.application.util.BankNameAr.lookup(bankCode, bankName),
+                    a.bankName(),
+                    a.bankCode(),
+                    a.bankName(),
+                    com.ksa.financing.lending.application.util.BankNameAr.lookup(a.bankCode(), a.bankName()),
                     iban,
-                    BankAccountItem.maskIban(iban),
-                    "Sample Holder",
-                    "CURRENT",
+                    maskedIban,
+                    a.accountHolderName(),
+                    a.accountType() != null ? a.accountType() : "CURRENT",
                     false,
-                    false,
-                    false,
-                    "ACTIVE",
+                    a.salaryAccount(),
+                    a.salaryAccount(),
+                    a.status() != null ? a.status() : "ACTIVE",
                     null,
                     null,
                     0));
         }
         return out;
-    }
-
-    private static String generateMockIban(String bankCode) {
-        if (bankCode == null) return "SA0000000000000000000000";
-        String code2 = bankCode.length() >= 2 ? bankCode.substring(0, 2) : ("0" + bankCode);
-        String suffix = String.format("%018d", Math.abs((long) bankCode.hashCode()));
-        return "SA00" + code2 + suffix;
     }
 
     /**
@@ -301,6 +267,13 @@ public class BankAccountLookupService {
      */
     public void syncBankAccountToCustomerService(String customerId, String bankName, String bankCode,
                                                   String iban, String accountHolderName, String bearerToken) {
+        // customer-service validates bankName/iban with @NotBlank — skip sync rather than send a
+        // request guaranteed to fail with 400 (which previously caused empty bank lists).
+        if (bankName == null || bankName.isBlank() || iban == null || iban.isBlank()) {
+            log.warn("Skipping bank account sync for customer {}: missing required fields (bankName={}, iban present={})",
+                    customerId, bankName, iban != null && !iban.isBlank());
+            return;
+        }
         try {
             String url = customerServiceUrl + "/internal/customers/" + customerId + "/bank-accounts";
             log.info("Syncing bank account to customer-service for customer: {}", customerId);

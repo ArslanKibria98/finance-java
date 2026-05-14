@@ -10,6 +10,8 @@ public record FraudEvaluationResponseDto(
     String customerId,
     String decision,
     String blockType,
+    UUID blockCodeId,
+    String blockCode,
     int compositeRiskScore,
     String riskLevel,
     List<TriggeredRuleDto> triggeredRules,
@@ -23,6 +25,8 @@ public record FraudEvaluationResponseDto(
         String ruleId,
         String decision,
         String blockType,
+        UUID blockCodeId,
+        String blockCode,
         String detail,
         int scoreContribution
     ) {}

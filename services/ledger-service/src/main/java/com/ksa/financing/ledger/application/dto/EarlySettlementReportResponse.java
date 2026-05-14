@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -11,7 +13,8 @@ import java.util.UUID;
 public record EarlySettlementReportResponse(
         LocalDate fromDate,
         LocalDate toDate,
-        List<EarlySettlementItem> items
+        List<EarlySettlementItem> items,
+        @JsonIgnore PageMetadata pagination
 ) {
     @Builder
     public record EarlySettlementItem(

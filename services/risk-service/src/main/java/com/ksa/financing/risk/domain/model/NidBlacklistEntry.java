@@ -11,6 +11,8 @@ public record NidBlacklistEntry(
     String reason,
     BlacklistStatus status,
     String addedBy,
+    UUID blockCodeId,
+    String blockCode,
     Instant createdAt,
     Instant updatedAt
 ) {}

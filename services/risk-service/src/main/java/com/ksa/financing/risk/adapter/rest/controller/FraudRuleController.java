@@ -7,6 +7,8 @@ import com.ksa.financing.risk.domain.port.in.ManageFraudRulesUseCase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,7 +20,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -32,22 +33,23 @@ public class FraudRuleController {
 
     @SecuredEndpoint(obj = "risk.fraud-rules", act = "read")
     @GetMapping
-    @Operation(summary = "List all fraud rules", description = "Returns all fraud rules for the tenant, ordered by priority")
-    public ResponseEntity<List<FraudRule>> listAll(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all fraud rules (paginated)", description = "Returns paginated fraud rules for the tenant, ordered by priority by default")
+    public PageResponse<FraudRule> listAll(
+            PageQuery query,
+            @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var rules = manageFraudRulesUseCase.listAll(tenantId);
-        return ResponseEntity.ok(rules);
+        return manageFraudRulesUseCase.listAll(tenantId, query);
     }
 
     @SecuredEndpoint(obj = "risk.fraud-rules", act = "read")
     @GetMapping("/category/{category}")
-    @Operation(summary = "List fraud rules by category", description = "Filter by: LOCATION, DEVICE, GEOGRAPHIC_ACCESS, FINANCIAL, PAYMENT_CARD, TRANSACTION_MONITORING")
-    public ResponseEntity<List<FraudRule>> listByCategory(
+    @Operation(summary = "List fraud rules by category (paginated)", description = "Filter by: LOCATION, DEVICE, GEOGRAPHIC_ACCESS, FINANCIAL, PAYMENT_CARD, TRANSACTION_MONITORING")
+    public PageResponse<FraudRule> listByCategory(
             @PathVariable String category,
+            PageQuery query,
             @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        var rules = manageFraudRulesUseCase.listByCategory(tenantId, category);
-        return ResponseEntity.ok(rules);
+        return manageFraudRulesUseCase.listByCategory(tenantId, category, query);
     }
 
     @SecuredEndpoint(obj = "risk.fraud-rules", act = "read")
@@ -134,6 +136,21 @@ public class FraudRuleController {
         manageFraudRulesUseCase.delete(tenantId, id);
         return ResponseEntity.noContent().build();
     }
+
+    @SecuredEndpoint(obj = "risk.fraud-rules", act = "update")
+    @PutMapping("/{id}/block-code")
+    @Operation(summary = "Assign block code to fraud rule")
+    public ResponseEntity<Void> assignBlockCode(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignBlockCodeRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        var tenantId = extractTenantId(jwt);
+        log.info("Assigning block code id={} to fraud rule id={} for tenant={}", request.blockCodeId(), id, tenantId);
+        manageFraudRulesUseCase.assignBlockCode(tenantId, id, request.blockCodeId());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record AssignBlockCodeRequest(UUID blockCodeId) {}
 
     private UUID extractTenantId(Jwt jwt) {
         var tenantClaim = jwt.getClaimAsString("tenant_id");

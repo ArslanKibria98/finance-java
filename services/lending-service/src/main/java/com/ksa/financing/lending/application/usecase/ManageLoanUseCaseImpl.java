@@ -41,6 +41,7 @@ public class ManageLoanUseCaseImpl implements ManageLoanUseCase {
                 command.shariaStructure(),
                 command.principalAmount(),
                 command.profitAmount(),
+                command.feeAmount(),
                 command.profitRate(),
                 command.tenureMonths(),
                 command.installmentAmount()

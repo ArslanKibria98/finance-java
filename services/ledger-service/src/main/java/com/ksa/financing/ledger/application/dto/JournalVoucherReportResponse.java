@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -18,7 +20,8 @@ public record JournalVoucherReportResponse(
         int totalVouchers,
         BigDecimal totalDebits,
         BigDecimal totalCredits,
-        List<VoucherItem> vouchers
+        List<VoucherItem> vouchers,
+        @JsonIgnore PageMetadata pagination
 ) {
     @Builder
     public record VoucherItem(

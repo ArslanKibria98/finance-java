@@ -53,6 +53,9 @@ public class LoanJpaEntity {
     @Column(name = "profit_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal profitAmount;
 
+    @Column(name = "fee_amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal feeAmount;
+
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal totalAmount;
 

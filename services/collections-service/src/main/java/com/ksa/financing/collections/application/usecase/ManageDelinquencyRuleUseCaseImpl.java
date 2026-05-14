@@ -42,7 +42,13 @@ public class ManageDelinquencyRuleUseCaseImpl implements ManageDelinquencyRuleUs
 
         switch (cmd.delinquencyType()) {
             case BROKEN_PROMISES -> rule.updateBrokenPromises(cmd.promisesPerYear(), cmd.promisesPerLoan());
-            case EARLY_SETTLEMENT -> rule.toggleCustom(cmd.isCustom());
+            case EARLY_SETTLEMENT -> {
+                rule.updateSettlementStrategy(cmd.settlementStrategy());
+                rule.toggleCustom(cmd.isCustom());
+                if (cmd.settlementStrategy() == com.ksa.financing.collections.domain.model.EarlySettlementStrategy.PRINCIPLE_BASED) {
+                    rule.updatePrincipleBasedSettlement(cmd.settlementDiscountType(), cmd.settlementMonths(), cmd.settlementAmountPerMonth());
+                }
+            }
             default -> { /* other types — no extra config */ }
         }
 
@@ -60,7 +66,9 @@ public class ManageDelinquencyRuleUseCaseImpl implements ManageDelinquencyRuleUs
 
     private void applyConfigs(DelinquencyRule rule, UpsertRuleCommand cmd) {
         var configs = cmd.configs();
-        boolean eligible = cmd.delinquencyType() == DelinquencyType.EARLY_SETTLEMENT && cmd.isCustom();
+        boolean eligible = cmd.delinquencyType() == DelinquencyType.EARLY_SETTLEMENT 
+                && cmd.settlementStrategy() == com.ksa.financing.collections.domain.model.EarlySettlementStrategy.INVOICE_BASED
+                && cmd.isCustom();
 
         if (!eligible) {
             if (configs != null && !configs.isEmpty()) {

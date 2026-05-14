@@ -75,15 +75,22 @@ public class KycController {
     @Operation(summary = "Initiate Nafath session", description = "Starts Nafath identity verification session, returns random number for user to confirm")
     public ResponseEntity<NafathInitiateResponse> initiateNafath(
             @Valid @RequestBody NafathInitiateRequest request,
+            @RequestHeader(value = "X-Customer-Id", required = false) String customerId,
+            @RequestHeader(value = "X-Application-Id", required = false) String applicationId,
+            @RequestHeader(value = "X-Context-Type", required = false) String contextType,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        log.info("Nafath session initiation requested for tenant={}", tenantId);
+        log.info("Nafath session initiation requested for tenant={}, customerId={}, applicationId={}, context={}",
+                tenantId, customerId, applicationId, contextType);
 
         var command = new InitiateNafathUseCase.InitiateNafathCommand(
                 tenantId,
                 request.nationalId(),
-                UUID.randomUUID().toString()
+                UUID.randomUUID().toString(),
+                customerId,
+                applicationId,
+                contextType != null ? contextType : "ONBOARDING"
         );
 
         var result = initiateNafathUseCase.initiate(command);

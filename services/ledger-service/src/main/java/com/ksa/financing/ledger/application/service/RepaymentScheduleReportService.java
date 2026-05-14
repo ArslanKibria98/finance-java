@@ -1,6 +1,9 @@
 package com.ksa.financing.ledger.application.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.ledger.application.dto.RepaymentScheduleListResponse;
 import com.ksa.financing.ledger.application.dto.RepaymentScheduleReportResponse;
 import com.ksa.financing.ledger.application.dto.RepaymentScheduleReportResponse.Installment;
 import com.ksa.financing.ledger.infrastructure.client.ReportDataClient;
@@ -75,8 +78,63 @@ public class RepaymentScheduleReportService {
 
     public List<RepaymentScheduleReportResponse> generateAll(
             UUID tenantId, LocalDate fromDate, LocalDate toDate) {
-        log.info("Bulk repayment schedule report not supported; use single-loan endpoint");
-        return List.of();
+        log.info("Generating bulk repayment schedule report tenant={} from={} to={}",
+                tenantId, fromDate, toDate);
+
+        // 1. Find all loans disbursed in the window via lending-service.
+        JsonNode disbursed = reportDataClient.fetchDisbursedLoans(fromDate, toDate, null, null);
+        if (disbursed == null || !disbursed.isArray() || disbursed.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. For each loan, fetch its schedule (sourced from collections-service installments).
+        List<RepaymentScheduleReportResponse> out = new ArrayList<>();
+        for (JsonNode loanNode : disbursed) {
+            if (!loanNode.hasNonNull("loanId")) continue;
+            UUID loanId;
+            try {
+                loanId = UUID.fromString(loanNode.get("loanId").asText());
+            } catch (IllegalArgumentException ex) {
+                continue;
+            }
+            try {
+                out.add(generate(tenantId, loanId));
+            } catch (RuntimeException ex) {
+                log.warn("Skipping loan {} in bulk schedule report: {}", loanId, ex.getMessage());
+            }
+        }
+        return out;
+    }
+
+    public RepaymentScheduleListResponse generateAllPaged(
+            UUID tenantId, LocalDate fromDate, LocalDate toDate, PageQuery pageQuery) {
+        List<RepaymentScheduleReportResponse> all = generateAll(tenantId, fromDate, toDate);
+
+        String search = pageQuery != null ? pageQuery.search() : null;
+        List<RepaymentScheduleReportResponse> filtered = all.stream()
+                .filter(it -> com.ksa.financing.ledger.application.service.util.SearchFilterUtil.matchesSearch(search,
+                        it.loanId() != null ? it.loanId().toString() : null,
+                        it.loanAccountNumber(),
+                        it.customerName(),
+                        it.productName()))
+                .toList();
+
+        int totalElements = filtered.size();
+        int page = pageQuery != null ? pageQuery.page() : 0;
+        int size = pageQuery != null && pageQuery.size() > 0 ? pageQuery.size() : 20;
+        int fromIndex = Math.min(page * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<RepaymentScheduleReportResponse> paged = filtered.subList(fromIndex, toIndex);
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+
+        return RepaymentScheduleListResponse.builder()
+                .fromDate(fromDate)
+                .toDate(toDate)
+                .items(paged)
+                .pagination(new PageMetadata(
+                        page, size, totalElements, totalPages,
+                        page == 0, toIndex == totalElements, paged.isEmpty()))
+                .build();
     }
 
     private BigDecimal toBig(JsonNode node, String field) {

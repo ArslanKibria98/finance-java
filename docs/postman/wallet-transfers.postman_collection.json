@@ -1,18 +1,22 @@
 {
   "info": {
     "name": "KSA - Wallet-to-Wallet Transfers",
-    "description": "Wallet-to-wallet P2P transfer demo.\n\n**Architecture (Option A — Fineract = single source of truth):**\n- wallet-service stores: transfer audit + idempotency only\n- Fineract holds: balances + GL + every transaction\n- Balance reads + writes go to Fineract directly\n- Mobile-based recipient lookup via identity-service\n\n**Demo wallets** (real Keycloak users, all in CompanyRealm):\n- Wallet A: NID 1010219431 / PIN 147852  →  +966561343161 (10,000 SAR initial)\n- Wallet B: NID 1211111111 / PIN 147852  →  +966591591591 ( 5,000 SAR initial)\n- Wallet C: NID 1234567010 / PIN 147852  →  +966555687010 (FROZEN, 0 SAR)\n\n**Tenant**: 00000000-0000-0000-0000-000000000001\n**Realm**: CompanyRealm\n\nRun the requests in order — first \"0. Login\" auto-sets the JWT, then everything else uses it.",
+    "description": "Wallet-to-wallet P2P transfer demo.\n\n**Architecture (updated 2026-05-05 — ledger-service is now the single Fineract bridge):**\n- wallet-service no longer talks to Fineract directly\n- ALL Fineract calls route through `ledger-service /internal/fineract-proxy/savings/**`\n- ledger-service handles: idempotency, audit log (SAMA 7-yr), Fineract auth\n- Fineract holds: balances + GL + every transaction (single source of truth)\n- wallet-service stores: transfer audit + idempotency + wallet metadata\n- Mobile-based recipient lookup via identity-service\n\n**Call path:**\n```\nClient → Kong → wallet-service\n                  ↓ (LedgerFineractSavingsClient SDK)\n                ledger-service /internal/fineract-proxy/savings/**\n                  ↓ (FineractGateway)\n                Fineract /savingsaccounts/**\n```\n\n**Demo wallets** (real Keycloak users, all in CompanyRealm):\n- Wallet A: NID 1010219431 / PIN 147852  →  +966561343161  (savings 146)\n- Wallet B: NID 1211111111 / PIN 147852  →  +966591591591  (savings 150)\n- Wallet C: NID 1234567010 / PIN 147852  →  +966555687010  (savings 108, FROZEN)\n\n**Tenant**: 00000000-0000-0000-0000-000000000001\n**Realm**: CompanyRealm\n\nRun the requests in order — first \"0. Login\" auto-sets the JWT, then everything else uses it.\n\n**🔍 Ledger Proxy folder**: contains direct calls to the new ledger-service proxy endpoints — no JWT required (internal). Use these to verify the audit trail and prove all Fineract calls flow through ledger-service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8000/wallet-service", "description": "via Kong (recommended)" },
-    { "key": "identityUrl", "value": "http://localhost:8000/identity-service" },
+    { "key": "baseUrl", "value": "http://46.62.226.94:8000/wallet-service", "description": "via Kong (recommended)" },
+    { "key": "identityUrl", "value": "http://46.62.226.94:8000/identity-service" },
     { "key": "directUrl", "value": "http://localhost:8088", "description": "wallet-service direct (bypass Kong)" },
+    { "key": "ledgerUrl", "value": "http://46.62.226.94:8000/ledger-service", "description": "ledger-service via Kong — works for both /api/v1/** (JWT) and /internal/** (no JWT) paths" },
+    { "key": "ledgerInternalUrl", "value": "http://46.62.226.94:8000/ledger-service", "description": "Same as ledgerUrl when going via Kong. For local-only direct access, change to http://localhost:8095" },
     { "key": "jwt", "value": "", "description": "auto-set by login request" },
     { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
     { "key": "walletA", "value": "22a7defd-c377-4239-bd68-a40dfb632ae8" },
     { "key": "walletB", "value": "43564271-7ea5-4047-b36f-79afeb5d07fe" },
     { "key": "walletC", "value": "9155a581-cccd-4e95-83ca-a17186521168" },
+    { "key": "savingsA", "value": "146", "description": "Fineract savings ID for Wallet A" },
+    { "key": "savingsB", "value": "150", "description": "Fineract savings ID for Wallet B" },
     { "key": "nidA", "value": "1010219431" },
     { "key": "nidB", "value": "1211111111" },
     { "key": "mobileA", "value": "+966561343161" },
@@ -61,7 +65,7 @@
       }
     },
     {
-      "name": "1. Balance — Wallet A (BEFORE) [from Fineract]",
+      "name": "1. Balance — Wallet A (BEFORE) [proxied via ledger-service]",
       "event": [
         {
           "listen": "test",
@@ -69,7 +73,8 @@
             "exec": [
               "pm.test('200 OK', () => pm.response.to.have.status(200));",
               "const d = pm.response.json().data;",
-              "console.log('Wallet A balance:', d.availableBalance, d.currency);"
+              "console.log('Wallet A balance:', d.availableBalance, d.currency);",
+              "console.log('Audit row will be visible at: GET ledger-service /api/v1/fineract-proxy/audit?caller=wallet-service (when implemented)');"
             ],
             "type": "text/javascript"
           }
@@ -79,11 +84,34 @@
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/v1/wallets/{{walletA}}/balance",
-        "description": "Reads balance from Fineract via wallet-service (single source of truth)."
+        "description": "wallet-service → LedgerFineractSavingsClient SDK → ledger-service /internal/fineract-proxy/savings/accounts/{savingsId} → Fineract.\nEvery call audited in ledger_db.fineract_audit_log."
       }
     },
     {
-      "name": "2. Balance — Wallet B (BEFORE) [from Fineract]",
+      "name": "1b. My Balance — GET /me/balance (JWT-based, no walletId)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const d = body.data || body;",
+              "console.log('My wallet:', d.walletNumber, '| Balance:', d.availableBalance, d.currency);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/wallets/me/balance",
+        "description": "NEW — resolves wallet from JWT customer_id/sub. No walletId in URL. Fineract balance fetched live via FineractSavingsPort."
+      }
+    },
+    {
+      "name": "2. Balance — Wallet B (BEFORE) [proxied via ledger-service]",
       "request": {
         "method": "GET",
         "header": [],
@@ -120,7 +148,7 @@
       }
     },
     {
-      "name": "4. ✅ Transfer by mobile — A → B (250 SAR)",
+      "name": "4. ✅ Transfer by mobile — A → B (250 SAR) [Fineract via proxy]",
       "event": [
         {
           "listen": "test",
@@ -131,7 +159,8 @@
               "pm.collectionVariables.set('lastTransferId', d.id);",
               "pm.test('status COMPLETED', () => pm.expect(d.status).to.eql('COMPLETED'));",
               "pm.test('amount=250', () => pm.expect(parseFloat(d.amount)).to.eql(250));",
-              "console.log('Transfer:', d.transferNumber, '| status:', d.status, '| fineractRef:', d.fineractTransferId);"
+              "console.log('Transfer:', d.transferNumber, '| status:', d.status);",
+              "console.log('Audit log: 2x savings.account.get + 1x savings.account.transfer rows in ledger_db.fineract_audit_log');"
             ],
             "type": "text/javascript"
           }
@@ -145,14 +174,14 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 250.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"P2P via mobile (Fineract source of truth)\"\n}"
+          "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 250.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"P2P via mobile (routed through ledger-service)\"\n}"
         },
         "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile",
-        "description": "Sender wallet resolved from JWT (sub → identity-service → customerId → wallet).\nReceiver wallet resolved from receiverMobile.\nNo wallet IDs in request body. Calls Fineract /accounttransfers atomically."
+        "description": "Sender wallet resolved from JWT (sub → identity-service → customerId → wallet).\nReceiver wallet resolved from receiverMobile.\nNo wallet IDs in request body.\n\n**Path:** wallet-service → ledger proxy → Fineract /accounttransfers (atomic)."
       }
     },
     {
-      "name": "5. ✅ Transfer by walletId — A → B (1000 SAR)",
+      "name": "5. ✅ Transfer by walletId — A → B (1000 SAR) [Fineract via proxy]",
       "event": [
         {
           "listen": "test",
@@ -162,7 +191,7 @@
               "const d = resp.data || resp;",
               "pm.collectionVariables.set('lastTransferId', d.id);",
               "pm.test('status COMPLETED', () => pm.expect(d.status).to.eql('COMPLETED'));",
-              "console.log('Fineract transfer ref:', d.fineractTransferId);"
+              "console.log('Transfer:', d.transferNumber, '| status:', d.status);"
             ],
             "type": "text/javascript"
           }
@@ -198,7 +227,7 @@
       }
     },
     {
-      "name": "7b. ✅ Full transaction history — Wallet A (Fineract + transfers merged)",
+      "name": "7b. ✅ Full transaction history — Wallet A (Fineract via proxy + transfers merged)",
       "event": [
         {
           "listen": "test",
@@ -228,7 +257,7 @@
             { "key": "size", "value": "20" }
           ]
         },
-        "description": "Returns unified bank-statement style transaction list:\n- TOP_UP / TRANSFER_OUT / TRANSFER_IN / WITHDRAWAL / FEE / OTHER\n- Each TRANSFER_* entry includes counterparty walletNumber, customerId, purposeNote, transferNumber\n- Source = Fineract savings transactions + wallet_transfers metadata, joined by amount+direction\n- Newest first, paginated"
+        "description": "Returns unified bank-statement style transaction list:\n- TOP_UP / TRANSFER_OUT / TRANSFER_IN / WITHDRAWAL / FEE / OTHER\n- Each TRANSFER_* entry includes counterparty walletNumber, customerId, purposeNote, transferNumber\n- Source = Fineract savings transactions (via proxy) + wallet_transfers metadata, joined by amount+direction\n- Newest first, paginated"
       }
     },
     {
@@ -292,7 +321,7 @@
           "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationWalletId\": \"{{walletB}}\",\n  \"amount\": 1000000.00\n}"
         },
         "url": "{{baseUrl}}/api/v1/wallets/transfers",
-        "description": "Balance check is now against Fineract (single source of truth).\nExpect: WALLET.BALANCE.INSUFFICIENT"
+        "description": "Balance check is now performed by reading Fineract via the ledger proxy.\nExpect: WALLET.BALANCE.INSUFFICIENT"
       }
     },
     {
@@ -375,7 +404,8 @@
           "mode": "raw",
           "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 100.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"Idempotency test\"\n}"
         },
-        "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile"
+        "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile",
+        "description": "Idempotency now layered:\n1. wallet-service idempotency (transfer table)\n2. ledger-service proxy idempotency (fineract_proxy_idempotency, 24h TTL)\nDuplicate Idempotency-Key returns the cached response — Fineract is NOT called twice."
       }
     },
     {
@@ -408,7 +438,7 @@
       }
     },
     {
-      "name": "14. Balance — Wallet A (AFTER) [Fineract reflects all transfers]",
+      "name": "14. Balance — Wallet A (AFTER) [Fineract via proxy reflects all transfers]",
       "event": [
         {
           "listen": "test",
@@ -428,7 +458,7 @@
       }
     },
     {
-      "name": "15. Balance — Wallet B (AFTER) [Fineract reflects all transfers]",
+      "name": "15. Balance — Wallet B (AFTER) [Fineract via proxy reflects all transfers]",
       "event": [
         {
           "listen": "test",
@@ -446,6 +476,197 @@
         "header": [],
         "url": "{{baseUrl}}/api/v1/wallets/{{walletB}}/balance"
       }
+    },
+    {
+      "name": "🔍 Ledger Proxy — Direct Verification (no JWT)",
+      "description": "Direct calls to the ledger-service Fineract proxy. These are the same endpoints wallet-service calls under the hood. Use them to verify the single-bridge architecture and inspect Fineract state without touching wallet-service.\n\n**No JWT required** — internal endpoints expect `X-Tenant-Id` + `X-Caller-Service` headers.",
+      "item": [
+        {
+          "name": "P1. Get Fineract savings A directly via ledger proxy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "const d = r.data || r;",
+                  "console.log('Fineract savings', d.id, '| status:', d.status?.value, '| balance:', d.summary?.accountBalance, '| available:', d.summary?.availableBalance);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-Caller-Service", "value": "postman-verification" },
+              { "key": "X-Correlation-ID", "value": "postman-{{$timestamp}}" }
+            ],
+            "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsA}}",
+            "description": "Direct call to the ledger proxy. Audit row written to fineract_audit_log with caller_service='postman-verification'."
+          }
+        },
+        {
+          "name": "P2. Get Fineract savings B directly via ledger proxy",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-Caller-Service", "value": "postman-verification" }
+            ],
+            "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsB}}"
+          }
+        },
+        {
+          "name": "P3. Lookup Fineract client by externalId (customerId of Wallet A)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || pm.response.json();",
+                  "console.log('clients matched:', d.totalFilteredRecords);",
+                  "if (d.pageItems && d.pageItems.length) console.log('  clientId:', d.pageItems[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-Caller-Service", "value": "postman-verification" }
+            ],
+            "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/clients/by-external/62d36093-c494-4133-8a11-79fecad3b465"
+          }
+        },
+        {
+          "name": "P4. Get Fineract savings transactions via ledger proxy",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-Caller-Service", "value": "postman-verification" }
+            ],
+            "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsA}}/transactions"
+          }
+        },
+        {
+          "name": "P5. Deposit 100 SAR to Wallet A's Fineract savings (proxy)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Fineract requires `dd MMMM yyyy` format (e.g. 05 May 2026)",
+                  "const d = new Date();",
+                  "const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];",
+                  "const fineractDate = `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;",
+                  "pm.collectionVariables.set('fineractDate', fineractDate);",
+                  "console.log('fineractDate set to:', fineractDate);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data || pm.response.json();",
+                  "console.log('Fineract txn:', d.resourceId, '| savings:', d.savingsId, '| client:', d.clientId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-Caller-Service", "value": "postman-verification" },
+              { "key": "X-Idempotency-Key", "value": "postman-deposit-{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\",\n  \"transactionAmount\": 100,\n  \"paymentTypeId\": 1,\n  \"transactionDate\": \"{{fineractDate}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsA}}/deposit",
+            "description": "Direct deposit through ledger proxy.\n\n**Date format**: Fineract requires `dd MMMM yyyy` (e.g. `05 May 2026`). The prerequest script computes today's date in this format and stores it in {{fineractDate}}. ISO timestamps are NOT accepted.\n\nOn success, a savings.account.deposit row is written to fineract_audit_log with the X-Caller-Service tag.\n\nReplay with same X-Idempotency-Key → returns cached response, no double-deposit."
+          }
+        },
+        {
+          "name": "P6. Idempotency replay — same X-Idempotency-Key (no double-deposit)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Fixed key for replay test",
+                  "pm.collectionVariables.set('replayKey', 'postman-replay-fixed-key-001');",
+                  "// Fineract date in dd MMMM yyyy",
+                  "const d = new Date();",
+                  "const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];",
+                  "const fineractDate = `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;",
+                  "pm.collectionVariables.set('fineractDate', fineractDate);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK on replay', () => pm.response.to.have.status(200));",
+                  "console.log('Cached response served — Fineract NOT called this time. Check audit log: only ONE deposit row should exist for the replayKey.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-Caller-Service", "value": "postman-verification" },
+              { "key": "X-Idempotency-Key", "value": "{{replayKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\",\n  \"transactionAmount\": 50,\n  \"paymentTypeId\": 1,\n  \"transactionDate\": \"{{fineractDate}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsA}}/deposit",
+            "description": "Run this request TWICE with the same X-Idempotency-Key (postman-replay-fixed-key-001).\n- 1st call: Fineract is called, response cached.\n- 2nd call: cached response is returned, Fineract is NOT called.\n\nVerify in DB: SELECT operation, idempotency_key, occurred_at FROM fineract_audit_log WHERE idempotency_key = 'postman-replay-fixed-key-001';\nOnly one row should exist."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 Verification SQL (informational)",
+      "description": "Reference SQL queries for verifying the audit trail and idempotency cache. These are not Postman requests — copy and run against the ledger_db PostgreSQL instance.\n\n```sql\n-- 1. Recent Fineract proxy calls\nSELECT operation, fineract_endpoint, response_status, caller_service, duration_ms, occurred_at\nFROM fineract_audit_log\nORDER BY occurred_at DESC\nLIMIT 20;\n\n-- 2. Calls that originated from wallet-service (proves the migration works)\nSELECT operation, fineract_endpoint, response_status, COUNT(*) AS calls,\n       AVG(duration_ms)::int AS avg_ms\nFROM fineract_audit_log\nWHERE caller_service = 'wallet-service'\nGROUP BY operation, fineract_endpoint, response_status\nORDER BY calls DESC;\n\n-- 3. Idempotency cache contents\nSELECT idempotency_key, operation, cached_status, expires_at\nFROM fineract_proxy_idempotency\nORDER BY created_at DESC\nLIMIT 10;\n\n-- 4. Failed Fineract calls in the last hour\nSELECT operation, fineract_endpoint, response_status, error_message, occurred_at\nFROM fineract_audit_log\nWHERE response_status >= 400\n  AND occurred_at > NOW() - INTERVAL '1 hour'\nORDER BY occurred_at DESC;\n```\n\n**Run via:** `docker exec ksa-postgres psql -U postgres -d ledger_db -c \"<sql>\"`",
+      "item": []
     }
   ]
 }

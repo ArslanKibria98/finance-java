@@ -27,6 +27,7 @@ public class LoanPersistenceMapper {
         entity.setCommodityTransactionId(agg.getCommodityTransactionId());
         entity.setPrincipalAmount(agg.getPrincipalAmount());
         entity.setProfitAmount(agg.getProfitAmount());
+        entity.setFeeAmount(agg.getFeeAmount());
         entity.setTotalAmount(agg.getTotalAmount());
         entity.setProfitRate(agg.getProfitRate());
         entity.setTenureMonths(agg.getTenureMonths());
@@ -64,6 +65,7 @@ public class LoanPersistenceMapper {
                 entity.getCommodityTransactionId(),
                 entity.getPrincipalAmount(),
                 entity.getProfitAmount(),
+                entity.getFeeAmount(),
                 entity.getTotalAmount(),
                 entity.getProfitRate(),
                 entity.getTenureMonths(),

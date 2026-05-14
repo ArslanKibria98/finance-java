@@ -47,6 +47,8 @@ public record ProductResponse(
     boolean earlySettlementAllowed,
     boolean waiveUnearnedProfit,
     Integer minTenureBeforeSettlement,
+    boolean penaltyWaiverAllowed,
+    Integer maxPenaltyWaiversAllowed,
     String currency,
     UUID countryId,
     String fineractProductId,
@@ -94,7 +96,12 @@ public record ProductResponse(
         BigDecimal maxDti,
         Integer minAge,
         Integer maxAge,
-        BigDecimal gdbrPercentage
+        BigDecimal gdbrPercentage,
+        Boolean penaltyWaiverAllowed,
+        Integer maxPenaltyWaiversAllowed,
+        BigDecimal minFinancingAmount,
+        BigDecimal maxFinancingAmount,
+        BigDecimal vatPercentage
     ) {}
 
     public record DurationSettingsResponse(

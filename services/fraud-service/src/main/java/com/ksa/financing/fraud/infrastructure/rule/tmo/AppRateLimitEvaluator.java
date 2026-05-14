@@ -45,7 +45,7 @@ public class AppRateLimitEvaluator implements FraudRuleEvaluator {
         if (monthCount <= maxMonth && yearCount <= maxYear) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Rate-limit breach month=" + monthCount + " year=" + yearCount,
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

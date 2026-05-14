@@ -32,7 +32,7 @@ public class InternationalCardEvaluator implements FraudRuleEvaluator {
         if (localCountry.equalsIgnoreCase(event.paymentSource().cardCountry())) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "International card from " + event.paymentSource().cardCountry(),
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

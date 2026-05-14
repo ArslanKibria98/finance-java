@@ -30,7 +30,7 @@ public class VpnProxyEvaluator implements FraudRuleEvaluator {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
         var detail = vpn && proxy ? "VPN+Proxy detected" : (vpn ? "VPN detected" : "Proxy detected");
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 detail, EvaluatorScores.forDecision(rule.defaultAction()));
     }
 }

@@ -126,6 +126,15 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring WebFlux (optional): used only by ApiAuditWebClientFilter for
+             outbound audit of reactive WebClient calls. Marked optional so
+             non-reactive services don't pull the entire reactive stack. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -1,17 +1,22 @@
 package com.ksa.financing.risk.infrastructure.persistence;
 
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.risk.domain.model.FraudRule;
 import com.ksa.financing.risk.domain.port.out.FraudRuleRepository;
 import com.ksa.financing.risk.infrastructure.persistence.entity.FraudRuleJpaEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -19,19 +24,38 @@ import java.util.UUID;
 @Slf4j
 public class FraudRuleRepositoryImpl implements FraudRuleRepository {
 
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Order.asc("priority"));
+    private static final Set<String> SEARCHABLE_FIELDS = Set.of(
+            "ruleId", "scenarioName", "scenarioNameAr", "detectionLogic"
+    );
+
     private final JpaFraudRuleRepository jpaFraudRuleRepository;
 
     @Override
-    public List<FraudRule> findAllByTenant(UUID tenantId) {
-        return jpaFraudRuleRepository.findAllByTenantIdOrderByPriorityAsc(tenantId)
-                .stream().map(this::toDomain).toList();
+    public PageResponse<FraudRule> findAllByTenant(UUID tenantId, PageQuery query) {
+        Specification<FraudRuleJpaEntity> tenantSpec = (root, q, cb) ->
+                cb.equal(root.get("tenantId"), tenantId);
+        Specification<FraudRuleJpaEntity> dynamic = SpecificationBuilder.<FraudRuleJpaEntity>builder()
+                .filters(query.filters())
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+        var page = jpaFraudRuleRepository.findAll(tenantSpec.and(dynamic), withDefaultSort(query));
+        return PageResponse.from(page, this::toDomain);
     }
 
     @Override
-    public List<FraudRule> findByCategory(UUID tenantId, String category) {
+    public PageResponse<FraudRule> findByCategory(UUID tenantId, String category, PageQuery query) {
         var cat = FraudRuleJpaEntity.FraudRuleCategory.valueOf(category.toUpperCase());
-        return jpaFraudRuleRepository.findAllByTenantIdAndCategoryOrderByPriorityAsc(tenantId, cat)
-                .stream().map(this::toDomain).toList();
+        Specification<FraudRuleJpaEntity> baseSpec = (root, q, cb) ->
+                cb.and(cb.equal(root.get("tenantId"), tenantId), cb.equal(root.get("category"), cat));
+        Specification<FraudRuleJpaEntity> dynamic = SpecificationBuilder.<FraudRuleJpaEntity>builder()
+                .filters(query.filters())
+                .search(query.search())
+                .searchableFields(SEARCHABLE_FIELDS)
+                .build();
+        var page = jpaFraudRuleRepository.findAll(baseSpec.and(dynamic), withDefaultSort(query));
+        return PageResponse.from(page, this::toDomain);
     }
 
     @Override
@@ -56,6 +80,20 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
         jpaFraudRuleRepository.deleteById(id);
     }
 
+    private Pageable withDefaultSort(PageQuery query) {
+        var pageable = query.toPageable();
+        boolean hasExplicitFraudSort = pageable.getSort().stream()
+                .anyMatch(o -> {
+                    String p = o.getProperty();
+                    return p.equals("priority") || p.equals("ruleId") || p.equals("category")
+                            || p.equals("status") || p.equals("scenarioName");
+                });
+        if (!hasExplicitFraudSort) {
+            return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), DEFAULT_SORT);
+        }
+        return pageable;
+    }
+
     private FraudRule toDomain(FraudRuleJpaEntity e) {
         var d = new FraudRule();
         d.setId(e.getId());
@@ -72,6 +110,8 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
         d.setPriority(e.getPriority());
         d.setCreatedAt(e.getCreatedAt() != null ? e.getCreatedAt().toInstant() : null);
         d.setUpdatedAt(e.getUpdatedAt() != null ? e.getUpdatedAt().toInstant() : null);
+        d.setBlockCodeId(e.getBlockCodeId());
+        d.setVersion(e.getVersion());
         return d;
     }
 
@@ -91,6 +131,8 @@ public class FraudRuleRepositoryImpl implements FraudRuleRepository {
         e.setPriority(d.getPriority());
         e.setCreatedAt(d.getCreatedAt() != null ? d.getCreatedAt().atOffset(ZoneOffset.UTC) : null);
         e.setUpdatedAt(d.getUpdatedAt() != null ? d.getUpdatedAt().atOffset(ZoneOffset.UTC) : null);
+        e.setBlockCodeId(d.getBlockCodeId());
+        e.setVersion(d.getVersion());
         return e;
     }
 }

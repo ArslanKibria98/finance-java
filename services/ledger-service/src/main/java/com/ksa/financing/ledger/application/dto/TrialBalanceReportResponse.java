@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ksa.financing.infra.pagination.PageMetadata;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -13,15 +15,17 @@ public record TrialBalanceReportResponse(
         @Schema(description = "Date of the report")
         LocalDate reportDate,
 
-        @Schema(description = "List of all accounts with balances")
+        @Schema(description = "List of all accounts with balances (paginated)")
         List<TrialBalanceAccountResponse> accounts,
 
-        @Schema(description = "Total debits across all accounts")
+        @Schema(description = "Total debits across all accounts (across the full unfiltered set)")
         BigDecimal totalDebits,
 
-        @Schema(description = "Total credits across all accounts")
+        @Schema(description = "Total credits across all accounts (across the full unfiltered set)")
         BigDecimal totalCredits,
 
         @Schema(description = "Difference (should be 0 for balanced ledger)")
-        BigDecimal difference
+        BigDecimal difference,
+
+        @Schema(description = "Pagination metadata") @JsonIgnore PageMetadata pagination
 ) {}

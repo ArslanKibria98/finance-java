@@ -6,6 +6,7 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -62,6 +63,12 @@ public class ProviderApiJpaEntity {
 
     @Column(name = "timeout_ms")
     private Integer timeoutMs;
+
+    @Column(name = "cost_per_call", nullable = false, precision = 12, scale = 4)
+    private BigDecimal costPerCall;
+
+    @Column(name = "cost_currency", nullable = false, length = 3)
+    private String costCurrency;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

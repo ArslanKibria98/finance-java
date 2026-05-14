@@ -11,8 +11,15 @@ public interface InitiateNafathUseCase {
     record InitiateNafathCommand(
         UUID tenantId,
         String nationalId,
-        String idempotencyKey
-    ) {}
+        String idempotencyKey,
+        String customerId,
+        String applicationId,
+        String contextType
+    ) {
+        public InitiateNafathCommand(UUID tenantId, String nationalId, String idempotencyKey) {
+            this(tenantId, nationalId, idempotencyKey, null, null, null);
+        }
+    }
 
     record NafathInitiationResult(
         VerificationSession session,

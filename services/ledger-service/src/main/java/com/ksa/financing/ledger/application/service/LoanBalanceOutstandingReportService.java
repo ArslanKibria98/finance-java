@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ksa.financing.ledger.application.dto.LoanBalanceOutstandingReportResponse;
 import com.ksa.financing.ledger.application.dto.LoanBalanceOutstandingReportResponse.Line;
@@ -24,36 +26,44 @@ public class LoanBalanceOutstandingReportService {
     public LoanBalanceOutstandingReportResponse generate(UUID tenantId,
                                                          LocalDate asOfDate,
                                                          UUID customerId,
-                                                         String productCode) {
-        log.info("Generating loan balance outstanding report tenant={} asOf={} customer={} product={}",
-                tenantId, asOfDate, customerId, productCode);
+                                                         String productCode,
+                                                         PageQuery pageQuery) {
+        log.info("Generating loan balance outstanding report tenant={} asOf={} customer={} product={} page={}",
+                tenantId, asOfDate, customerId, productCode, pageQuery.page());
 
-        JsonNode data = reportDataClient.fetchOutstandingBalances(asOfDate, productCode);
+        JsonNode data = reportDataClient.fetchOutstandingBalances(asOfDate, productCode, pageQuery);
         var items = data.path("items");
         LocalDate reportDate = data.hasNonNull("asOfDate")
                 ? LocalDate.parse(data.get("asOfDate").asText())
                 : (asOfDate != null ? asOfDate : LocalDate.now());
 
-        List<Line> lines = new ArrayList<>();
+        List<Line> allLines = new ArrayList<>();
         BigDecimal totalPrincipal = BigDecimal.ZERO;
         BigDecimal totalProfit = BigDecimal.ZERO;
         BigDecimal totalFees = BigDecimal.ZERO;
 
+        String searchTerm = lowerSearch(pageQuery.search());
         if (items.isArray()) {
             for (JsonNode n : items) {
                 UUID custId = n.hasNonNull("customerId")
                         ? UUID.fromString(n.get("customerId").asText()) : null;
                 if (customerId != null && !customerId.equals(custId)) continue;
 
+                String loanNumber = n.path("loanNumber").asText(null);
+                String prodCode = n.path("productCode").asText(null);
+                String status = n.path("status").asText(null);
+                if (!matchesSearch(searchTerm, loanNumber, prodCode, status,
+                        custId != null ? custId.toString() : null)) continue;
+
                 BigDecimal principal = toBig(n, "outstandingPrincipal");
                 BigDecimal profit = toBig(n, "outstandingProfit");
                 BigDecimal fees = toBig(n, "outstandingFees");
 
-                lines.add(Line.builder()
-                        .loanAccountNumber(n.path("loanNumber").asText(null))
+                allLines.add(Line.builder()
+                        .loanAccountNumber(loanNumber)
                         .customerId(custId)
                         .customerName(null)
-                        .productName(n.path("productCode").asText(null))
+                        .productName(prodCode)
                         .disbursedAmount(toBig(n, "disbursedAmount"))
                         .totalPaid(toBig(n, "totalPaid"))
                         .principalOutstanding(principal)
@@ -61,7 +71,7 @@ public class LoanBalanceOutstandingReportService {
                         .penaltiesOutstanding(fees)
                         .nextDueDate(null)
                         .nextDueAmount(BigDecimal.ZERO)
-                        .loanStatus(n.path("status").asText(null))
+                        .loanStatus(status)
                         .build());
                 totalPrincipal = totalPrincipal.add(principal);
                 totalProfit = totalProfit.add(profit);
@@ -69,17 +79,40 @@ public class LoanBalanceOutstandingReportService {
             }
         }
 
-        return LoanBalanceOutstandingReportResponse.builder()
-                .asOfDate(reportDate)
-                .totalCount(lines.size())
-                .totalPrincipalOutstanding(totalPrincipal)
-                .totalProfitOutstanding(totalProfit)
-                .totalPenaltiesOutstanding(totalFees)
-                .items(lines)
-                .build();
+        int totalElements = allLines.size();
+        int page = pageQuery.page();
+        int size = pageQuery.size();
+        int fromIndex = Math.min(page * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<Line> pagedItems = allLines.subList(fromIndex, toIndex);
+
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+
+        return new LoanBalanceOutstandingReportResponse(
+                reportDate,
+                totalElements,
+                totalPrincipal,
+                totalProfit,
+                totalFees,
+                pagedItems,
+                new PageMetadata(page, size, totalElements, totalPages, page == 0, toIndex == totalElements, pagedItems.isEmpty())
+        );
     }
 
     private BigDecimal toBig(JsonNode node, String field) {
         return node.hasNonNull(field) ? new BigDecimal(node.get(field).asText("0")) : BigDecimal.ZERO;
+    }
+
+    private String lowerSearch(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return raw.trim().toLowerCase();
+    }
+
+    private boolean matchesSearch(String term, String... fields) {
+        if (term == null) return true;
+        for (String f : fields) {
+            if (f != null && f.toLowerCase().contains(term)) return true;
+        }
+        return false;
     }
 }

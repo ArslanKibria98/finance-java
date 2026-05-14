@@ -8,9 +8,11 @@ import com.ksa.financing.collections.application.service.EarlySettlementMatcher;
 import com.ksa.financing.collections.domain.model.DelinquencyRule;
 import com.ksa.financing.collections.domain.model.DelinquencyType;
 import com.ksa.financing.collections.domain.model.Installment;
+import com.ksa.financing.collections.domain.model.PenaltyWaiverRequest;
 import com.ksa.financing.collections.domain.model.RepaymentScheduleAggregate;
 import com.ksa.financing.collections.domain.port.in.ManageRepaymentScheduleUseCase;
 import com.ksa.financing.collections.domain.port.in.ManageRepaymentScheduleUseCase.CreateScheduleCommand;
+import com.ksa.financing.collections.domain.port.out.PenaltyWaiverRequestRepository;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,7 +27,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,6 +43,7 @@ public class RepaymentScheduleController {
     private final ManageRepaymentScheduleUseCase scheduleUseCase;
     private final DelinquencyRulesResolver rulesResolver;
     private final EarlySettlementMatcher matcher;
+    private final PenaltyWaiverRequestRepository penaltyWaiverRequestRepository;
 
     @PostMapping
     @Operation(summary = "Create a repayment schedule for a loan")
@@ -50,6 +55,12 @@ public class RepaymentScheduleController {
         UUID tenantId = extractTenantId(jwt);
         UUID userId = UUID.fromString(jwt.getSubject());
 
+        BigDecimal resolvedTotalFee = request.totalFee() != null
+                ? request.totalFee()
+                : request.installments().stream()
+                        .map(i -> i.feeAmount() != null ? i.feeAmount() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         var command = new CreateScheduleCommand(
                 tenantId,
                 request.loanId(),
@@ -57,6 +68,7 @@ public class RepaymentScheduleController {
                 request.scheduleNumber(),
                 request.totalPrincipal(),
                 request.totalProfit(),
+                resolvedTotalFee,
                 request.firstDueDate(),
                 request.lastDueDate(),
                 request.installments().stream()
@@ -112,8 +124,9 @@ public class RepaymentScheduleController {
         DelinquencyRule esRule = rulesResolver.rule(tenantId, schedule.getProductId(),
                 DelinquencyType.EARLY_SETTLEMENT).orElse(null);
         LocalDate today = LocalDate.now();
+        Map<UUID, PenaltyWaiverRequest> pendingWaivers = loadPendingWaivers(tenantId, schedule.getLoanId());
         return ResponseEntity.ok(schedule.getInstallments().stream()
-                .map(i -> toInstallmentResponse(i, esRule, today))
+                .map(i -> toInstallmentResponse(i, esRule, today, pendingWaivers))
                 .toList());
     }
 
@@ -131,9 +144,12 @@ public class RepaymentScheduleController {
                 ? rulesResolver.rule(tenantId, schedule.getProductId(), DelinquencyType.EARLY_SETTLEMENT).orElse(null)
                 : null;
         LocalDate today = LocalDate.now();
+        Map<UUID, PenaltyWaiverRequest> pendingWaivers = includeInstallments
+                ? loadPendingWaivers(tenantId, schedule.getLoanId())
+                : Map.of();
         var installments = includeInstallments
                 ? schedule.getInstallments().stream()
-                        .map(i -> toInstallmentResponse(i, esRule, today))
+                        .map(i -> toInstallmentResponse(i, esRule, today, pendingWaivers))
                         .toList()
                 : List.<InstallmentResponse>of();
 
@@ -143,6 +159,7 @@ public class RepaymentScheduleController {
                 schedule.getScheduleNumber(),
                 schedule.getTotalPrincipal(),
                 schedule.getTotalProfit(),
+                schedule.getTotalFee(),
                 schedule.getTotalAmount(),
                 schedule.getPaidPrincipal(),
                 schedule.getPaidProfit(),
@@ -156,7 +173,15 @@ public class RepaymentScheduleController {
         );
     }
 
-    private InstallmentResponse toInstallmentResponse(Installment i, DelinquencyRule esRule, LocalDate today) {
+    private InstallmentResponse toInstallmentResponse(Installment i, DelinquencyRule esRule, LocalDate today,
+                                                      Map<UUID, PenaltyWaiverRequest> pendingWaivers) {
+        BigDecimal waived = i.getWaivedPenaltyAmount() != null ? i.getWaivedPenaltyAmount() : BigDecimal.ZERO;
+
+        // Final amount the customer owes for this installment AFTER waiver applied.
+        // = principal + profit + fee + remainingPenalty (= gross penalty − waived)
+        BigDecimal effectiveTotal = i.getTotalAmount().subtract(waived).max(BigDecimal.ZERO);
+        BigDecimal effectiveOutstanding = effectiveTotal.subtract(i.getPaidTotal()).max(BigDecimal.ZERO);
+
         var matchOpt = matcher.match(esRule, i, today);
 
         BigDecimal totalDiscount = BigDecimal.ZERO;
@@ -164,14 +189,17 @@ public class RepaymentScheduleController {
             var m = matchOpt.get();
             if (m.isPercentage()) {
                 BigDecimal pct = m.discountPercentage() != null ? m.discountPercentage() : BigDecimal.ZERO;
-                totalDiscount = i.getOutstandingAmount()
+                totalDiscount = effectiveOutstanding
                         .multiply(pct)
                         .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
             } else {
                 totalDiscount = m.discountAmount() != null ? m.discountAmount() : BigDecimal.ZERO;
             }
         }
-        BigDecimal payable = i.getTotalAmount().subtract(totalDiscount).max(BigDecimal.ZERO);
+        // payableAmount = what customer pays IF early-settlement is applied right now
+        BigDecimal payable = effectiveTotal.subtract(totalDiscount).max(BigDecimal.ZERO);
+
+        PenaltyWaiverRequest pending = pendingWaivers.get(i.getId());
 
         return new InstallmentResponse(
                 i.getId(),
@@ -180,13 +208,13 @@ public class RepaymentScheduleController {
                 i.getPrincipalAmount(),
                 i.getProfitAmount(),
                 i.getFeeAmount(),
-                i.getLatePenaltyAmount(),
-                i.getTotalAmount(),
+                i.getRemainingPenalty(),
+                effectiveTotal,
                 i.getPaidPrincipal(),
                 i.getPaidProfit(),
                 i.getPaidFee(),
                 i.getPaidTotal(),
-                i.getOutstandingAmount(),
+                effectiveOutstanding,
                 i.getStatus(),
                 i.getDpd(),
                 matchOpt.isPresent(),
@@ -201,7 +229,24 @@ public class RepaymentScheduleController {
                 i.getWrittenOffFee(),
                 i.getWrittenOffPenalty(),
                 i.getWriteOffDate(),
-                i.getWriteOffReason()
+                i.getWriteOffReason(),
+                waived,
+                i.getRemainingPenalty(),
+                pending != null,
+                pending != null ? pending.getRequestedAmount() : null
         );
+    }
+
+    private Map<UUID, PenaltyWaiverRequest> loadPendingWaivers(UUID tenantId, UUID loanId) {
+        if (loanId == null) return Map.of();
+        var requests = penaltyWaiverRequestRepository.findByLoanId(tenantId, loanId);
+        Map<UUID, PenaltyWaiverRequest> map = new HashMap<>();
+        for (var r : requests) {
+            if (r.getStatus() == PenaltyWaiverRequest.WaiverRequestStatus.PENDING && r.getInstallmentId() != null) {
+                // first pending wins (UI surfaces a single pending request per installment)
+                map.putIfAbsent(r.getInstallmentId(), r);
+            }
+        }
+        return map;
     }
 }

@@ -181,6 +181,16 @@ public class ManageSettlementUseCaseImpl implements ManageSettlementUseCase {
         }
         DelinquencyRule rule = ruleOpt.get();
 
+        // New Logic: Support Principle Based Settlement (Image 3)
+        if (rule.getSettlementStrategy() == com.ksa.financing.collections.domain.model.EarlySettlementStrategy.PRINCIPLE_BASED) {
+            // Formula: Discount = settlementMonths * settlementAmountPerMonth
+            // We give a flat discount as defined in the principle-based rule.
+            return rule.getSettlementAmountPerMonth()
+                    .multiply(BigDecimal.valueOf(rule.getSettlementMonths()))
+                    .setScale(6, RoundingMode.HALF_UP);
+        }
+
+        // Existing Logic: Invoice Based (Default)
         BigDecimal total = BigDecimal.ZERO;
         for (Installment inst : schedule.getInstallments()) {
             if (inst.getStatus() == InstallmentStatus.PAID || inst.getStatus() == InstallmentStatus.WAIVED) {

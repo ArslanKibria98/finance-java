@@ -269,7 +269,9 @@ public record StepSignalResponse(
     private static String resolveOverallStatus(ApplicationStatus status) {
         if (status == null) return "active";
         return switch (status) {
+            case AWAIT_DISBURSED -> "await_disbursement";
             case APPROVED -> "approved";
+            case DISBURSED -> "disbursed";
             case REJECTED -> "rejected";
             case CANCELLED -> "cancelled";
             case EXPIRED -> "expired";

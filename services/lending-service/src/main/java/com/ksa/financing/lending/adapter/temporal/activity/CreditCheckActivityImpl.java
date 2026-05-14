@@ -60,12 +60,13 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
             // Call risk-service which internally calls SIMAH via middleware-third-party
             String url = riskServiceUrl + "/api/v1/credit-check";
 
-            var requestBody = objectMapper.writeValueAsString(Map.of(
-                    "tenantId", input.tenantId(),
-                    "nationalId", input.nationalId(),
-                    "customerId", input.customerId(),
-                    "requestedAmount", input.requestedAmount()
-            ));
+            var bodyMap = new java.util.LinkedHashMap<String, Object>();
+            bodyMap.put("tenantId", input.tenantId());
+            bodyMap.put("nationalId", input.nationalId());
+            bodyMap.put("customerId", input.customerId());
+            if (input.applicationId() != null) bodyMap.put("applicationId", input.applicationId());
+            bodyMap.put("requestedAmount", input.requestedAmount());
+            var requestBody = objectMapper.writeValueAsString(bodyMap);
 
             var headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

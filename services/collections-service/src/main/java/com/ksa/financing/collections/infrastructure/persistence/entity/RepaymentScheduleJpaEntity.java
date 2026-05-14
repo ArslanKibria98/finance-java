@@ -52,6 +52,9 @@ public class RepaymentScheduleJpaEntity {
     @Column(name = "total_profit", nullable = false, precision = 20, scale = 6)
     private BigDecimal totalProfit;
 
+    @Column(name = "total_fee", nullable = false, precision = 20, scale = 6)
+    private BigDecimal totalFee;
+
     @Column(name = "total_amount", nullable = false, precision = 20, scale = 6)
     private BigDecimal totalAmount;
 

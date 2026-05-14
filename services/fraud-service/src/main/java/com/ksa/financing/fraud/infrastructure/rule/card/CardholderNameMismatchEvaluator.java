@@ -49,7 +49,7 @@ public class CardholderNameMismatchEvaluator implements FraudRuleEvaluator {
         if (matches) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Cardholder name does not match customer",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

@@ -30,16 +30,27 @@ public class CreditScoringFieldController {
 
     @SecuredEndpoint(obj = "credit-scoring-fields", act = "read")
     @GetMapping
-    @Operation(summary = "List credit scoring fields",
+    @Operation(summary = "List credit scoring fields. Optional ?search= filters by fieldKey, nameEn, nameAr, dataType (case-insensitive LIKE).",
             description = "Returns all active credit scoring field definitions with their predefined options for dropdowns")
     public ResponseEntity<List<CreditScoringFieldDefinition>> listFields(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         var tenantId = extractTenantId(jwt);
-        log.info("Listing credit scoring fields for tenant: {}", tenantId);
+        log.info("Listing credit scoring fields for tenant: {} (search={})", tenantId, search);
 
         var fields = manageCreditScoringFieldsUseCase.listFieldDefinitions(tenantId);
+        String term = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        if (term != null) {
+            fields = fields.stream()
+                    .filter(f -> c(f.fieldKey(), term) || c(f.nameEn(), term) || c(f.nameAr(), term) || c(f.dataType(), term))
+                    .toList();
+        }
         return ResponseEntity.ok(fields);
+    }
+
+    private static boolean c(String f, String t) {
+        return f != null && f.toLowerCase().contains(t);
     }
 
     private UUID extractTenantId(Jwt jwt) {

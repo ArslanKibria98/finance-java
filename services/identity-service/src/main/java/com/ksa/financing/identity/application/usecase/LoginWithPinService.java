@@ -6,6 +6,7 @@ import com.ksa.financing.identity.domain.port.in.LoginWithPinUseCase;
 import com.ksa.financing.identity.domain.port.out.CustomerLookupPort;
 import com.ksa.financing.identity.domain.port.out.KeycloakAdapterPort;
 import com.ksa.financing.identity.domain.port.out.UserIdentityRepository;
+import com.ksa.financing.identity.infrastructure.blacklist.LoginGuardService;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
@@ -29,10 +30,14 @@ public class LoginWithPinService implements LoginWithPinUseCase {
     private final KeycloakAdapterPort keycloakAdapter;
     private final UserIdentityRepository userIdentityRepository;
     private final CustomerLookupPort customerLookupPort;
+    private final LoginGuardService loginGuard;
 
     @Override
     public LoginWithPinResult login(LoginWithPinCommand command) {
         log.info("PIN login attempt for NID ending in: {}", maskNid(command.nationalId()));
+
+        // Step 0: Pre-token blacklist guard — block early before hitting Keycloak.
+        loginGuard.verifyByNid(command.nationalId());
 
         // Step 1: Find user by NID (keycloakUsername = nationalId)
         UserIdentity identity = userIdentityRepository.findByKeycloakUsername(command.nationalId())
@@ -106,12 +111,18 @@ public class LoginWithPinService implements LoginWithPinUseCase {
     public LoginWithPinResult loginWithMobile(LoginWithMobileCommand command) {
         log.info("Mobile PIN login attempt for mobile ending in: {}", maskMobile(command.mobileNumber()));
 
+        // Step 0: Pre-token blacklist guard — mobile + (later) NID once we resolve the identity.
+        loginGuard.verifyByMobile(command.mobileNumber());
+
         // Step 1: Find user by mobile number
         UserIdentity identity = userIdentityRepository.findByMobileNumber(command.mobileNumber())
                 .orElseThrow(() -> {
                     log.warn("No user found for mobile ending in: {}", maskMobile(command.mobileNumber()));
                     return new NotFoundException("User", command.mobileNumber());
                 });
+
+        // Re-check guard against the resolved NID (mobile alone may not be blacklisted but NID could be)
+        loginGuard.verifyByNid(identity.getKeycloakUsername());
 
         // Step 2: Verify account is active
         if (identity.getStatus() != UserStatus.ACTIVE) {

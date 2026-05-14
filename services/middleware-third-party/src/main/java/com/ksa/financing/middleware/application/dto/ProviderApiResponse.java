@@ -1,5 +1,6 @@
 package com.ksa.financing.middleware.application.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,6 +17,8 @@ public record ProviderApiResponse(
         String status,
         boolean async,
         Integer timeoutMs,
+        BigDecimal costPerCall,
+        String costCurrency,
         Instant createdAt,
         Instant updatedAt
 ) {}

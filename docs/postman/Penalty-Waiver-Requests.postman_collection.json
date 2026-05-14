@@ -1,0 +1,190 @@
+{
+  "info": {
+    "name": "Penalty Waiver Request System",
+    "description": "API collection for managing customer-initiated penalty waiver requests and product-level eligibility settings.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "kongUrl", "value": "http://localhost:8000", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "loanId", "value": "", "type": "string" },
+    { "key": "applicationId", "value": "", "type": "string" },
+    { "key": "invoiceId", "value": "", "type": "string" },
+    { "key": "installmentId", "value": "", "type": "string" },
+    { "key": "requestId", "value": "", "type": "string" },
+    { "key": "customerId", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Product Settings (Admin)",
+      "item": [
+        {
+          "name": "Update Product Waiver Limits",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/product-service/api/v1/products/{{productId}}/basic-info",
+              "host": ["{{kongUrl}}"],
+              "path": ["product-service", "api", "v1", "products", "{{productId}}", "basic-info"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"penaltyWaiverAllowed\": true,\n  \"maxPenaltyWaiversAllowed\": 3\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Dunning Policy Settings (Admin)",
+      "item": [
+        {
+          "name": "Update Policy Waiver Limits",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/dunning-policies/{{policyId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "admin", "dunning-policies", "{{policyId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"penaltyWaiverAllowed\": true,\n  \"maxPenaltyWaiversAllowed\": 3\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Customer Waiver Requests",
+      "item": [
+        {
+          "name": "Submit Waiver Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loanId\": \"{{loanId}}\",\n  \"applicationId\": \"{{applicationId}}\",\n  \"installmentId\": \"{{installmentId}}\",\n  \"amount\": 50.00,\n  \"reason\": \"Financial hardship due to medical emergency\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get My Request History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/customer/{{customerId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "customer", "{{customerId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Admin Approval Workflow",
+      "item": [
+        {
+          "name": "List Requests by Loan",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/loan/{{loanId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "loan", "{{loanId}}"]
+            }
+          }
+        },
+        {
+          "name": "List Requests by Application",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/application/{{applicationId}}",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "application", "{{applicationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Approve Request (by Request ID)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/{{requestId}}/approve",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "{{requestId}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Approve Request (by Invoice ID)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/invoice/{{invoiceId}}/approve",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "invoice", "{{invoiceId}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Reject Request (by Request ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/{{requestId}}/reject",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "{{requestId}}", "reject"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Documentation provided is insufficient\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reject Request (by Invoice ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/collections/waiver-requests/invoice/{{invoiceId}}/reject",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service", "api", "v1", "collections", "waiver-requests", "invoice", "{{invoiceId}}", "reject"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Documentation provided is insufficient\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

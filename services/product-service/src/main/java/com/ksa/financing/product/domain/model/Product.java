@@ -67,10 +67,13 @@ public class Product {
     private String repaymentFrequency;
     private int gracePeriodDays;
 
-    // Early settlement
     private boolean earlySettlementAllowed;
     private boolean waiveUnearnedProfit;
     private Integer minTenureBeforeSettlement;
+
+    // Penalty waiver settings
+    private boolean penaltyWaiverAllowed;
+    private Integer maxPenaltyWaiversAllowed;
 
     // Core banking system (Fineract) reference
     private String fineractProductId;
@@ -154,6 +157,8 @@ public class Product {
         product.earlySettlementAllowed = true;
         product.waiveUnearnedProfit = true;
         product.minTenureBeforeSettlement = 3;
+        product.penaltyWaiverAllowed = true;
+        product.maxPenaltyWaiversAllowed = 1;
         product.currency = "SAR";
         product.versionNumber = 1;
         product.version = 1;
@@ -348,6 +353,12 @@ public class Product {
 
     public Integer getMinTenureBeforeSettlement() { return minTenureBeforeSettlement; }
     public void setMinTenureBeforeSettlement(Integer minTenureBeforeSettlement) { this.minTenureBeforeSettlement = minTenureBeforeSettlement; }
+
+    public boolean isPenaltyWaiverAllowed() { return penaltyWaiverAllowed; }
+    public void setPenaltyWaiverAllowed(boolean penaltyWaiverAllowed) { this.penaltyWaiverAllowed = penaltyWaiverAllowed; }
+
+    public Integer getMaxPenaltyWaiversAllowed() { return maxPenaltyWaiversAllowed; }
+    public void setMaxPenaltyWaiversAllowed(Integer maxPenaltyWaiversAllowed) { this.maxPenaltyWaiversAllowed = maxPenaltyWaiversAllowed; }
 
     public String getFineractProductId() { return fineractProductId; }
     public void setFineractProductId(String fineractProductId) { this.fineractProductId = fineractProductId; }

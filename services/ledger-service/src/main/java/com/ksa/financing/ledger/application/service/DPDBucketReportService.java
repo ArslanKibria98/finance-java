@@ -38,7 +38,7 @@ public class DPDBucketReportService {
     public DPDBucketReportResponse generate(UUID tenantId, LocalDate date) {
         log.info("Generating DPD bucket report: tenantId={} date={}", tenantId, date);
 
-        var overdue = reportDataClient.fetchOverdueInstallments(date, 0);
+        var overdue = reportDataClient.fetchOverdueInstallments(date, 0, null);
 
         Map<Integer, Integer> countByBucket = new HashMap<>();
         Map<Integer, BigDecimal> amountByBucket = new HashMap<>();

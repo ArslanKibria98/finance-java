@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "KSA - Loan Disbursement → Wallet",
+    "description": "Disbursement flow updated 2026-05-11.\n\n**Old flow (deprecated):** approved loan → IBAN bank transfer via middleware (HyperPay) → customer bank account.\n\n**New flow:** approved loan → Fineract deposit on customer's wallet savings account → balance immediately available in wallet.\n\nCall path:\n```\nLoanApplicationWorkflow Phase 6g\n  → DisbursementActivity.disburseToWallet(customerId, amount)\n  → wallet-service POST /internal/wallets/credit-from-loan  (X-Tenant-Id header)\n  → FineractSavingsPort.deposit(savingsId, amount, idemKey)\n  → wallet_db: balance += amount, movement row\n```\n\nThis collection covers:\n1. Login (customer JWT)\n2. Get my wallet balance BEFORE disbursement (JWT-based — no walletId needed)\n3. (Optional) Internal: directly credit a wallet (simulates what lending-service does)\n4. Get my wallet balance AFTER disbursement\n\nTenant: `00000000-0000-0000-0000-000000000001`\nRealm: `CompanyRealm`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "kongUrl", "value": "http://46.62.226.94:8000", "description": "Kong gateway" },
+    { "key": "walletBaseUrl", "value": "{{kongUrl}}/wallet-service", "description": "wallet-service via Kong" },
+    { "key": "walletDirectUrl", "value": "http://localhost:8088", "description": "wallet-service direct (for /internal/** which Kong may not expose)" },
+    { "key": "identityUrl", "value": "{{kongUrl}}/identity-service" },
+    { "key": "jwt", "value": "", "description": "auto-set by login" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "nationalId", "value": "1010219431" },
+    { "key": "pin", "value": "147852" },
+    { "key": "customerId", "value": "", "description": "set this to the JWT customer_id/sub for /internal/credit-from-loan request body" },
+    { "key": "loanId", "value": "", "description": "loan UUID, used as referenceId" },
+    { "key": "amount", "value": "10000", "description": "disbursement amount in SAR" },
+    { "key": "idempotencyKey", "value": "demo-disb-001", "description": "must be unique per disbursement; same key → returns DUPLICATE on retry" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{jwt}}" }]
+  },
+  "item": [
+    {
+      "name": "0. Login (auto-sets {{jwt}} and {{customerId}})",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const resp = pm.response.json();",
+              "const data = resp.data || resp;",
+              "if (data.accessToken) {",
+              "    pm.collectionVariables.set('jwt', data.accessToken);",
+              "    const payload = JSON.parse(atob(data.accessToken.split('.')[1]));",
+              "    const cust = payload.customer_id || payload.sub;",
+              "    pm.collectionVariables.set('customerId', cust);",
+              "    console.log('customerId:', cust);",
+              "}",
+              "pm.test('Login OK', () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nationalId\": \"{{nationalId}}\",\n  \"pin\": \"{{pin}}\"\n}"
+        },
+        "url": "{{identityUrl}}/api/v1/auth/login-with-pin",
+        "description": "Login. JWT + customerId auto-saved into collection variables."
+      }
+    },
+    {
+      "name": "1. GET /api/v1/wallets/me/balance  — BEFORE disbursement",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const d = body.data || body;",
+              "console.log('Wallet:', d.walletNumber, '| Balance:', d.availableBalance, d.currency);",
+              "console.log('Fineract savings ID:', d.fineractSavingsAccountId);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{walletBaseUrl}}/api/v1/wallets/me/balance",
+        "description": "NEW endpoint — resolves wallet from JWT `customer_id`/`sub` claim. No walletId in the URL. Fineract savings balance is fetched live."
+      }
+    },
+    {
+      "name": "2. POST /internal/wallets/credit-from-loan  (simulates what lending-service does)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "console.log('Credited wallet:', r.walletNumber);",
+              "console.log('Fineract txn id:', r.fineractTransactionId);",
+              "console.log('New balance:', r.newAvailableBalance);",
+              "console.log('Status:', r.status);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+          { "key": "X-Caller-Service", "value": "lending-service" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"amount\": {{amount}},\n  \"purpose\": \"LOAN_PROCEEDS\",\n  \"referenceType\": \"LOAN_DISBURSEMENT\",\n  \"referenceId\": \"{{loanId}}\",\n  \"description\": \"Loan disbursement (postman test)\",\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+        },
+        "url": "{{walletDirectUrl}}/internal/wallets/credit-from-loan",
+        "description": "INTERNAL endpoint — no JWT, uses `X-Tenant-Id` header.\n\nThis is exactly what `DisbursementActivityImpl.disburseToWallet()` calls inside `LoanApplicationWorkflow` Phase 6g after a loan is approved.\n\n**Idempotency**: re-running with the same `idempotencyKey` returns status `DUPLICATE` and does NOT credit again.\n\n**referenceId**: pass the loan UUID (lending-service does this automatically).\n\n**Note**: this endpoint runs on the wallet-service direct port (8088). Use Kong route if exposed publicly (depends on Kong config)."
+      }
+    },
+    {
+      "name": "3. GET /api/v1/wallets/me/balance  — AFTER disbursement",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const d = body.data || body;",
+              "console.log('Wallet:', d.walletNumber, '| Balance:', d.availableBalance, d.currency);",
+              "console.log('Balance should be old balance + {{amount}}');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{walletBaseUrl}}/api/v1/wallets/me/balance"
+      }
+    },
+    {
+      "name": "4. GET /api/v1/wallets/me/balance  — idempotency check (re-credit same key)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"amount\": {{amount}},\n  \"purpose\": \"LOAN_PROCEEDS\",\n  \"referenceType\": \"LOAN_DISBURSEMENT\",\n  \"referenceId\": \"{{loanId}}\",\n  \"description\": \"Loan disbursement (postman test)\",\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+        },
+        "url": "{{walletDirectUrl}}/internal/wallets/credit-from-loan",
+        "description": "Reusing the same idempotencyKey — server returns status=`DUPLICATE`, no second credit, balance unchanged. Verifies idempotency."
+      }
+    }
+  ]
+}

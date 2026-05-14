@@ -146,3 +146,8 @@ ksa:
     cache-key-prefix: casbin:policies
     skip-patterns:
       - /internal/**
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true

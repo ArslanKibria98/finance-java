@@ -1,6 +1,7 @@
 package com.ksa.financing.ledger.application.service;
 
 import com.ksa.financing.ledger.application.dto.CashFlowReportResponse;
+import com.ksa.financing.ledger.application.service.util.AggregateValueUtil;
 import com.ksa.financing.ledger.domain.port.out.AccountRepository;
 import com.ksa.financing.ledger.infrastructure.messaging.LedgerAccountCodes;
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaAccountBalanceRepository;
@@ -45,10 +46,17 @@ public class CashFlowReportService {
         var from = date.withDayOfMonth(1);
 
         // Bank is an ASSET — debits increase cash (inflows), credits decrease (outflows).
-        var totals = journalLineRepository.sumDebitsCreditsByAccountInRange(
-                tenantId, bankAccountUuid, from, date);
-        var inflows = toBigDecimal(totals, 0);
-        var outflows = toBigDecimal(totals, 1);
+        Object[] totals;
+        try {
+            totals = journalLineRepository.sumDebitsCreditsByAccountInRange(
+                    tenantId, bankAccountUuid, from, date);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to aggregate cash flow totals tenant={} date={}. Returning zeros. Cause={}",
+                    tenantId, date, ex.getMessage());
+            totals = null;
+        }
+        var inflows = AggregateValueUtil.valueAt(totals, 0);
+        var outflows = AggregateValueUtil.valueAt(totals, 1);
         var net = inflows.subtract(outflows);
 
         // Use latest balance snapshot ≤ date if available; else compute from activity.
@@ -66,8 +74,4 @@ public class CashFlowReportService {
                 .build();
     }
 
-    private BigDecimal toBigDecimal(Object[] row, int idx) {
-        if (row == null || row.length <= idx || row[idx] == null) return BigDecimal.ZERO;
-        return new BigDecimal(row[idx].toString());
-    }
 }

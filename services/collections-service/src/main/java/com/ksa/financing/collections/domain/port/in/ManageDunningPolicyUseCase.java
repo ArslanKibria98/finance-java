@@ -29,6 +29,8 @@ public interface ManageDunningPolicyUseCase {
             boolean autoAssignAgent,
             Integer agentAssignmentDpd,
             Integer walletFreezeDpd,
+            boolean penaltyWaiverAllowed,
+            int maxPenaltyWaiversAllowed,
             UUID createdBy
     ) {}
 
@@ -45,6 +47,8 @@ public interface ManageDunningPolicyUseCase {
             boolean autoAssignAgent,
             Integer agentAssignmentDpd,
             Integer walletFreezeDpd,
+            Boolean penaltyWaiverAllowed,
+            Integer maxPenaltyWaiversAllowed,
             UUID updatedBy
     ) {}
 

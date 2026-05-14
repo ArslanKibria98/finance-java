@@ -18,7 +18,8 @@ public class EmdhaMockProvider implements MockResponseProvider {
     @Override
     public MockResponseResult getMockResponse(String apiCode, String requestBody) {
         return switch (apiCode) {
-            case "EMDHA_SIGN" -> signResponse();
+            case "EMDHA_SIGN", "EMDHA_SIGN_DOCUMENT" -> signResponse();
+            case "EMDHA_GENERATE_CONTRACT" -> signResponse();
             default -> fallbackResponse();
         };
     }

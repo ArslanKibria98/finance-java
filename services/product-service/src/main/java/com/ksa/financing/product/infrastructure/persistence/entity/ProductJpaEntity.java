@@ -170,6 +170,12 @@ public class ProductJpaEntity {
     @Column(name = "min_tenure_before_settlement")
     private Integer minTenureBeforeSettlement;
 
+    @Column(name = "penalty_waiver_allowed", nullable = false)
+    private boolean penaltyWaiverAllowed;
+
+    @Column(name = "max_penalty_waivers_allowed")
+    private Integer maxPenaltyWaiversAllowed;
+
     // --- Core banking ---
 
     @Column(name = "fineract_product_id", length = 50)

@@ -1,5 +1,6 @@
 package com.ksa.financing.infra.exception;
 
+import com.ksa.financing.infra.security.blacklist.BlacklistViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
@@ -8,7 +9,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
@@ -47,7 +52,10 @@ public class GlobalExceptionHandler {
         log.warn("Business error: {} - {}", ex.getErrorCode(), ex.getMessage());
 
         Locale locale = resolveLocale(request);
-        String localizedMessage = resolveMessage(ex.getErrorCode(), ex.getArgs(), ex.getMessage(), locale);
+        Object[] args = (ex.getArgs() != null && ex.getArgs().length > 0)
+                ? ex.getArgs()
+                : new Object[]{ex.getMessage()};
+        String localizedMessage = resolveMessage(ex.getErrorCode(), args, ex.getMessage(), locale);
 
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(Instant.now())
@@ -66,8 +74,11 @@ public class GlobalExceptionHandler {
         log.error("Technical error: {} - {}", ex.getErrorCode(), ex.getMessage(), ex);
 
         Locale locale = resolveLocale(request);
+        Object[] args = (ex.getArgs() != null && ex.getArgs().length > 0)
+                ? ex.getArgs()
+                : new Object[]{ex.getMessage()};
         String localizedMessage = resolveMessage(
-                ErrorCodes.TECHNICAL_ERROR, ex.getArgs(),
+                ErrorCodes.TECHNICAL_ERROR, args,
                 "A system error occurred. Please try again later.", locale);
 
         ErrorResponse error = ErrorResponse.builder()
@@ -87,7 +98,10 @@ public class GlobalExceptionHandler {
         log.debug("Resource not found: {}", ex.getMessage());
 
         Locale locale = resolveLocale(request);
-        String localizedMessage = resolveMessage(ex.getErrorCode(), ex.getArgs(), ex.getMessage(), locale);
+        Object[] args = (ex.getArgs() != null && ex.getArgs().length > 0)
+                ? ex.getArgs()
+                : new Object[]{ex.getMessage()};
+        String localizedMessage = resolveMessage(ex.getErrorCode(), args, ex.getMessage(), locale);
 
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(Instant.now())
@@ -117,6 +131,26 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.FORBIDDEN.value())
                 .error(HttpStatus.FORBIDDEN.getReasonPhrase())
                 .code(ErrorCodes.ACCESS_DENIED)
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
+    @ExceptionHandler(BlacklistViolationException.class)
+    public ResponseEntity<ErrorResponse> handleBlacklistViolation(BlacklistViolationException ex, WebRequest request) {
+        log.warn("Blacklist violation: type={}, reason={}", ex.getType(), ex.getReason());
+
+        Locale locale = resolveLocale(request);
+        Object[] args = ex.getReason() != null ? new Object[]{ex.getReason()} : new Object[]{"blacklisted"};
+        String localizedMessage = resolveMessage(ex.getErrorCode(), args, ex.getMessage(), locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.FORBIDDEN.value())
+                .error(HttpStatus.FORBIDDEN.getReasonPhrase())
+                .code(ex.getErrorCode())
                 .message(localizedMessage)
                 .path(extractPath(request))
                 .build();
@@ -177,6 +211,94 @@ public class GlobalExceptionHandler {
     }
 
     // ── Spring MVC Exception Handlers ──────────────────────────────
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestParameter(MissingServletRequestParameterException ex, WebRequest request) {
+        log.warn("Missing request parameter: {}", ex.getParameterName());
+
+        Locale locale = resolveLocale(request);
+        String fallback = "Required request parameter '" + ex.getParameterName() + "' is not present";
+        String localizedMessage = resolveMessage(
+                ErrorCodes.BAD_REQUEST, new Object[]{fallback}, fallback, locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .code(ErrorCodes.BAD_REQUEST)
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex, WebRequest request) {
+        log.warn("HTTP method not supported: {} (supported: {})", ex.getMethod(), ex.getSupportedHttpMethods());
+
+        Locale locale = resolveLocale(request);
+        String supported = ex.getSupportedHttpMethods() != null
+                ? ex.getSupportedHttpMethods().toString() : "";
+        String fallback = "HTTP method '" + ex.getMethod() + "' is not supported for this endpoint."
+                + (supported.isBlank() ? "" : " Supported methods: " + supported);
+        String localizedMessage = resolveMessage(
+                ErrorCodes.BAD_REQUEST, new Object[]{fallback}, fallback, locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.METHOD_NOT_ALLOWED.value())
+                .error(HttpStatus.METHOD_NOT_ALLOWED.getReasonPhrase())
+                .code(ErrorCodes.BAD_REQUEST)
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(error);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex, WebRequest request) {
+        log.warn("Content-Type not supported: {}", ex.getContentType());
+
+        Locale locale = resolveLocale(request);
+        String fallback = "Content-Type '" + ex.getContentType() + "' is not supported. Supported: "
+                + ex.getSupportedMediaTypes();
+        String localizedMessage = resolveMessage(
+                ErrorCodes.BAD_REQUEST, new Object[]{fallback}, fallback, locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value())
+                .error(HttpStatus.UNSUPPORTED_MEDIA_TYPE.getReasonPhrase())
+                .code(ErrorCodes.BAD_REQUEST)
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(error);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleArgumentTypeMismatch(MethodArgumentTypeMismatchException ex, WebRequest request) {
+        log.warn("Argument type mismatch: {} = {}", ex.getName(), ex.getValue());
+
+        Locale locale = resolveLocale(request);
+        String fallback = "Parameter '" + ex.getName() + "' has an invalid value: " + ex.getValue();
+        String localizedMessage = resolveMessage(
+                ErrorCodes.BAD_REQUEST, new Object[]{fallback}, fallback, locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .code(ErrorCodes.BAD_REQUEST)
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
 
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
     public ResponseEntity<ErrorResponse> handleNoResourceFoundException(Exception ex, WebRequest request) {

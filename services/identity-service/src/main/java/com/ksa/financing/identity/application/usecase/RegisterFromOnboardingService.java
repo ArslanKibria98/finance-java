@@ -7,11 +7,14 @@ import com.ksa.financing.identity.domain.port.in.RegisterFromOnboardingUseCase;
 import com.ksa.financing.identity.domain.port.out.EventPublisherPort;
 import com.ksa.financing.identity.domain.port.out.KeycloakAdapterPort;
 import com.ksa.financing.identity.domain.port.out.UserIdentityRepository;
+import com.ksa.financing.identity.infrastructure.blacklist.LoginGuardService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -24,13 +27,16 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
     private final KeycloakAdapterPort keycloakAdapter;
     private final UserIdentityRepository userIdentityRepository;
     private final EventPublisherPort eventPublisher;
+    private final LoginGuardService loginGuard;
 
     public RegisterFromOnboardingService(KeycloakAdapterPort keycloakAdapter,
                                          UserIdentityRepository userIdentityRepository,
-                                         EventPublisherPort eventPublisher) {
+                                         EventPublisherPort eventPublisher,
+                                         LoginGuardService loginGuard) {
         this.keycloakAdapter = keycloakAdapter;
         this.userIdentityRepository = userIdentityRepository;
         this.eventPublisher = eventPublisher;
+        this.loginGuard = loginGuard;
     }
 
     @Override
@@ -38,6 +44,10 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
     public RegisterFromOnboardingResult register(RegisterFromOnboardingCommand command) {
         log.info("Starting onboarding registration for NID ending in: {}",
                 maskNid(command.nationalId()));
+
+        // Pre-token blacklist guard — block both NID and mobile before creating user / issuing token.
+        loginGuard.verifyByNid(command.nationalId());
+        loginGuard.verifyByMobile(command.mobileNumber());
 
         // Check if user already exists - if so, authenticate and return tokens
         var existing = userIdentityRepository.findByKeycloakUsername(command.nationalId());
@@ -69,6 +79,17 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
         // Step 3: Assign customer role
         keycloakAdapter.assignRole(REALM, keycloakUser.keycloakUserId(), CUSTOMER_ROLE);
         log.info("Assigned '{}' role to Keycloak user: {}", CUSTOMER_ROLE, keycloakUser.keycloakUserId());
+
+        // Step 3.1: Persist mobile_number + national_id as Keycloak user attributes so the
+        // configured protocol mappers expose them as JWT claims for the BlacklistGuardFilter.
+        Map<String, String> jwtAttributes = new HashMap<>();
+        if (command.mobileNumber() != null && !command.mobileNumber().isBlank()) {
+            jwtAttributes.put("mobile_number", command.mobileNumber());
+        }
+        jwtAttributes.put("national_id", command.nationalId());
+        if (!jwtAttributes.isEmpty()) {
+            keycloakAdapter.setUserAttributes(REALM, keycloakUser.keycloakUserId(), jwtAttributes);
+        }
 
         // Step 4: Create UserIdentity entity
         UserIdentity identity = new UserIdentity();

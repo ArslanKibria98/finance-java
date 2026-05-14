@@ -34,7 +34,7 @@ public class ThirdPartyPaymentEvaluator implements FraudRuleEvaluator {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
         if (event.paymentSource().thirdParty()) {
-            return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+            return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                     "Payment flagged as third-party",
                     EvaluatorScores.forDecision(rule.defaultAction()));
         }
@@ -45,7 +45,7 @@ public class ThirdPartyPaymentEvaluator implements FraudRuleEvaluator {
         var registeredIban = profile.get().registeredIban();
         var paymentIban = event.paymentSource().iban();
         if (registeredIban != null && paymentIban != null && !registeredIban.equalsIgnoreCase(paymentIban)) {
-            return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+            return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                     "Payment IBAN does not match registered IBAN",
                     EvaluatorScores.forDecision(rule.defaultAction()));
         }

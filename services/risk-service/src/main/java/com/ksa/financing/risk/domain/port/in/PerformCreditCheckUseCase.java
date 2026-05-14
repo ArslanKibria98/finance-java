@@ -11,6 +11,7 @@ public interface PerformCreditCheckUseCase {
             UUID tenantId,
             String nationalId,
             String customerId,
+            String applicationId,
             BigDecimal requestedAmount
     ) {}
 

@@ -31,7 +31,7 @@ public class LoanVsTransferAmountEvaluator implements FraudRuleEvaluator {
         if (event.transactionAmount().compareTo(event.approvedLoanAmount()) == 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Disbursed " + event.transactionAmount() + " vs approved " + event.approvedLoanAmount(),
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

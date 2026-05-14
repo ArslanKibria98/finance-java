@@ -31,6 +31,10 @@ public class DunningPolicy {
     private LateFeeConfig lateFee;
     private SimahReportingConfig simah;
 
+    // Penalty Waiver Config
+    private boolean penaltyWaiverAllowed;
+    private int maxPenaltyWaiversAllowed;
+
     // Actions per stage — Map<stage, action-config-as-map>
     private final Map<DunningStage, Map<String, Object>> stageActions;
 
@@ -59,6 +63,7 @@ public class DunningPolicy {
                           Map<DunningStage, Map<String, Object>> stageActions,
                           boolean autoAssignAgent, Integer agentAssignmentDpd,
                           Integer walletFreezeDpd,
+                          boolean penaltyWaiverAllowed, int maxPenaltyWaiversAllowed,
                           LocalDateTime createdAt) {
         this.id = id;
         this.tenantId = tenantId;
@@ -74,6 +79,8 @@ public class DunningPolicy {
         this.autoAssignAgent = autoAssignAgent;
         this.agentAssignmentDpd = agentAssignmentDpd;
         this.walletFreezeDpd = walletFreezeDpd;
+        this.penaltyWaiverAllowed = penaltyWaiverAllowed;
+        this.maxPenaltyWaiversAllowed = maxPenaltyWaiversAllowed;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
         this.version = 1;
@@ -89,7 +96,9 @@ public class DunningPolicy {
                                        SimahReportingConfig simah,
                                        Map<DunningStage, Map<String, Object>> stageActions,
                                        boolean autoAssignAgent, Integer agentAssignmentDpd,
-                                       Integer walletFreezeDpd, UUID createdBy) {
+                                       Integer walletFreezeDpd,
+                                       boolean penaltyWaiverAllowed, int maxPenaltyWaiversAllowed,
+                                       UUID createdBy) {
         if (tenantId == null)
             throw new IllegalArgumentException("tenantId cannot be null");
         if (policyName == null || policyName.isBlank())
@@ -106,6 +115,7 @@ public class DunningPolicy {
                 simah != null ? simah : SimahReportingConfig.defaults(),
                 stageActions,
                 autoAssignAgent, agentAssignmentDpd, walletFreezeDpd,
+                penaltyWaiverAllowed, maxPenaltyWaiversAllowed,
                 LocalDateTime.now());
         policy.createdBy = createdBy;
         policy.updatedBy = createdBy;
@@ -123,12 +133,14 @@ public class DunningPolicy {
                                              Map<DunningStage, Map<String, Object>> stageActions,
                                              boolean autoAssignAgent, Integer agentAssignmentDpd,
                                              Integer walletFreezeDpd,
+                                             boolean penaltyWaiverAllowed, int maxPenaltyWaiversAllowed,
                                              int version,
                                              LocalDateTime createdAt, LocalDateTime updatedAt,
                                              UUID createdBy, UUID updatedBy) {
         var policy = new DunningPolicy(id, tenantId, policyName, productCode, description,
                 active, defaultPolicy, thresholds, lateFee, simah,
                 stageActions, autoAssignAgent, agentAssignmentDpd, walletFreezeDpd,
+                penaltyWaiverAllowed, maxPenaltyWaiversAllowed,
                 createdAt);
         policy.version = version;
         policy.updatedAt = updatedAt;
@@ -188,6 +200,12 @@ public class DunningPolicy {
         this.autoAssignAgent = autoAssign;
         this.agentAssignmentDpd = agentDpd;
         this.walletFreezeDpd = walletFreezeDpd;
+        touch(updatedBy);
+    }
+    
+    public void updateWaiverSettings(boolean allowed, int maxWaivers, UUID updatedBy) {
+        this.penaltyWaiverAllowed = allowed;
+        this.maxPenaltyWaiversAllowed = maxWaivers;
         touch(updatedBy);
     }
 
@@ -299,6 +317,8 @@ public class DunningPolicy {
     public boolean isAutoAssignAgent() { return autoAssignAgent; }
     public Integer getAgentAssignmentDpd() { return agentAssignmentDpd; }
     public Integer getWalletFreezeDpd() { return walletFreezeDpd; }
+    public boolean isPenaltyWaiverAllowed() { return penaltyWaiverAllowed; }
+    public int getMaxPenaltyWaiversAllowed() { return maxPenaltyWaiversAllowed; }
     public int getVersion() { return version; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

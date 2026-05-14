@@ -175,6 +175,7 @@ app:
     fineract-tenant-id: ${FINERACT_TENANT_ID:default}
     notification-service-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8096}
     ledger-service-url: ${LEDGER_SERVICE_URL:http://localhost:8095}
+    wallet-service-url: ${WALLET_SERVICE_URL:http://localhost:8088}
   gl:
     accounts:
       loans-receivable: ${GL_ACCOUNT_LOANS_RECEIVABLE:1200}
@@ -190,3 +191,8 @@ ksa:
   error:
     additional-basenames:
       - errors/lending-errors
+  blacklist:
+    enabled: ${BLACKLIST_GUARD_ENABLED:true}
+    cache-key-prefix: blacklist
+    fail-open: false
+    token-only: true

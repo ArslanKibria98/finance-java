@@ -38,6 +38,7 @@ public class ManageDunningPolicyUseCaseImpl implements ManageDunningPolicyUseCas
                 c.defaultPolicy(), c.thresholds(), c.lateFee(), c.simah(),
                 c.stageActions(),
                 c.autoAssignAgent(), c.agentAssignmentDpd(), c.walletFreezeDpd(),
+                c.penaltyWaiverAllowed(), c.maxPenaltyWaiversAllowed(),
                 c.createdBy());
 
         if (c.defaultPolicy()) {
@@ -78,6 +79,12 @@ public class ManageDunningPolicyUseCaseImpl implements ManageDunningPolicyUseCas
         }
         policy.updateEscalation(
                 c.autoAssignAgent(), c.agentAssignmentDpd(), c.walletFreezeDpd(), c.updatedBy());
+        if (c.penaltyWaiverAllowed() != null || c.maxPenaltyWaiversAllowed() != null) {
+            policy.updateWaiverSettings(
+                    c.penaltyWaiverAllowed() != null ? c.penaltyWaiverAllowed() : policy.isPenaltyWaiverAllowed(),
+                    c.maxPenaltyWaiversAllowed() != null ? c.maxPenaltyWaiversAllowed() : policy.getMaxPenaltyWaiversAllowed(),
+                    c.updatedBy());
+        }
 
         var saved = policyRepository.save(policy);
         publishEvents(saved);

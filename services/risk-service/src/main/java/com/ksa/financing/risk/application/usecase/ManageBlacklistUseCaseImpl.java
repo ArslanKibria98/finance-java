@@ -10,6 +10,7 @@ import com.ksa.financing.risk.domain.model.MobileBlacklistEntry;
 import com.ksa.financing.risk.domain.model.NidBlacklistEntry;
 import com.ksa.financing.risk.domain.port.in.ManageBlacklistUseCase;
 import com.ksa.financing.risk.domain.port.out.BlacklistRepository;
+import com.ksa.financing.risk.infrastructure.blacklist.BlacklistRedisSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,10 +25,11 @@ import java.util.UUID;
 public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
     private final BlacklistRepository blacklistRepository;
+    private final BlacklistRedisSyncService redisSync;
 
     @Override
     @Transactional
-    public NidBlacklistEntry blacklistNid(String nationalId, String reason) {
+    public NidBlacklistEntry blacklistNid(String nationalId, String reason, UUID blockCodeId) {
         var existing = blacklistRepository.findNidByNationalId(nationalId);
         if (existing.isPresent() && existing.get().status() == BlacklistStatus.BLACKLISTED) {
             throw new BusinessException("RISK.BLACKLIST.ALREADY_BLACKLISTED",
@@ -36,14 +38,19 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
         if (existing.isPresent()) {
             blacklistRepository.updateNidStatus(nationalId, BlacklistStatus.BLACKLISTED);
+            if (blockCodeId != null) {
+                blacklistRepository.updateNidBlockCode(nationalId, blockCodeId);
+            }
             log.info("NID re-blacklisted: {}", maskNid(nationalId));
+            redisSync.onNidBlacklisted(nationalId, reason);
             return blacklistRepository.findNidByNationalId(nationalId).orElseThrow();
         }
 
         var entry = new NidBlacklistEntry(null, NationalId.of(nationalId), reason, BlacklistStatus.BLACKLISTED,
-            null, Instant.now(), Instant.now());
+            null, blockCodeId, null, Instant.now(), Instant.now());
         var saved = blacklistRepository.saveNid(entry);
         log.info("NID blacklisted: {}", maskNid(nationalId));
+        redisSync.onNidBlacklisted(nationalId, reason);
         return saved;
     }
 
@@ -54,6 +61,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
             .orElseThrow(() -> NotFoundException.forEntity("NidBlacklist", nationalId));
         blacklistRepository.updateNidStatus(nationalId, BlacklistStatus.REMOVED);
         log.info("NID removed from blacklist: {}", maskNid(nationalId));
+        redisSync.onNidRemoved(nationalId);
         return blacklistRepository.findNidByNationalId(nationalId).orElseThrow();
     }
 
@@ -72,7 +80,17 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
     @Override
     @Transactional
-    public MobileBlacklistEntry blacklistMobile(String mobileNumber, String reason) {
+    public NidBlacklistEntry assignNidBlockCode(String nationalId, UUID blockCodeId) {
+        blacklistRepository.findNidByNationalId(nationalId)
+            .orElseThrow(() -> NotFoundException.forEntity("NidBlacklist", nationalId));
+        blacklistRepository.updateNidBlockCode(nationalId, blockCodeId);
+        log.info("Block code {} assigned to NID: {}", blockCodeId, maskNid(nationalId));
+        return blacklistRepository.findNidByNationalId(nationalId).orElseThrow();
+    }
+
+    @Override
+    @Transactional
+    public MobileBlacklistEntry blacklistMobile(String mobileNumber, String reason, UUID blockCodeId) {
         var existing = blacklistRepository.findMobileByNumber(mobileNumber);
         if (existing.isPresent() && existing.get().status() == BlacklistStatus.BLACKLISTED) {
             throw new BusinessException("RISK.BLACKLIST.ALREADY_BLACKLISTED",
@@ -81,14 +99,19 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
         if (existing.isPresent()) {
             blacklistRepository.updateMobileStatus(mobileNumber, BlacklistStatus.BLACKLISTED);
+            if (blockCodeId != null) {
+                blacklistRepository.updateMobileBlockCode(mobileNumber, blockCodeId);
+            }
             log.info("Mobile re-blacklisted: {}", maskMobile(mobileNumber));
+            redisSync.onMobileBlacklisted(mobileNumber, reason);
             return blacklistRepository.findMobileByNumber(mobileNumber).orElseThrow();
         }
 
         var entry = new MobileBlacklistEntry(null, mobileNumber, reason, BlacklistStatus.BLACKLISTED,
-            null, Instant.now(), Instant.now());
+            null, blockCodeId, null, Instant.now(), Instant.now());
         var saved = blacklistRepository.saveMobile(entry);
         log.info("Mobile blacklisted: {}", maskMobile(mobileNumber));
+        redisSync.onMobileBlacklisted(mobileNumber, reason);
         return saved;
     }
 
@@ -99,6 +122,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
             .orElseThrow(() -> NotFoundException.forEntity("MobileBlacklist", mobileNumber));
         blacklistRepository.updateMobileStatus(mobileNumber, BlacklistStatus.REMOVED);
         log.info("Mobile removed from blacklist: {}", maskMobile(mobileNumber));
+        redisSync.onMobileRemoved(mobileNumber);
         return blacklistRepository.findMobileByNumber(mobileNumber).orElseThrow();
     }
 
@@ -113,6 +137,16 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
     @Transactional(readOnly = true)
     public PageResponse<MobileBlacklistEntry> listMobileBlacklist(PageQuery pageQuery) {
         return blacklistRepository.findAllMobile(pageQuery);
+    }
+
+    @Override
+    @Transactional
+    public MobileBlacklistEntry assignMobileBlockCode(String mobileNumber, UUID blockCodeId) {
+        blacklistRepository.findMobileByNumber(mobileNumber)
+            .orElseThrow(() -> NotFoundException.forEntity("MobileBlacklist", mobileNumber));
+        blacklistRepository.updateMobileBlockCode(mobileNumber, blockCodeId);
+        log.info("Block code {} assigned to mobile: {}", blockCodeId, maskMobile(mobileNumber));
+        return blacklistRepository.findMobileByNumber(mobileNumber).orElseThrow();
     }
 
     private String maskNid(String nid) {

@@ -33,11 +33,16 @@ public enum ApplicationStatus {
     CONTRACT_SIGNED,
 
     // Phase 6: Loan creation & disbursement
+    // After approval (auto or manual), application sits in AWAIT_DISBURSED for a
+    // grace window (default 1 minute) before LOAN_CREATING kicks off disbursement.
+    AWAIT_DISBURSED,
     LOAN_CREATING,
     DISBURSING,
 
     // Terminal states
     APPROVED,
+    // Funds successfully transferred to customer wallet — final state after disbursement completes
+    DISBURSED,
     REJECTED,
     CANCELLED,
     EXPIRED,
@@ -48,7 +53,7 @@ public enum ApplicationStatus {
     public boolean canTransitionTo(ApplicationStatus target) {
         if (target == CANCELLED || target == EXPIRED) {
             // Can cancel/expire from any state BEFORE disbursement
-            if (this == DISBURSING || this == APPROVED) {
+            if (this == DISBURSING || this == APPROVED || this == DISBURSED) {
                 return false;
             }
             return !this.isTerminal();
@@ -73,16 +78,19 @@ public enum ApplicationStatus {
             case CONTRACT_SIGNING -> target == OTP_VERIFICATION;
             case OTP_VERIFICATION -> target == IVR_VERIFICATION || target == CONTRACT_SIGNING;
             case IVR_VERIFICATION -> target == CONTRACT_SIGNED || target == CONTRACT_SIGNING;
-            case CONTRACT_SIGNED -> target == LOAN_CREATING;
+            case CONTRACT_SIGNED -> target == AWAIT_DISBURSED || target == LOAN_CREATING;
+            case AWAIT_DISBURSED -> target == LOAN_CREATING || target == REJECTED;
             case LOAN_CREATING -> target == DISBURSING || target == REJECTED;
-            case DISBURSING -> target == APPROVED || target == REJECTED;
+            case DISBURSING -> target == APPROVED || target == DISBURSED || target == REJECTED;
+            case APPROVED -> target == DISBURSED;
             case EXPIRED_RESUMABLE -> target == CONTRACT_PENDING;
-            case APPROVED, REJECTED, CANCELLED, EXPIRED -> false;
+            case DISBURSED, REJECTED, CANCELLED, EXPIRED -> false;
         };
     }
 
     public boolean isTerminal() {
-        return this == APPROVED || this == REJECTED || this == CANCELLED || this == EXPIRED;
+        return this == APPROVED || this == DISBURSED
+                || this == REJECTED || this == CANCELLED || this == EXPIRED;
     }
 
     /**
@@ -96,7 +104,7 @@ public enum ApplicationStatus {
             case OFFER_PRESENTED, OFFER_ACCEPTED -> 4;
             case CONTRACT_PENDING, CONTRACT_SIGNING, OTP_VERIFICATION,
                  IVR_VERIFICATION, CONTRACT_SIGNED -> 5;
-            case LOAN_CREATING, DISBURSING, APPROVED -> 5;
+            case AWAIT_DISBURSED, LOAN_CREATING, DISBURSING, APPROVED, DISBURSED -> 5;
             case EXPIRED_RESUMABLE -> 5;
             case REJECTED, CANCELLED, EXPIRED -> 0;
         };
@@ -113,7 +121,8 @@ public enum ApplicationStatus {
             case OFFER_PRESENTED, OFFER_ACCEPTED -> "Accept Offer";
             case CONTRACT_PENDING, CONTRACT_SIGNING, OTP_VERIFICATION,
                  IVR_VERIFICATION, CONTRACT_SIGNED,
-                 LOAN_CREATING, DISBURSING, APPROVED -> "Sign Contract";
+                 AWAIT_DISBURSED, LOAN_CREATING, DISBURSING, APPROVED -> "Sign Contract";
+            case DISBURSED -> "Funds Transferred";
             case EXPIRED_RESUMABLE -> "Contract Expired (Resumable)";
             case REJECTED -> "Rejected";
             case CANCELLED -> "Cancelled";

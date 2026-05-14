@@ -38,7 +38,7 @@ public class MultipleDisbursementsSameIbanEvaluator implements FraudRuleEvaluato
         if (count < min) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 count + " accounts share IBAN " + event.disbursementIban(),
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

@@ -30,6 +30,9 @@ public record InstallmentScheduleResponse(
         @Schema(description = "Profit component in SAR")
         BigDecimal profitComponent,
 
+        @Schema(description = "Fee component in SAR (processing + admin fee allocated to this installment)")
+        BigDecimal feeComponent,
+
         @Schema(description = "Outstanding balance after payment in SAR")
         BigDecimal outstandingBalance,
 
@@ -55,13 +58,14 @@ public record InstallmentScheduleResponse(
             BigDecimal installmentAmount,
             BigDecimal principalComponent,
             BigDecimal profitComponent,
+            BigDecimal feeComponent,
             BigDecimal outstandingBalance,
             String paymentStatus,
             LocalDate paidDate,
             BigDecimal paidAmount,
             boolean receiptAvailable) {
         return new InstallmentScheduleResponse(invoiceId, installmentNumber, dueDate, installmentAmount,
-                principalComponent, profitComponent, outstandingBalance, paymentStatus, paidDate,
+                principalComponent, profitComponent, feeComponent, outstandingBalance, paymentStatus, paidDate,
                 paidAmount, receiptAvailable, null);
     }
 }

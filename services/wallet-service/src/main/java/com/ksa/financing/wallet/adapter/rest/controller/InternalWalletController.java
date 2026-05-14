@@ -1,21 +1,32 @@
 package com.ksa.financing.wallet.adapter.rest.controller;
 
-import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.model.TransactionPurpose;
+import com.ksa.financing.wallet.domain.port.in.CreditWalletUseCase;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Internal endpoint for service-to-service wallet lookups.
- * No JWT required — used by customer-service for profile API.
+ * Internal endpoints for service-to-service wallet operations.
+ * No JWT required — protected by network policy / API gateway.
+ *
+ * Used by:
+ *  - customer-service → wallet IBAN lookup (profile API)
+ *  - lending-service  → credit wallet on loan disbursement
  */
 @RestController
 @RequestMapping("/internal/wallets")
@@ -24,6 +35,7 @@ import java.util.UUID;
 public class InternalWalletController {
 
     private final WalletRepository walletRepository;
+    private final CreditWalletUseCase creditWalletUseCase;
 
     @GetMapping("/by-customer/{customerId}")
     public ResponseEntity<WalletIbanResponse> getWalletIbanByCustomerId(
@@ -32,12 +44,7 @@ public class InternalWalletController {
 
         log.info("Internal: Getting wallet IBAN for customer: {} tenant: {}", customerId, tenantId);
 
-        UUID tenantUuid;
-        try {
-            tenantUuid = UUID.fromString(tenantId);
-        } catch (IllegalArgumentException e) {
-            tenantUuid = UUID.nameUUIDFromBytes(tenantId.getBytes());
-        }
+        UUID tenantUuid = parseTenant(tenantId);
 
         return walletRepository.findByCustomerId(tenantUuid, customerId)
                 .map(wallet -> ResponseEntity.ok(new WalletIbanResponse(
@@ -49,10 +56,55 @@ public class InternalWalletController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Credit the customer's wallet from an internal source (loan disbursement, refund, etc.).
+     * Funds are deposited into the Fineract savings account backing the wallet.
+     */
+    @PostMapping("/credit-from-loan")
+    public ResponseEntity<CreditWalletUseCase.CreditResult> creditFromLoan(
+            @Valid @RequestBody CreditWalletRequest request,
+            @RequestHeader(value = "X-Tenant-Id") String tenantId) {
+
+        UUID tenantUuid = parseTenant(tenantId);
+        log.info("Internal: Crediting wallet for customer={} amount={} ref={} idempotency={}",
+                request.customerId(), request.amount(), request.referenceId(), request.idempotencyKey());
+
+        var result = creditWalletUseCase.credit(new CreditWalletUseCase.CreditCommand(
+                tenantUuid,
+                request.customerId(),
+                request.amount(),
+                request.purpose() != null ? request.purpose() : TransactionPurpose.LOAN_PROCEEDS,
+                request.referenceType(),
+                request.referenceId(),
+                request.description(),
+                request.idempotencyKey()
+        ));
+
+        return ResponseEntity.ok(result);
+    }
+
+    private UUID parseTenant(String tenantId) {
+        try {
+            return UUID.fromString(tenantId);
+        } catch (IllegalArgumentException e) {
+            return UUID.nameUUIDFromBytes(tenantId.getBytes());
+        }
+    }
+
     public record WalletIbanResponse(
             UUID walletId,
             UUID customerId,
             String walletNumber,
             String iban
+    ) {}
+
+    public record CreditWalletRequest(
+            @NotNull UUID customerId,
+            @NotNull @Positive BigDecimal amount,
+            TransactionPurpose purpose,
+            String referenceType,
+            UUID referenceId,
+            String description,
+            @NotNull String idempotencyKey
     ) {}
 }

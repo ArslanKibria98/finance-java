@@ -173,6 +173,7 @@ public class LoanController {
                     .openingPrincipal(opening)
                     .principalComponent(monthlyPrincipal)
                     .profitComponent(monthlyProfit)
+                    .feeComponent(BigDecimal.ZERO)
                     .totalInstallment(monthlyTotal)
                     .closingPrincipal(closing.max(BigDecimal.ZERO))
                     .cumulativePrincipal(cumulativePrincipal)
@@ -533,17 +534,27 @@ public class LoanController {
             status = normalizeInstallmentStatus(status);
             var isPaid = "PAID".equalsIgnoreCase(status) || "COMPLETED".equalsIgnoreCase(status);
 
+            // Force component breakdown to match the contract installmentAmount.
+            // Some legacy rows have profit_component computed from a stale rate; the
+            // canonical figure is total_installment, so we derive profit on the fly
+            // to keep `principal + profit + fee == installmentAmount` invariant.
+            BigDecimal principal = row.getPrincipalComponent() != null ? row.getPrincipalComponent() : BigDecimal.ZERO;
+            BigDecimal fee = row.getFeeComponent() != null ? row.getFeeComponent() : BigDecimal.ZERO;
+            BigDecimal total = row.getTotalInstallment() != null ? row.getTotalInstallment() : BigDecimal.ZERO;
+            BigDecimal profit = total.subtract(principal).subtract(fee).max(BigDecimal.ZERO);
+
             responses.add(new InstallmentScheduleResponse(
                     invoiceId,
                     row.getInstallmentNumber(),
                     row.getDueDate(),
-                    row.getTotalInstallment(),
-                    row.getPrincipalComponent(),
-                    row.getProfitComponent(),
+                    total,
+                    principal,
+                    profit,
+                    fee,
                     row.getClosingPrincipal(),
                     status,
                     isPaid ? LocalDate.now() : null,
-                    isPaid ? row.getTotalInstallment() : null,
+                    isPaid ? total : null,
                     isPaid,
                     collectionsSnapshots.get(row.getInstallmentNumber())
             ));
@@ -608,6 +619,7 @@ public class LoanController {
                     row.getTotalInstallment(),
                     row.getPrincipalComponent(),
                     row.getProfitComponent(),
+                    row.getFeeComponent() != null ? row.getFeeComponent() : BigDecimal.ZERO,
                     row.getClosingPrincipal(),
                     status,
                     isPaid ? LocalDate.now() : null,
@@ -717,9 +729,11 @@ public class LoanController {
 
         var principal = dto.principalAmount() != null ? dto.principalAmount() : BigDecimal.ZERO;
         var totalProfit = dto.profitAmount() != null ? dto.profitAmount() : BigDecimal.ZERO;
+        var totalFee = dto.feeAmount() != null ? dto.feeAmount() : BigDecimal.ZERO;
         var monthlyPrincipal = principal.divide(BigDecimal.valueOf(dto.tenureMonths()), 2, RoundingMode.HALF_UP);
         var monthlyProfit = totalProfit.divide(BigDecimal.valueOf(dto.tenureMonths()), 2, RoundingMode.HALF_UP);
-        var balance = principal.add(totalProfit);
+        var monthlyFee = totalFee.divide(BigDecimal.valueOf(dto.tenureMonths()), 2, RoundingMode.HALF_UP);
+        var balance = principal.add(totalProfit).add(totalFee);
 
         var total = dto.totalAmount() != null ? dto.totalAmount() : BigDecimal.ZERO;
         var outstanding = dto.totalOutstanding() != null ? dto.totalOutstanding() : BigDecimal.ZERO;
@@ -746,6 +760,7 @@ public class LoanController {
                     dto.installmentAmount(),
                     monthlyPrincipal,
                     monthlyProfit,
+                    monthlyFee,
                     balance,
                     isPaid ? "PAID" : (isOverdue ? "OVERDUE" : resolvedStatus),
                     isPaid ? LocalDate.now() : null,

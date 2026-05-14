@@ -21,6 +21,7 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
 
     private final ProductRepository productRepository;
     private final ProductSettingsRepository settingsRepository;
+    private final com.ksa.financing.product.domain.port.out.EventPublisherPort eventPublisher;
 
     @Override
     @Transactional
@@ -51,7 +52,8 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
     @Transactional
     public void updateFeeSettings(UUID tenantId, UUID productId, UpdateFeeSettingsCommand command) {
         log.info("Updating fee settings for product: {}", productId);
-        ensureProductExists(tenantId, productId);
+        var product = productRepository.findById(tenantId, productId)
+            .orElseThrow(() -> NotFoundException.forEntity("Product", productId.toString()));
 
         settingsRepository.saveFeeSettings(
             tenantId, productId,
@@ -59,7 +61,19 @@ public class ManageProductSettingsUseCaseImpl implements ManageProductSettingsUs
             command.maxDbrPercentage(),
             command.dbrCalculationMethod(), command.dbrExceptions(),
             command.maxDti(), command.minAge(), command.maxAge(),
-            command.gdbrPercentage()
+            command.gdbrPercentage(),
+            command.penaltyWaiverAllowed(),
+            command.maxPenaltyWaiversAllowed(),
+            command.minFinancingAmount(),
+            command.maxFinancingAmount(),
+            command.vatPercentage()
+        );
+
+        eventPublisher.publishFeeSettingsUpdated(
+            tenantId, productId,
+            product.getProductCode(),
+            command.maxPenaltyWaiversAllowed(),
+            command.penaltyWaiverAllowed()
         );
 
         advanceWizardIfNeeded(tenantId, productId, 3);

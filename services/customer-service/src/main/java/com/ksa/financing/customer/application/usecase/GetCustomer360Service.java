@@ -728,6 +728,8 @@ public class GetCustomer360Service {
                 customer.getPepStatus() != null ? customer.getPepStatus().name() : null,
                 customer.getGlobalUid(),
                 profilePictureUrl,
+                customer.isBlocked(),
+                customer.getBlockCodes(),
                 customer.getCreatedAt(),
                 customer.getUpdatedAt()
         );

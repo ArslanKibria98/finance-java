@@ -34,7 +34,7 @@ public class BlacklistedCountryEvaluator implements FraudRuleEvaluator {
         if (!countryBlacklistRepository.isBlacklisted(event.tenantId(), country)) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Access from blacklisted country: " + country,
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

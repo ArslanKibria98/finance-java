@@ -4,12 +4,17 @@ import com.ksa.financing.ledger.application.dto.LedgerReportResponse;
 import com.ksa.financing.ledger.application.dto.LedgerReportResponse.AccountLedger;
 import com.ksa.financing.ledger.application.dto.LedgerReportResponse.LedgerMovement;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
 import com.ksa.financing.ledger.infrastructure.persistence.entity.AccountJpaEntity;
 import com.ksa.financing.ledger.infrastructure.persistence.entity.JournalLineJpaEntity;
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaAccountRepository;
 import com.ksa.financing.ledger.infrastructure.persistence.repository.JpaJournalLineRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,40 +46,54 @@ public class LedgerReportService {
                                          LocalDate fromDate,
                                          LocalDate toDate,
                                          String accountCode,
-                                         UUID accountId) {
-        log.info("Generating ledger report: tenant={}, from={}, to={}, accountCode={}, accountId={}",
-                tenantId, fromDate, toDate, accountCode, accountId);
+                                         UUID accountId,
+                                         PageQuery pageQuery) {
+        log.info("Generating ledger report: tenant={}, from={}, to={}, accountCode={}, accountId={}, search={}, page={}",
+                tenantId, fromDate, toDate, accountCode, accountId, pageQuery.search(), pageQuery.page());
 
-        List<AccountJpaEntity> accounts = resolveAccounts(tenantId, accountCode, accountId);
+        Pageable pageable = pageQuery.toPageable();
+        String searchPattern = toLikePattern(pageQuery.search());
+        Page<AccountJpaEntity> accountPage = resolveAccounts(tenantId, accountCode, accountId, searchPattern, pageable);
+        
         List<AccountLedger> ledgers = new ArrayList<>();
 
-        for (AccountJpaEntity account : accounts) {
+        for (AccountJpaEntity account : accountPage.getContent()) {
             AccountLedger ledger = buildAccountLedger(tenantId, account, fromDate, toDate);
+            // We include the ledger if it has movements, OR if the user specifically requested this account
             if (!ledger.movements().isEmpty() || accountCode != null || accountId != null) {
                 ledgers.add(ledger);
             }
         }
 
-        return LedgerReportResponse.builder()
-                .fromDate(fromDate)
-                .toDate(toDate)
-                .totalAccounts(ledgers.size())
-                .accounts(ledgers)
-                .build();
+        return new LedgerReportResponse(
+                fromDate,
+                toDate,
+                (int) accountPage.getTotalElements(),
+                ledgers,
+                PageMetadata.from(accountPage)
+        );
     }
 
-    private List<AccountJpaEntity> resolveAccounts(UUID tenantId, String accountCode, UUID accountId) {
+    private Page<AccountJpaEntity> resolveAccounts(UUID tenantId, String accountCode, UUID accountId,
+                                                   String searchPattern, Pageable pageable) {
         if (accountId != null) {
             AccountJpaEntity account = accountRepository.findByTenantIdAndId(tenantId, accountId)
                     .orElseThrow(() -> NotFoundException.forEntity("Account", accountId.toString()));
-            return List.of(account);
+            List<AccountJpaEntity> content = pageable.getPageNumber() == 0 ? List.of(account) : List.of();
+            return new PageImpl<>(content, pageable, 1);
         }
         if (accountCode != null && !accountCode.isBlank()) {
             AccountJpaEntity account = accountRepository.findByTenantIdAndAccountCode(tenantId, accountCode)
                     .orElseThrow(() -> NotFoundException.forEntity("Account", accountCode));
-            return List.of(account);
+            List<AccountJpaEntity> content = pageable.getPageNumber() == 0 ? List.of(account) : List.of();
+            return new PageImpl<>(content, pageable, 1);
         }
-        return accountRepository.findAllByTenantId(tenantId);
+        return accountRepository.searchByTenant(tenantId, searchPattern, pageable);
+    }
+
+    private String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     private AccountLedger buildAccountLedger(UUID tenantId,

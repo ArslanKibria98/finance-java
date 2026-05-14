@@ -91,13 +91,15 @@ public final class TawarruqCalculator {
             ProfitRate profitRate,
             Tenure tenure,
             LocalDate startDate,
-            String commodityTransactionId
+            String commodityTransactionId,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
         Objects.requireNonNull(tenure, "Tenure cannot be null");
         Objects.requireNonNull(startDate, "Start date cannot be null");
         Objects.requireNonNull(commodityTransactionId, "Commodity transaction ID cannot be null");
+        Objects.requireNonNull(feeAmount, "Fee amount cannot be null");
 
         if (commodityTransactionId.isBlank()) {
             throw new IllegalArgumentException("Commodity transaction ID cannot be blank");
@@ -112,15 +114,16 @@ public final class TawarruqCalculator {
         // Calculate sale price
         SarMoney salePrice = costPrice.add(profitAmount);
 
-        // Calculate monthly installment
-        SarMoney monthlyInstallment = salePrice.divide(tenure.months());
+        // Calculate monthly installment (Principal + Profit + Fee)
+        SarMoney monthlyInstallment = salePrice.add(feeAmount).divide(tenure.months());
 
         // Generate amortization schedule (same as Murabaha - flat distribution)
         List<InstallmentLine> schedule = AmortizationScheduleGenerator.generateFlatSchedule(
                 costPrice,
                 profitRate,
                 tenure,
-                startDate
+                startDate,
+                feeAmount
         );
 
         return new TawarruqCalculation(
@@ -152,7 +155,7 @@ public final class TawarruqCalculator {
             LocalDate startDate
     ) {
         String commodityTransactionId = "TAWQ-" + UUID.randomUUID().toString();
-        return calculate(costPrice, profitRate, tenure, startDate, commodityTransactionId);
+        return calculate(costPrice, profitRate, tenure, startDate, commodityTransactionId, SarMoney.zero());
     }
 
     /**
@@ -173,13 +176,15 @@ public final class TawarruqCalculator {
             ProfitRate profitRate,
             Tenure tenure,
             LocalDate startDate,
-            String commodityTransactionId
+            String commodityTransactionId,
+            SarMoney feeAmount
     ) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
         Objects.requireNonNull(tenure, "Tenure cannot be null");
         Objects.requireNonNull(startDate, "Start date cannot be null");
         Objects.requireNonNull(commodityTransactionId, "Commodity transaction ID cannot be null");
+        Objects.requireNonNull(feeAmount, "Fee amount cannot be null");
 
         if (commodityTransactionId.isBlank()) {
             throw new IllegalArgumentException("Commodity transaction ID cannot be blank");
@@ -193,7 +198,8 @@ public final class TawarruqCalculator {
                 costPrice,
                 profitRate,
                 tenure,
-                startDate
+                startDate,
+                feeAmount
         );
 
         // Calculate totals from schedule
@@ -280,9 +286,10 @@ public final class TawarruqCalculator {
     public static SarMoney calculateMonthlyInstallment(
             SarMoney costPrice,
             ProfitRate profitRate,
-            Tenure tenure
+            Tenure tenure,
+            SarMoney feeAmount
     ) {
-        return MurabahaCalculator.calculateMonthlyInstallment(costPrice, profitRate, tenure);
+        return MurabahaCalculator.calculateMonthlyInstallment(costPrice, profitRate, tenure, feeAmount);
     }
 
     /**

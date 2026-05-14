@@ -60,6 +60,9 @@ public class FraudRuleJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    @Column(name = "block_code_id")
+    private UUID blockCodeId;
+
     @Version
     @Column(name = "version", nullable = false)
     private int version;

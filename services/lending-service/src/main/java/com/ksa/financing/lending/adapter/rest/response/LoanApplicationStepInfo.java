@@ -227,9 +227,11 @@ public record LoanApplicationStepInfo(
             case OTP_VERIFICATION -> "VERIFY_OTP";
             case IVR_VERIFICATION -> "AWAIT_IVR_CALL";
             case CONTRACT_SIGNED -> "AWAIT_DISBURSEMENT";
+            case AWAIT_DISBURSED -> "DONE";
             case LOAN_CREATING -> "AWAIT_DISBURSEMENT";
             case DISBURSING -> "AWAIT_FUNDS_TRANSFER";
-            case APPROVED -> "DONE";
+            case APPROVED -> "AWAIT_FUNDS_TRANSFER";
+            case DISBURSED -> "DONE";
             case REJECTED -> "APPLICATION_REJECTED";
             case CANCELLED -> "APPLICATION_CANCELLED";
             case EXPIRED -> "APPLICATION_EXPIRED";
@@ -285,7 +287,9 @@ public record LoanApplicationStepInfo(
             case CONTRACT_PENDING, CONTRACT_SIGNING -> 5;
             case OTP_VERIFICATION -> 6;
             case IVR_VERIFICATION, CONTRACT_SIGNED -> 7;
-            case LOAN_CREATING, DISBURSING, APPROVED -> 8;
+            case AWAIT_DISBURSED, LOAN_CREATING, DISBURSING, APPROVED -> 8;
+            // Disbursement settled — no active step; step 8 will render as "completed"
+            case DISBURSED -> 0;
             case EXPIRED_RESUMABLE -> 5;
             case REJECTED, CANCELLED, EXPIRED -> 1;
         };

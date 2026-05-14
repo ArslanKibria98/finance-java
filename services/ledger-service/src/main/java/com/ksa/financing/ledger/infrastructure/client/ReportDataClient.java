@@ -2,6 +2,7 @@ package com.ksa.financing.ledger.infrastructure.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ksa.financing.infra.pagination.PageQuery;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -43,23 +44,35 @@ public class ReportDataClient {
         this.lendingUrl = lendingUrl;
     }
 
-    public JsonNode fetchOverdueInstallments(LocalDate asOfDate, Integer minDaysPastDue) {
-        var url = UriComponentsBuilder.fromHttpUrl(collectionsUrl)
+    public JsonNode fetchOverdueInstallments(LocalDate asOfDate, Integer minDaysPastDue, PageQuery query) {
+        var builder = UriComponentsBuilder.fromHttpUrl(collectionsUrl)
                 .pathSegment("api", "v1", "internal", "reports", "overdue-installments")
                 .queryParam("asOfDate", asOfDate)
                 .queryParamIfPresent("minDaysPastDue",
-                        java.util.Optional.ofNullable(minDaysPastDue))
-                .toUriString();
-        return get(url);
+                        java.util.Optional.ofNullable(minDaysPastDue));
+        
+        if (query != null) {
+            builder.queryParam("page", query.page())
+                   .queryParam("size", query.size())
+                   .queryParamIfPresent("search", java.util.Optional.ofNullable(query.search()));
+        }
+        
+        return get(builder.toUriString());
     }
 
-    public JsonNode fetchDueInstallments(LocalDate fromDate, LocalDate toDate) {
-        var url = UriComponentsBuilder.fromHttpUrl(collectionsUrl)
+    public JsonNode fetchDueInstallments(LocalDate fromDate, LocalDate toDate, PageQuery query) {
+        var builder = UriComponentsBuilder.fromHttpUrl(collectionsUrl)
                 .pathSegment("api", "v1", "internal", "reports", "due-installments")
                 .queryParam("fromDate", fromDate)
-                .queryParam("toDate", toDate)
-                .toUriString();
-        return get(url);
+                .queryParam("toDate", toDate);
+
+        if (query != null) {
+            builder.queryParam("page", query.page())
+                   .queryParam("size", query.size())
+                   .queryParamIfPresent("search", java.util.Optional.ofNullable(query.search()));
+        }
+
+        return get(builder.toUriString());
     }
 
     public JsonNode fetchScheduleInstallments(UUID loanId) {
@@ -70,21 +83,42 @@ public class ReportDataClient {
         return get(url);
     }
 
-    public JsonNode fetchEarlySettlements(LocalDate fromDate, LocalDate toDate) {
-        var url = UriComponentsBuilder.fromHttpUrl(collectionsUrl)
+    public JsonNode fetchEarlySettlements(LocalDate fromDate, LocalDate toDate, PageQuery query) {
+        var builder = UriComponentsBuilder.fromHttpUrl(collectionsUrl)
                 .pathSegment("api", "v1", "internal", "reports", "early-settlements")
                 .queryParam("fromDate", fromDate)
-                .queryParam("toDate", toDate)
-                .toUriString();
-        return get(url);
+                .queryParam("toDate", toDate);
+
+        if (query != null) {
+            builder.queryParam("page", query.page())
+                   .queryParam("size", query.size())
+                   .queryParamIfPresent("search", java.util.Optional.ofNullable(query.search()));
+        }
+
+        return get(builder.toUriString());
     }
 
-    public JsonNode fetchOutstandingBalances(LocalDate asOfDate, String productCode) {
+    public JsonNode fetchOutstandingBalances(LocalDate asOfDate, String productCode, PageQuery query) {
         var builder = UriComponentsBuilder.fromHttpUrl(lendingUrl)
                 .pathSegment("api", "v1", "internal", "reports", "outstanding-balances");
         if (asOfDate != null) builder.queryParam("asOfDate", asOfDate);
         if (productCode != null) builder.queryParam("productCode", productCode);
+
+        if (query != null) {
+            builder.queryParam("page", query.page())
+                   .queryParam("size", query.size())
+                   .queryParamIfPresent("search", java.util.Optional.ofNullable(query.search()));
+        }
+
         return get(builder.toUriString());
+    }
+
+    public JsonNode fetchLoansByCustomer(UUID customerId) {
+        var url = UriComponentsBuilder.fromHttpUrl(lendingUrl)
+                .pathSegment("api", "v1", "internal", "reports", "loans-by-customer")
+                .queryParam("customerId", customerId)
+                .toUriString();
+        return get(url);
     }
 
     public JsonNode fetchLoanLookup(List<UUID> loanIds) {
@@ -95,7 +129,7 @@ public class ReportDataClient {
         return get(builder.toUriString());
     }
 
-    public JsonNode fetchDisbursedLoans(LocalDate fromDate, LocalDate toDate, String productCode) {
+    public JsonNode fetchDisbursedLoans(LocalDate fromDate, LocalDate toDate, String productCode, PageQuery query) {
         var builder = UriComponentsBuilder.fromHttpUrl(lendingUrl)
                 .pathSegment("api", "v1", "internal", "reports", "disbursed-loans")
                 .queryParam("fromDate", fromDate)
@@ -103,6 +137,13 @@ public class ReportDataClient {
         if (productCode != null && !productCode.isBlank()) {
             builder.queryParam("productCode", productCode);
         }
+
+        if (query != null) {
+            builder.queryParam("page", query.page())
+                   .queryParam("size", query.size())
+                   .queryParamIfPresent("search", java.util.Optional.ofNullable(query.search()));
+        }
+
         return get(builder.toUriString());
     }
 

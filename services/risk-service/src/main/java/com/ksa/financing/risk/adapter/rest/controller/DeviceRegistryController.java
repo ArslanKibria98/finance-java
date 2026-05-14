@@ -3,6 +3,8 @@ package com.ksa.financing.risk.adapter.rest.controller;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.adapter.rest.request.BlockDeviceRequest;
 import com.ksa.financing.risk.adapter.rest.response.BlockedDeviceResponse;
 import com.ksa.financing.risk.domain.model.DeviceRegistryEntry;
@@ -38,7 +40,7 @@ public class DeviceRegistryController {
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
         log.info("Blocking device: {}... for tenant: {}", maskDeviceId(request.deviceId()), tenantId);
-        return manageDeviceRegistryUseCase.blockDevice(request.deviceId(), request.reason());
+        return manageDeviceRegistryUseCase.blockDevice(request.deviceId(), request.reason(), request.blockCodeId());
     }
 
     @SecuredEndpoint(obj = "risk.devices", act = "update")
@@ -65,9 +67,11 @@ public class DeviceRegistryController {
     @SecuredEndpoint(obj = "risk.devices", act = "read")
     @GetMapping("/blocked")
     @Operation(summary = "List all blocked devices", description = "Returns devices blocked by admin OR flagged by internal checks (identity farming). Grouped by deviceId with all NID associations.")
-    public List<BlockedDeviceResponse> listBlockedDevices(@AuthenticationPrincipal Jwt jwt) {
+    public List<BlockedDeviceResponse> listBlockedDevices(
+            @RequestParam(required = false) String search,
+            @AuthenticationPrincipal Jwt jwt) {
         extractTenantId(jwt);
-        var entries = manageDeviceRegistryUseCase.listBlockedDevices();
+        var entries = manageDeviceRegistryUseCase.listBlockedDevices(search);
         return groupByDevice(entries);
     }
 
@@ -89,6 +93,14 @@ public class DeviceRegistryController {
                     .map(DeviceRegistryEntry::blockSource)
                     .filter(Objects::nonNull)
                     .findFirst().orElse("UNKNOWN");
+            String blockCode = rows.stream()
+                    .map(DeviceRegistryEntry::blockCode)
+                    .filter(Objects::nonNull)
+                    .findFirst().orElse("NONE");
+            java.util.UUID blockCodeId = rows.stream()
+                    .map(DeviceRegistryEntry::blockCodeId)
+                    .filter(Objects::nonNull)
+                    .findFirst().orElse(null);
 
             int totalNids = rows.size();
             int totalAttempts = rows.stream().mapToInt(DeviceRegistryEntry::attemptCount).sum();
@@ -102,18 +114,23 @@ public class DeviceRegistryController {
 
             var nidAssociations = rows.stream()
                     .map(r -> new BlockedDeviceResponse.NidAssociation(
-                            r.nidHash(), r.attemptCount(), r.firstSeenAt(), r.lastSeenAt()))
+                            r.nid(), r.mobileNumber(), r.attemptCount(), r.firstSeenAt(), r.lastSeenAt()))
                     .toList();
 
-            String blockType = switch (blockSource) {
-                case "ADMIN_BLOCKED", "IDENTITY_FARMING" -> "HARD_BLOCK";
-                case "VELOCITY_EXCEEDED" -> "SOFT_BLOCK";
-                default -> "UNKNOWN";
-            };
+            String blockType = "NONE";
+            if (blockSource != null) {
+                if (blockSource.startsWith("Admin Block") || blockSource.startsWith("Identity Farming")) {
+                    blockType = "HARD_BLOCK";
+                } else if (blockSource.startsWith("Velocity Exceeded")) {
+                    blockType = "SOFT_BLOCK";
+                } else {
+                    blockType = "SYSTEM_FLAGGED";
+                }
+            }
 
             return new BlockedDeviceResponse(
                     deviceId, first.deviceFingerprint(),
-                    adminBlocked, blockReason, blockSource, blockType,
+                    adminBlocked, blockReason, blockSource, blockType, blockCode, blockCodeId,
                     totalNids, totalAttempts,
                     earliestSeen, latestSeen,
                     nidAssociations);
@@ -122,10 +139,13 @@ public class DeviceRegistryController {
 
     @SecuredEndpoint(obj = "risk.devices", act = "read")
     @GetMapping
-    @Operation(summary = "List all devices in registry")
-    public List<DeviceRegistryEntry> listAllDevices(@AuthenticationPrincipal Jwt jwt) {
+    @Operation(summary = "List all devices in registry (grouped)", description = "Returns all devices grouped by deviceId, matching the blocked devices format")
+    public List<BlockedDeviceResponse> listAllDevices(
+            @RequestParam(required = false) String search,
+            @AuthenticationPrincipal Jwt jwt) {
         extractTenantId(jwt);
-        return manageDeviceRegistryUseCase.listAllDevices();
+        var entries = manageDeviceRegistryUseCase.listAllDevicesGrouped(search);
+        return groupByDevice(entries);
     }
 
     @SecuredEndpoint(obj = "risk.devices", act = "delete")

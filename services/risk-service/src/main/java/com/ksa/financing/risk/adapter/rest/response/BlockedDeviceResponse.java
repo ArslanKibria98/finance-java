@@ -2,6 +2,7 @@ package com.ksa.financing.risk.adapter.rest.response;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public record BlockedDeviceResponse(
     String deviceId,
@@ -10,6 +11,8 @@ public record BlockedDeviceResponse(
     String blockReason,
     String blockSource,
     String blockType,
+    String blockCode,
+    UUID blockCodeId,
     int totalNidAssociations,
     int totalAttempts,
     Instant firstSeenAt,
@@ -17,7 +20,8 @@ public record BlockedDeviceResponse(
     List<NidAssociation> nidAssociations
 ) {
     public record NidAssociation(
-        String nidHash,
+        String nid,
+        String mobileNumber,
         int attemptCount,
         Instant firstSeenAt,
         Instant lastSeenAt

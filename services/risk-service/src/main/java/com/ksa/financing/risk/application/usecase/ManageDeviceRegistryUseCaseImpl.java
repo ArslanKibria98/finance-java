@@ -2,15 +2,19 @@ package com.ksa.financing.risk.application.usecase;
 
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.risk.domain.model.DeviceRegistryEntry;
 import com.ksa.financing.risk.domain.port.in.ManageDeviceRegistryUseCase;
 import com.ksa.financing.risk.domain.port.out.DeviceRegistryRepository;
+import com.ksa.financing.risk.infrastructure.blacklist.BlacklistRedisSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -18,10 +22,11 @@ import java.util.List;
 public class ManageDeviceRegistryUseCaseImpl implements ManageDeviceRegistryUseCase {
 
     private final DeviceRegistryRepository deviceRegistryRepository;
+    private final BlacklistRedisSyncService redisSync;
 
     @Override
     @Transactional
-    public DeviceRegistryEntry blockDevice(String deviceId, String reason) {
+    public DeviceRegistryEntry blockDevice(String deviceId, String reason, UUID blockCodeId) {
         var existing = deviceRegistryRepository.findByDeviceId(deviceId);
         if (existing.isPresent() && existing.get().blocked()) {
             throw new BusinessException("RISK.DEVICE.ALREADY_BLOCKED",
@@ -32,8 +37,9 @@ public class ManageDeviceRegistryUseCaseImpl implements ManageDeviceRegistryUseC
             throw NotFoundException.forEntity("DeviceRegistry", deviceId);
         }
 
-        deviceRegistryRepository.updateBlockStatus(deviceId, true, reason);
-        log.info("Device blocked: {}, reason: {}", maskDeviceId(deviceId), reason);
+        deviceRegistryRepository.updateBlockStatus(deviceId, true, reason, blockCodeId);
+        log.info("Device blocked: {}, reason: {}, blockCodeId: {}", maskDeviceId(deviceId), reason, blockCodeId);
+        redisSync.onDeviceBlocked(deviceId, reason);
         return deviceRegistryRepository.findByDeviceId(deviceId).orElseThrow();
     }
 
@@ -55,8 +61,9 @@ public class ManageDeviceRegistryUseCaseImpl implements ManageDeviceRegistryUseC
         }
 
         if (wasBlocked) {
-            deviceRegistryRepository.updateBlockStatus(deviceId, false, null);
+            deviceRegistryRepository.updateBlockStatus(deviceId, false, null, null);
             log.info("Device admin-block removed: {}", maskDeviceId(deviceId));
+            redisSync.onDeviceUnblocked(deviceId);
         }
 
         // Always reset ALL row attempt counts on unblock — findByDeviceId only returns most-recent row
@@ -82,14 +89,20 @@ public class ManageDeviceRegistryUseCaseImpl implements ManageDeviceRegistryUseC
 
     @Override
     @Transactional(readOnly = true)
-    public List<DeviceRegistryEntry> listBlockedDevices() {
-        return deviceRegistryRepository.findAllBlocked();
+    public List<DeviceRegistryEntry> listBlockedDevices(String search) {
+        return deviceRegistryRepository.findAllBlocked(search);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<DeviceRegistryEntry> listAllDevices() {
-        return deviceRegistryRepository.findAll();
+    public List<DeviceRegistryEntry> listAllDevicesGrouped(String search) {
+        return deviceRegistryRepository.findAllForGrouping(search);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DeviceRegistryEntry> listAllDevices(PageQuery query) {
+        return deviceRegistryRepository.findAll(query);
     }
 
     @Override

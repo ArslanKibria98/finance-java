@@ -57,6 +57,8 @@ public interface ManageProductUseCase {
         String repaymentFrequency,
         int gracePeriodDays,
         boolean earlySettlementAllowed,
+        boolean penaltyWaiverAllowed,
+        Integer maxPenaltyWaiversAllowed,
         UUID countryId,
         UUID createdBy
     ) {}

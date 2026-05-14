@@ -290,7 +290,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 1.50,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 30,\n  \"penaltyType\": 1,\n  \"isCustom\": false,\n  \"charityFundAccount\": \"CHARITY_FUND_001\"\n}"
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 1.50,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 30,\n  \"penaltyType\": 1,\n  \"settlementStrategy\": 1,\n  \"isCustom\": false,\n  \"charityFundAccount\": \"CHARITY_FUND_001\"\n}"
             },
             "description": "Flat discount mode. `isCustom=false` → the rule uses the top-level `penaltyPercentage`/`penaltyAmount` + day range; `configs[]` must be empty or omitted.\n\nCasbin: `delinquency.rules:manage`"
           }
@@ -325,9 +325,28 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 0.00,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 0,\n  \"penaltyType\": 1,\n  \"isCustom\": true,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n  \"configs\": [\n    {\n      \"kind\": \"SINGLE\",\n      \"invoiceOrder\": 1,\n      \"fromDay\": 0,\n      \"tillDay\": 30,\n      \"isPercentage\": true,\n      \"discountPercentage\": 5.00,\n      \"discountAmount\": 0.00\n    },\n    {\n      \"kind\": \"RANGE\",\n      \"rangeNo\": 1,\n      \"minInvoiceOrder\": 2,\n      \"maxInvoiceOrder\": 6,\n      \"fromDay\": 0,\n      \"tillDay\": 60,\n      \"isPercentage\": true,\n      \"discountPercentage\": 3.50,\n      \"discountAmount\": 0.00\n    }\n  ]\n}"
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"isPercentage\": true,\n  \"penaltyPercentage\": 0.00,\n  \"penaltyAmount\": 0.00,\n  \"fromDay\": 0,\n  \"tillDay\": 0,\n  \"penaltyType\": 1,\n  \"settlementStrategy\": 1,\n  \"isCustom\": true,\n  \"charityFundAccount\": \"CHARITY_FUND_001\",\n  \"configs\": [\n    {\n      \"kind\": \"SINGLE\",\n      \"invoiceOrder\": 1,\n      \"fromDay\": 0,\n      \"tillDay\": 30,\n      \"isPercentage\": true,\n      \"discountPercentage\": 5.00,\n      \"discountAmount\": 0.00\n    },\n    {\n      \"kind\": \"RANGE\",\n      \"rangeNo\": 1,\n      \"minInvoiceOrder\": 2,\n      \"maxInvoiceOrder\": 6,\n      \"fromDay\": 0,\n      \"tillDay\": 60,\n      \"isPercentage\": true,\n      \"discountPercentage\": 3.50,\n      \"discountAmount\": 0.00\n    }\n  ]\n}"
             },
             "description": "Custom-frequency mode. `isCustom=true` with the full `configs[]` array in ONE request.\n\n- The RANGE item (invoices 2–6) expands server-side into 5 rows (`isRange=true`, `rangeNo=1`, `min=2`, `max=6`).\n- The SINGLE item (invoice 1) becomes 1 row (`isRange=false`, `rangeNo=0`).\n- Every upsert **replaces** the entire config set for this rule (rewrite-on-save). Omit `configs[]` to clear all configs.\n\nServer returns 422 if `isCustom=false` and `configs[]` is non-empty."
+          }
+        },
+        {
+          "name": "2b. Upsert Rule — Early Settlement (type=1, principle based, strategy=2)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{kongUrl}}/collections-service/api/v1/admin/delinquency-rules",
+              "host": ["{{kongUrl}}"],
+              "path": ["collections-service","api","v1","admin","delinquency-rules"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delinquencyType\": 1,\n  \"settlementStrategy\": 2,\n  \"settlementDiscountType\": \"FIXED\",\n  \"settlementMonths\": 3,\n  \"settlementAmountPerMonth\": 100.00,\n  \"isCustom\": false,\n  \"charityFundAccount\": \"CHARITY_FUND_001\"\n}"
+            },
+            "description": "Principle-based settlement mode (Strategy 2). Calculates total discount as: settlementMonths * settlementAmountPerMonth."
           }
         },
         {

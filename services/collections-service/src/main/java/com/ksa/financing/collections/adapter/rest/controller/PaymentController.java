@@ -410,6 +410,7 @@ public class PaymentController {
             var entries = new ArrayList<ManageRepaymentScheduleUseCase.CreateScheduleCommand.InstallmentEntry>();
             BigDecimal totalPrincipal = BigDecimal.ZERO;
             BigDecimal totalProfit = BigDecimal.ZERO;
+            BigDecimal totalFee = BigDecimal.ZERO;
             LocalDate firstDueDate = null;
             LocalDate lastDueDate = null;
 
@@ -418,11 +419,15 @@ public class PaymentController {
                 LocalDate dueDate = LocalDate.parse(item.path("dueDate").asText());
                 BigDecimal principal = item.path("principalComponent").decimalValue();
                 BigDecimal profit = item.path("profitComponent").decimalValue();
+                var feeNode = item.path("feeComponent");
+                BigDecimal fee = feeNode.isMissingNode() || feeNode.isNull()
+                        ? BigDecimal.ZERO : feeNode.decimalValue();
 
                 entries.add(new ManageRepaymentScheduleUseCase.CreateScheduleCommand.InstallmentEntry(
-                        number, dueDate, principal, profit, BigDecimal.ZERO));
+                        number, dueDate, principal, profit, fee));
                 totalPrincipal = totalPrincipal.add(principal);
                 totalProfit = totalProfit.add(profit);
+                totalFee = totalFee.add(fee);
                 if (firstDueDate == null || dueDate.isBefore(firstDueDate)) firstDueDate = dueDate;
                 if (lastDueDate == null || dueDate.isAfter(lastDueDate)) lastDueDate = dueDate;
             }
@@ -440,6 +445,7 @@ public class PaymentController {
                     "SCH-" + loanId.toString().substring(0, 8).toUpperCase() + "-001",
                     totalPrincipal,
                     totalProfit,
+                    totalFee,
                     firstDueDate,
                     lastDueDate,
                     entries,

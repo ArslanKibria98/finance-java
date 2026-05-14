@@ -1,8 +1,10 @@
 package com.ksa.financing.wallet.adapter.temporal.activity;
 
+import com.ksa.financing.wallet.domain.iban.IbanGenerator;
 import com.ksa.financing.wallet.domain.model.Wallet;
 import com.ksa.financing.wallet.domain.port.out.FineractSavingsPort;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
+import com.ksa.financing.wallet.infrastructure.fineract.WalletFineractFeatureFlag;
 import io.temporal.activity.Activity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ public class FineractSyncActivityImpl implements FineractSyncActivity {
 
     private final FineractSavingsPort fineractPort;
     private final WalletRepository walletRepository;
+    private final WalletFineractFeatureFlag fineractConfig;
 
     @Override
     public Long lookupFineractClient(String customerId) {
@@ -60,11 +63,15 @@ public class FineractSyncActivityImpl implements FineractSyncActivity {
                 .orElseThrow(() -> Activity.wrap(new IllegalStateException(
                         "Wallet not found: " + walletNumber)));
 
+        String derivedIban = IbanGenerator.fromFineractSavingsId(savingsId, fineractConfig.getIbanBankCode());
+
         wallet.setFineractSavingsAccountId(savingsId);
+        wallet.setIban(derivedIban);
         wallet.setLedgerSynced(true);
         wallet.setLastLedgerSyncAt(Instant.now());
         walletRepository.save(wallet);
-        log.info("[FineractSync] Wallet {} linked to Fineract savings {}", walletNumber, savingsId);
+        log.info("[FineractSync] Wallet {} linked to Fineract savings {} (iban={})",
+                walletNumber, savingsId, derivedIban);
     }
 
     @Override

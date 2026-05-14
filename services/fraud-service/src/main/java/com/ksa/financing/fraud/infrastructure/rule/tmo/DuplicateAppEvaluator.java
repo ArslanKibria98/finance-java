@@ -45,7 +45,7 @@ public class DuplicateAppEvaluator implements FraudRuleEvaluator {
         if (otherDupes == 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Duplicate application within " + windowHours + "h",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

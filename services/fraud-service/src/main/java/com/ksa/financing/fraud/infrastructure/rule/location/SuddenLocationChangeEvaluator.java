@@ -53,7 +53,7 @@ public class SuddenLocationChangeEvaluator implements FraudRuleEvaluator {
         if (distance.compareTo(BigDecimal.valueOf(distanceKm)) <= 0) {
             return RuleEvaluationResult.notTriggered(rule.ruleId());
         }
-        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(),
+        return RuleEvaluationResult.triggered(rule.ruleId(), rule.defaultAction(), rule.blockType(), rule.blockCodeId(), rule.blockCode(),
                 "Same device + " + distance + " km move within " + windowHours + "h (possible GPS spoof)",
                 EvaluatorScores.forDecision(rule.defaultAction()));
     }

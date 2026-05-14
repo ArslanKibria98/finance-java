@@ -1,6 +1,9 @@
 package com.ksa.financing.ledger.unit.application;
 
 import com.ksa.financing.infra.exception.BusinessException;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageQuery;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.ledger.application.usecase.ManageCoaConfigurationUseCaseImpl;
 import com.ksa.financing.ledger.domain.model.AccountAggregate;
 import com.ksa.financing.ledger.domain.model.AccountType;
@@ -24,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -97,9 +101,10 @@ class ManageCoaConfigurationUseCaseTest {
 
         when(configurationRepository.findProfileById(tenantId, profileId)).thenReturn(Optional.of(profile));
         when(configurationRepository.findMappingsByProfileId(tenantId, profileId)).thenReturn(List.of());
-        when(fieldLovRepository.findAllActiveByTenant(tenantId)).thenReturn(List.of(
-                CoaFieldLov.create(tenantId, "COLLECTION_ACCOUNT", "Collection Account", null, "COLLECTIONS", true, 1)
-        ));
+        var mandatoryField = CoaFieldLov.create(tenantId, "COLLECTION_ACCOUNT", "Collection Account", null, "COLLECTIONS", true, 1);
+        var fieldPage = new PageResponse<>(List.of(mandatoryField), new PageMetadata(0, 1000, 1, 1, true, true, false));
+        when(fieldLovRepository.findAllActiveByTenant(eq(tenantId), any(PageQuery.class))).thenReturn(fieldPage);
+        when(fieldLovRepository.findAllByTenant(eq(tenantId), any(PageQuery.class))).thenReturn(fieldPage);
 
         var validation = useCase.validate(tenantId, profileId);
 
@@ -121,7 +126,9 @@ class ManageCoaConfigurationUseCaseTest {
 
         when(configurationRepository.findProfileById(tenantId, profileId)).thenReturn(Optional.of(profile));
         when(configurationRepository.findMappingsByProfileId(tenantId, profileId)).thenReturn(List.of(mapping));
-        when(fieldLovRepository.findAllActiveByTenant(tenantId)).thenReturn(List.of(field));
+        var fieldPage = new PageResponse<>(List.of(field), new PageMetadata(0, 1000, 1, 1, true, true, false));
+        when(fieldLovRepository.findAllActiveByTenant(eq(tenantId), any(PageQuery.class))).thenReturn(fieldPage);
+        when(fieldLovRepository.findAllByTenant(eq(tenantId), any(PageQuery.class))).thenReturn(fieldPage);
         when(accountRepository.findById(tenantId, account.getId())).thenReturn(Optional.of(account));
         when(configurationRepository.saveProfile(any(CoaConfigurationProfile.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

@@ -2,6 +2,7 @@ package com.ksa.financing.wallet.infrastructure.persistence.repository;
 
 import com.ksa.financing.wallet.infrastructure.persistence.entity.WalletTransferJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -9,7 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface JpaWalletTransferRepository extends JpaRepository<WalletTransferJpaEntity, UUID> {
+public interface JpaWalletTransferRepository extends JpaRepository<WalletTransferJpaEntity, UUID>, JpaSpecificationExecutor<WalletTransferJpaEntity> {
 
     Optional<WalletTransferJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 

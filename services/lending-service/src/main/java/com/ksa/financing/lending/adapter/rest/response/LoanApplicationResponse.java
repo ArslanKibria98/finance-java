@@ -144,6 +144,8 @@ public record LoanApplicationResponse(
         BigDecimal principalAmount,
         @Schema(description = "Total payable amount")
         BigDecimal totalAmount,
+        @Schema(description = "Total payable amount (explicit key)")
+        BigDecimal totalPayable,
         @Schema(description = "Monthly installment amount")
         BigDecimal installmentAmount,
         @Schema(description = "Fineract loan ID")
@@ -182,7 +184,7 @@ public record LoanApplicationResponse(
         Boolean earlySettlementEligible
 ) {
     public static LoanApplicationResponse from(LoanApplicationDto dto) {
-        return from(dto, null, null, null, null, null, null, null);
+        return from(dto, null, null, null, null, null, null, null, null);
     }
 
     public static LoanApplicationResponse from(
@@ -193,9 +195,59 @@ public record LoanApplicationResponse(
             LocalDateTime rescheduleRequestedAt,
             LocalDateTime rescheduleAppliedAt,
             String rescheduleReason,
-            String rescheduleDetails) {
+            String rescheduleDetails,
+            BigDecimal preliminaryTotalPayable) {
         var normalizedStatus = normalizeStatus(dto.status());
         String displayStatus = deriveDisplayStatus(dto, normalizedStatus);
+        
+        // Prefer the current loan totalAmount when it exists — it reflects post-reschedule
+        // values (tenure extension recomputes total = newInstallment × newTenure).
+        // Fall back to offeredTotalPayable for applications that haven't booked a loan yet.
+        BigDecimal finalTotalPayable = dto.totalAmount() != null ? dto.totalAmount() : dto.offeredTotalPayable();
+        if (finalTotalPayable == null) {
+            finalTotalPayable = preliminaryTotalPayable;
+        } else if (dto.totalAmount() == null) {
+            // Legacy fix only applies when falling back to offeredTotalPayable (pre-loan stage).
+            BigDecimal safeAmount = dto.acceptedAmount() != null ? dto.acceptedAmount() :
+                                    (dto.offeredAmount() != null ? dto.offeredAmount() : BigDecimal.ZERO);
+            BigDecimal safeProfit = dto.offeredTotalProfit() != null ? dto.offeredTotalProfit() : BigDecimal.ZERO;
+            BigDecimal safeProcFee = dto.processingFee() != null ? dto.processingFee() : BigDecimal.ZERO;
+            BigDecimal safeAdminFee = dto.adminFee() != null ? dto.adminFee() : BigDecimal.ZERO;
+
+            BigDecimal expectedTotal = safeAmount.add(safeProfit).add(safeProcFee).add(safeAdminFee);
+
+            if (safeAmount.compareTo(BigDecimal.ZERO) > 0 && finalTotalPayable.compareTo(expectedTotal) < 0) {
+                finalTotalPayable = expectedTotal;
+            }
+        }
+
+        // Self-heal stale loan.total_amount rows that pre-date the reschedule recompute fix.
+        // If installment × tenure disagrees with the persisted totalAmount, trust the schedule.
+        if (dto.installmentAmount() != null && dto.currentTenureMonths() != null
+                && dto.currentTenureMonths() > 0) {
+            BigDecimal scheduledTotal = dto.installmentAmount()
+                    .multiply(BigDecimal.valueOf(dto.currentTenureMonths()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            if (finalTotalPayable == null
+                    || finalTotalPayable.setScale(2, RoundingMode.HALF_UP)
+                            .compareTo(scheduledTotal) != 0) {
+                finalTotalPayable = scheduledTotal;
+            }
+        }
+
+        // Derive offeredTotalProfit from finalTotalPayable so it stays consistent
+        // after a tenure extension / reschedule.
+        BigDecimal displayedTotalProfit = dto.offeredTotalProfit();
+        if (finalTotalPayable != null && dto.principalAmount() != null) {
+            BigDecimal procFee = dto.processingFee() != null ? dto.processingFee() : BigDecimal.ZERO;
+            BigDecimal adminFee = dto.adminFee() != null ? dto.adminFee() : BigDecimal.ZERO;
+            displayedTotalProfit = finalTotalPayable
+                    .subtract(dto.principalAmount())
+                    .subtract(procFee)
+                    .subtract(adminFee)
+                    .max(BigDecimal.ZERO);
+        }
+
         return new LoanApplicationResponse(
                 dto.id(),
                 dto.applicationNumber(),
@@ -258,8 +310,8 @@ public record LoanApplicationResponse(
                 // Offer
                 scale2(dto.offeredAmount()),
                 scale2(dto.installmentAmount() != null ? dto.installmentAmount() : dto.offeredMonthlyInstallment()),
-                scale2(dto.offeredTotalProfit()),
-                scale2(dto.totalAmount() != null ? dto.totalAmount() : dto.offeredTotalPayable()),
+                scale2(displayedTotalProfit),
+                scale2(finalTotalPayable),
                 scale2(dto.processingFee()),
                 scale2(dto.adminFee()),
                 scale2(dto.acceptedAmount()),
@@ -280,7 +332,8 @@ public record LoanApplicationResponse(
                 dto.loanNumber(),
                 dto.loanStatus(),
                 scale2(dto.principalAmount()),
-                scale2(dto.totalAmount()),
+                scale2(finalTotalPayable),
+                scale2(finalTotalPayable),
                 scale2(dto.installmentAmount()),
                 dto.fineractLoanId(),
                 dto.disbursementDate(),
@@ -307,13 +360,15 @@ public record LoanApplicationResponse(
     }
 
     private static String deriveDisplayStatus(LoanApplicationDto dto, String normalizedStatus) {
-        // If loan is already disbursed/active, list view should show APPROVED even when app status lags.
+        // If loan is already disbursed/active, list view should show DISBURSED even when app status lags.
         if (dto.disbursementDate() != null || isActiveOrClosedLoan(dto.loanStatus())) {
-            return "APPROVED";
+            return "DISBURSED";
         }
         return switch (normalizedStatus) {
             case "MANUAL_REVIEW" -> "MANUAL_REVIEW";
             case "APPROVED" -> "APPROVED";
+            case "AWAIT_DISBURSED" -> "AWAIT_DISBURSED";
+            case "DISBURSED" -> "DISBURSED";
             case "REJECTED" -> "REJECTED";
             case "CANCELLED" -> "CANCELLED";
             case "EXPIRED" -> "EXPIRED";

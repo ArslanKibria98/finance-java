@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -14,7 +16,8 @@ public record OverdueLoanReportResponse(
     @Schema(description = "As-of date") LocalDate asOfDate,
     @Schema(description = "Number of overdue loans") int totalCount,
     @Schema(description = "Total overdue amount (SAR)") BigDecimal totalOverdueAmount,
-    @Schema(description = "Line items") List<Line> items
+    @Schema(description = "Line items") List<Line> items,
+    @Schema(description = "Pagination metadata") @JsonIgnore PageMetadata pagination
 ) {
 
     @Builder

@@ -18,6 +18,13 @@ public interface DisbursementActivity {
     @ActivityMethod
     DisbursementResult disburseFunds(DisburseFundsInput input);
 
+    /**
+     * Credit loan proceeds directly into the customer's wallet (Fineract savings account)
+     * instead of bank transfer to IBAN. Wallet-service handles the Fineract deposit.
+     */
+    @ActivityMethod
+    WalletDisbursementResult disburseToWallet(WalletDisbursementInput input);
+
     @ActivityMethod
     void sendCompletionNotification(NotificationInput input);
 
@@ -62,6 +69,26 @@ public interface DisbursementActivity {
             String disbursementId,
             String disbursementNumber,
             String paymentReference,
+            String status,
+            boolean success
+    ) {}
+
+    record WalletDisbursementInput(
+            String tenantId,
+            String loanId,
+            String loanNumber,
+            String customerId,
+            BigDecimal amount,
+            String idempotencyKey
+    ) {}
+
+    record WalletDisbursementResult(
+            String walletId,
+            String walletNumber,
+            Long fineractSavingsAccountId,
+            Long fineractTransactionId,
+            String movementId,
+            BigDecimal newAvailableBalance,
             String status,
             boolean success
     ) {}

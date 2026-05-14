@@ -19,6 +19,8 @@ public class FraudRule {
     private int priority;
     private Instant createdAt;
     private Instant updatedAt;
+    private UUID blockCodeId;
+    private int version;
 
     public FraudRule() {}
 
@@ -63,4 +65,10 @@ public class FraudRule {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public UUID getBlockCodeId() { return blockCodeId; }
+    public void setBlockCodeId(UUID blockCodeId) { this.blockCodeId = blockCodeId; }
+
+    public int getVersion() { return version; }
+    public void setVersion(int version) { this.version = version; }
 }

@@ -9,7 +9,6 @@ import com.ksa.financing.middleware.domain.port.in.ExecuteApiUseCase;
 import com.ksa.financing.middleware.domain.port.out.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +22,15 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Executes third-party API calls through the middleware gateway.
- * Authenticates client via secretKey, verifies API access, then routes to mock or live.
+ *
+ * Flow:
+ *  1. Authenticate calling client by X-Secret-Key.
+ *  2. Resolve client environment (TEST / DEV / PROD) and choose target table:
+ *       TEST -> client_request_test  (mock response dispatched locally)
+ *       DEV  -> client_request_dev   (live HTTP call using provider DEV creds)
+ *       PROD -> client_request_prod  (live HTTP call using provider PROD creds)
+ *  3. Idempotency lookup is scoped to the client's environment table.
+ *  4. Persist the full request/response envelope in the env-specific table.
  */
 @Slf4j
 @Service
@@ -33,24 +40,33 @@ public class ExecuteApiService implements ExecuteApiUseCase {
     private final ProviderApiRepository providerApiRepository;
     private final ProviderRepository providerRepository;
     private final EnvConfigRepository envConfigRepository;
-    private final RequestLogRepository requestLogRepository;
+    private final ClientRequestRepository clientRequestRepository;
     private final ClientRepository clientRepository;
     private final ClientAccessRepository clientAccessRepository;
     private final MockResponseDispatcher mockResponseDispatcher;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.environment:DEV}")
-    private String activeEnvironment;
+    @Override
+    @Transactional
+    public ExecutionResult execute(String secretKey, String apiCode, String requestBody,
+                                   Map<String, String> pathParams, Map<String, String> queryParams,
+                                   Map<String, String> headers, String idempotencyKey,
+                                   String nationalId, String mobileNumber, String callerService) {
+        return execute(secretKey, apiCode, requestBody, pathParams, queryParams, headers,
+                idempotencyKey, nationalId, mobileNumber, callerService, BusinessContext.empty());
+    }
 
     @Override
     @Transactional
     public ExecutionResult execute(String secretKey, String apiCode, String requestBody,
                                    Map<String, String> pathParams, Map<String, String> queryParams,
                                    Map<String, String> headers, String idempotencyKey,
-                                   String nationalId, String callerService) {
+                                   String nationalId, String mobileNumber, String callerService,
+                                   BusinessContext context) {
 
-        // 1. Authenticate client by secretKey
+        if (context == null) context = BusinessContext.empty();
+
         if (secretKey == null || secretKey.isBlank()) {
             throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS, "Secret key is required");
         }
@@ -65,16 +81,17 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         }
 
         var tenantId = client.getTenantId();
-        log.info("Executing API call: apiCode={}, tenant={}, client={}, caller={}",
-                apiCode, tenantId, client.getCode(), callerService);
+        var environment = toEnvironmentType(client.getEnvironment());
+        log.info("Executing API call: apiCode={}, env={}, tenant={}, client={}, caller={}",
+                apiCode, environment, tenantId, client.getCode(), callerService);
 
-        // 2. Check idempotency — return cached result if already processed
+        // Env-scoped idempotency: a TEST replay must not return a DEV/PROD result.
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            var cached = requestLogRepository.findByIdempotencyKey(tenantId, idempotencyKey);
+            var cached = clientRequestRepository.findByIdempotencyKey(tenantId, environment, idempotencyKey);
             if (cached.isPresent()) {
                 var existing = cached.get();
                 if (existing.getStatus() == RequestStatus.SUCCESS || existing.getStatus() == RequestStatus.FAILED) {
-                    log.info("Idempotent hit: returning cached result for key={}", idempotencyKey);
+                    log.info("Idempotent hit: env={}, key={}", environment, idempotencyKey);
                     return new ExecutionResult(
                             existing.getRequestId(),
                             existing.getResponseStatus() != null ? existing.getResponseStatus() : 0,
@@ -88,7 +105,6 @@ public class ExecuteApiService implements ExecuteApiUseCase {
             }
         }
 
-        // 3. Resolve API definition
         var providerApi = providerApiRepository.findByCode(tenantId, apiCode)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCodes.NOT_FOUND, "API not found: " + apiCode));
@@ -98,14 +114,12 @@ public class ExecuteApiService implements ExecuteApiUseCase {
                     "API is not active: " + apiCode);
         }
 
-        // 4. Verify client has access to this API
         var apiAccess = clientAccessRepository.findApiAccess(tenantId, client.getId(), providerApi.getId());
         if (apiAccess.isEmpty() || !apiAccess.get().isActive()) {
             throw new BusinessException(ErrorCodes.ACCESS_DENIED,
                     "Client does not have access to API: " + apiCode);
         }
 
-        // 5. Resolve provider
         var provider = providerRepository.findById(tenantId, providerApi.getProviderId())
                 .orElseThrow(() -> new BusinessException(
                         ErrorCodes.NOT_FOUND, "Provider not found for API: " + apiCode));
@@ -115,92 +129,70 @@ public class ExecuteApiService implements ExecuteApiUseCase {
                     "Provider is not active: " + provider.getCode());
         }
 
-        // 6. Route by client environment: TEST → mock, DEV/PROD → live HTTP
-        if (client.getEnvironment() == AccessEnvironment.TEST) {
-            return executeMock(tenantId, client, provider, providerApi, apiCode,
-                    requestBody, idempotencyKey, nationalId);
+        if (environment == EnvironmentType.TEST) {
+            return executeMock(tenantId, environment, client, provider, providerApi, apiCode,
+                    requestBody, idempotencyKey, nationalId, mobileNumber, callerService, context);
         }
-
-        // 7. Live execution for DEV/PROD/BOTH clients
-        return executeLive(tenantId, client, provider, providerApi, apiCode,
-                requestBody, pathParams, queryParams, headers, idempotencyKey, nationalId);
+        return executeLive(tenantId, environment, client, provider, providerApi, apiCode,
+                requestBody, pathParams, queryParams, headers, idempotencyKey,
+                nationalId, mobileNumber, callerService, context);
     }
 
-    private ExecutionResult executeMock(UUID tenantId, ApiClient client, ThirdPartyProvider provider,
-                                         ProviderApi providerApi, String apiCode,
-                                         String requestBody, String idempotencyKey, String nationalId) {
+    private ExecutionResult executeMock(UUID tenantId, EnvironmentType environment, ApiClient client,
+                                         ThirdPartyProvider provider, ProviderApi providerApi, String apiCode,
+                                         String requestBody, String idempotencyKey,
+                                         String nationalId, String mobileNumber, String callerService,
+                                         BusinessContext context) {
 
         log.info("Mock execution: apiCode={}, provider={}, client={}", apiCode, provider.getCode(), client.getCode());
 
         String requestId = generateRequestId();
-        var requestLog = ApiRequestLog.create(
+        var clientRequest = ClientRequest.create(
                 tenantId, providerApi.getId(), client.getId(), requestId,
-                EnvironmentType.DEV, providerApi.getHttpMethod(), "MOCK://" + apiCode,
-                "{}", requestBody != null ? requestBody : "{}", idempotencyKey, nationalId
+                provider.getCode(), apiCode, environment, providerApi.getHttpMethod(),
+                "MOCK://" + apiCode, "{}", ensureJsonBody(requestBody),
+                idempotencyKey, nationalId, mobileNumber, callerService,
+                context.customerId(), context.applicationId(), context.contextType(),
+                providerApi.getCostPerCall(), providerApi.getCostCurrency()
         );
-        requestLog = requestLogRepository.save(requestLog);
+        clientRequest = clientRequestRepository.save(clientRequest);
 
         var mockResult = mockResponseDispatcher.dispatch(provider.getCode(), apiCode, requestBody);
+        String responseHeadersJson = normalizeHeadersToJson(mockResult.responseHeaders());
+        String responseBodyJson = ensureJsonBody(mockResult.responseBody());
 
-        // Convert plain-text headers to valid JSON for JSONB column
-        String responseHeadersJson = "{}";
-        if (mockResult.responseHeaders() != null && !mockResult.responseHeaders().isBlank()) {
-            try {
-                // If already valid JSON, use as-is
-                objectMapper.readTree(mockResult.responseHeaders());
-                responseHeadersJson = mockResult.responseHeaders();
-            } catch (Exception e) {
-                // Convert "Key: Value" format to JSON object
-                var headerMap = new java.util.LinkedHashMap<String, String>();
-                for (String line : mockResult.responseHeaders().split("\n")) {
-                    var parts = line.split(":", 2);
-                    if (parts.length == 2) {
-                        headerMap.put(parts[0].trim(), parts[1].trim());
-                    }
-                }
-                try {
-                    responseHeadersJson = objectMapper.writeValueAsString(headerMap);
-                } catch (Exception ignored) {
-                    responseHeadersJson = "{}";
-                }
-            }
-        }
+        clientRequest.markSuccess(mockResult.httpStatus(), responseHeadersJson, responseBodyJson, 0L);
+        clientRequest = clientRequestRepository.save(clientRequest);
 
-        requestLog.markSuccess(
-                mockResult.httpStatus(),
-                responseHeadersJson,
-                mockResult.responseBody(),
-                0L
-        );
-        requestLogRepository.save(requestLog);
-
-        log.info("Mock execution completed: apiCode={}, status={}", apiCode, mockResult.httpStatus());
+        log.info("Mock execution completed: apiCode={}, status={}, table={}",
+                apiCode, mockResult.httpStatus(), targetTable(environment));
 
         return new ExecutionResult(
                 requestId,
                 mockResult.httpStatus(),
                 mockResult.responseBody(),
-                mockResult.responseHeaders(),
+                responseHeadersJson,
                 0L,
                 true,
                 null
         );
     }
 
-    private ExecutionResult executeLive(UUID tenantId, ApiClient client, ThirdPartyProvider provider,
-                                         ProviderApi providerApi, String apiCode,
+    private ExecutionResult executeLive(UUID tenantId, EnvironmentType environment, ApiClient client,
+                                         ThirdPartyProvider provider, ProviderApi providerApi, String apiCode,
                                          String requestBody, Map<String, String> pathParams,
                                          Map<String, String> queryParams, Map<String, String> headers,
-                                         String idempotencyKey, String nationalId) {
+                                         String idempotencyKey, String nationalId,
+                                         String mobileNumber, String callerService,
+                                         BusinessContext context) {
 
-        var envType = EnvironmentType.valueOf(activeEnvironment);
         var envConfigs = envConfigRepository.findAllByApi(tenantId, providerApi.getId());
         var envConfig = envConfigs.stream()
-                .filter(c -> c.getEnvironment() == envType && c.isActive())
+                .filter(c -> c.getEnvironment() == environment && c.isActive())
                 .findFirst()
                 .orElse(null);
 
-        String baseUrl = resolveBaseUrl(provider, envConfig, envType);
+        String baseUrl = resolveBaseUrl(provider, envConfig, environment);
         String endpointPath = envConfig != null && envConfig.getEndpointPath() != null
                 ? envConfig.getEndpointPath()
                 : providerApi.getEndpointPath();
@@ -212,7 +204,6 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         }
 
         String fullUrl = baseUrl + endpointPath;
-
         var uriBuilder = UriComponentsBuilder.fromHttpUrl(fullUrl);
         if (envConfig != null && envConfig.getQueryParams() != null) {
             mergeQueryParams(uriBuilder, envConfig.getQueryParams());
@@ -226,82 +217,142 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         var httpMethod = resolveHttpMethod(providerApi.getHttpMethod());
 
         String requestId = generateRequestId();
-        var requestLog = ApiRequestLog.create(
+        var clientRequest = ClientRequest.create(
                 tenantId, providerApi.getId(), client.getId(), requestId,
-                envType, providerApi.getHttpMethod(), finalUrl,
-                sanitizeHeaders(httpHeaders.toString()), requestBody,
-                idempotencyKey, nationalId
+                provider.getCode(), apiCode, environment, providerApi.getHttpMethod(),
+                finalUrl, httpHeadersToJson(httpHeaders), ensureJsonBody(requestBody),
+                idempotencyKey, nationalId, mobileNumber, callerService,
+                context.customerId(), context.applicationId(), context.contextType(),
+                providerApi.getCostPerCall(), providerApi.getCostCurrency()
         );
-        requestLog = requestLogRepository.save(requestLog);
+        clientRequest = clientRequestRepository.save(clientRequest);
 
         long startTime = System.currentTimeMillis();
         try {
             var httpEntity = new HttpEntity<>(requestBody, httpHeaders);
             ResponseEntity<String> response = restTemplate.exchange(finalUrl, httpMethod, httpEntity, String.class);
-
             long duration = System.currentTimeMillis() - startTime;
 
-            requestLog.markSuccess(
-                    response.getStatusCode().value(),
-                    response.getHeaders().toString(),
-                    response.getBody(),
-                    duration
-            );
-            requestLogRepository.save(requestLog);
+            String respHeadersJson = httpHeadersToJson(response.getHeaders());
+            String respBodyJson = ensureJsonBody(response.getBody());
+            clientRequest.markSuccess(response.getStatusCode().value(),
+                    respHeadersJson, respBodyJson, duration);
+            clientRequestRepository.save(clientRequest);
 
-            log.info("API call succeeded: apiCode={}, status={}, duration={}ms",
-                    apiCode, response.getStatusCode().value(), duration);
+            log.info("Live API call succeeded: apiCode={}, env={}, status={}, duration={}ms",
+                    apiCode, environment, response.getStatusCode().value(), duration);
 
-            return new ExecutionResult(
-                    requestId,
-                    response.getStatusCode().value(),
-                    response.getBody(),
-                    response.getHeaders().toString(),
-                    duration,
-                    true,
-                    null
-            );
+            return new ExecutionResult(requestId, response.getStatusCode().value(),
+                    response.getBody(), respHeadersJson, duration, true, null);
 
         } catch (HttpStatusCodeException ex) {
             long duration = System.currentTimeMillis() - startTime;
-            requestLog.markFailed(
-                    ex.getStatusCode().value(),
-                    ex.getResponseBodyAsString(),
-                    ex.getMessage(),
-                    duration
-            );
-            requestLogRepository.save(requestLog);
+            clientRequest.markFailed(ex.getStatusCode().value(),
+                    ensureJsonBody(ex.getResponseBodyAsString()), ex.getMessage(), duration);
+            clientRequestRepository.save(clientRequest);
 
-            log.warn("API call failed: apiCode={}, status={}, duration={}ms, error={}",
-                    apiCode, ex.getStatusCode().value(), duration, ex.getMessage());
+            log.warn("Live API call failed: apiCode={}, env={}, status={}, duration={}ms",
+                    apiCode, environment, ex.getStatusCode().value(), duration);
 
-            return new ExecutionResult(
-                    requestId,
-                    ex.getStatusCode().value(),
-                    ex.getResponseBodyAsString(),
-                    null,
-                    duration,
-                    false,
-                    ex.getMessage()
-            );
+            return new ExecutionResult(requestId, ex.getStatusCode().value(),
+                    ex.getResponseBodyAsString(), null, duration, false, ex.getMessage());
 
         } catch (ResourceAccessException ex) {
             long duration = System.currentTimeMillis() - startTime;
-            requestLog.markTimeout(ex.getMessage(), duration);
-            requestLogRepository.save(requestLog);
+            clientRequest.markTimeout(ex.getMessage(), duration);
+            clientRequestRepository.save(clientRequest);
 
-            log.error("API call timeout: apiCode={}, duration={}ms, error={}",
-                    apiCode, duration, ex.getMessage());
+            log.error("Live API call timeout: apiCode={}, env={}, duration={}ms",
+                    apiCode, environment, duration);
 
-            return new ExecutionResult(
-                    requestId,
-                    0,
-                    null,
-                    null,
-                    duration,
-                    false,
-                    "Timeout: " + ex.getMessage()
-            );
+            return new ExecutionResult(requestId, 0, null, null, duration,
+                    false, "Timeout: " + ex.getMessage());
+        }
+    }
+
+    private EnvironmentType toEnvironmentType(AccessEnvironment access) {
+        if (access == null) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST,
+                    "Client environment is not set");
+        }
+        return switch (access) {
+            case TEST -> EnvironmentType.TEST;
+            case DEV, BOTH -> EnvironmentType.DEV;
+            case PROD -> EnvironmentType.PROD;
+        };
+    }
+
+    private String targetTable(EnvironmentType env) {
+        return switch (env) {
+            case TEST -> "client_request_test";
+            case DEV -> "client_request_dev";
+            case PROD -> "client_request_prod";
+        };
+    }
+
+    /**
+     * Serialize Spring HttpHeaders to a JSON object string suitable for a JSONB column.
+     * Authorization / API-key values are redacted to avoid leaking secrets into audit logs.
+     */
+    private String httpHeadersToJson(HttpHeaders headers) {
+        if (headers == null || headers.isEmpty()) return "{}";
+        var map = new LinkedHashMap<String, Object>();
+        headers.forEach((name, values) -> {
+            boolean isSensitive = HttpHeaders.AUTHORIZATION.equalsIgnoreCase(name)
+                    || "X-API-Key".equalsIgnoreCase(name)
+                    || "Cookie".equalsIgnoreCase(name)
+                    || "Set-Cookie".equalsIgnoreCase(name);
+            if (isSensitive) {
+                map.put(name, "***REDACTED***");
+            } else if (values.size() == 1) {
+                map.put(name, values.get(0));
+            } else {
+                map.put(name, values);
+            }
+        });
+        try {
+            return objectMapper.writeValueAsString(map);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    /**
+     * Ensure the body string is valid JSON before persisting into a JSONB column.
+     * Empty/null becomes {}. Non-JSON payloads (XML/HTML/text) are wrapped as {"raw":"..."}.
+     */
+    private String ensureJsonBody(String body) {
+        if (body == null || body.isBlank()) return "{}";
+        try {
+            objectMapper.readTree(body);
+            return body;
+        } catch (Exception ignored) {
+            try {
+                return objectMapper.writeValueAsString(Map.of("raw", body));
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+    }
+
+    private String normalizeHeadersToJson(String headers) {
+        if (headers == null || headers.isBlank()) return "{}";
+        try {
+            objectMapper.readTree(headers);
+            return headers;
+        } catch (Exception ignored) {
+            var headerMap = new LinkedHashMap<String, String>();
+            for (String line : headers.split("\n")) {
+                var parts = line.split(":", 2);
+                if (parts.length == 2) {
+                    headerMap.put(parts[0].trim(), parts[1].trim());
+                }
+            }
+            try {
+                return objectMapper.writeValueAsString(headerMap);
+            } catch (Exception e) {
+                return "{}";
+            }
         }
     }
 
@@ -347,7 +398,6 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         if (additionalHeaders != null) {
             additionalHeaders.forEach(httpHeaders::set);
         }
-
         return httpHeaders;
     }
 
@@ -357,20 +407,13 @@ public class ExecuteApiService implements ExecuteApiUseCase {
             Map<String, String> creds = objectMapper.readValue(credentialsJson, Map.class);
 
             switch (authType) {
-                case BASIC -> {
-                    String username = creds.getOrDefault("username", "");
-                    String password = creds.getOrDefault("password", "");
-                    headers.setBasicAuth(username, password);
-                }
-                case BEARER -> {
-                    String token = creds.getOrDefault("token", "");
-                    headers.setBearerAuth(token);
-                }
-                case API_KEY -> {
-                    String headerName = creds.getOrDefault("headerName", "X-API-Key");
-                    String apiKey = creds.getOrDefault("apiKey", "");
-                    headers.set(headerName, apiKey);
-                }
+                case BASIC -> headers.setBasicAuth(
+                        creds.getOrDefault("username", ""),
+                        creds.getOrDefault("password", ""));
+                case BEARER -> headers.setBearerAuth(creds.getOrDefault("token", ""));
+                case API_KEY -> headers.set(
+                        creds.getOrDefault("headerName", "X-API-Key"),
+                        creds.getOrDefault("apiKey", ""));
                 case OAUTH2 -> {
                     String accessToken = creds.getOrDefault("accessToken", "");
                     if (!accessToken.isBlank()) {
@@ -378,7 +421,7 @@ public class ExecuteApiService implements ExecuteApiUseCase {
                     }
                 }
                 case CUSTOM -> creds.forEach(headers::set);
-                case NONE -> { /* No auth */ }
+                case NONE -> { /* no auth */ }
             }
         } catch (Exception e) {
             log.warn("Failed to apply auth credentials: {}", e.getMessage());

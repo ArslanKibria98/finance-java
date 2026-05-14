@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import com.ksa.financing.fraud.domain.model.fraud.FraudDecision;
 
 /**
  * Core fraud rule engine — evaluates all active rules against an enriched fraud event.
@@ -57,6 +59,20 @@ public class FraudRuleEngine {
         int cappedScore = Math.min(totalScore, 100);
         var riskLevel = FraudCompositeScore.levelFromScore(cappedScore);
 
-        return new FraudCompositeScore(cappedScore, riskLevel, triggeredResults);
+        // Resolve overall block code (from highest priority rule that resulted in BLOCK or HOLD)
+        UUID overallBlockCodeId = null;
+        String overallBlockCode = null;
+
+        for (var result : triggeredResults) {
+            if (result.decision() == FraudDecision.BLOCK || result.decision() == FraudDecision.HOLD) {
+                if (result.blockCodeId() != null) {
+                    overallBlockCodeId = result.blockCodeId();
+                    overallBlockCode = result.blockCode();
+                    break; // Since rules are sorted by priority, first one wins
+                }
+            }
+        }
+
+        return new FraudCompositeScore(cappedScore, riskLevel, triggeredResults, overallBlockCodeId, overallBlockCode);
     }
 }

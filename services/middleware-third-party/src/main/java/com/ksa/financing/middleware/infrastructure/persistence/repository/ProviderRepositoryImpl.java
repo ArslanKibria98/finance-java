@@ -5,7 +5,7 @@ import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.infra.pagination.SpecificationBuilder;
 import com.ksa.financing.middleware.domain.model.ThirdPartyProvider;
 import com.ksa.financing.middleware.domain.port.out.ProviderRepository;
-import com.ksa.financing.middleware.infrastructure.persistence.entity.ProviderJpaEntity;
+import com.ksa.financing.middleware.infrastructure.persistence.entity.ThirdPartyProviderJpaEntity;
 import com.ksa.financing.middleware.infrastructure.persistence.mapper.MiddlewarePersistenceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,19 +50,19 @@ public class ProviderRepositoryImpl implements ProviderRepository {
 
     @Override
     public PageResponse<ThirdPartyProvider> findAllByTenant(UUID tenantId, PageQuery query) {
-        Specification<ProviderJpaEntity> tenantSpec = (root, q, cb) -> cb.and(
+        Specification<ThirdPartyProviderJpaEntity> tenantSpec = (root, q, cb) -> cb.and(
                 cb.equal(root.get("tenantId"), tenantId),
                 cb.isNull(root.get("deletedAt"))
         );
 
-        Specification<ProviderJpaEntity> dynamic = SpecificationBuilder.<ProviderJpaEntity>builder()
+        Specification<ThirdPartyProviderJpaEntity> dynamic = SpecificationBuilder.<ThirdPartyProviderJpaEntity>builder()
                 .filters(query.filters())
                 .allowedFilterFields(ALLOWED_FILTER_FIELDS)
                 .search(query.search())
                 .searchableFields(SEARCHABLE_FIELDS)
                 .build();
 
-        Page<ProviderJpaEntity> page = jpaRepository.findAll(tenantSpec.and(dynamic), query.toPageable());
+        Page<ThirdPartyProviderJpaEntity> page = jpaRepository.findAll(tenantSpec.and(dynamic), query.toPageable());
         return PageResponse.from(page, mapper::toDomain);
     }
 

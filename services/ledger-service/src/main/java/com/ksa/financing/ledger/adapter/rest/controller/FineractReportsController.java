@@ -1,5 +1,6 @@
 package com.ksa.financing.ledger.adapter.rest.controller;
 
+import com.ksa.financing.infra.pagination.PageQuery;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
@@ -18,6 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -74,16 +76,32 @@ public class FineractReportsController {
     @Operation(summary = "Trial Balance Report",
             description = "All GL accounts with their opening balance, transactions, and closing balance")
     @ApiResponse(responseCode = "200", description = "Trial balance report")
-    public ResponseEntity<TrialBalanceReportResponse> getTrialBalance(
-            @Parameter(description = "Report date", example = "2026-03-30")
-            @RequestParam
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<TrialBalanceReportResponse>> getTrialBalance(
+            @Parameter(description = "Report date (optional). When omitted, returns latest balance per account across all dates.", example = "2026-03-30")
+            @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+
+            @Parameter(description = "Search across accountCode, accountName, accountType (case-insensitive)")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
 
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        TrialBalanceReportResponse response = trialBalanceReportService.generate(tenantId, date);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        TrialBalanceReportResponse response = trialBalanceReportService.generate(tenantId, date, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<TrialBalanceReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -171,8 +189,8 @@ public class FineractReportsController {
     @Operation(summary = "Profit & Revenue Report",
             description = "Profit earned and collected by product type with quality metrics")
     public ResponseEntity<ProfitRevenueReportResponse> getProfitRevenue(
-            @Parameter(description = "Year-Month", example = "2026-03")
-            @RequestParam String period,
+            @Parameter(description = "Year-Month (optional). When omitted, returns all-time profit/revenue.", example = "2026-03")
+            @RequestParam(required = false) String period,
 
             @AuthenticationPrincipal Jwt jwt) {
 
@@ -190,8 +208,8 @@ public class FineractReportsController {
     @Operation(summary = "Write-off & Provisions Report",
             description = "Bad debt provisions, write-offs, and restructured loans")
     public ResponseEntity<WriteOffProvisionReportResponse> getWriteOffProvisions(
-            @Parameter(description = "Year-Month", example = "2026-03")
-            @RequestParam String period,
+            @Parameter(description = "Year-Month (optional). When omitted, returns all-time totals across every period.", example = "2026-03")
+            @RequestParam(required = false) String period,
 
             @AuthenticationPrincipal Jwt jwt) {
 
@@ -256,12 +274,12 @@ public class FineractReportsController {
     @GetMapping("/loan-disbursement")
     @Operation(summary = "Loan Disbursement Report",
             description = "Loans disbursed within the specified date range, with customer, product, amount, tenure, and channel")
-    public ResponseEntity<LoanDisbursementReportResponse> getLoanDisbursementReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<LoanDisbursementReportResponse>> getLoanDisbursementReport(
             @Parameter(description = "From date", example = "2026-01-01")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
 
             @Parameter(description = "To date", example = "2026-03-31")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 
             @Parameter(description = "Product code filter (optional)")
             @RequestParam(required = false) String productCode,
@@ -272,12 +290,30 @@ public class FineractReportsController {
             @Parameter(description = "Loan status filter (optional)")
             @RequestParam(required = false) String status,
 
+            @Parameter(description = "Search across applicationNumber, loanNumber, productCode, productName, status, branchOrChannel, nationalId")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        LocalDate effectiveTo = toDate != null ? toDate : LocalDate.now(ZoneId.of("UTC"));
+        LocalDate effectiveFrom = fromDate != null ? fromDate : LocalDate.of(1900, 1, 1);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
         LoanDisbursementReportResponse response = loanDisbursementReportService.generate(
-                tenantId, fromDate, toDate, productCode, branchOrChannel, status);
-        return ResponseEntity.ok(response);
+                tenantId, effectiveFrom, effectiveTo, productCode, branchOrChannel, status, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<LoanDisbursementReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -288,7 +324,7 @@ public class FineractReportsController {
     @GetMapping("/overdue-loans")
     @Operation(summary = "Overdue Loan Report",
             description = "Loans with unpaid installments past their due date, including DPD bucket and overdue amounts")
-    public ResponseEntity<OverdueLoanReportResponse> getOverdueLoanReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<OverdueLoanReportResponse>> getOverdueLoanReport(
             @Parameter(description = "As-of date", example = "2026-03-30")
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -299,14 +335,30 @@ public class FineractReportsController {
             @Parameter(description = "Product code filter (optional)")
             @RequestParam(required = false) String productCode,
 
+            @Parameter(description = "Search across loanNumber, productCode, status, dpdBucket, customerId, loanId")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
         LocalDate reportDate = asOfDate != null ? asOfDate : LocalDate.now(ZoneId.of("UTC"));
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
 
         OverdueLoanReportResponse response = overdueLoanReportService.generate(
-                tenantId, reportDate, minDaysPastDue, productCode);
-        return ResponseEntity.ok(response);
+                tenantId, reportDate, minDaysPastDue, productCode, pageQuery);
+        
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<OverdueLoanReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -317,18 +369,36 @@ public class FineractReportsController {
     @GetMapping("/due-loans")
     @Operation(summary = "Due Loan Report",
             description = "Upcoming installments falling due within the selected date window")
-    public ResponseEntity<DueLoanReportResponse> getDueLoanReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<DueLoanReportResponse>> getDueLoanReport(
             @Parameter(description = "Window from date", example = "2026-04-01")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
 
             @Parameter(description = "Window to date", example = "2026-04-30")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+
+            @Parameter(description = "Search across loanNumber, productCode, status, customerId, loanId")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
 
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        DueLoanReportResponse response = dueLoanReportService.generate(tenantId, fromDate, toDate);
-        return ResponseEntity.ok(response);
+        LocalDate effectiveFrom = fromDate != null ? fromDate : LocalDate.of(1900, 1, 1);
+        LocalDate effectiveTo = toDate != null ? toDate : LocalDate.now(ZoneId.of("UTC")).plusYears(50);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        DueLoanReportResponse response = dueLoanReportService.generate(tenantId, effectiveFrom, effectiveTo, pageQuery);
+        
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<DueLoanReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -339,7 +409,7 @@ public class FineractReportsController {
     @GetMapping("/repayment-schedule")
     @Operation(summary = "Repayment Schedule Report (All Loans)",
             description = "Installment plans for all loans in selected date range. Use this endpoint when loanId is not provided.")
-    public ResponseEntity<List<RepaymentScheduleReportResponse>> getRepaymentScheduleReportAll(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<RepaymentScheduleListResponse>> getRepaymentScheduleReportAll(
             @Parameter(description = "From date", example = "2026-04-01")
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -348,15 +418,31 @@ public class FineractReportsController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 
+            @Parameter(description = "Search across loanId, loanAccountNumber, customerName, productName (case-insensitive)")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
         LocalDate reportTo = toDate != null ? toDate : LocalDate.now(ZoneId.of("UTC"));
         LocalDate reportFrom = fromDate != null ? fromDate : reportTo.minusMonths(1);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
 
-        List<RepaymentScheduleReportResponse> response =
-                repaymentScheduleReportService.generateAll(tenantId, reportFrom, reportTo);
-        return ResponseEntity.ok(response);
+        RepaymentScheduleListResponse response =
+                repaymentScheduleReportService.generateAllPaged(tenantId, reportFrom, reportTo, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<RepaymentScheduleListResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.repayment-schedule", act = "read")
@@ -382,7 +468,7 @@ public class FineractReportsController {
     @GetMapping("/loan-balance-outstanding")
     @Operation(summary = "Loan Balance & Outstanding Report",
             description = "Per-loan outstanding principal, profit, and penalties with next due date")
-    public ResponseEntity<LoanBalanceOutstandingReportResponse> getLoanBalanceOutstandingReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<LoanBalanceOutstandingReportResponse>> getLoanBalanceOutstandingReport(
             @Parameter(description = "As-of date", example = "2026-03-30")
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -393,14 +479,30 @@ public class FineractReportsController {
             @Parameter(description = "Filter by product code (optional)")
             @RequestParam(required = false) String productCode,
 
+            @Parameter(description = "Search across loanNumber, productCode, status, customerId")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
         LocalDate reportDate = asOfDate != null ? asOfDate : LocalDate.now(ZoneId.of("UTC"));
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
 
         LoanBalanceOutstandingReportResponse response = loanBalanceOutstandingReportService.generate(
-                tenantId, reportDate, customerId, productCode);
-        return ResponseEntity.ok(response);
+                tenantId, reportDate, customerId, productCode, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<LoanBalanceOutstandingReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -415,17 +517,30 @@ public class FineractReportsController {
             @Parameter(description = "Customer ID", required = true)
             @PathVariable("customerId") UUID customerId,
 
-            @Parameter(description = "Statement from date", example = "2026-01-01")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @Parameter(description = "Statement from date (optional — defaults to all-time start when omitted)", example = "2026-01-01")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
 
-            @Parameter(description = "Statement to date", example = "2026-03-31")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Statement to date (optional — defaults to today when omitted)", example = "2026-03-31")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+
+            @Parameter(description = "Search across statement entries (description, voucher number, etc.)")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
 
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        // Defaults when caller omits the dates → return the full ledger window for this customer.
+        LocalDate effectiveFrom = fromDate != null ? fromDate : LocalDate.of(1900, 1, 1);
+        LocalDate effectiveTo   = toDate   != null ? toDate   : LocalDate.now(ZoneId.of("UTC"));
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
         CustomerStatementOfAccountResponse response = customerStatementOfAccountService.generate(
-                tenantId, customerId, fromDate, toDate);
+                tenantId, customerId, effectiveFrom, effectiveTo, pageQuery);
         return ResponseEntity.ok(response);
     }
 
@@ -433,39 +548,72 @@ public class FineractReportsController {
     @GetMapping("/product-wise-pnl")
     @Operation(summary = "Product-Wise P&L Report",
             description = "P&L summary grouped by product code and product name")
-    public ResponseEntity<ProductWisePnLReportResponse> getProductWisePnLReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<ProductWisePnLReportResponse>> getProductWisePnLReport(
             @RequestParam String period,
+            @Parameter(description = "Search across productCode, productName (case-insensitive)")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        ProductWisePnLReportResponse response = productWisePnLReportService.generate(tenantId, period);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        ProductWisePnLReportResponse response = productWisePnLReportService.generate(tenantId, period, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<ProductWisePnLReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.customer-wise-pnl", act = "read")
     @GetMapping("/customer-wise-pnl")
     @Operation(summary = "Customer-Wise P&L Report",
             description = "P&L summary grouped by customer")
-    public ResponseEntity<CustomerWisePnLReportResponse> getCustomerWisePnLReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<CustomerWisePnLReportResponse>> getCustomerWisePnLReport(
             @RequestParam String period,
+            @Parameter(description = "Search across customerName, customerId (case-insensitive)")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        CustomerWisePnLReportResponse response = customerWisePnLReportService.generate(tenantId, period);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        CustomerWisePnLReportResponse response = customerWisePnLReportService.generate(tenantId, period, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<CustomerWisePnLReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.loan-history", act = "read")
     @GetMapping("/loan-history/{loanId}")
     @Operation(summary = "Loan History Report",
             description = "Timeline of loan lifecycle events for a specific loan")
-    public ResponseEntity<LoanHistoryReportResponse> getLoanHistoryReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<LoanHistoryReportResponse>> getLoanHistoryReport(
             @PathVariable("loanId") UUID loanId,
+            @Parameter(description = "Search across eventType, description (case-insensitive)")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        LoanHistoryReportResponse response = loanHistoryReportService.generate(tenantId, loanId);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        LoanHistoryReportResponse response = loanHistoryReportService.generate(tenantId, loanId, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<LoanHistoryReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.daily-transaction-summary", act = "read")
@@ -473,11 +621,13 @@ public class FineractReportsController {
     @Operation(summary = "Daily Transaction Summary Report",
             description = "Daily summary of credits, debits, and transaction counts")
     public ResponseEntity<DailyTransactionSummaryReportResponse> getDailyTransactionSummaryReport(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "Report date (optional). Defaults to today when omitted.", example = "2026-05-07")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        DailyTransactionSummaryReportResponse response = dailyTransactionSummaryReportService.generate(tenantId, date);
+        LocalDate effectiveDate = date != null ? date : LocalDate.now(ZoneId.of("UTC"));
+        DailyTransactionSummaryReportResponse response = dailyTransactionSummaryReportService.generate(tenantId, effectiveDate);
         return ResponseEntity.ok(response);
     }
 
@@ -500,69 +650,136 @@ public class FineractReportsController {
     @GetMapping("/early-settlement")
     @Operation(summary = "Early Settlement Report",
             description = "Loans settled early with rebate and closure details")
-    public ResponseEntity<EarlySettlementReportResponse> getEarlySettlementReport(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<EarlySettlementReportResponse>> getEarlySettlementReport(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Search across loanId, customerId")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        EarlySettlementReportResponse response = earlySettlementReportService.generate(tenantId, fromDate, toDate);
-        return ResponseEntity.ok(response);
+        LocalDate effectiveFrom = fromDate != null ? fromDate : LocalDate.of(1900, 1, 1);
+        LocalDate effectiveTo = toDate != null ? toDate : LocalDate.now(ZoneId.of("UTC"));
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        EarlySettlementReportResponse response = earlySettlementReportService.generate(tenantId, effectiveFrom, effectiveTo, pageQuery);
+        
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<EarlySettlementReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.write-off-loans", act = "read")
     @GetMapping("/write-off-loans")
     @Operation(summary = "Write-Off Loan Report (List)",
             description = "List view of write-off loans with principal and provision impact")
-    public ResponseEntity<WriteOffLoanListReportResponse> getWriteOffLoanListReport(
-            @RequestParam String period,
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<WriteOffLoanListReportResponse>> getWriteOffLoanListReport(
+            @Parameter(description = "Year-Month (optional). When omitted, returns the current month's write-off list.", example = "2026-03")
+            @RequestParam(required = false) String period,
+            @Parameter(description = "Search across loanId, customerId (case-insensitive)")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        WriteOffLoanListReportResponse response = writeOffLoanListReportService.generate(tenantId, period);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        WriteOffLoanListReportResponse response = writeOffLoanListReportService.generate(tenantId, period, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<WriteOffLoanListReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.collections-due", act = "read")
     @GetMapping("/collections-due")
     @Operation(summary = "Collections Due Report",
             description = "Installments due for collection in the selected date range")
-    public ResponseEntity<CollectionsDueReportResponse> getCollectionsDueReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<CollectionsDueReportResponse>> getCollectionsDueReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Search across loanId, customerId (case-insensitive)")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        CollectionsDueReportResponse response = collectionsDueReportService.generate(tenantId, fromDate, toDate);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        CollectionsDueReportResponse response = collectionsDueReportService.generate(tenantId, fromDate, toDate, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<CollectionsDueReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.account", act = "read")
     @GetMapping("/account")
     @Operation(summary = "Account Report",
             description = "GL account-level activity and balances for a selected date")
-    public ResponseEntity<AccountReportResponse> getAccountReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<AccountReportResponse>> getAccountReport(
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
+            @Parameter(description = "Search across accountCode, accountName (case-insensitive)")
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
         LocalDate reportDate = asOfDate != null ? asOfDate : LocalDate.now(ZoneId.of("UTC"));
-        AccountReportResponse response = accountReportService.generate(tenantId, reportDate);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        AccountReportResponse response = accountReportService.generate(tenantId, reportDate, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<AccountReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     @SecuredEndpoint(obj = "reports.simah", act = "read")
     @GetMapping("/simah")
     @Operation(summary = "Simah Report",
-            description = "Simah reporting extract with customer and facility level indicators")
-    public ResponseEntity<SimahReportResponse> getSimahReport(
-            @RequestParam String period,
+            description = "Simah reporting extract with customer and facility level indicators. " +
+                    "When period (YYYY-MM) is omitted, returns all reports across all periods. " +
+                    "When period is provided, returns only that period's report.")
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<SimahReportResponse>> getSimahReport(
+            @Parameter(description = "Year-Month (optional)", example = "2026-03")
+            @RequestParam(required = false) String period,
+
+            @Parameter(description = "Search across customerId, loanId, simahStatus, facilityType, paymentStatus")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        SimahReportResponse response = simahReportService.generate(tenantId, period);
-        return ResponseEntity.ok(response);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+        SimahReportResponse response = simahReportService.generate(tenantId, period, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<SimahReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -573,13 +790,16 @@ public class FineractReportsController {
     @GetMapping("/journal-vouchers")
     @Operation(summary = "Journal Vouchers Report",
             description = "All posted journal vouchers in the selected date range with debit/credit lines. " +
+                    "When fromDate/toDate are omitted, returns all vouchers across all dates. " +
                     "Optional filters: referenceType (LOAN, DISBURSEMENT, REPAYMENT, etc.) and status (POSTED, REVERSED, PENDING).")
-    public ResponseEntity<JournalVoucherReportResponse> getJournalVouchersReport(
-            @Parameter(description = "From date", example = "2026-04-01")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<JournalVoucherReportResponse>> getJournalVouchersReport(
+            @Parameter(description = "From date (optional)", example = "2026-04-01")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
 
-            @Parameter(description = "To date", example = "2026-04-30")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "To date (optional)", example = "2026-04-30")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 
             @Parameter(description = "Reference type filter (optional)", example = "LOAN")
             @RequestParam(required = false) String referenceType,
@@ -587,12 +807,28 @@ public class FineractReportsController {
             @Parameter(description = "Status filter (optional)", example = "POSTED")
             @RequestParam(required = false) String status,
 
+            @Parameter(description = "Search across entryNumber, description, referenceType, transactionType (case-insensitive LIKE)")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
         JournalVoucherReportResponse response = journalVoucherReportService.generate(
-                tenantId, fromDate, toDate, referenceType, status);
-        return ResponseEntity.ok(response);
+                tenantId, fromDate, toDate, referenceType, status, pageQuery);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<JournalVoucherReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -604,7 +840,7 @@ public class FineractReportsController {
     @Operation(summary = "Day Book Report",
             description = "Chronological listing of every debit and credit line posted on a single date, " +
                     "one row per journal line, with totals.")
-    public ResponseEntity<DayBookReportResponse> getDayBookReport(
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<DayBookReportResponse>> getDayBookReport(
             @Parameter(description = "Report date", example = "2026-04-20")
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -617,18 +853,34 @@ public class FineractReportsController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 
+            @Parameter(description = "Search across entryNumber, description, referenceType, transactionType")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
 
         DayBookReportResponse response;
         if (fromDate != null && toDate != null) {
-            response = dayBookReportService.generate(tenantId, fromDate, toDate);
+            response = dayBookReportService.generate(tenantId, fromDate, toDate, pageQuery);
         } else {
             LocalDate reportDate = date != null ? date : LocalDate.now(ZoneId.of("UTC"));
-            response = dayBookReportService.generate(tenantId, reportDate);
+            response = dayBookReportService.generate(tenantId, reportDate, pageQuery);
         }
-        return ResponseEntity.ok(response);
+
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<DayBookReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     /**
@@ -641,12 +893,12 @@ public class FineractReportsController {
             description = "Per-account ledger view with opening balance, chronological debits/credits, " +
                     "running balance, and closing balance. If accountCode or accountId is provided, returns " +
                     "a single-account ledger; otherwise returns every account with activity in the range.")
-    public ResponseEntity<LedgerReportResponse> getLedgerReport(
-            @Parameter(description = "From date", example = "2026-04-01")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+    public ResponseEntity<com.ksa.financing.infra.response.ApiResponse<LedgerReportResponse>> getLedgerReport(
+            @Parameter(description = "From date (optional). Defaults to 1900-01-01 when omitted (returns all records).", example = "2026-04-01")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
 
-            @Parameter(description = "To date", example = "2026-04-30")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "To date (optional). Defaults to today when omitted.", example = "2026-04-30")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 
             @Parameter(description = "Account code filter (optional)", example = "1000001")
             @RequestParam(required = false) String accountCode,
@@ -654,12 +906,31 @@ public class FineractReportsController {
             @Parameter(description = "Account ID filter (optional)")
             @RequestParam(required = false) UUID accountId,
 
+            @Parameter(description = "Search across accountCode, accountName, accountNameAr (case-insensitive LIKE)")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(required = false, defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(required = false, defaultValue = "20") int size,
+
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        LocalDate effectiveFrom = fromDate != null ? fromDate : LocalDate.of(1900, 1, 1);
+        LocalDate effectiveTo = toDate != null ? toDate : LocalDate.now(ZoneId.of("UTC"));
+        PageQuery pageQuery = new PageQuery(page, size, null, null, search);
+
         LedgerReportResponse response = ledgerReportService.generate(
-                tenantId, fromDate, toDate, accountCode, accountId);
-        return ResponseEntity.ok(response);
+                tenantId, effectiveFrom, effectiveTo, accountCode, accountId, pageQuery);
+        
+        return ResponseEntity.ok(com.ksa.financing.infra.response.ApiResponse.<LedgerReportResponse>builder()
+                .data(response)
+                .pagination(response.pagination())
+                .message("success")
+                .timestamp(Instant.now())
+                .build());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

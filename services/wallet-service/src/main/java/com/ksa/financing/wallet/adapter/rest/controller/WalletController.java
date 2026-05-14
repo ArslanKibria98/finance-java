@@ -11,24 +11,28 @@ import com.ksa.financing.wallet.domain.port.in.GetTransactionHistoryUseCase;
 import com.ksa.financing.wallet.domain.port.in.TopUpUseCase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.exception.NotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/wallets")
-@RequiredArgsConstructor
 @Tag(name = "Wallet", description = "Wallet management and top-up operations")
 public class WalletController {
 
@@ -38,6 +42,21 @@ public class WalletController {
     private final GetBalanceUseCase getBalanceUseCase;
     private final TopUpUseCase topUpUseCase;
     private final GetTransactionHistoryUseCase getTransactionHistoryUseCase;
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final String customerServiceUrl;
+
+    public WalletController(
+            CreateWalletUseCase createWalletUseCase,
+            GetBalanceUseCase getBalanceUseCase,
+            TopUpUseCase topUpUseCase,
+            GetTransactionHistoryUseCase getTransactionHistoryUseCase,
+            @Value("${app.services.customer-service-url:http://localhost:8084}") String customerServiceUrl) {
+        this.createWalletUseCase = createWalletUseCase;
+        this.getBalanceUseCase = getBalanceUseCase;
+        this.topUpUseCase = topUpUseCase;
+        this.getTransactionHistoryUseCase = getTransactionHistoryUseCase;
+        this.customerServiceUrl = customerServiceUrl;
+    }
 
     @SecuredEndpoint(obj = "wallets", act = "read")
     @GetMapping("/by-customer/{customerId}")
@@ -51,6 +70,50 @@ public class WalletController {
 
         Wallet wallet = getBalanceUseCase.getByCustomerId(tenantId, customerId);
         return ResponseEntity.ok(toResponse(wallet));
+    }
+
+    @SecuredEndpoint(obj = "wallets", act = "read")
+    @GetMapping("/me/balance")
+    @Operation(summary = "Get authenticated customer's wallet balance (resolved from JWT)")
+    public ResponseEntity<WalletResponse> getMyBalance(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        UUID keycloakUserId = extractCustomerId(jwt);
+
+        // JWT.sub is the Keycloak user ID; the wallet is keyed by customer-service's
+        // customer.id. Resolve via customer-service /internal/customers/by-keycloak.
+        UUID customerId = resolveCustomerId(keycloakUserId);
+        log.info("/me/balance keycloakUserId={} customerId={} tenant={}",
+                keycloakUserId, customerId, tenantId);
+
+        Wallet wallet = getBalanceUseCase.getByCustomerId(tenantId, customerId);
+        return ResponseEntity.ok(toResponse(wallet));
+    }
+
+    private UUID resolveCustomerId(UUID keycloakUserId) {
+        try {
+            String url = customerServiceUrl + "/internal/customers/by-keycloak/" + keycloakUserId;
+            ResponseEntity<Map> resp = restTemplate.getForEntity(url, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                throw NotFoundException.forEntity("Customer (keycloak)", keycloakUserId.toString());
+            }
+            Map<?, ?> body = resp.getBody();
+            // Response is wrapped: { "data": { "customerId": "...", ... } }
+            Object dataObj = body.get("data");
+            Map<?, ?> payload = (dataObj instanceof Map) ? (Map<?, ?>) dataObj : body;
+            Object cid = payload.get("customerId");
+            if (cid == null) {
+                throw NotFoundException.forEntity("Customer (keycloak)", keycloakUserId.toString());
+            }
+            return UUID.fromString(cid.toString());
+        } catch (NotFoundException e) {
+            throw e;
+        } catch (RestClientException e) {
+            log.warn("customer-service lookup failed for keycloakUserId={}: {} — falling back to keycloakUserId as customerId",
+                    keycloakUserId, e.getMessage());
+            return keycloakUserId;
+        }
     }
 
     @SecuredEndpoint(obj = "wallets", act = "read")
@@ -143,6 +206,23 @@ public class WalletController {
                     "No tenant_id claim found in JWT token");
         }
         return UUID.fromString(tenantClaim);
+    }
+
+    private UUID extractCustomerId(Jwt jwt) {
+        String customer = jwt.getClaimAsString("customer_id");
+        if (customer == null) customer = jwt.getSubject();
+        if (customer == null) {
+            throw new BusinessException(
+                    ErrorCodes.INVALID_CREDENTIALS,
+                    "JWT missing customer_id and subject");
+        }
+        try {
+            return UUID.fromString(customer);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(
+                    ErrorCodes.INVALID_CREDENTIALS,
+                    "JWT customer_id/sub is not a valid UUID");
+        }
     }
 
     private WalletResponse toResponse(Wallet wallet) {

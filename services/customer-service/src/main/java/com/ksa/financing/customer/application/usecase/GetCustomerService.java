@@ -9,9 +9,12 @@ import com.ksa.financing.customer.domain.model.PepStatus;
 import com.ksa.financing.customer.domain.port.in.GetCustomerUseCase;
 import com.ksa.financing.customer.domain.port.out.CustomerPepAnswerRepository;
 import com.ksa.financing.customer.domain.port.out.CustomerRepository;
+import com.ksa.financing.customer.domain.port.out.CustomerBlockRepository;
+import com.ksa.financing.customer.domain.model.CustomerBlock;
 import com.ksa.financing.infra.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -19,12 +22,15 @@ public class GetCustomerService implements GetCustomerUseCase {
 
     private final CustomerRepository customerRepository;
     private final CustomerPepAnswerRepository customerPepAnswerRepository;
+    private final CustomerBlockRepository customerBlockRepository;
 
     public GetCustomerService(
             CustomerRepository customerRepository,
-            CustomerPepAnswerRepository customerPepAnswerRepository) {
+            CustomerPepAnswerRepository customerPepAnswerRepository,
+            CustomerBlockRepository customerBlockRepository) {
         this.customerRepository = customerRepository;
         this.customerPepAnswerRepository = customerPepAnswerRepository;
+        this.customerBlockRepository = customerBlockRepository;
     }
 
     @Override
@@ -95,8 +101,15 @@ public class GetCustomerService implements GetCustomerUseCase {
 
         if (!hasPepAnswers && customer.getPepStatus() == null) {
             customer.setPepStatus(PepStatus.PENDING);
-            return customerRepository.save(customer);
+            customer = customerRepository.save(customer);
         }
+
+        // Populate block codes
+        List<String> blockCodes = customerBlockRepository.findAllActiveByCustomerId(customer.getId())
+                .stream()
+                .map(CustomerBlock::getBlockCode)
+                .toList();
+        customer.setBlockCodes(blockCodes);
 
         return customer;
     }

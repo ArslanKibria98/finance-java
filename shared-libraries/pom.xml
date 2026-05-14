@@ -32,6 +32,7 @@
         <module>domain-core-sdk</module>
         <module>workflow-orchestration-sdk</module>
         <module>lms-adapter-sdk</module>
+        <module>ledger-fineract-client-sdk</module>
         <module>compliance-localization-sdk</module>
         <module>reporting-projection-sdk</module>
         <module>test-harness-sdk</module>

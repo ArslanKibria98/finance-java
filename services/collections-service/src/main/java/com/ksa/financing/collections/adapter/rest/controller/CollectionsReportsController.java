@@ -49,10 +49,14 @@ public class CollectionsReportsController {
     public ResponseEntity<OverdueInstallmentsResponse> overdueInstallments(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
             @RequestParam(required = false, defaultValue = "1") Integer minDaysPastDue,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "1000") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
         var cutoff = asOfDate.minusDays(Math.max(0, minDaysPastDue - 1));
+        var searchPattern = toLikePattern(search);
 
         var sql = """
                 SELECT  i.loan_id,
@@ -66,8 +70,11 @@ public class CollectionsReportsController {
                    AND  i.due_date <= ?
                    AND  i.status IN ('OVERDUE', 'DUE', 'SCHEDULED', 'PARTIALLY_PAID')
                    AND  (i.total_amount - i.paid_total) > 0
+                   AND  (CAST(? AS text) IS NULL OR CAST(i.loan_id AS text) LIKE ?)
                  GROUP  BY i.loan_id
                 HAVING  MIN(i.due_date) <= ?
+                 ORDER  BY oldest_unpaid ASC, i.loan_id
+                 LIMIT  ? OFFSET ?
                 """;
 
         var rows = jdbcTemplate.query(sql,
@@ -79,23 +86,36 @@ public class CollectionsReportsController {
                         rs.getBigDecimal("penalty_amount"),
                         rs.getBigDecimal("total_overdue")
                 ),
-                tenantId, Date.valueOf(asOfDate), Date.valueOf(cutoff));
+                tenantId, Date.valueOf(asOfDate), searchPattern, searchPattern, Date.valueOf(cutoff),
+                size, page * size);
+
+        var totalSql = """
+                SELECT  COUNT(DISTINCT i.loan_id) AS total_count,
+                        COALESCE(SUM(i.total_amount - i.paid_total), 0) AS total_overdue_sum
+                  FROM  installments i
+                 WHERE  i.tenant_id = ?
+                   AND  i.due_date <= ?
+                   AND  i.status IN ('OVERDUE', 'DUE', 'SCHEDULED', 'PARTIALLY_PAID')
+                   AND  (i.total_amount - i.paid_total) > 0
+                   AND  (CAST(? AS text) IS NULL OR CAST(i.loan_id AS text) LIKE ?)
+                """;
+        
+        var totals = jdbcTemplate.queryForMap(totalSql, tenantId, Date.valueOf(asOfDate), searchPattern, searchPattern);
+        long totalCount = ((Number) totals.get("total_count")).longValue();
+        BigDecimal totalOverdueSum = (BigDecimal) totals.get("total_overdue_sum");
 
         var items = new ArrayList<OverdueItem>();
-        BigDecimal total = BigDecimal.ZERO;
         for (var r : rows) {
             int dpd = (int) ChronoUnit.DAYS.between(r.oldestUnpaid(), asOfDate);
-            if (dpd < minDaysPastDue) continue;
             items.add(new OverdueItem(
                     r.loanId(), r.oldestUnpaid(), r.principalOverdue(),
                     r.profitOverdue(), r.penaltyAmount(), r.totalOverdue(),
                     dpd, dpdBucket(dpd)));
-            total = total.add(r.totalOverdue());
         }
 
-        log.info("Overdue report: tenant={} asOf={} minDPD={} count={} total={}",
-                tenantId, asOfDate, minDaysPastDue, items.size(), total);
-        return ResponseEntity.ok(new OverdueInstallmentsResponse(asOfDate, items.size(), total, items));
+        log.info("Overdue report: tenant={} asOf={} search={} count={} total={}",
+                tenantId, asOfDate, search, items.size(), totalOverdueSum);
+        return ResponseEntity.ok(new OverdueInstallmentsResponse(asOfDate, (int)totalCount, totalOverdueSum, items));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -108,9 +128,13 @@ public class CollectionsReportsController {
     public ResponseEntity<DueInstallmentsResponse> dueInstallments(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "1000") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        var searchPattern = toLikePattern(search);
 
         var sql = """
                 SELECT  i.loan_id,
@@ -125,12 +149,13 @@ public class CollectionsReportsController {
                    AND  i.due_date BETWEEN ? AND ?
                    AND  i.status IN ('SCHEDULED', 'DUE', 'PARTIALLY_PAID', 'OVERDUE')
                    AND  (i.total_amount - i.paid_total) > 0
+                   AND  (CAST(? AS text) IS NULL OR CAST(i.loan_id AS text) LIKE ? OR LOWER(i.status::text) LIKE ?)
                  ORDER  BY i.due_date, i.loan_id, i.installment_number
+                 LIMIT  ? OFFSET ?
                 """;
 
         var today = LocalDate.now(ZoneOffset.UTC);
         var items = new ArrayList<DueItem>();
-        BigDecimal total = BigDecimal.ZERO;
 
         var rows = jdbcTemplate.query(sql,
                 (rs, rn) -> new Object[]{
@@ -142,7 +167,9 @@ public class CollectionsReportsController {
                         rs.getBigDecimal("amount_due"),
                         rs.getString("status")
                 },
-                tenantId, Date.valueOf(fromDate), Date.valueOf(toDate));
+                tenantId, Date.valueOf(fromDate), Date.valueOf(toDate),
+                searchPattern, searchPattern, searchPattern,
+                size, page * size);
 
         for (var r : rows) {
             var due = (LocalDate) r[2];
@@ -151,10 +178,24 @@ public class CollectionsReportsController {
                     (UUID) r[0], (Integer) r[1], due,
                     (BigDecimal) r[3], (BigDecimal) r[4], amount,
                     (int) ChronoUnit.DAYS.between(today, due), (String) r[6]));
-            total = total.add(amount);
         }
 
-        return ResponseEntity.ok(new DueInstallmentsResponse(fromDate, toDate, items.size(), total, items));
+        var totalSql = """
+                SELECT  COUNT(*) AS total_count,
+                        COALESCE(SUM(i.total_amount - i.paid_total), 0) AS total_due_sum
+                  FROM  installments i
+                 WHERE  i.tenant_id = ?
+                   AND  i.due_date BETWEEN ? AND ?
+                   AND  i.status IN ('SCHEDULED', 'DUE', 'PARTIALLY_PAID', 'OVERDUE')
+                   AND  (i.total_amount - i.paid_total) > 0
+                   AND  (CAST(? AS text) IS NULL OR CAST(i.loan_id AS text) LIKE ? OR LOWER(i.status::text) LIKE ?)
+                """;
+        var totals = jdbcTemplate.queryForMap(totalSql, tenantId, Date.valueOf(fromDate), Date.valueOf(toDate),
+                searchPattern, searchPattern, searchPattern);
+        long totalCount = ((Number) totals.get("total_count")).longValue();
+        BigDecimal totalDueSum = (BigDecimal) totals.get("total_due_sum");
+
+        return ResponseEntity.ok(new DueInstallmentsResponse(fromDate, toDate, (int)totalCount, totalDueSum, items));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -206,9 +247,13 @@ public class CollectionsReportsController {
     public ResponseEntity<List<EarlySettlementItem>> earlySettlements(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "1000") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
+        var searchPattern = toLikePattern(search);
 
         var sql = """
                 SELECT  loan_id, customer_id, settlement_date,
@@ -218,7 +263,9 @@ public class CollectionsReportsController {
                  WHERE  tenant_id = ?
                    AND  settlement_date IS NOT NULL
                    AND  settlement_date BETWEEN ? AND ?
+                   AND  (CAST(? AS text) IS NULL OR CAST(loan_id AS text) LIKE ? OR CAST(customer_id AS text) LIKE ?)
                  ORDER  BY settlement_date DESC
+                 LIMIT  ? OFFSET ?
                 """;
 
         var items = jdbcTemplate.query(sql,
@@ -230,7 +277,9 @@ public class CollectionsReportsController {
                         rs.getBigDecimal("outstanding_total"),
                         rs.getBigDecimal("ibra_amount")
                 ),
-                tenantId, Date.valueOf(fromDate), Date.valueOf(toDate));
+                tenantId, Date.valueOf(fromDate), Date.valueOf(toDate),
+                searchPattern, searchPattern, searchPattern,
+                size, page * size);
 
         return ResponseEntity.ok(items);
     }
@@ -252,6 +301,11 @@ public class CollectionsReportsController {
         if (dpd <= 60) return "31-60";
         if (dpd <= 90) return "61-90";
         return "90+";
+    }
+
+    private String toLikePattern(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        return "%" + raw.trim().toLowerCase() + "%";
     }
 
     // ── Row helper + DTOs ─────────────────────────────────────────

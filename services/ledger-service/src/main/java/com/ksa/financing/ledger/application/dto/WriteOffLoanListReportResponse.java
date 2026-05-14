@@ -1,5 +1,7 @@
 package com.ksa.financing.ledger.application.dto;
 
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -10,7 +12,8 @@ import java.util.UUID;
 @Builder
 public record WriteOffLoanListReportResponse(
         String period,
-        List<WriteOffLoanItem> items
+        List<WriteOffLoanItem> items,
+        @JsonIgnore PageMetadata pagination
 ) {
     @Builder
     public record WriteOffLoanItem(

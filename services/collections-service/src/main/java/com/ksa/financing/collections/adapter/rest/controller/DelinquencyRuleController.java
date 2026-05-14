@@ -78,6 +78,10 @@ public class DelinquencyRuleController {
                 nullToZero(req.promisesPerYear()),
                 nullToZero(req.promisesPerLoan()),
                 Boolean.TRUE.equals(req.isCustom()),
+                com.ksa.financing.collections.domain.model.EarlySettlementStrategy.fromCode(req.settlementStrategy() != null ? req.settlementStrategy() : 1),
+                req.settlementDiscountType(),
+                nullToZero(req.settlementMonths()),
+                nullToZero(req.settlementAmountPerMonth()),
                 req.charityFundAccount(),
                 toConfigItems(req.configs()));
 
@@ -112,17 +116,23 @@ public class DelinquencyRuleController {
     }
 
     @GetMapping
-    @Operation(summary = "List all delinquency rules for a product (all 6 stages)")
+    @Operation(summary = "List all delinquency rules for a product (all 6 stages). Optional ?search= filters by delinquencyTypeName, charityFundAccount, channel (case-insensitive LIKE).")
     @SecuredEndpoint(obj = "delinquency.rules", act = "read")
     public ResponseEntity<List<DelinquencyRuleResponse>> listForProduct(
             @RequestParam UUID productId,
+            @RequestParam(required = false) String search,
             @AuthenticationPrincipal Jwt jwt) {
 
         UUID tenantId = extractTenantId(jwt);
-        return ResponseEntity.ok(
-                manageUseCase.listForProduct(tenantId, productId).stream()
-                        .map(this::toResponse)
-                        .toList());
+        String term = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        var responses = manageUseCase.listForProduct(tenantId, productId).stream()
+                .map(this::toResponse)
+                .filter(r -> term == null
+                        || (r.delinquencyTypeName() != null && r.delinquencyTypeName().toLowerCase().contains(term))
+                        || (r.charityFundAccount() != null && r.charityFundAccount().toLowerCase().contains(term))
+                        || (r.channel() != null && r.channel().toLowerCase().contains(term)))
+                .toList();
+        return ResponseEntity.ok(responses);
     }
 
     @GetMapping("/eligibility")
@@ -216,6 +226,10 @@ public class DelinquencyRuleController {
                 r.getPromisesPerYear(),
                 r.getPromisesPerLoan(),
                 r.isCustom(),
+                r.getSettlementStrategy().code(),
+                r.getSettlementDiscountType(),
+                r.getSettlementMonths(),
+                r.getSettlementAmountPerMonth(),
                 r.getCharityFundAccount(),
                 r.getChannel(),
                 r.getRecordState(),

@@ -270,7 +270,7 @@ public class LedgerServiceClient {
             }
 
             var requestBody = objectMapper.writeValueAsString(request);
-            var url = ledgerServiceUrl + "/api/v1/journal-entries";
+            var url = ledgerServiceUrl + "/internal/v1/journal-entries";
 
             var response = restTemplate.exchange(
                     url, HttpMethod.POST, new HttpEntity<>(requestBody, headers), String.class);
@@ -278,16 +278,17 @@ public class LedgerServiceClient {
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("GL {} entry posted successfully to ledger-service", entryType);
             } else {
-                log.warn("Ledger-service returned non-2xx for {} entry: status={}", entryType,
+                log.error("Ledger-service returned non-2xx for {} entry: status={}", entryType,
                         response.getStatusCode());
+                throw new IllegalStateException("Ledger-service returned " + response.getStatusCode());
             }
         } catch (org.springframework.web.client.HttpStatusCodeException e) {
             log.error("Ledger-service rejected {} GL entry: status={} body={}",
                     entryType, e.getStatusCode(), e.getResponseBodyAsString());
-            // Non-blocking — disbursement has already succeeded; GL sync can retry later
+            throw e;
         } catch (Exception e) {
             log.error("Failed to post {} GL entry to ledger-service: {}", entryType, e.getMessage(), e);
-            // Non-blocking — allow disbursement to complete even if ledger is temporarily unavailable
+            throw new IllegalStateException("Failed to post " + entryType + " GL entry: " + e.getMessage(), e);
         }
     }
 

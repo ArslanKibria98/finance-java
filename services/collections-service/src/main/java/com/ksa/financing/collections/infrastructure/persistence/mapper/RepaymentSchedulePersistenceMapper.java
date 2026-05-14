@@ -26,6 +26,7 @@ public class RepaymentSchedulePersistenceMapper {
         entity.setTotalInstallments(aggregate.getTotalInstallments());
         entity.setTotalPrincipal(aggregate.getTotalPrincipal());
         entity.setTotalProfit(aggregate.getTotalProfit());
+        entity.setTotalFee(aggregate.getTotalFee());
         entity.setTotalAmount(aggregate.getTotalAmount());
         entity.setFirstDueDate(aggregate.getFirstDueDate());
         entity.setLastDueDate(aggregate.getLastDueDate());
@@ -62,6 +63,7 @@ public class RepaymentSchedulePersistenceMapper {
         managed.setTotalInstallments(aggregate.getTotalInstallments());
         managed.setTotalPrincipal(aggregate.getTotalPrincipal());
         managed.setTotalProfit(aggregate.getTotalProfit());
+        managed.setTotalFee(aggregate.getTotalFee());
         managed.setTotalAmount(aggregate.getTotalAmount());
         managed.setFirstDueDate(aggregate.getFirstDueDate());
         managed.setLastDueDate(aggregate.getLastDueDate());
@@ -173,6 +175,7 @@ public class RepaymentSchedulePersistenceMapper {
                 entity.isActive(),
                 entity.getTotalPrincipal(),
                 entity.getTotalProfit(),
+                entity.getTotalFee(),
                 entity.getFirstDueDate(),
                 entity.getLastDueDate(),
                 installments,

@@ -2,6 +2,7 @@ package com.ksa.financing.customer.application.dto;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record CustomerResponse(
@@ -29,6 +30,8 @@ public record CustomerResponse(
     String pepStatus,
     UUID globalUid,
     String profilePicture,
+    boolean isBlocked,
+    List<String> blockCodes,
     Instant createdAt,
     Instant updatedAt
 ) {}
