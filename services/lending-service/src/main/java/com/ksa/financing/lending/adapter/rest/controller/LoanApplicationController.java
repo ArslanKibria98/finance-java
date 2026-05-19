@@ -1129,6 +1129,31 @@ public class LoanApplicationController {
         );
 
         var dataMap = objectMapper.convertValue(slim, new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Object>>() {});
+
+        // Match listing endpoint: surface displayStatus alongside raw status.
+        java.time.LocalDate loanDisbursementDate = null;
+        String loanStatusName = null;
+        try {
+            var loan = loanUseCase.getLoanByApplicationId(tenantId, inProgress.getId().getValue());
+            loanDisbursementDate = loan.getDisbursementDate();
+            loanStatusName = loan.getStatus() != null ? loan.getStatus().name() : null;
+        } catch (Exception ignored) {
+        }
+        String appStatus = inProgress.getStatus() != null ? inProgress.getStatus().name() : null;
+        dataMap.put("displayStatus",
+                LoanApplicationResponse.deriveDisplayStatus(appStatus, loanDisbursementDate, loanStatusName));
+
+        // disbursed_start_time / disbursed_end_time: surfaced only while the application sits in
+        // AWAIT_DISBURSED. Start is the dedicated awaitDisbursedAt timestamp captured atomically
+        // inside LoanApplicationAggregate.moveToAwaitDisbursed(); end is start + 1 minute.
+        // Null for every other status (incl. DISBURSED).
+        java.time.LocalDateTime disbursedStart =
+                inProgress.getStatus() == ApplicationStatus.AWAIT_DISBURSED
+                        ? inProgress.getAwaitDisbursedAt()
+                        : null;
+        dataMap.put("disbursed_start_time", disbursedStart);
+        dataMap.put("disbursed_end_time", disbursedStart != null ? disbursedStart.plusMinutes(1) : null);
+
         dataMap.put("product", buildProductObject(tenantId, inProgress.getProductId()));
         var currentInstallment = buildCurrentInstallmentObject(tenantId, inProgress.getId().getValue(), jwt);
         if (currentInstallment != null) {
@@ -1306,10 +1331,52 @@ public class LoanApplicationController {
                 return true;
             }
 
+            // Customer-payable rule: the offer presented to the customer (preQualification.totalPayable
+            // and monthlyInstallment) excludes processing/admin fees — it is just principal + profit.
+            // Once the customer has paid an amount >= (totalPrincipal + totalProfit), they have settled
+            // what the app told them they owe. Any residual is fee-allocation drift the customer cannot
+            // see or act on. Treat as fully paid in the latest-application view so the application stops
+            // appearing once the customer has fulfilled their advertised obligation.
+            var totalPrincipal = decimalNode(dataNode, "totalPrincipal");
+            var totalProfit = decimalNode(dataNode, "totalProfit");
+            if (paidTotal != null && totalPrincipal != null && totalProfit != null) {
+                var customerPayable = totalPrincipal.add(totalProfit);
+                if (paidTotal.compareTo(customerPayable.subtract(FULLY_PAID_TOLERANCE)) >= 0) {
+                    return true;
+                }
+            }
+
             var installmentsNode = dataNode.path("installments");
             if (!installmentsNode.isArray() || installmentsNode.isEmpty()) {
                 return false;
             }
+
+            // Customer-facing rule: once the FINAL installment is fully PAID/WAIVED and every
+            // earlier installment has had a payment attempt (PAID / WAIVED / PARTIALLY_PAID),
+            // the schedule term has concluded. Any residual on earlier installments is allocation
+            // drift (e.g., per-installment fee not included in the advertised monthlyInstallment)
+            // — not new money the customer can act on from the app. Treat as fully paid here so
+            // the "latest application" view does not surface a phantom currentInstallment.
+            int lastNumber = -1;
+            String lastStatus = "";
+            boolean allTouched = true;
+            for (var item : installmentsNode) {
+                var n = item.path("installmentNumber").asInt(-1);
+                var status = item.path("status").asText("").toUpperCase();
+                if (!("PAID".equals(status) || "WAIVED".equals(status) || "COMPLETED".equals(status)
+                        || "PARTIALLY_PAID".equals(status))) {
+                    allTouched = false;
+                }
+                if (n > lastNumber) {
+                    lastNumber = n;
+                    lastStatus = status;
+                }
+            }
+            if (allTouched && ("PAID".equals(lastStatus) || "WAIVED".equals(lastStatus)
+                    || "COMPLETED".equals(lastStatus))) {
+                return true;
+            }
+
             for (var item : installmentsNode) {
                 var status = item.path("status").asText("").toUpperCase();
                 if ("PAID".equals(status) || "COMPLETED".equals(status) || "WAIVED".equals(status)) {
@@ -1965,6 +2032,7 @@ public class LoanApplicationController {
         var overallStatus = switch (agg.getStatus()) {
             case AWAIT_DISBURSED -> "await_disbursement";
             case APPROVED -> "approved";
+            case DISBURSED -> "completed";
             case REJECTED -> "rejected";
             case CANCELLED -> "cancelled";
             case EXPIRED -> "expired";

@@ -2,6 +2,7 @@ package com.ksa.financing.wallet.adapter.rest.controller;
 
 import com.ksa.financing.wallet.domain.model.TransactionPurpose;
 import com.ksa.financing.wallet.domain.port.in.CreditWalletUseCase;
+import com.ksa.financing.wallet.domain.port.in.DebitWalletUseCase;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +37,7 @@ public class InternalWalletController {
 
     private final WalletRepository walletRepository;
     private final CreditWalletUseCase creditWalletUseCase;
+    private final DebitWalletUseCase debitWalletUseCase;
 
     @GetMapping("/by-customer/{customerId}")
     public ResponseEntity<WalletIbanResponse> getWalletIbanByCustomerId(
@@ -83,6 +85,34 @@ public class InternalWalletController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Debit the customer's wallet for an internal operation (loan repayment, fee, etc.).
+     * Funds are withdrawn from the Fineract savings account backing the wallet.
+     * Returns 422 (INSUFFICIENT_FUNDS) when the wallet balance is below the requested amount.
+     */
+    @PostMapping("/debit-for-loan")
+    public ResponseEntity<DebitWalletUseCase.DebitResult> debitForLoan(
+            @Valid @RequestBody DebitWalletRequest request,
+            @RequestHeader(value = "X-Tenant-Id") String tenantId) {
+
+        UUID tenantUuid = parseTenant(tenantId);
+        log.info("Internal: Debiting wallet for customer={} amount={} ref={} idempotency={}",
+                request.customerId(), request.amount(), request.referenceId(), request.idempotencyKey());
+
+        var result = debitWalletUseCase.debit(new DebitWalletUseCase.DebitCommand(
+                tenantUuid,
+                request.customerId(),
+                request.amount(),
+                request.purpose() != null ? request.purpose() : TransactionPurpose.INSTALLMENT_PAYMENT,
+                request.referenceType(),
+                request.referenceId(),
+                request.description(),
+                request.idempotencyKey()
+        ));
+
+        return ResponseEntity.ok(result);
+    }
+
     private UUID parseTenant(String tenantId) {
         try {
             return UUID.fromString(tenantId);
@@ -99,6 +129,16 @@ public class InternalWalletController {
     ) {}
 
     public record CreditWalletRequest(
+            @NotNull UUID customerId,
+            @NotNull @Positive BigDecimal amount,
+            TransactionPurpose purpose,
+            String referenceType,
+            UUID referenceId,
+            String description,
+            @NotNull String idempotencyKey
+    ) {}
+
+    public record DebitWalletRequest(
             @NotNull UUID customerId,
             @NotNull @Positive BigDecimal amount,
             TransactionPurpose purpose,

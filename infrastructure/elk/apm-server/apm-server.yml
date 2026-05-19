@@ -1,0 +1,46 @@
+################# APM Server Config #################
+# Receives traces/metrics/errors from Java agents
+# Stores into Elasticsearch as apm-* / traces-* / logs-* / metrics-* indices
+
+apm-server:
+  host: "0.0.0.0:8200"
+  rum:
+    enabled: true
+    allow_origins: ['*']
+
+  # Real User Monitoring (RUM) - optional, for frontend tracing
+  default_service_environment: "${APM_ENVIRONMENT:dev}"
+
+  # Buffer / retention
+  max_event_size: 307200
+  read_timeout: 30s
+  write_timeout: 30s
+  shutdown_timeout: 5s
+
+# Output to Elasticsearch
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_URL:elasticsearch:9200}"]
+  # username: "${ELASTIC_USERNAME:}"
+  # password: "${ELASTIC_PASSWORD:}"
+
+# Setup data view (legacy "index pattern") + ILM
+setup.template.enabled: true
+setup.template.overwrite: false
+setup.ilm.enabled: true
+
+# Kibana connection (for index pattern auto-setup)
+setup.kibana:
+  host: "${KIBANA_URL:kibana:5601}"
+
+# Logging
+logging:
+  level: info
+  to_files: false
+  to_stderr: true
+  metrics.enabled: false
+
+# Disable agent config from Kibana for now (can enable later)
+apm-server.agent.config.cache.expiration: 30s
+
+# Monitoring (self-monitoring)
+monitoring.enabled: false

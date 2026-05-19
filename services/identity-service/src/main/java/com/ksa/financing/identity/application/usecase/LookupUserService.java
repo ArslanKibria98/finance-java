@@ -38,6 +38,11 @@ public class LookupUserService implements LookupUserUseCase {
         return userIdentityRepository.findByKeycloakUsername(nationalId).map(this::enrich);
     }
 
+    @Override
+    public Optional<UserLookupResult> lookupByCustomerId(UUID internalCustomerId) {
+        return userIdentityRepository.findByInternalCustomerId(internalCustomerId).map(this::enrich);
+    }
+
     private UserLookupResult enrich(UserIdentity identity) {
         String firstName = null;
         String lastName = null;

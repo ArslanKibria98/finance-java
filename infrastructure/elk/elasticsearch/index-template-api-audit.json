@@ -1,0 +1,37 @@
+{
+  "index_patterns": ["api-audit-*"],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "ksa-logs-30d"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "service": { "type": "keyword" },
+        "environment": { "type": "keyword" },
+        "direction": { "type": "keyword" },
+        "audit_type": { "type": "keyword" },
+        "method": { "type": "keyword" },
+        "path": { "type": "keyword" },
+        "endpoint": { "type": "keyword" },
+        "status": { "type": "keyword" },
+        "status_code": { "type": "integer" },
+        "duration_ms": { "type": "long" },
+        "user_id": { "type": "keyword" },
+        "tenant_id": { "type": "keyword" },
+        "correlationId": { "type": "keyword" },
+        "traceId": { "type": "keyword" },
+        "ip": { "type": "ip" },
+        "user_agent": { "type": "keyword" },
+        "request_body": { "type": "text", "index": false },
+        "response_body": { "type": "text", "index": false },
+        "third_party_name": { "type": "keyword" },
+        "third_party_url": { "type": "keyword" },
+        "error_message": { "type": "text" }
+      }
+    }
+  }
+}

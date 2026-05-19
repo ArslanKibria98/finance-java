@@ -12,8 +12,10 @@ import com.ksa.financing.collections.domain.model.PaymentStatus;
 import com.ksa.financing.collections.domain.port.in.ManageRepaymentScheduleUseCase;
 import com.ksa.financing.collections.domain.port.in.ProcessPaymentUseCase;
 import com.ksa.financing.collections.domain.port.in.ProcessPaymentUseCase.*;
+import com.ksa.financing.collections.infrastructure.payment.WalletServiceClient;
 import com.ksa.financing.collections.infrastructure.persistence.repository.JpaPaymentRepository;
 import com.ksa.financing.infra.exception.BusinessException;
+import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.authorization.SecuredEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -58,7 +60,8 @@ public class PaymentController {
     private final EntityManager entityManager;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+    private final WalletServiceClient walletServiceClient;
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
     @Value("${app.services.lending-service-url:${LENDING_SERVICE_URL:http://lending-service:8097}}")
     private String lendingServiceUrl;
@@ -85,6 +88,21 @@ public class PaymentController {
         String parentIdempotencyKey = resolveIdempotencyKey(request.idempotencyKey());
         List<BigDecimal> perInvoiceAmounts = splitAmount(request.amount(), invoiceIds.size());
         List<PaymentResponse> responses = new ArrayList<>(invoiceIds.size());
+
+        // Wallet pre-check: fast-fail if total balance is insufficient before we
+        // start initiating per-invoice payments. Does NOT debit the wallet here —
+        // the actual debit + ledger posting happens on /payments/{id}/complete.
+        if (isWalletMethod(request.paymentMethod())) {
+            var snapshot = walletServiceClient.getMyWallet(tenantId, jwt.getTokenValue());
+            if (snapshot.availableBalance().compareTo(request.amount()) < 0) {
+                throw new BusinessException(
+                        ErrorCodes.Wallet.INSUFFICIENT_FUNDS,
+                        "Insufficient wallet balance: available=" + snapshot.availableBalance()
+                                + " requested=" + request.amount(),
+                        snapshot.availableBalance().toPlainString(),
+                        request.amount().toPlainString());
+            }
+        }
 
         for (int i = 0; i < invoiceIds.size(); i++) {
             String invoiceId = invoiceIds.get(i);
@@ -120,6 +138,8 @@ public class PaymentController {
             // Simulate async provider webhook for HyperPay flows: auto-complete after 5 seconds.
             // Only schedule for PENDING payments — if idempotent lookup returned an already
             // COMPLETED/FAILED payment, skip (the domain state machine would reject it anyway).
+            // Wallet payments do NOT auto-complete — caller invokes /payments/{id}/complete
+            // which will debit the wallet and trigger the ledger entry via Kafka.
             if (isHyperPayMethod(request.paymentMethod()) && payment.getStatus() == PaymentStatus.PENDING) {
                 scheduleAutoComplete(tenantId, payment.getId().getValue());
             }
@@ -169,8 +189,13 @@ public class PaymentController {
                 || method == PaymentMethod.SADAD;
     }
 
+    private boolean isWalletMethod(PaymentMethod method) {
+        return method == PaymentMethod.WALLET_MANUAL
+                || method == PaymentMethod.WALLET_AUTO_DEBIT;
+    }
+
     @PostMapping("/{paymentId}/complete")
-    @Operation(summary = "Complete a payment (callback from payment provider)")
+    @Operation(summary = "Complete a payment. For WALLET methods, debits the wallet here and (on success) marks payment COMPLETED; the PaymentCompleted Kafka event then triggers the ledger GL entry in ledger-service. For other methods, the provider's transaction id from the request body is recorded as-is.")
     @SecuredEndpoint(obj = "payments", act = "update")
     public ResponseEntity<PaymentResponse> completePayment(
             @PathVariable UUID paymentId,
@@ -179,7 +204,47 @@ public class PaymentController {
 
         UUID tenantId = extractTenantId(jwt);
 
-        var command = new CompletePaymentCommand(tenantId, paymentId, request.providerTransactionId());
+        // Load payment first so we can branch on paymentMethod before completing.
+        var existing = paymentUseCase.getPayment(tenantId, paymentId);
+
+        String providerTransactionId = request.providerTransactionId();
+
+        if (isWalletMethod(existing.getPaymentMethod()) && existing.getStatus() == PaymentStatus.PENDING) {
+            // Resolve wallet customer.id via /me/balance (translates JWT Keycloak sub → customer.id).
+            // Then atomically debit via /internal/wallets/debit-for-loan. Idempotency key is
+            // tied to the payment id so retries of /complete are safe.
+            var snapshot = walletServiceClient.getMyWallet(tenantId, jwt.getTokenValue());
+
+            WalletServiceClient.DebitResult debitResult;
+            try {
+                debitResult = walletServiceClient.debitForLoan(
+                        tenantId,
+                        snapshot.customerId(),
+                        existing.getLoanId(),
+                        existing.getAmount(),
+                        "Loan repayment — invoice " + existing.getInvoiceId(),
+                        "wallet-debit:" + paymentId);
+            } catch (BusinessException debitErr) {
+                // Mark payment FAILED so it isn't left dangling, then re-throw the original
+                // wallet error code (INSUFFICIENT_FUNDS, NOT_ACTIVE, etc.).
+                try {
+                    paymentUseCase.failPayment(new FailPaymentCommand(
+                            tenantId, paymentId, debitErr.getErrorCode(), debitErr.getMessage()));
+                } catch (Exception markFailEx) {
+                    log.warn("Could not mark payment FAILED after wallet error: paymentId={} err={}",
+                            paymentId, markFailEx.getMessage());
+                }
+                throw debitErr;
+            }
+
+            providerTransactionId = "WALLET-" + (debitResult.fineractTransactionId() != null
+                    ? debitResult.fineractTransactionId()
+                    : debitResult.movementId());
+            log.info("✅ Wallet debit OK paymentId={} movementId={} balanceAfter={}",
+                    paymentId, debitResult.movementId(), debitResult.newAvailableBalance());
+        }
+
+        var command = new CompletePaymentCommand(tenantId, paymentId, providerTransactionId);
         var result = paymentUseCase.completePayment(command);
         log.info("Payment completed: paymentId={}", paymentId);
         return ResponseEntity.ok(toResponse(result.payment()));

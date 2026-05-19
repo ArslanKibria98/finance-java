@@ -1,7 +1,9 @@
 package com.ksa.financing.wallet.infrastructure.identity;
 
+import com.ksa.financing.infra.audit.ApiAuditRestTemplateInterceptor;
 import com.ksa.financing.wallet.domain.port.out.RecipientLookupPort;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -23,11 +25,18 @@ public class HttpRecipientLookupAdapter implements RecipientLookupPort {
     public HttpRecipientLookupAdapter(
             @Value("${identity.service.base-url:http://identity-service:8083}") String identityBaseUrl,
             @Value("${identity.service.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${identity.service.read-timeout-ms:5000}") int readTimeoutMs) {
+            @Value("${identity.service.read-timeout-ms:5000}") int readTimeoutMs,
+            ObjectProvider<ApiAuditRestTemplateInterceptor> auditInterceptor) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeoutMs);
         factory.setReadTimeout(readTimeoutMs);
         this.restTemplate = new RestTemplate(factory);
+        // Attach SDK audit interceptor so every outbound identity-service call is
+        // captured into the api-audit Elasticsearch index with full request/response.
+        ApiAuditRestTemplateInterceptor interceptor = auditInterceptor.getIfAvailable();
+        if (interceptor != null) {
+            this.restTemplate.getInterceptors().add(interceptor);
+        }
         this.identityBaseUrl = identityBaseUrl;
     }
 
@@ -44,6 +53,11 @@ public class HttpRecipientLookupAdapter implements RecipientLookupPort {
     @Override
     public Optional<UserLookup> lookupByNationalId(String nationalId) {
         return lookup(Map.of("nid", nationalId));
+    }
+
+    @Override
+    public Optional<UserLookup> lookupByCustomerId(UUID customerId) {
+        return lookup(Map.of("customerId", customerId.toString()));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

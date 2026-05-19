@@ -67,6 +67,15 @@ public class WalletJpaEntity {
     @Column(name = "iban", length = 34)
     private String iban;
 
+    @Column(name = "masked_name", length = 120)
+    private String maskedName;
+
+    @Column(name = "english_first_name", length = 60)
+    private String englishFirstName;
+
+    @Column(name = "english_third_name", length = 60)
+    private String englishThirdName;
+
     @Column(name = "auto_debit_enabled", nullable = false)
     private boolean autoDebitEnabled = true;
 
@@ -152,6 +161,15 @@ public class WalletJpaEntity {
 
     public String getIban() { return iban; }
     public void setIban(String iban) { this.iban = iban; }
+
+    public String getMaskedName() { return maskedName; }
+    public void setMaskedName(String maskedName) { this.maskedName = maskedName; }
+
+    public String getEnglishFirstName() { return englishFirstName; }
+    public void setEnglishFirstName(String englishFirstName) { this.englishFirstName = englishFirstName; }
+
+    public String getEnglishThirdName() { return englishThirdName; }
+    public void setEnglishThirdName(String englishThirdName) { this.englishThirdName = englishThirdName; }
 
     public boolean isAutoDebitEnabled() { return autoDebitEnabled; }
     public void setAutoDebitEnabled(boolean autoDebitEnabled) { this.autoDebitEnabled = autoDebitEnabled; }

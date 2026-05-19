@@ -6,6 +6,7 @@ import com.ksa.financing.wallet.domain.model.Wallet;
 import com.ksa.financing.wallet.domain.model.WalletStatus;
 import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
 import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
+import com.ksa.financing.wallet.domain.port.out.RecipientLookupPort;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import com.ksa.financing.wallet.infrastructure.fineract.WalletFineractFeatureFlag;
 import com.ksa.islamic.orchestration.common.TaskQueue;
@@ -31,15 +32,18 @@ public class CreateWalletService implements CreateWalletUseCase {
     private final EventPublisherPort eventPublisher;
     private final WorkflowClient workflowClient;
     private final WalletFineractFeatureFlag fineractConfig;
+    private final RecipientLookupPort recipientLookupPort;
 
     public CreateWalletService(WalletRepository walletRepository,
                                EventPublisherPort eventPublisher,
                                WorkflowClient workflowClient,
-                               WalletFineractFeatureFlag fineractConfig) {
+                               WalletFineractFeatureFlag fineractConfig,
+                               RecipientLookupPort recipientLookupPort) {
         this.walletRepository = walletRepository;
         this.eventPublisher = eventPublisher;
         this.workflowClient = workflowClient;
         this.fineractConfig = fineractConfig;
+        this.recipientLookupPort = recipientLookupPort;
     }
 
     @Override
@@ -70,6 +74,7 @@ public class CreateWalletService implements CreateWalletUseCase {
         wallet.setIban(command.iban() != null
                 ? command.iban()
                 : (fineractConfig.isEnabled() ? null : generateIban()));
+        applyDisplayName(wallet, command);
         wallet.setAutoDebitEnabled(true);
 
         Wallet saved = walletRepository.save(wallet);
@@ -120,6 +125,64 @@ public class CreateWalletService implements CreateWalletUseCase {
             log.warn("Failed to start Fineract sync workflow for wallet={}: {}. Manual retry needed.",
                     wallet.getWalletNumber(), e.getMessage());
         }
+    }
+
+    /**
+     * Resolves the customer display name (merged at the NAFATH layer as
+     * "<englishFirstName> <englishThirdName>") and stores all three derived
+     * fields on the wallet. Strict resolution order — NO random fallback:
+     *   1. {@code command.displayName()} (forwarded via customer-created event)
+     *   2. Identity-service lookup (legacy producers that omit fullName)
+     *   3. {@code null} — the wallet records no display name; read paths keep
+     *      it null rather than inventing one.
+     */
+    private void applyDisplayName(Wallet wallet, CreateWalletCommand command) {
+        String displayName = resolveDisplayName(command);
+        if (displayName == null || displayName.isBlank()) {
+            wallet.setMaskedName(null);
+            wallet.setEnglishFirstName(null);
+            wallet.setEnglishThirdName(null);
+            return;
+        }
+        String trimmed = displayName.trim();
+        int sep = indexOfWhitespace(trimmed);
+        String first = sep < 0 ? trimmed : trimmed.substring(0, sep);
+        String third = sep < 0 ? null : trimmed.substring(sep + 1).trim();
+        if (third != null && third.isEmpty()) third = null;
+        wallet.setEnglishFirstName(first);
+        wallet.setEnglishThirdName(third);
+        wallet.setMaskedName(third == null ? first : first + " " + third);
+    }
+
+    private String resolveDisplayName(CreateWalletCommand command) {
+        String fromEvent = command.displayName();
+        if (fromEvent != null && !fromEvent.isBlank()) {
+            return fromEvent.trim();
+        }
+        java.util.UUID customerId = command.customerId();
+        if (customerId == null) return null;
+        try {
+            return recipientLookupPort.lookupByCustomerId(customerId)
+                    .map(info -> {
+                        if (info.name() != null && !info.name().isBlank()) return info.name().trim();
+                        String first = info.firstName() != null ? info.firstName().trim() : "";
+                        String last = info.lastName() != null ? info.lastName().trim() : "";
+                        String joined = (first + " " + last).trim();
+                        return joined.isEmpty() ? null : joined;
+                    })
+                    .orElse(null);
+        } catch (Exception ex) {
+            log.warn("Identity lookup failed during wallet creation for customerId={}: {}",
+                    customerId, ex.getMessage());
+            return null;
+        }
+    }
+
+    private int indexOfWhitespace(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (Character.isWhitespace(s.charAt(i))) return i;
+        }
+        return -1;
     }
 
     private String generateIban() {

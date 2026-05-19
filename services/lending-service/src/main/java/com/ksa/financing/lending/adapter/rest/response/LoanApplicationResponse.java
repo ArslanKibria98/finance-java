@@ -360,11 +360,17 @@ public record LoanApplicationResponse(
     }
 
     private static String deriveDisplayStatus(LoanApplicationDto dto, String normalizedStatus) {
+        return deriveDisplayStatus(normalizedStatus, dto.disbursementDate(), dto.loanStatus());
+    }
+
+    public static String deriveDisplayStatus(String applicationStatus,
+                                             java.time.LocalDate disbursementDate,
+                                             String loanStatus) {
         // If loan is already disbursed/active, list view should show DISBURSED even when app status lags.
-        if (dto.disbursementDate() != null || isActiveOrClosedLoan(dto.loanStatus())) {
+        if (disbursementDate != null || isActiveOrClosedLoan(loanStatus)) {
             return "DISBURSED";
         }
-        return switch (normalizedStatus) {
+        return switch (normalizeStatus(applicationStatus)) {
             case "MANUAL_REVIEW" -> "MANUAL_REVIEW";
             case "APPROVED" -> "APPROVED";
             case "AWAIT_DISBURSED" -> "AWAIT_DISBURSED";

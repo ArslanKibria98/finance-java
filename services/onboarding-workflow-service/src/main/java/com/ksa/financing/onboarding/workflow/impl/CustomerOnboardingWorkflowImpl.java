@@ -424,17 +424,33 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // Lifecycle: Nafath verified, proceeding to additional info
             state.setLifecycleStage("QUALIFIED");
 
-            // Profile creation (non-blocking)
+            // Profile creation (non-blocking).
+            // Name source priority: NAFATH (englishFirstName + englishThirdName, the
+            // mocked-pool merged name) → Yakeen → null. Yakeen currently returns
+            // individual name parts only, so its fullNameEn is null in practice;
+            // taking NAFATH as primary is what guarantees Customer.fullName and
+            // (downstream) wallet.masked_name are populated.
+            String nafathFullNameEn = nafathName(state.getNafathVerificationData(), "fullNameEn",
+                    "englishFirstName", "englishSecondName", "englishThirdName", "englishLastName");
+            String nafathFullNameAr = nafathName(state.getNafathVerificationData(), "fullNameAr",
+                    "firstName", "secondName", "thirdName", "lastName");
+            String profileFullNameEn = nafathFullNameEn != null && !nafathFullNameEn.isBlank()
+                    ? nafathFullNameEn
+                    : (yakeenResult != null ? yakeenResult.fullNameEn() : null);
+            String profileFullNameAr = nafathFullNameAr != null && !nafathFullNameAr.isBlank()
+                    ? nafathFullNameAr
+                    : (yakeenResult != null ? yakeenResult.fullNameAr() : null);
             try {
-                log.info("Step 5a: Profile creation for workflow: {}", workflowId);
+                log.info("Step 5a: Profile creation for workflow: {} (fullNameEn={})",
+                        workflowId, profileFullNameEn);
                 var profileResult = profileActivity.createProfile(
                         new ProfileCreationActivity.ProfileCreationInput(
                                 request.nationalId(),
                                 request.mobileNumber(),
                                 null,
                                 null,
-                                yakeenResult != null ? yakeenResult.fullNameAr() : null,
-                                yakeenResult != null ? yakeenResult.fullNameEn() : null,
+                                profileFullNameAr,
+                                profileFullNameEn,
                                 yakeenResult != null ? yakeenResult.gender() : null,
                                 yakeenResult != null ? yakeenResult.nationality() : null,
                                 yakeenResult != null ? yakeenResult.addressCity() : null,
@@ -725,11 +741,13 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
 
             // Wallet creation (non-blocking)
             try {
-                log.info("Step 5c: Wallet creation for workflow: {}", workflowId);
+                log.info("Step 5c: Wallet creation for workflow: {} (fullName={})",
+                        workflowId, profileFullNameEn);
                 var walletResult = walletActivity.createWallet(
                         new WalletCreationActivity.WalletCreationInput(
                                 state.getCustomerId(), request.tenantId(), "SAR",
-                                additionalInfoSignal != null ? additionalInfoSignal.iban() : null
+                                additionalInfoSignal != null ? additionalInfoSignal.iban() : null,
+                                profileFullNameEn
                         )
                 );
                 if (walletResult.created()) {
@@ -871,6 +889,9 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
         log.info("Received EDD form submission signal");
         this.eddFormSignal = signal;
         this.eddFormReceived = true;
+        if (signal.occupation() != null && !signal.occupation().isBlank()) {
+            state.setEddOccupation(signal.occupation());
+        }
     }
 
     @Override
@@ -955,5 +976,29 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
         updateState(OnboardingStep.FAILED);
         log.error("Onboarding failed for workflow {}: {}", workflowId, reason);
         throw ApplicationFailure.newNonRetryableFailure(reason, "ONBOARDING_FAILED");
+    }
+
+    /**
+     * Extracts a full name from the NAFATH verification map. Prefers the pre-joined
+     * key (e.g. {@code fullNameEn}) emitted by the KYC adapter; if absent, joins the
+     * supplied part keys with single spaces, skipping blanks.
+     */
+    private static String nafathName(java.util.Map<String, Object> nafathData,
+                                     String preJoinedKey, String... partKeys) {
+        if (nafathData == null) return null;
+        Object joined = nafathData.get(preJoinedKey);
+        if (joined != null && !joined.toString().isBlank()) {
+            return joined.toString().trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String key : partKeys) {
+            Object v = nafathData.get(key);
+            if (v == null) continue;
+            String s = v.toString().trim();
+            if (s.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(s);
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 }

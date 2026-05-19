@@ -53,6 +53,12 @@ public class WalletTransferJpaEntity {
     @Column(name = "purpose_note", length = 280)
     private String purposeNote;
 
+    @Column(name = "recipient_masked_name", length = 120)
+    private String recipientMaskedName;
+
+    @Column(name = "sender_masked_name", length = 120)
+    private String senderMaskedName;
+
     @Column(name = "debit_movement_id")
     private UUID debitMovementId;
 
@@ -151,6 +157,10 @@ public class WalletTransferJpaEntity {
     public void setStatus(String status) { this.status = status; }
     public String getPurposeNote() { return purposeNote; }
     public void setPurposeNote(String purposeNote) { this.purposeNote = purposeNote; }
+    public String getRecipientMaskedName() { return recipientMaskedName; }
+    public void setRecipientMaskedName(String recipientMaskedName) { this.recipientMaskedName = recipientMaskedName; }
+    public String getSenderMaskedName() { return senderMaskedName; }
+    public void setSenderMaskedName(String senderMaskedName) { this.senderMaskedName = senderMaskedName; }
     public UUID getDebitMovementId() { return debitMovementId; }
     public void setDebitMovementId(UUID debitMovementId) { this.debitMovementId = debitMovementId; }
     public UUID getCreditMovementId() { return creditMovementId; }

@@ -171,6 +171,17 @@ services:
         protocols:
           - http
 
+  # Notification Service - Novu Orchestrator
+  - name: notification-service
+    url: http://notification-service:8096
+    routes:
+      - name: notification-routes
+        paths:
+          - /notification-service
+        strip_path: true
+        protocols:
+          - http
+
   # Keycloak Authentication
   - name: keycloak-service
     url: http://keycloak:8080
@@ -204,38 +215,148 @@ services:
         protocols:
           - http
 
+  # ==========================================================================
+  # QA ENVIRONMENT (PM2-managed services on host ports 91XX)
+  # Mobile QA build base URL: http://46.62.226.94:8000/qa/<service-name>
+  # Kong forwards to host.docker.internal:<qa-port> (host PM2 process).
+  # ==========================================================================
+
+  - name: identity-service-qa
+    url: http://host.docker.internal:9183
+    routes:
+      - name: identity-routes-qa
+        paths:
+          - /qa/identity-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: customer-service-qa
+    url: http://host.docker.internal:9184
+    routes:
+      - name: customer-routes-qa
+        paths:
+          - /qa/customer-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: global-profile-service-qa
+    url: http://host.docker.internal:9185
+    routes:
+      - name: profile-routes-qa
+        paths:
+          - /qa/global-profile-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: kyc-adapter-service-qa
+    url: http://host.docker.internal:9187
+    routes:
+      - name: kyc-routes-qa
+        paths:
+          - /qa/kyc-adapter-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: wallet-service-qa
+    url: http://host.docker.internal:9188
+    routes:
+      - name: wallet-routes-qa
+        paths:
+          - /qa/wallet-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: risk-service-qa
+    url: http://host.docker.internal:9190
+    routes:
+      - name: risk-routes-qa
+        paths:
+          - /qa/risk-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: product-service-qa
+    url: http://host.docker.internal:9191
+    routes:
+      - name: product-routes-qa
+        paths:
+          - /qa/product-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: fraud-service-qa
+    url: http://host.docker.internal:9192
+    routes:
+      - name: fraud-routes-qa
+        paths:
+          - /qa/fraud-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: ledger-service-qa
+    url: http://host.docker.internal:9195
+    routes:
+      - name: ledger-routes-qa
+        paths:
+          - /qa/ledger-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: notification-service-qa
+    url: http://host.docker.internal:9196
+    routes:
+      - name: notification-routes-qa
+        paths:
+          - /qa/notification-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: lending-service-qa
+    url: http://host.docker.internal:9197
+    routes:
+      - name: lending-routes-qa
+        paths:
+          - /qa/lending-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: collections-service-qa
+    url: http://host.docker.internal:9199
+    routes:
+      - name: collections-routes-qa
+        paths:
+          - /qa/collections-service
+        strip_path: true
+        protocols:
+          - http
+
+  - name: onboarding-workflow-service-qa
+    url: http://host.docker.internal:9189
+    routes:
+      - name: onboarding-routes-qa
+        paths:
+          - /qa/onboarding-service
+        strip_path: true
+        protocols:
+          - http
+
 plugins:
   # Global CORS - Allow all origins
   - name: cors
     config:
       origins:
-        - http://localhost
-        - http://localhost:3000
-        - http://localhost:3001
-        - http://localhost:4200
-        - http://localhost:5173
-        - http://localhost:5174
-        - http://localhost:8080
-        - http://46.62.226.94
-        - http://46.62.226.94:7374
-        - http://65.108.31.172
-        - http://65.108.31.172:7374
-        - https://46.62.226.94
-        - https://46.62.226.94:7374
-        - https://65.108.31.172
-        - https://65.108.31.172:7374
-        - https://localhost
-        - https://localhost:3000
-        - https://localhost:3001
-        - https://localhost:4200
-        - https://localhost:5173
-        - https://localhost:5174
-        - http://127.0.0.1:3000
-        - http://127.0.0.1:3001
-        - http://127.0.0.1:4200
-        - http://127.0.0.1:5173
-        - http://127.0.0.1:5174
-        - http://127.0.0.1:8080
+        - "*"
       methods:
         - GET
         - POST
@@ -244,16 +365,7 @@ plugins:
         - DELETE
         - OPTIONS
       headers:
-        - Accept
-        - Accept-Language
-        - Authorization
-        - Cache-Control
-        - Content-Type
-        - Origin
-        - Pragma
-        - X-Correlation-ID
-        - X-Idempotency-Key
-        - X-Tenant-Id
+        - "*"
       exposed_headers:
         - X-Correlation-ID
         - Content-Type

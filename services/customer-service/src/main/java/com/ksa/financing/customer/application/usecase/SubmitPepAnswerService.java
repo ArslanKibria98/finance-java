@@ -28,8 +28,10 @@ public class SubmitPepAnswerService implements SubmitPepAnswerUseCase {
         var customer = customerRepository.findById(tenantId, customerId)
                 .orElseThrow(() -> NotFoundException.forEntity("Customer", customerId.toString()));
 
-        var answer = new CustomerPepAnswer(
-                null,
+        var existing = customerPepAnswerRepository.findByCustomer(tenantId, customerId);
+        
+        CustomerPepAnswer answer = new CustomerPepAnswer(
+                existing.map(CustomerPepAnswer::id).orElse(null),
                 tenantId,
                 customerId,
                 command.isPep(),
@@ -45,10 +47,16 @@ public class SubmitPepAnswerService implements SubmitPepAnswerUseCase {
                 command.sourceOfFundsDetails(),
                 command.relatedPersons(),
                 command.additionalNotes(),
-                CustomerPepAnswer.SubmittedVia.POST_LOGIN,
+                existing.map(CustomerPepAnswer::submittedVia).orElse(CustomerPepAnswer.SubmittedVia.POST_LOGIN),
                 Instant.now(),
                 command.submittedBy()
         );
+
+        if (existing.isPresent()) {
+            log.info("Updating existing PEP answers for customerId={}", customerId);
+        } else {
+            log.info("Creating new PEP answers for customerId={}", customerId);
+        }
 
         var saved = customerPepAnswerRepository.save(answer);
 
@@ -56,7 +64,7 @@ public class SubmitPepAnswerService implements SubmitPepAnswerUseCase {
         customer.setPepStatus(PepStatus.COMPLETED);
         customerRepository.save(customer);
 
-        log.info("PEP answers submitted for customerId={} tenantId={}", customerId, tenantId);
+        log.info("PEP answers persisted for customerId={} tenantId={}", customerId, tenantId);
         return saved;
     }
 }

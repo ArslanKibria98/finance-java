@@ -124,6 +124,7 @@ public class LoanApplicationPersistenceMapper {
         // Disbursement delay (snapshot from product at apply time)
         entity.setDisbursementDurationHours(agg.getDisbursementDurationHours());
         entity.setDisbursementScheduledAt(agg.getDisbursementScheduledAt());
+        entity.setAwaitDisbursedAt(agg.getAwaitDisbursedAt());
 
         // Audit
         entity.setCreatedBy(agg.getCreatedBy());
@@ -241,6 +242,7 @@ public class LoanApplicationPersistenceMapper {
         agg.setDisbursementDurationHours(
                 e.getDisbursementDurationHours() != null ? e.getDisbursementDurationHours() : 0);
         agg.setDisbursementScheduledAt(e.getDisbursementScheduledAt());
+        agg.setAwaitDisbursedAt(e.getAwaitDisbursedAt());
 
         return agg;
     }

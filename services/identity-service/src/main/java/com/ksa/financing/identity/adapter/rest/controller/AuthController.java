@@ -164,7 +164,7 @@ public class AuthController {
         log.info("Onboarding registration request for NID: {}", maskNid(request.nationalId()));
 
         var command = new RegisterFromOnboardingUseCase.RegisterFromOnboardingCommand(
-                request.nationalId(), request.mobileNumber(), request.globalUid(), request.firstName()
+                request.nationalId(), request.mobileNumber(), request.globalUid(), request.firstName(), request.fcmToken()
         );
 
         var result = registerFromOnboardingUseCase.register(command);

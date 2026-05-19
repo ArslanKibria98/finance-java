@@ -148,6 +148,45 @@
       }
     },
     {
+      "name": "3.1 🆕 Get Recent Recipients (Last 5)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test('Is array', () => pm.expect(Array.isArray(d)).to.be.true);",
+              "if (d.length > 0) {",
+              "    console.log('Recent Recipients count:', d.length);",
+              "    console.log('Last recipient:', d[0].maskedName, '(', d[0].walletNumber, ')');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/transfers/recent-recipients",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "transfers",
+            "recent-recipients"
+          ]
+        },
+        "description": "Returns the last 5 unique destination accounts (wallets) the customer has sent money to, resolved from the customer's JWT."
+      },
+      "response": []
+    },
+    {
       "name": "4. ✅ Transfer by mobile — A → B (250 SAR) [Fineract via proxy]",
       "event": [
         {

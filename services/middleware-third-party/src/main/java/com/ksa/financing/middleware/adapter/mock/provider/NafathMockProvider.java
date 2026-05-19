@@ -4,11 +4,31 @@ import com.ksa.financing.middleware.adapter.mock.MockResponseResult;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/**
+ * Nafath mock with per-session-deterministic display names.
+ *
+ * On every {@code NAFATH_INITIATE} we pick a (firstName, thirdName) pair from
+ * {@link RecipientNamePool} and cache it against the generated {@code transId}.
+ * Subsequent {@code NAFATH_CHECK_STATUS} calls within the same session reuse
+ * the cached pair, so a customer's name never changes mid-onboarding. The
+ * merged "&lt;firstName&gt; &lt;thirdName&gt;" then flows downstream to
+ * customer-service → Keycloak → wallet-service, giving every API a single
+ * source of truth.
+ */
 @Component
 public class NafathMockProvider implements MockResponseProvider {
 
     private static final String HEADERS = "Content-Type: application/json";
+    private static final Pattern TRANS_ID_PATTERN = Pattern.compile("\"transId\"\\s*:\\s*\"([^\"]+)\"");
+
+    private record NamePair(String first, String third) {}
+
+    /** transId → picked (firstName, thirdName). Bounded by onboarding session count (mock; demo only). */
+    private final ConcurrentHashMap<String, NamePair> sessionNames = new ConcurrentHashMap<>();
 
     @Override
     public String getProviderCode() {
@@ -19,7 +39,7 @@ public class NafathMockProvider implements MockResponseProvider {
     public MockResponseResult getMockResponse(String apiCode, String requestBody) {
         return switch (apiCode) {
             case "NAFATH_INITIATE" -> initiateResponse();
-            case "NAFATH_CHECK_STATUS" -> checkStatusResponse();
+            case "NAFATH_CHECK_STATUS" -> checkStatusResponse(requestBody);
             case "NAFATH_CALLBACK" -> callbackResponse();
             case "NAFATH_GET_JWK" -> getJwkResponse();
             default -> fallbackResponse();
@@ -29,6 +49,8 @@ public class NafathMockProvider implements MockResponseProvider {
     private MockResponseResult initiateResponse() {
         var transId = UUID.randomUUID().toString();
         var random = String.valueOf((int) (Math.random() * 90 + 10));
+        // Pick the name pair ONCE per session; reuse it on every check-status poll.
+        sessionNames.put(transId, newNamePair());
         var body = """
                 {
                     "transId": "%s",
@@ -38,7 +60,15 @@ public class NafathMockProvider implements MockResponseProvider {
         return new MockResponseResult(201, body, HEADERS);
     }
 
-    private MockResponseResult checkStatusResponse() {
+    private MockResponseResult checkStatusResponse(String requestBody) {
+        String transId = extractTransId(requestBody);
+        // Reuse the name pair picked at initiate-time. If the session is unknown
+        // (e.g. request replayed without prior initiate), fall back to a fresh
+        // pool pick — but only one pick, no per-call rerolling within a session.
+        NamePair names = transId != null
+                ? sessionNames.computeIfAbsent(transId, k -> newNamePair())
+                : newNamePair();
+        String responseTransId = transId != null ? transId : UUID.randomUUID().toString();
         var body = """
                 {
                     "aud": "https://api.awn.ai/callback/nafath",
@@ -54,33 +84,33 @@ public class NafathMockProvider implements MockResponseProvider {
                     "transId": "%s",
                     "PersonId": 2564878532,
                     "jwks_uri": "https://nafath.api.elm.sa/api/v1/mfa/jwk",
-                    "lastName": "\u0646\u0648\u0627\u0632",
-                    "firstName": "\u0639\u0645\u0631",
-                    "thirdName": "\u0634\u064a\u062e \u0633\u064a\u0627\u064a",
-                    "secondName": "\u0634\u064a\u062e",
+                    "lastName": "نواز",
+                    "firstName": "عمر",
+                    "thirdName": "شيخ سياي",
+                    "secondName": "شيخ",
                     "ServiceName": "OpenAccount",
                     "iqamaNumber": "2564878532",
                     "dateOfBirthG": "01-05-1993",
                     "dateOfBirthH": "10-11-1413",
                     "drivingLicenses": null,
-                    "englishLastName": "NAWAZ",
+                    "englishLastName": "",
                     "iqamaIssueDateG": "21-01-2024",
                     "iqamaIssueDateH": "09-07-1445",
                     "nationalAddress": [
                         {
                             "city": "RIYADH",
                             "cityId": "3",
-                            "cityL2": "\u0627\u0644\u0631\u064a\u0627\u0636",
+                            "cityL2": "الرياض",
                             "district": "Al Woroud Dist.",
                             "postCode": "12252",
                             "regionId": "1",
-                            "streetL2": "\u062d\u0645\u062f \u0627\u0644\u062c\u0627\u0633\u0631",
+                            "streetL2": "حمد الجاسر",
                             "districtID": "null",
-                            "districtL2": "\u062d\u064a \u0627\u0644\u0648\u0631\u0648\u062f",
+                            "districtL2": "حي الورود",
                             "regionName": "Al Riyadh",
                             "streetName": "Hamad Al Jasir",
                             "unitNumber": "null",
-                            "regionNameL2": "\u0627\u0644\u0631\u064a\u0627\u0636",
+                            "regionNameL2": "الرياض",
                             "shortAddress": "RHWA3482",
                             "buildingNumber": "3482",
                             "additionalNumber": "6847",
@@ -89,18 +119,33 @@ public class NafathMockProvider implements MockResponseProvider {
                         }
                     ],
                     "nationalityCode": 304,
-                    "nationalityDesc": "\u0628\u0627\u0643\u0633\u062a\u0627\u0646",
-                    "englishFirstName": "OMAR",
-                    "englishThirdName": "SHEIKH",
+                    "nationalityDesc": "باكستان",
+                    "englishFirstName": "%s",
+                    "englishThirdName": "%s",
                     "iqamaExpiryDateG": "24-03-2027",
                     "iqamaExpiryDateH": "24-09-1446",
-                    "englishSecondName": "NAWAZ",
+                    "englishSecondName": "",
                     "iqamaVersionNumber": 1,
                     "iqamaIssuePlaceCode": 1,
-                    "iqamaIssuePlaceDesc": "\u0627\u0644\u0631\u064a\u0627\u0636"
+                    "iqamaIssuePlaceDesc": "الرياض"
                 }
-                """.formatted(UUID.randomUUID().toString());
+                """.formatted(responseTransId, escape(names.first()), escape(names.third()));
         return new MockResponseResult(200, body, HEADERS);
+    }
+
+    private NamePair newNamePair() {
+        return new NamePair(RecipientNamePool.randomFirstName(), RecipientNamePool.randomName());
+    }
+
+    private String extractTransId(String requestBody) {
+        if (requestBody == null || requestBody.isBlank()) return null;
+        Matcher m = TRANS_ID_PATTERN.matcher(requestBody);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private static String escape(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private MockResponseResult callbackResponse() {

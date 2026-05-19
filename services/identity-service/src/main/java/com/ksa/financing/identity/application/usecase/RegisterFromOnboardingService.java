@@ -10,6 +10,7 @@ import com.ksa.financing.identity.domain.port.out.UserIdentityRepository;
 import com.ksa.financing.identity.infrastructure.blacklist.LoginGuardService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,14 +21,19 @@ import java.util.UUID;
 @Service
 public class RegisterFromOnboardingService implements RegisterFromOnboardingUseCase {
 
-    private static final Logger log = LoggerFactory.getLogger(RegisterFromOnboardingService.class);
-    private static final String REALM = "CompanyRealm";
+    @Value("${keycloak.realm:CompanyRealm}")
+    private String realm;
     private static final String CUSTOMER_ROLE = "customer";
+
+    private static final Logger log = LoggerFactory.getLogger(RegisterFromOnboardingService.class);
 
     private final KeycloakAdapterPort keycloakAdapter;
     private final UserIdentityRepository userIdentityRepository;
     private final EventPublisherPort eventPublisher;
     private final LoginGuardService loginGuard;
+
+    @Value("${platform.default-tenant-id:00000000-0000-0000-0000-000000000001}")
+    private String defaultTenantId;
 
     public RegisterFromOnboardingService(KeycloakAdapterPort keycloakAdapter,
                                          UserIdentityRepository userIdentityRepository,
@@ -55,9 +61,9 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
             log.info("User already exists for NID: {}, generating tokens", maskNid(command.nationalId()));
             UserIdentity identity = existing.get();
             String tempPassword = UUID.randomUUID().toString();
-            keycloakAdapter.resetPassword(REALM, identity.getKeycloakUserId(), tempPassword);
+            keycloakAdapter.resetPassword(realm, identity.getKeycloakUserId(), tempPassword);
             KeycloakAdapterPort.TokenResponse tokenResponse = keycloakAdapter.authenticate(
-                    REALM, command.nationalId(), tempPassword);
+                    realm, command.nationalId(), tempPassword);
             return new RegisterFromOnboardingResult(
                     tokenResponse.accessToken(),
                     tokenResponse.refreshToken(),
@@ -72,12 +78,12 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
         // Step 2: Create Keycloak user with NID as username
         String email = command.nationalId() + "@onboarding.local";
         KeycloakAdapterPort.KeycloakUser keycloakUser = keycloakAdapter.createUser(
-                REALM, command.nationalId(), email, password, command.firstName()
+                realm, command.nationalId(), email, password, command.firstName()
         );
         log.info("Keycloak user created with ID: {}", keycloakUser.keycloakUserId());
 
         // Step 3: Assign customer role
-        keycloakAdapter.assignRole(REALM, keycloakUser.keycloakUserId(), CUSTOMER_ROLE);
+        keycloakAdapter.assignRole(realm, keycloakUser.keycloakUserId(), CUSTOMER_ROLE);
         log.info("Assigned '{}' role to Keycloak user: {}", CUSTOMER_ROLE, keycloakUser.keycloakUserId());
 
         // Step 3.1: Persist mobile_number + national_id as Keycloak user attributes so the
@@ -88,14 +94,21 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
         }
         jwtAttributes.put("national_id", command.nationalId());
         if (!jwtAttributes.isEmpty()) {
-            keycloakAdapter.setUserAttributes(REALM, keycloakUser.keycloakUserId(), jwtAttributes);
+            try {
+                keycloakAdapter.setUserAttributes(realm, keycloakUser.keycloakUserId(), jwtAttributes);
+            } catch (Exception e) {
+                // Keycloak 26+ Declarative User Profile can block unknown attributes if not explicitly configured.
+                // We log this as a warning but continue registration so the user is not blocked from onboarding.
+                log.warn("Failed to set Keycloak user attributes for userId: {} (continuing): {}",
+                        keycloakUser.keycloakUserId(), e.getMessage());
+            }
         }
 
         // Step 4: Create UserIdentity entity
         UserIdentity identity = new UserIdentity();
-        identity.setTenantId(UUID.randomUUID());
+        identity.setTenantId(UUID.fromString(defaultTenantId));
         identity.setKeycloakUserId(keycloakUser.keycloakUserId());
-        identity.setKeycloakRealm(REALM);
+        identity.setKeycloakRealm(realm);
         identity.setKeycloakUsername(command.nationalId());
         identity.setMobileNumber(command.mobileNumber());
         identity.setInternalUserId(UUID.randomUUID());
@@ -107,12 +120,12 @@ public class RegisterFromOnboardingService implements RegisterFromOnboardingUseC
 
         // Step 5: Save entity and publish event
         UserIdentity saved = userIdentityRepository.save(identity);
-        eventPublisher.publishUserRegistered(saved.getId(), saved.getTenantId());
+        eventPublisher.publishUserRegistered(saved.getId(), saved.getTenantId(), command.fcmToken());
         log.info("UserIdentity saved with ID: {} and status: {}", saved.getId(), saved.getStatus());
 
         // Step 6: Authenticate to get JWT tokens
         KeycloakAdapterPort.TokenResponse tokenResponse = keycloakAdapter.authenticate(
-                REALM, command.nationalId(), password
+                realm, command.nationalId(), password
         );
         log.info("JWT tokens obtained for onboarding user: {}", keycloakUser.keycloakUserId());
 

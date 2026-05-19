@@ -129,7 +129,7 @@ public record StepInfo(
             case SCREENING -> "AWAIT_SCREENING";
             case EDD_REQUIRED -> "SUBMIT_EDD_FORM";
             case EDD_SUBMITTED -> "AWAIT_RISK_DECISION";
-            case COMPLETING -> "AWAIT_COMPLETION";
+            case COMPLETING -> "SET_PIN";
             case PIN_SETUP -> "SET_PIN";
             case COMPLETED -> "LOGIN";
             case FAILED -> "RETRY_OR_CONTACT_SUPPORT";

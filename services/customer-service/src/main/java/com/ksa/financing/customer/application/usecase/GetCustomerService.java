@@ -87,20 +87,19 @@ public class GetCustomerService implements GetCustomerUseCase {
                 .findByCustomer(customer.getTenantId(), customer.getId())
                 .isPresent();
 
-        // Onboarding flow can mark PEP via workflow/risk path before post-login
-        // PEP answers are persisted. In that case, treat status as completed.
-        if (customer.isPepFlag() && customer.getPepStatus() != PepStatus.COMPLETED) {
-            customer.setPepStatus(PepStatus.COMPLETED);
-            return customerRepository.save(customer);
+        PepStatus targetStatus;
+        if (hasPepAnswers) {
+            targetStatus = PepStatus.COMPLETED;
+        } else if (customer.isPepFlag()) {
+            // PEP detected but no answers yet
+            targetStatus = PepStatus.PENDING;
+        } else {
+            // Not a PEP, no answers needed
+            targetStatus = PepStatus.COMPLETED;
         }
 
-        if (hasPepAnswers && customer.getPepStatus() != PepStatus.COMPLETED) {
-            customer.setPepStatus(PepStatus.COMPLETED);
-            return customerRepository.save(customer);
-        }
-
-        if (!hasPepAnswers && customer.getPepStatus() == null) {
-            customer.setPepStatus(PepStatus.PENDING);
+        if (customer.getPepStatus() != targetStatus) {
+            customer.setPepStatus(targetStatus);
             customer = customerRepository.save(customer);
         }
 

@@ -106,6 +106,8 @@
         <module>shared-libraries/risk-activity-api</module>
 
         <!-- Active Microservices -->
+        <module>services/identity-service</module>
+        <module>services/global-profile-service</module>
         <module>services/risk-service</module>
         <module>services/fraud-service</module>
         <module>services/product-service</module>
@@ -126,12 +128,10 @@
         <!--
         <module>services/document-service</module>
         <module>services/partner-service</module>
-        <module>services/notification-service</module>
         <module>services/audit-service</module>
-        <module>services/kyc-adapter</module>
-        <module>services/core-banking-adapter</module>
-        <module>services/payment-adapter</module>
         -->
+        <module>services/notification-service</module>
+        <module>services/kyc-adapter-service</module>
     </modules>
 
     <dependencyManagement>

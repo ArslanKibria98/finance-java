@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.domain.PageRequest;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -30,6 +31,19 @@ public class WalletTransferRepositoryImpl implements WalletTransferRepository {
     private static final Set<String> SEARCHABLE_FIELDS = Set.of(
             "transferNumber", "status", "channel", "purposeNote", "errorCode", "errorMessage"
     );
+
+    @Override
+    public List<UUID> findRecentRecipientWalletIds(UUID sourceWalletId, int limit) {
+        log.debug("Finding recent recipient wallet IDs for sourceWallet={} limit={}", sourceWalletId, limit);
+        return jpaRepo.findRecentRecipientWalletIds(sourceWalletId, PageRequest.of(0, limit));
+    }
+
+    @Override
+    public Optional<WalletTransfer> findMostRecentTransferToRecipient(UUID sourceWalletId, UUID destinationWalletId) {
+        return jpaRepo
+                .findFirstBySourceWalletIdAndDestinationWalletIdOrderByInitiatedAtDesc(sourceWalletId, destinationWalletId)
+                .map(mapper::toDomain);
+    }
 
     @Override
     public WalletTransfer save(WalletTransfer transfer) {

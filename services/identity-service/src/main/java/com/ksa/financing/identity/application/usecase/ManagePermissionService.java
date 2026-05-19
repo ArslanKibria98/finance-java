@@ -156,15 +156,19 @@ public class ManagePermissionService implements ManagePermissionUseCase {
         // Customer
         mapping.put("CUSTOMER:GET", new String[][]{
                 {"customers", "read"}, {"customers.bank-accounts", "read"},
-                {"customers.employment", "read"}, {"reference-data", "read"}});
+                {"customers.employment", "read"}, {"reference-data", "read"},
+                {"reference-data.occupation", "read"}});
         mapping.put("CUSTOMER:POST", new String[][]{
                 {"customers", "create"}, {"customers.bank-accounts", "create"},
-                {"customers.employment", "create"}, {"reference-data", "create"}});
+                {"customers.employment", "create"}, {"reference-data", "create"},
+                {"reference-data.occupation", "create"}});
         mapping.put("CUSTOMER:PUT", new String[][]{
                 {"customers", "update"}, {"customers.kyc-status", "update"},
-                {"reference-data", "update"}});
+                {"reference-data", "update"},
+                {"reference-data.occupation", "update"}});
         mapping.put("CUSTOMER:DELETE", new String[][]{
-                {"reference-data", "delete"}});
+                {"reference-data", "delete"},
+                {"reference-data.occupation", "delete"}});
 
         // Product
         mapping.put("PRODUCT:GET", new String[][]{
@@ -347,6 +351,7 @@ public class ManagePermissionService implements ManagePermissionUseCase {
                 {"reference-data.source-of-wealth", "read"},
                 {"reference-data.source-of-funds", "read"},
                 {"reference-data.source-of-income", "read"},
+                {"reference-data.occupation", "read"},
                 {"reference-data.purpose-of-finance", "read"},
                 {"reference-data.net-worth-ranges", "read"},
                 {"risk.credit-scoring.field-definitions", "read"},
@@ -355,6 +360,7 @@ public class ManagePermissionService implements ManagePermissionUseCase {
                 {"reference-data.source-of-wealth", "create"},
                 {"reference-data.source-of-funds", "create"},
                 {"reference-data.source-of-income", "create"},
+                {"reference-data.occupation", "create"},
                 {"reference-data.purpose-of-finance", "create"},
                 {"reference-data.net-worth-ranges", "create"},
                 {"risk.credit-scoring.field-definitions", "create"},
@@ -363,6 +369,7 @@ public class ManagePermissionService implements ManagePermissionUseCase {
                 {"reference-data.source-of-wealth", "update"},
                 {"reference-data.source-of-funds", "update"},
                 {"reference-data.source-of-income", "update"},
+                {"reference-data.occupation", "update"},
                 {"reference-data.purpose-of-finance", "update"},
                 {"reference-data.net-worth-ranges", "update"},
                 {"risk.credit-scoring.field-definitions", "update"},
@@ -371,6 +378,7 @@ public class ManagePermissionService implements ManagePermissionUseCase {
                 {"reference-data.source-of-wealth", "delete"},
                 {"reference-data.source-of-funds", "delete"},
                 {"reference-data.source-of-income", "delete"},
+                {"reference-data.occupation", "delete"},
                 {"reference-data.purpose-of-finance", "delete"},
                 {"reference-data.net-worth-ranges", "delete"},
                 {"risk.credit-scoring.field-definitions", "delete"},

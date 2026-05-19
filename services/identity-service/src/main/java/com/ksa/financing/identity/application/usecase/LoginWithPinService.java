@@ -91,6 +91,7 @@ public class LoginWithPinService implements LoginWithPinUseCase {
                             maskNid(command.nationalId()));
                     return new CustomerLookupPort.CustomerLookupResult(
                             identity.getInternalUserId() != null ? identity.getInternalUserId().toString() : null,
+                            null,
                             null
                     );
                 });
@@ -103,7 +104,7 @@ public class LoginWithPinService implements LoginWithPinUseCase {
                 customerLookup.pepStatus(),
                 identity.getKeycloakUsername(),
                 identity.getMobileNumber(),
-                tokenResponse.name()
+                resolveName(tokenResponse.name(), customerLookup.name())
         );
     }
 
@@ -165,15 +166,18 @@ public class LoginWithPinService implements LoginWithPinUseCase {
         // Resolve customer ID
         String customerId = null;
         String pepStatus = null;
+        String customerName = null;
         if (identity.getKeycloakUsername() != null) {
             var lookup = customerLookupPort
                     .resolveCustomerByNationalId(identity.getKeycloakUsername(), tokenResponse.accessToken())
                     .orElseGet(() -> new CustomerLookupPort.CustomerLookupResult(
                             identity.getInternalUserId() != null ? identity.getInternalUserId().toString() : null,
+                            null,
                             null
                     ));
             customerId = lookup.customerId();
             pepStatus = lookup.pepStatus();
+            customerName = lookup.name();
         }
 
         return new LoginWithPinResult(
@@ -184,8 +188,15 @@ public class LoginWithPinService implements LoginWithPinUseCase {
                 pepStatus,
                 identity.getKeycloakUsername(),
                 identity.getMobileNumber(),
-                tokenResponse.name()
+                resolveName(tokenResponse.name(), customerName)
         );
+    }
+
+    private String resolveName(String jwtName, String customerName) {
+        if (customerName != null && !customerName.isBlank()) {
+            return customerName;
+        }
+        return jwtName;
     }
 
     private String maskMobile(String mobile) {

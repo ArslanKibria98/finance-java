@@ -114,6 +114,10 @@ kafka:
     payment-applied: ${KAFKA_TOPIC_PAYMENT_APPLIED:financing.repayment.payment-applied}
     schedule-fully-paid: ${KAFKA_TOPIC_SCHEDULE_FULLY_PAID:financing.repayment.schedule.fully-paid}
 
+app:
+  services:
+    wallet-service-url: ${WALLET_SERVICE_URL:http://wallet-service:8088}
+
 middleware:
   base-url: ${MIDDLEWARE_BASE_URL:http://middleware-third-party:8093}
   secret-key: ${MIDDLEWARE_SECRET_KEY:test-mock-secret-key-2026}

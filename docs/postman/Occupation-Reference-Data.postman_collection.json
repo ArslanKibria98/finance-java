@@ -1,0 +1,149 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-occupation-ref-data",
+    "name": "Occupation Reference Data",
+    "description": "CRUD and read-only endpoints for **occupation** LOV (customer-service), aligned with Source of Income / Source of Wealth.\n\n**Via Kong:** `{{kongUrl}}/customer-service/api/v1/reference-data/occupation...`\n\n**Auth:**\n- Secured routes: `Authorization: Bearer {{accessToken}}` (JWT must include `tenant_id`).\n- `GET .../occupation/active`: no JWT required; send `X-Tenant-Id: {{tenantId}}` (or JWT with `tenant_id`).\n\n**Casbin:** `reference-data.occupation` with acts create | read | update | delete.\n\n**Variables:** Set `kongUrl` (e.g. `http://localhost:8000`), `accessToken`, `tenantId`, and optionally `occupationOptionId` after create or list.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "kongUrl", "value": "http://localhost:8000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "occupationOptionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "customer-service (via Kong)",
+      "item": [
+        {
+          "name": "Create occupation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const data = j.data !== undefined ? j.data : j;",
+                  "if (data && data.id) pm.collectionVariables.set('occupationOptionId', data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"CONSULTANT_IT\",\n  \"nameEn\": \"IT Consultant\",\n  \"nameAr\": \"استشاري تقنية معلومات\",\n  \"descriptionEn\": \"Independent or employed IT consulting\",\n  \"descriptionAr\": \"استشارات تقنية معلومات\",\n  \"displayOrder\": 50\n}"
+            },
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation",
+            "description": "`@SecuredEndpoint` reference-data.occupation + create. Response may be raw body or ApiResponse-wrapped (`data`)."
+          }
+        },
+        {
+          "name": "List all (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation?page=0&size=50",
+            "description": "Paged list including inactive. Adjust `page` / `size` to match your `PageQuery` contract."
+          }
+        },
+        {
+          "name": "List active (dropdown / public)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text", "description": "Required if no JWT with tenant_id" }
+            ],
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/active?page=0&size=100",
+            "description": "No JWT required on customer-service public chain. Optional `&search=` query supported."
+          }
+        },
+        {
+          "name": "Get by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}",
+            "description": "Set `occupationOptionId` from Create response or seed data."
+          }
+        },
+        {
+          "name": "Update occupation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nameEn\": \"IT Consultant (updated)\",\n  \"nameAr\": \"استشاري تقنية معلومات (محدّث)\",\n  \"descriptionEn\": \"Updated description\",\n  \"descriptionAr\": \"وصف محدّث\",\n  \"isActive\": true,\n  \"displayOrder\": 51\n}"
+            },
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}",
+            "description": "Partial update; null fields ignored."
+          }
+        },
+        {
+          "name": "Activate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}/activate",
+            "description": "204 No Content."
+          }
+        },
+        {
+          "name": "Deactivate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}/deactivate",
+            "description": "204 No Content."
+          }
+        },
+        {
+          "name": "Delete (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+            "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}",
+            "description": "Soft delete (`is_deleted`); 204 No Content."
+          }
+        }
+      ]
+    },
+    {
+      "name": "onboarding-workflow-service (proxy, via Kong)",
+      "item": [
+        {
+          "name": "List active occupation (EDD proxy)",
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/onboarding-service/api/v1/onboarding/reference-data/occupation",
+            "description": "Proxies to customer-service `/reference-data/occupation/active`. Optional: `?search=`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Direct customer-service (no Kong)",
+      "item": [
+        {
+          "name": "List active — direct :8084",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }],
+            "url": "http://localhost:8084/api/v1/reference-data/occupation/active",
+            "description": "Use when calling customer-service directly; change host/port to match your environment."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,12 +1,18 @@
 package com.ksa.financing.wallet.application.usecase;
 
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.infra.pagination.PageMetadata;
+import com.ksa.financing.infra.pagination.PageResponse;
+import com.ksa.financing.wallet.domain.model.MovementType;
+import com.ksa.financing.wallet.domain.model.TransactionPurpose;
 import com.ksa.financing.wallet.domain.model.TransferStatus;
 import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.model.WalletMovement;
 import com.ksa.financing.wallet.domain.model.WalletTransfer;
 import com.ksa.financing.wallet.domain.port.in.GetTransactionHistoryUseCase;
 import com.ksa.financing.wallet.domain.port.out.FineractSavingsPort;
 import com.ksa.financing.wallet.domain.port.out.RecipientLookupPort;
+import com.ksa.financing.wallet.domain.port.out.WalletMovementRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletTransferRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,12 +44,13 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
 
     private final WalletRepository walletRepository;
     private final WalletTransferRepository transferRepository;
+    private final WalletMovementRepository movementRepository;
     private final FineractSavingsPort fineractPort;
     private final RecipientLookupPort recipientLookupPort;
 
     @Override
     @Transactional(readOnly = true)
-    public TransactionHistory getHistory(UUID walletId, int page, int size) {
+    public PageResponse<TransactionItem> getHistory(UUID walletId, int page, int size) {
         Wallet wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> NotFoundException.forEntity("Wallet", walletId.toString()));
 
@@ -62,6 +69,14 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
         Map<UUID, CounterpartyMeta> counterpartyCache = new HashMap<>();
         // Track matched transfers per request (avoid double-matching)
         java.util.Set<UUID> matchedTransferIds = new java.util.HashSet<>();
+
+        // wallet_movements provide context for non-transfer movements
+        // (loan disbursements, repayments, top-ups, withdrawals, fees, etc.)
+        List<WalletMovement> movements = movementRepository.findByWalletId(walletId);
+        java.util.Set<UUID> matchedMovementIds = new java.util.HashSet<>();
+
+        // Single lookup for the wallet's own customer (used for non-transfer counterparties).
+        String holderMaskedMobile = lookupMaskedMobile(wallet.getCustomerId());
 
         List<TransactionItem> items = new ArrayList<>();
         BigDecimal currentBalance = wallet.getAvailableBalance() != null
@@ -92,10 +107,38 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
                     WalletTransfer matched = matchByAmountDirection(
                             sent, received, tx.amount(), direction, matchedTransferIds);
 
-                    String mappedType = mapType(type, matched, direction);
-                    Counterparty counterparty = matched != null
-                            ? buildCounterparty(walletId, matched, counterpartyCache)
-                            : null;
+                    String mappedType;
+                    Counterparty counterparty;
+                    String purposeNote;
+                    String transferNumber;
+                    // Fineract returns date-only (no time), so its value collapses every
+                    // tx on the same day to 00:00:00Z. Prefer the persisted Instant from
+                    // wallet_transfers / wallet_movements when we have a match.
+                    Instant timestamp = parseDate(tx.date());
+
+                    if (matched != null) {
+                        mappedType = "CREDIT".equals(direction) ? "TRANSFER_IN" : "TRANSFER_OUT";
+                        counterparty = buildCounterparty(walletId, matched, counterpartyCache);
+                        purposeNote = matched.getPurposeNote();
+                        transferNumber = matched.getTransferNumber();
+                        Instant transferTs = pickTransferTimestamp(matched);
+                        if (transferTs != null) timestamp = transferTs;
+                    } else {
+                        WalletMovement movementMatch = matchMovement(
+                                movements, tx.amount(), direction, matchedMovementIds);
+                        if (movementMatch != null) {
+                            mappedType = mapPurposeToType(movementMatch.getPurpose(), type);
+                            purposeNote = movementMatch.getDescription();
+                            transferNumber = movementMatch.getMovementNumber();
+                            counterparty = buildExternalCounterparty(wallet, movementMatch, holderMaskedMobile);
+                            if (movementMatch.getCreatedAt() != null) timestamp = movementMatch.getCreatedAt();
+                        } else {
+                            mappedType = mapType(type, null, direction);
+                            purposeNote = null;
+                            transferNumber = null;
+                            counterparty = null;
+                        }
+                    }
 
                     items.add(new TransactionItem(
                             tx.transactionId() != null ? tx.transactionId().toString() : null,
@@ -105,10 +148,10 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
                             tx.runningBalance(),
                             tx.reversed() ? "REVERSED" : "COMPLETED",
                             counterparty,
-                            matched != null ? matched.getPurposeNote() : null,
-                            matched != null ? matched.getTransferNumber() : null,
+                            purposeNote,
+                            transferNumber,
                             tx.transactionId() != null ? tx.transactionId().toString() : null,
-                            parseDate(tx.date())));
+                            timestamp));
                 }
             } catch (Exception ex) {
                 log.warn("Fineract transactions fetch failed walletId={}: {}", walletId, ex.getMessage());
@@ -125,27 +168,26 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
             items.add(buildPendingTransferItem(walletId, t, "CREDIT", "TRANSFER_IN", counterpartyCache));
         }
 
-        // Sort newest first
+        // Sort newest first. Fineract only stores date (not time), so same-day txs collide
+        // on timestamp — break ties with fineractTransactionId DESC (numeric IDs ascend with time).
         items.sort((a, b) -> {
             Instant ai = a.timestamp() != null ? a.timestamp() : Instant.EPOCH;
             Instant bi = b.timestamp() != null ? b.timestamp() : Instant.EPOCH;
-            return bi.compareTo(ai);
+            int cmp = bi.compareTo(ai);
+            if (cmp != 0) return cmp;
+            return Long.compare(parseTxIdOrZero(b.fineractTransactionId()), parseTxIdOrZero(a.fineractTransactionId()));
         });
 
         int total = items.size();
         int from = Math.min(page * size, total);
         int to = Math.min(from + size, total);
-        List<TransactionItem> pageItems = items.subList(from, to);
+        List<TransactionItem> pageItems = new ArrayList<>(items.subList(from, to));
 
-        return new TransactionHistory(
-                wallet.getId(),
-                wallet.getWalletNumber(),
-                currentBalance,
-                currency,
-                pageItems,
-                page,
-                size,
-                total);
+        int totalPages = size > 0 ? (int) Math.ceil((double) total / size) : 0;
+        boolean first = page == 0;
+        boolean last = to >= total;
+        PageMetadata metadata = new PageMetadata(page, size, total, totalPages, first, last, pageItems.isEmpty());
+        return new PageResponse<>(pageItems, metadata);
     }
 
     private TransactionItem buildPendingTransferItem(UUID walletId, WalletTransfer t, String direction,
@@ -183,6 +225,84 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
         return "OTHER";
     }
 
+    private WalletMovement matchMovement(List<WalletMovement> movements,
+                                         BigDecimal amount,
+                                         String direction,
+                                         java.util.Set<UUID> matchedMovementIds) {
+        MovementType wanted = "CREDIT".equals(direction) ? MovementType.CREDIT : MovementType.DEBIT;
+        for (WalletMovement m : movements) {
+            if (matchedMovementIds.contains(m.getId())) continue;
+            if (m.getMovementType() != wanted) continue;
+            if (m.getAmount() == null || m.getAmount().compareTo(amount) != 0) continue;
+            matchedMovementIds.add(m.getId());
+            return m;
+        }
+        return null;
+    }
+
+    private String mapPurposeToType(TransactionPurpose purpose, String fineractType) {
+        if (purpose == null) return mapType(fineractType, null, null);
+        return switch (purpose) {
+            case TOP_UP -> "TOP_UP";
+            case LOAN_PROCEEDS -> "LOAN_DISBURSEMENT";
+            case INSTALLMENT_PAYMENT -> "LOAN_REPAYMENT";
+            case EARLY_SETTLEMENT -> "LOAN_SETTLEMENT";
+            case FEE_DEDUCTION, TRANSFER_FEE -> "FEE";
+            case REFUND -> "REFUND";
+            case REVERSAL -> "REVERSAL";
+            case WITHDRAWAL -> "WITHDRAWAL";
+            case ADJUSTMENT -> "ADJUSTMENT";
+            case TRANSFER_OUT -> "TRANSFER_OUT";
+            case TRANSFER_IN -> "TRANSFER_IN";
+        };
+    }
+
+    /**
+     * Counterparty for non-transfer movements (loan disbursement, top-up, withdrawal, fee, etc.).
+     * No external "source wallet" exists in this domain for these movements (funds originate from
+     * Fineract loan account / bank rails / fee accounts), so walletId / walletNumber / customerId
+     * are populated from the holder wallet itself — keeps the field shape filled and traceable
+     * back to the wallet that the movement landed on. maskedName carries the source label.
+     */
+    private Counterparty buildExternalCounterparty(Wallet wallet, WalletMovement movement, String maskedMobile) {
+        String label = externalCounterpartyLabel(movement);
+        if (label == null) return null;
+        return new Counterparty(
+                wallet.getId(),
+                wallet.getWalletNumber(),
+                wallet.getCustomerId(),
+                label,
+                maskedMobile);
+    }
+
+    private String lookupMaskedMobile(UUID customerId) {
+        if (customerId == null) return null;
+        try {
+            return recipientLookupPort.lookupByCustomerId(customerId)
+                    .map(RecipientLookupPort.UserLookup::maskedMobile)
+                    .orElse(null);
+        } catch (Exception ex) {
+            log.warn("Identity lookup failed for customerId={}: {}", customerId, ex.getMessage());
+            return null;
+        }
+    }
+
+    private String externalCounterpartyLabel(WalletMovement movement) {
+        TransactionPurpose purpose = movement.getPurpose();
+        if (purpose == null) return movement.getDescription();
+        return switch (purpose) {
+            case LOAN_PROCEEDS -> "Islamic Financing";
+            case INSTALLMENT_PAYMENT, EARLY_SETTLEMENT -> "Loan Repayment";
+            case TOP_UP -> "Wallet Top-Up";
+            case WITHDRAWAL -> "Bank Withdrawal";
+            case FEE_DEDUCTION, TRANSFER_FEE -> "Service Fee";
+            case REFUND -> "Refund";
+            case REVERSAL -> "Reversal";
+            case ADJUSTMENT -> "Adjustment";
+            case TRANSFER_OUT, TRANSFER_IN -> null;
+        };
+    }
+
     /**
      * Best-effort match: find the most recent unmatched COMPLETED transfer
      * with matching amount + direction. Mutates the given set to mark matched.
@@ -206,38 +326,65 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
 
     private Counterparty buildCounterparty(UUID currentWalletId, WalletTransfer t,
                                            Map<UUID, CounterpartyMeta> cache) {
-        UUID otherWalletId = t.getSourceWalletId().equals(currentWalletId)
-                ? t.getDestinationWalletId() : t.getSourceWalletId();
-        UUID otherCustomerId = t.getSourceWalletId().equals(currentWalletId)
-                ? t.getDestinationCustomerId() : t.getSourceCustomerId();
+        boolean viewerIsSender = t.getSourceWalletId().equals(currentWalletId);
+        UUID otherWalletId = viewerIsSender ? t.getDestinationWalletId() : t.getSourceWalletId();
+        UUID otherCustomerId = viewerIsSender ? t.getDestinationCustomerId() : t.getSourceCustomerId();
 
         CounterpartyMeta meta = cache.computeIfAbsent(otherWalletId, id -> resolveCounterparty(id, otherCustomerId));
+
+        // Prefer the masked name frozen at transfer time over a live identity
+        // lookup (which can return a null name even when the user exists).
+        String storedName = viewerIsSender ? t.getRecipientMaskedName() : t.getSenderMaskedName();
+        String maskedName = storedName != null ? storedName : meta.maskedName;
 
         return new Counterparty(
                 otherWalletId,
                 meta.walletNumber,
                 otherCustomerId,
-                meta.maskedName,
+                maskedName,
                 meta.maskedMobile);
     }
 
     private CounterpartyMeta resolveCounterparty(UUID walletId, UUID customerId) {
         String walletNumber = null;
+        String maskedName = null;
         try {
-            walletNumber = walletRepository.findById(walletId).map(Wallet::getWalletNumber).orElse(null);
+            var w = walletRepository.findById(walletId).orElse(null);
+            if (w != null) {
+                walletNumber = w.getWalletNumber();
+                maskedName = w.getMaskedName();
+            }
         } catch (Exception ignore) { }
 
-        String maskedName = null;
+        // maskedMobile still comes from identity-service (it isn't stored on the
+        // wallet); maskedName never does — it stays whatever the wallet holds.
         String maskedMobile = null;
         if (customerId != null) {
             try {
-                var lookup = recipientLookupPort.lookupByMobile(""); // not used here
-            } catch (Exception ignore) { }
+                var lookup = recipientLookupPort.lookupByCustomerId(customerId).orElse(null);
+                if (lookup != null) {
+                    maskedMobile = lookup.maskedMobile();
+                }
+            } catch (Exception ex) {
+                log.warn("Counterparty identity lookup failed customerId={}: {}", customerId, ex.getMessage());
+            }
         }
-        // Try keycloak-id-based lookup is N/A here — we don't have the keycloakId.
-        // Best-effort: skip name resolution (requires identity by customerId — not yet implemented).
-        // For now show walletNumber + customerId only; extend identity lookup later.
         return new CounterpartyMeta(walletNumber, maskedName, maskedMobile);
+    }
+
+    private long parseTxIdOrZero(String id) {
+        if (id == null) return 0L;
+        try {
+            return Long.parseLong(id);
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
+    }
+
+    private Instant pickTransferTimestamp(WalletTransfer t) {
+        if (t.getCompletedAt() != null) return t.getCompletedAt();
+        if (t.getInitiatedAt() != null) return t.getInitiatedAt();
+        return t.getCreatedAt();
     }
 
     private Instant parseDate(String iso) {

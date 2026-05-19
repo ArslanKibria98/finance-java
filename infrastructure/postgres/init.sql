@@ -22,3 +22,4 @@ CREATE DATABASE middleware_third_party_db;
 CREATE DATABASE fraud_service_db;
 CREATE DATABASE ledger_db;
 CREATE DATABASE collections_db;
+CREATE DATABASE notification_db;

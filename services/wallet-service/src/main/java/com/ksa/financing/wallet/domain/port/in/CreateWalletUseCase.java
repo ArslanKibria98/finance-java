@@ -10,6 +10,7 @@ public interface CreateWalletUseCase {
         UUID tenantId,
         UUID customerId,
         String currency,
-        String iban
+        String iban,
+        String displayName
     ) {}
 }

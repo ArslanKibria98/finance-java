@@ -52,10 +52,11 @@ public class CalculateFinanceUseCaseImpl implements CalculateFinanceUseCase {
         return FinanceCalculationService.calculate(
                 command.amount(),
                 config.profitRate(),
-                config.costOfTermPercent(),
                 command.tenureMonths(),
                 processingFee,
-                config.adminFeeAmount()
+                config.adminFeeAmount(),
+                config.vatPercent(),
+                config.isDisbursementInclusive()
         );
     }
 

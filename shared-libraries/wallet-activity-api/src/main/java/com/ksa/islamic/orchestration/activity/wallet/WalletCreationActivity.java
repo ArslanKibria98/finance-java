@@ -23,7 +23,8 @@ public interface WalletCreationActivity {
         String customerId,
         String tenantId,
         String currency,
-        String iban
+        String iban,
+        String fullName
     ) {}
 
     record WalletCreationResult(

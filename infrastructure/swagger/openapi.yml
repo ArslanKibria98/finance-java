@@ -892,7 +892,8 @@ paths:
         \  - positionStartDate: DD/MM/YYYY (cannot be future)\n  - positionEndDate: DD/MM/YYYY or null (current)\n  - primarySourceOfWealth:\
         \ Salary | Business Ownership | Inheritance | Investments | Real Estate | Other\n  - estimatedNetWorth: < 1M | 1M-5M\
         \ | 5M-10M | 10M-50M | > 50M SAR\n  - sourceOfWealthDescription: min 50 chars\n  - sourceOfFunds: Salary | Business\
-        \ Profits | Asset Sale | Inheritance | Savings | Other\n  - sourceOfFundsDetails: min 30 chars\n  - relatedPersons:\
+        \ Profits | Asset Sale | Inheritance | Savings | Other\n  - sourceOfFundsDetails: min 30 chars\n  - occupation: LOV\
+        \ code from GET /customer-service/api/v1/reference-data/occupation/active (e.g. EMPLOYED_PUBLIC)\n  - relatedPersons:\
         \ optional array [{name, relationship, position}]\n\nDevice metadata via headers"
       requestBody:
         required: true
@@ -935,6 +936,10 @@ paths:
                 sourceOfFundsDetails:
                   type: string
                   example: Monthly salary from Ministry of Finance deposited into Al Rajhi Bank account
+                occupation:
+                  type: string
+                  description: Occupation LOV code from customer-service reference-data/occupation/active
+                  example: EMPLOYED_PUBLIC
                 relatedPersons:
                   type: array
                   items:
@@ -957,6 +962,7 @@ paths:
               - sourceOfWealthDescription
               - sourceOfFunds
               - sourceOfFundsDetails
+              - occupation
               - relatedPersons
               - additionalNotes
       responses:

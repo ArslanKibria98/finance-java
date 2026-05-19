@@ -1,5 +1,7 @@
 package com.ksa.financing.identity.adapter.rest.controller;
 
+import com.ksa.financing.identity.domain.port.in.LinkUserCustomerUseCase;
+import com.ksa.financing.identity.domain.port.in.LinkUserCustomerUseCase.LinkResult;
 import com.ksa.financing.identity.domain.port.in.LookupUserUseCase;
 import com.ksa.financing.identity.domain.port.in.LookupUserUseCase.UserLookupResult;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -7,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,12 +35,14 @@ import java.util.UUID;
 public class InternalLookupController {
 
     private final LookupUserUseCase lookupUserUseCase;
+    private final LinkUserCustomerUseCase linkUserCustomerUseCase;
 
     @GetMapping("/lookup")
     public ResponseEntity<LookupResponse> lookup(
             @RequestParam(required = false) String mobile,
             @RequestParam(required = false) String nid,
-            @RequestParam(required = false) UUID keycloakId) {
+            @RequestParam(required = false) UUID keycloakId,
+            @RequestParam(required = false) UUID customerId) {
 
         Optional<UserLookupResult> result = Optional.empty();
 
@@ -52,10 +58,12 @@ public class InternalLookupController {
             result = lookupUserUseCase.lookupByNationalId(nid.trim());
         } else if (keycloakId != null) {
             result = lookupUserUseCase.lookupByKeycloakUserId(keycloakId);
+        } else if (customerId != null) {
+            result = lookupUserUseCase.lookupByCustomerId(customerId);
         }
 
         if (result.isEmpty()) {
-            log.debug("Internal lookup miss mobile={} nid={} keycloakId={}", mobile, nid, keycloakId);
+            log.debug("Internal lookup miss mobile={} nid={} keycloakId={} customerId={}", mobile, nid, keycloakId, customerId);
             return ResponseEntity.ok(new LookupResponse(false, null, null, null, null,
                     null, null, null, null, false));
         }
@@ -73,6 +81,25 @@ public class InternalLookupController {
                 r.status(),
                 r.enabled()));
     }
+
+    @PostMapping("/link-customer")
+    public ResponseEntity<LinkCustomerResponse> linkCustomer(@RequestBody LinkCustomerRequest request) {
+        if (request == null || request.keycloakUserId() == null || request.internalCustomerId() == null) {
+            return ResponseEntity.badRequest().body(new LinkCustomerResponse(
+                    false, null, null, "MISSING_IDS"));
+        }
+        LinkResult result = linkUserCustomerUseCase.link(request.keycloakUserId(), request.internalCustomerId());
+        return ResponseEntity.ok(new LinkCustomerResponse(
+                result.linked(),
+                result.keycloakUserId(),
+                result.internalCustomerId(),
+                result.reason()));
+    }
+
+    public record LinkCustomerRequest(UUID keycloakUserId, UUID internalCustomerId) {}
+
+    public record LinkCustomerResponse(boolean linked, UUID keycloakUserId,
+                                       UUID internalCustomerId, String reason) {}
 
     private String maskMobile(String mobile) {
         if (mobile == null || mobile.length() < 4) return mobile;

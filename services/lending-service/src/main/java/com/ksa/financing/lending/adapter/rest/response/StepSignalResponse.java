@@ -271,7 +271,7 @@ public record StepSignalResponse(
         return switch (status) {
             case AWAIT_DISBURSED -> "await_disbursement";
             case APPROVED -> "approved";
-            case DISBURSED -> "disbursed";
+            case DISBURSED -> "completed";
             case REJECTED -> "rejected";
             case CANCELLED -> "cancelled";
             case EXPIRED -> "expired";

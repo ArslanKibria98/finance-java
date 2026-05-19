@@ -42,6 +42,8 @@ public class OnboardingState implements Serializable {
     private String eddSourceOfWealth;
     private String eddEstimatedNetWorth;
     private String eddSourceOfFunds;
+    /** Occupation LOV code from EDD form (submit-edd). */
+    private String eddOccupation;
     private String amlAssessmentId;     // UUID from risk-service AML scoring
     private String amlRiskLevel;        // HIGH, MEDIUM, LOW from AML scoring
     private double amlTotalScore;       // weighted AML risk score
@@ -321,6 +323,14 @@ public class OnboardingState implements Serializable {
 
     public void setEddSourceOfFunds(String eddSourceOfFunds) {
         this.eddSourceOfFunds = eddSourceOfFunds;
+    }
+
+    public String getEddOccupation() {
+        return eddOccupation;
+    }
+
+    public void setEddOccupation(String eddOccupation) {
+        this.eddOccupation = eddOccupation;
     }
 
     public String getAmlAssessmentId() {

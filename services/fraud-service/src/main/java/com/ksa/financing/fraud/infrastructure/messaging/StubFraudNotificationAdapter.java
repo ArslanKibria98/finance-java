@@ -4,13 +4,15 @@ import com.ksa.financing.fraud.domain.model.fraud.FraudAlert;
 import com.ksa.financing.fraud.domain.model.fraud.FraudEvaluationResult;
 import com.ksa.financing.fraud.domain.port.out.FraudNotificationPort;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
  * Stub notification adapter — logs alerts instead of publishing to Kafka.
- * Will be replaced with real KafkaFraudAlertPublisher in Sprint 9.
+ * Active only when fraud.notifications.adapter=stub (default: kafka adapter is primary).
  */
 @Component
+@ConditionalOnProperty(name = "fraud.notifications.adapter", havingValue = "stub")
 @Slf4j
 public class StubFraudNotificationAdapter implements FraudNotificationPort {
 

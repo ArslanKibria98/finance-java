@@ -36,6 +36,9 @@ public class WalletPersistenceMapper {
         entity.setLedgerSynced(domain.isLedgerSynced());
         entity.setLastLedgerSyncAt(toOffsetDateTime(domain.getLastLedgerSyncAt()));
         entity.setIban(domain.getIban());
+        entity.setMaskedName(domain.getMaskedName());
+        entity.setEnglishFirstName(domain.getEnglishFirstName());
+        entity.setEnglishThirdName(domain.getEnglishThirdName());
         entity.setAutoDebitEnabled(domain.isAutoDebitEnabled());
         entity.setCreatedAt(toOffsetDateTime(domain.getCreatedAt()));
         entity.setUpdatedAt(toOffsetDateTime(domain.getUpdatedAt()));
@@ -65,6 +68,9 @@ public class WalletPersistenceMapper {
         domain.setLedgerSynced(entity.isLedgerSynced());
         domain.setLastLedgerSyncAt(toInstant(entity.getLastLedgerSyncAt()));
         domain.setIban(entity.getIban());
+        domain.setMaskedName(entity.getMaskedName());
+        domain.setEnglishFirstName(entity.getEnglishFirstName());
+        domain.setEnglishThirdName(entity.getEnglishThirdName());
         domain.setAutoDebitEnabled(entity.isAutoDebitEnabled());
         domain.setCreatedAt(toInstant(entity.getCreatedAt()));
         domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));

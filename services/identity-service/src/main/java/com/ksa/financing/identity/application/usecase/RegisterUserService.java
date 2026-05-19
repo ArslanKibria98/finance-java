@@ -49,7 +49,7 @@ public class RegisterUserService implements RegisterUserUseCase {
         identity.setStatus(UserStatus.PENDING_VERIFICATION);
 
         UserIdentity saved = userIdentityRepository.save(identity);
-        eventPublisher.publishUserRegistered(saved.getId(), saved.getTenantId());
+        eventPublisher.publishUserRegistered(saved.getId(), saved.getTenantId(), null);
 
         return saved;
     }

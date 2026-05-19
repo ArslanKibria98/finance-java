@@ -132,6 +132,10 @@ public class LoanApplicationAggregate {
     private int disbursementDurationHours;
     private LocalDateTime disbursementScheduledAt;
 
+    // Real wall-clock moment the application entered AWAIT_DISBURSED. Persisted so that
+    // any later mutation (which would move updatedAt) cannot wipe the transition timestamp.
+    private LocalDateTime awaitDisbursedAt;
+
     // Audit
     private final LocalDateTime createdAt;
     private final UUID createdBy;
@@ -578,9 +582,11 @@ public class LoanApplicationAggregate {
 
     public void moveToAwaitDisbursed(UUID updatedBy) {
         assertTransition(ApplicationStatus.AWAIT_DISBURSED);
+        var now = LocalDateTime.now();
         this.status = ApplicationStatus.AWAIT_DISBURSED;
+        this.awaitDisbursedAt = now;
         this.updatedBy = updatedBy;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     public void moveToLoanCreating(UUID updatedBy) {
@@ -653,6 +659,10 @@ public class LoanApplicationAggregate {
 
     public void setDisbursementScheduledAt(LocalDateTime scheduledAt) {
         this.disbursementScheduledAt = scheduledAt;
+    }
+
+    public void setAwaitDisbursedAt(LocalDateTime awaitDisbursedAt) {
+        this.awaitDisbursedAt = awaitDisbursedAt;
     }
 
     // ==================== EVENT MANAGEMENT ====================
@@ -763,6 +773,7 @@ public class LoanApplicationAggregate {
     public String getIdempotencyKey() { return idempotencyKey; }
     public int getDisbursementDurationHours() { return disbursementDurationHours; }
     public LocalDateTime getDisbursementScheduledAt() { return disbursementScheduledAt; }
+    public LocalDateTime getAwaitDisbursedAt() { return awaitDisbursedAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public UUID getCreatedBy() { return createdBy; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

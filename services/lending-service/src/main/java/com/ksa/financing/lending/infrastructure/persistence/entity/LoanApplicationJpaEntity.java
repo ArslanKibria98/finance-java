@@ -290,6 +290,9 @@ public class LoanApplicationJpaEntity {
     @Column(name = "disbursement_scheduled_at")
     private LocalDateTime disbursementScheduledAt;
 
+    @Column(name = "await_disbursed_at")
+    private LocalDateTime awaitDisbursedAt;
+
     // ══════════ Audit ══════════
 
     @Column(name = "created_by")

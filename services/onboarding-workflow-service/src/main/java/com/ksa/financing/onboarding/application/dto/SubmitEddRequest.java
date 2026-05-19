@@ -15,8 +15,9 @@ import java.util.List;
  *   1. Political Position details
  *   2. Source of Wealth
  *   3. Source of Funds
- *   4. Related Persons (family in political positions)
- *   5. Supporting Documents (handled via separate file upload endpoint)
+ *   4. Occupation (LOV code from customer-service)
+ *   5. Related Persons (family in political positions)
+ *   6. Supporting Documents (handled via separate file upload endpoint)
  */
 public record SubmitEddRequest(
 
@@ -58,6 +59,11 @@ public record SubmitEddRequest(
     @NotBlank(message = "Source of funds details is required")
     @Size(min = 30, message = "Source of funds details must be at least 30 characters")
     String sourceOfFundsDetails,
+
+    /** Occupation LOV code from {@code GET /api/v1/reference-data/occupation/active} (e.g. {@code EMPLOYED_PUBLIC}). */
+    @NotBlank(message = "Occupation is required")
+    @Size(max = 50, message = "Occupation code must not exceed 50 characters")
+    String occupation,
 
     // --- Related Persons (optional) ---
     @Valid

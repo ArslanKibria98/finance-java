@@ -49,10 +49,11 @@ public class CheckEligibilityUseCaseImpl implements CheckEligibilityUseCase {
         var finCalc = FinanceCalculationService.calculate(
                 cmd.amount(),
                 config.profitRate(),
-                config.costOfTermPercent(),
                 cmd.tenureMonths(),
                 BigDecimal.ZERO,
-                BigDecimal.ZERO
+                BigDecimal.ZERO,
+                config.vatPercent(),
+                config.isDisbursementInclusive()
         );
 
         // Sum expenses with minimum enforcement + dependents
@@ -95,8 +96,9 @@ public class CheckEligibilityUseCaseImpl implements CheckEligibilityUseCase {
             // If max eligible > 0, offer reduced amount
             if (maxEligible.compareTo(BigDecimal.ZERO) > 0 && maxEligible.compareTo(cmd.amount()) < 0) {
                 var reducedCalc = FinanceCalculationService.calculate(
-                        maxEligible, config.profitRate(), config.costOfTermPercent(),
-                        cmd.tenureMonths(), BigDecimal.ZERO, BigDecimal.ZERO
+                        maxEligible, config.profitRate(),
+                        cmd.tenureMonths(), BigDecimal.ZERO, BigDecimal.ZERO,
+                        config.vatPercent(), config.isDisbursementInclusive()
                 );
 
                 return new EligibilityCheckResult(

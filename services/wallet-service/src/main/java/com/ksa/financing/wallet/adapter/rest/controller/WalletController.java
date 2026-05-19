@@ -8,8 +8,10 @@ import com.ksa.financing.wallet.domain.model.Wallet;
 import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.GetBalanceUseCase;
 import com.ksa.financing.wallet.domain.port.in.GetTransactionHistoryUseCase;
+import com.ksa.financing.wallet.domain.port.in.GetTransactionHistoryUseCase.TransactionItem;
 import com.ksa.financing.wallet.domain.port.in.TopUpUseCase;
 import com.ksa.financing.infra.exception.BusinessException;
+import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.RestClientException;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -42,7 +45,7 @@ public class WalletController {
     private final GetBalanceUseCase getBalanceUseCase;
     private final TopUpUseCase topUpUseCase;
     private final GetTransactionHistoryUseCase getTransactionHistoryUseCase;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final String customerServiceUrl;
 
     public WalletController(
@@ -50,11 +53,13 @@ public class WalletController {
             GetBalanceUseCase getBalanceUseCase,
             TopUpUseCase topUpUseCase,
             GetTransactionHistoryUseCase getTransactionHistoryUseCase,
+            RestTemplate restTemplate,
             @Value("${app.services.customer-service-url:http://localhost:8084}") String customerServiceUrl) {
         this.createWalletUseCase = createWalletUseCase;
         this.getBalanceUseCase = getBalanceUseCase;
         this.topUpUseCase = topUpUseCase;
         this.getTransactionHistoryUseCase = getTransactionHistoryUseCase;
+        this.restTemplate = restTemplate;
         this.customerServiceUrl = customerServiceUrl;
     }
 
@@ -169,13 +174,30 @@ public class WalletController {
     @SecuredEndpoint(obj = "wallets", act = "read")
     @GetMapping("/{walletId}/transactions")
     @Operation(summary = "Get unified transaction history (Fineract txs + transfer counterparty info)")
-    public ResponseEntity<GetTransactionHistoryUseCase.TransactionHistory> getTransactions(
+    public PageResponse<TransactionItem> getTransactions(
             @PathVariable UUID walletId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
         extractTenantId(jwt);
-        return ResponseEntity.ok(getTransactionHistoryUseCase.getHistory(walletId, page, size));
+        return getTransactionHistoryUseCase.getHistory(walletId, page, size);
+    }
+
+    @SecuredEndpoint(obj = "wallets", act = "read")
+    @GetMapping("/me/transactions/recent")
+    @Operation(summary = "Get authenticated customer's last 10 transactions (resolved from JWT)")
+    public List<TransactionItem> getMyRecentTransactions(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        UUID keycloakUserId = extractCustomerId(jwt);
+        UUID customerId = resolveCustomerId(keycloakUserId);
+
+        Wallet wallet = getBalanceUseCase.getByCustomerId(tenantId, customerId);
+        log.info("/me/transactions/recent keycloakUserId={} customerId={} walletId={} tenant={}",
+                keycloakUserId, customerId, wallet.getId(), tenantId);
+
+        return getTransactionHistoryUseCase.getHistory(wallet.getId(), 0, 10).content();
     }
 
     @SecuredEndpoint(obj = "wallets", act = "create")
@@ -192,7 +214,8 @@ public class WalletController {
                 tenantId,
                 request.customerId(),
                 request.currency(),
-                request.iban()
+                request.iban(),
+                null
         ));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(wallet));

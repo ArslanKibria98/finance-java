@@ -2,6 +2,7 @@ package com.ksa.financing.customer.workflow.activity.impl;
 
 import com.ksa.financing.customer.domain.model.Customer;
 import com.ksa.financing.customer.domain.port.in.CreateCustomerUseCase;
+import com.ksa.financing.customer.domain.port.out.IdentityLinkPort;
 import com.ksa.islamic.orchestration.activity.customer.ProfileCreationActivity;
 import io.temporal.activity.Activity;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import java.util.UUID;
 public class ProfileCreationActivityImpl implements ProfileCreationActivity {
 
     private final CreateCustomerUseCase createCustomerUseCase;
+    private final IdentityLinkPort identityLinkPort;
 
     @Override
     public ProfileCreationResult createProfile(ProfileCreationInput input) {
@@ -67,9 +69,13 @@ public class ProfileCreationActivityImpl implements ProfileCreationActivity {
                             keycloakUserUuid,
                             input.lifecycleStage() != null ? input.lifecycleStage() : "ONBOARDING",
                             preAssignedGlobalUid,
-                            null  // idempotencyKey — Temporal provides its own idempotency via workflow ID
+                            "ONB-" + input.nationalId() + "-" + (preAssignedGlobalUid != null ? preAssignedGlobalUid.toString().substring(0, 8) : "NEW")
                     )
             );
+
+            if (keycloakUserUuid != null) {
+                identityLinkPort.linkInternalCustomer(keycloakUserUuid, customer.getId());
+            }
 
             return new ProfileCreationResult(
                     customer.getId().toString(),

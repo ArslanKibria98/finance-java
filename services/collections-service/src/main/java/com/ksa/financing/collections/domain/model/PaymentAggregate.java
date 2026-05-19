@@ -97,7 +97,7 @@ public class PaymentAggregate {
                 invoiceId, paymentMethod, amount, "SAR", valueDate, idempotencyKey);
 
         payment.registerEvent(new PaymentInitiated(
-                payment.id, tenantId, loanId, installmentId, customerId, invoiceId, amount, paymentMethod, idempotencyKey));
+                payment.id.getValue(), tenantId, loanId, installmentId, customerId, invoiceId, amount, paymentMethod, idempotencyKey));
 
         return payment;
     }
@@ -145,7 +145,7 @@ public class PaymentAggregate {
         this.providerTransactionId = providerTransactionId;
         this.updatedAt = LocalDateTime.now();
 
-        registerEvent(new PaymentCompleted(id, tenantId, loanId, customerId, amount, providerTransactionId));
+        registerEvent(new PaymentCompleted(id.getValue(), tenantId, loanId, customerId, amount, providerTransactionId));
     }
 
     public void fail(String failureCode, String failureMessage) {
@@ -156,7 +156,7 @@ public class PaymentAggregate {
         this.failureMessage = failureMessage;
         this.updatedAt = LocalDateTime.now();
 
-        registerEvent(new PaymentFailed(id, tenantId, loanId, amount, failureCode, failureMessage));
+        registerEvent(new PaymentFailed(id.getValue(), tenantId, loanId, amount, failureCode, failureMessage));
     }
 
     public void reverse(String reason) {
@@ -165,7 +165,7 @@ public class PaymentAggregate {
         this.status = PaymentStatus.REVERSED;
         this.updatedAt = LocalDateTime.now();
 
-        registerEvent(new PaymentReversed(id, tenantId, loanId, amount, reason));
+        registerEvent(new PaymentReversed(id.getValue(), tenantId, loanId, amount, reason));
     }
 
     public void markLedgerSynced(UUID ledgerEntryId) {
@@ -219,22 +219,22 @@ public class PaymentAggregate {
     // ==================== DOMAIN EVENTS ====================
 
     public record PaymentInitiated(
-            PaymentId paymentId, UUID tenantId, UUID loanId, UUID installmentId, UUID customerId,
+            UUID paymentId, UUID tenantId, UUID loanId, UUID installmentId, UUID customerId,
             String invoiceId, BigDecimal amount, PaymentMethod paymentMethod, String idempotencyKey
     ) {}
 
     public record PaymentCompleted(
-            PaymentId paymentId, UUID tenantId, UUID loanId, UUID customerId,
+            UUID paymentId, UUID tenantId, UUID loanId, UUID customerId,
             BigDecimal amount, String providerTransactionId
     ) {}
 
     public record PaymentFailed(
-            PaymentId paymentId, UUID tenantId, UUID loanId,
+            UUID paymentId, UUID tenantId, UUID loanId,
             BigDecimal amount, String failureCode, String failureMessage
     ) {}
 
     public record PaymentReversed(
-            PaymentId paymentId, UUID tenantId, UUID loanId,
+            UUID paymentId, UUID tenantId, UUID loanId,
             BigDecimal amount, String reason
     ) {}
 }

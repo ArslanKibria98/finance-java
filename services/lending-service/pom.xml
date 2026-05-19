@@ -213,6 +213,14 @@
             <version>1.2.1</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Apache HttpClient 5 — required for RestTemplate to support PATCH
+             (default JDK HttpURLConnection rejects PATCH). Needed by the
+             collections-service /due-date sync call. -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

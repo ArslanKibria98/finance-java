@@ -12,6 +12,7 @@ public record ReferenceDataResponse(
     String descriptionAr,
     boolean isActive,
     int displayOrder,
+    int score,
     Instant createdAt,
     Instant updatedAt
 ) {}

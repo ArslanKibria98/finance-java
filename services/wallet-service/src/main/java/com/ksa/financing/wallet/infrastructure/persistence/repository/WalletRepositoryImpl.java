@@ -51,6 +51,13 @@ public class WalletRepositoryImpl implements WalletRepository {
     }
 
     @Override
+    public Optional<Wallet> findByIban(UUID tenantId, String iban) {
+        log.debug("Finding wallet by iban tenantId: {}", tenantId);
+        return jpaWalletRepository.findByIbanAndTenantId(iban, tenantId)
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public boolean existsByCustomerId(UUID tenantId, UUID customerId) {
         log.debug("Checking wallet existence for customerId: {} tenantId: {}", customerId, tenantId);
         return jpaWalletRepository.existsByCustomerIdAndTenantId(customerId, tenantId);

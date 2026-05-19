@@ -34,9 +34,14 @@ public class CustomerCreatedEventListener {
         try {
             log.info("Received customer-created event: {}", event);
 
-            String customerIdStr = extractString(event, "customerId");
-            String tenantIdStr = extractString(event, "tenantId");
-            String currency = extractString(event, "currency");
+            // Customer-service wraps fields under "payload"; handle the flat shape too
+            // for backwards compatibility with older producers.
+            Map<String, Object> data = unwrap(event);
+
+            String customerIdStr = extractString(data, "customerId");
+            String tenantIdStr = extractString(data, "tenantId");
+            String currency = extractString(data, "currency");
+            String fullName = extractString(data, "fullName");
 
             if (customerIdStr == null || tenantIdStr == null) {
                 log.error("Invalid customer-created event: missing customerId or tenantId. Event: {}", event);
@@ -51,13 +56,15 @@ public class CustomerCreatedEventListener {
                 tenantId = UUID.nameUUIDFromBytes(tenantIdStr.getBytes());
             }
 
-            log.info("Processing wallet creation for customer: {} tenant: {}", customerId, tenantId);
+            log.info("Processing wallet creation for customer: {} tenant: {} fullName: {}",
+                    customerId, tenantId, fullName);
 
             createWalletUseCase.create(new CreateWalletUseCase.CreateWalletCommand(
                     tenantId,
                     customerId,
                     currency != null ? currency : "SAR",
-                    null
+                    null,
+                    fullName
             ));
 
             log.info("Successfully processed wallet creation for customer: {}", customerId);
@@ -69,6 +76,15 @@ public class CustomerCreatedEventListener {
             log.error("Error processing customer-created event: {}", event, e);
             throw e; // Re-throw to trigger retry/DLQ
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> unwrap(Map<String, Object> event) {
+        Object inner = event.get("payload");
+        if (inner instanceof Map<?, ?> nested) {
+            return (Map<String, Object>) nested;
+        }
+        return event;
     }
 
     private String extractString(Map<String, Object> event, String key) {

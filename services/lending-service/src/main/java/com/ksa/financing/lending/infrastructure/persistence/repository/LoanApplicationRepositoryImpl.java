@@ -70,6 +70,13 @@ public class LoanApplicationRepositoryImpl implements LoanApplicationRepository 
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<LoanApplicationAggregate> findByWorkflowId(UUID tenantId, String workflowId) {
+        return jpaRepository.findByTenantIdAndWorkflowId(tenantId, workflowId)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResponse<LoanApplicationAggregate> findAllByTenant(UUID tenantId, PageQuery query) {
         log.debug("Listing applications page={} size={} for tenantId={}",
                 query.page(), query.size(), tenantId);

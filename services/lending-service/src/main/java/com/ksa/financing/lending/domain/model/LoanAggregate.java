@@ -324,4 +324,11 @@ public class LoanAggregate {
             LoanId loanId, UUID tenantId, UUID customerId,
             LocalDate settlementDate
     ) {}
+
+    public record LoanRescheduled(
+            LoanId loanId, UUID tenantId, UUID customerId,
+            int oldTenureMonths, int newTenureMonths,
+            BigDecimal newMonthlyInstallment, String reason,
+            LocalDate effectiveDate
+    ) {}
 }

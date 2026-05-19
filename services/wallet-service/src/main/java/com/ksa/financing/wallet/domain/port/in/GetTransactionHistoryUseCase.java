@@ -1,24 +1,14 @@
 package com.ksa.financing.wallet.domain.port.in;
 
+import com.ksa.financing.infra.pagination.PageResponse;
+
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 public interface GetTransactionHistoryUseCase {
 
-    TransactionHistory getHistory(UUID walletId, int page, int size);
-
-    record TransactionHistory(
-            UUID walletId,
-            String walletNumber,
-            BigDecimal currentBalance,
-            String currency,
-            List<TransactionItem> transactions,
-            int page,
-            int size,
-            int totalElements
-    ) {}
+    PageResponse<TransactionItem> getHistory(UUID walletId, int page, int size);
 
     record TransactionItem(
             String id,                  // Fineract txId or transferId

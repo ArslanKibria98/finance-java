@@ -3,6 +3,7 @@ package com.ksa.financing.identity.infrastructure.keycloak;
 import com.ksa.financing.identity.domain.port.out.KeycloakAdapterPort;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
+import com.ksa.financing.infra.exception.NotFoundException;
 import com.ksa.financing.infra.exception.TechnicalException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -28,12 +29,6 @@ import java.util.UUID;
 
 /**
  * Keycloak adapter implementation that communicates with Keycloak REST API.
- * <p>
- * For user creation and role assignment, this uses the Keycloak Admin REST API.
- * For authentication and token refresh, this uses the OpenID Connect token endpoint.
- * <p>
- * NOTE: This is a simplified/stub implementation. In production, consider using
- * keycloak-admin-client library for admin operations and handle error cases more robustly.
  */
 @Component
 @Slf4j
@@ -65,7 +60,7 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
 
     @Override
     @Retry(name = "keycloak")
-    @CircuitBreaker(name = "keycloak", fallbackMethod = "createUserFallback")
+    @CircuitBreaker(name = "keycloak")
     public KeycloakUser createUser(String realm, String username, String email, String password, String firstName) {
         log.info("Creating Keycloak user: {} in realm: {}", username, realm);
 
@@ -92,21 +87,16 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         UUID keycloakUserId;
         try {
             ResponseEntity<Void> createResponse = restTemplate.postForEntity(usersUrl, request, Void.class);
-            // Prefer Keycloak Location header to get created user ID reliably.
             keycloakUserId = extractUserIdFromLocation(createResponse.getHeaders().getLocation())
                     .orElseGet(() -> resolveCreatedUserId(usersUrl, getRequest, username, email));
             log.info("Keycloak user created successfully with ID: {}", keycloakUserId);
         } catch (HttpClientErrorException.Conflict conflict) {
-            // Keycloak already has this username/email (e.g. local DB was wiped or a previous
-            // onboarding attempt orphaned the Keycloak user). Recover by reusing the existing
-            // user — the caller treats this as idempotent create-or-reuse.
             log.warn("Keycloak user already exists for username/email, reusing existing record: {}",
                     conflict.getResponseBodyAsString());
             keycloakUserId = resolveCreatedUserId(usersUrl, getRequest, username, email);
         }
 
-        // Keycloak 26+ ignores credentials in user creation payload.
-        // Set password separately via the reset-password endpoint (also resets for reused users).
+        // Set password separately
         String resetPwUrl = usersUrl + "/" + keycloakUserId + "/reset-password";
         Map<String, Object> credential = Map.of(
                 "type", "password",
@@ -120,136 +110,68 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     }
 
     private java.util.Optional<UUID> extractUserIdFromLocation(URI location) {
-        if (location == null) {
-            return java.util.Optional.empty();
-        }
+        if (location == null) return java.util.Optional.empty();
         String path = location.getPath();
-        if (path == null || path.isBlank()) {
-            return java.util.Optional.empty();
-        }
+        if (path == null || path.isBlank()) return java.util.Optional.empty();
         int lastSlash = path.lastIndexOf('/');
-        if (lastSlash < 0 || lastSlash + 1 >= path.length()) {
-            return java.util.Optional.empty();
-        }
+        if (lastSlash < 0 || lastSlash + 1 >= path.length()) return java.util.Optional.empty();
         String id = path.substring(lastSlash + 1);
-        try {
-            return java.util.Optional.of(UUID.fromString(id));
-        } catch (IllegalArgumentException ex) {
-            log.warn("Could not parse Keycloak user ID from Location header: {}", location);
-            return java.util.Optional.empty();
-        }
+        try { return java.util.Optional.of(UUID.fromString(id)); }
+        catch (IllegalArgumentException ex) { return java.util.Optional.empty(); }
     }
 
-    private UUID resolveCreatedUserId(String usersUrl,
-                                      HttpEntity<Void> getRequest,
-                                      String username,
-                                      String email) {
+    private UUID resolveCreatedUserId(String usersUrl, HttpEntity<Void> getRequest, String username, String email) {
         for (int attempt = 1; attempt <= userLookupRetryMaxAttempts; attempt++) {
             var byUsername = searchUser(usersUrl, getRequest, "username", username);
             if (byUsername != null && !byUsername.isEmpty()) {
                 Map<String, Object> user = (Map<String, Object>) byUsername.get(0);
                 return UUID.fromString((String) user.get("id"));
             }
-
             var byEmail = searchUser(usersUrl, getRequest, "email", email);
             if (byEmail != null && !byEmail.isEmpty()) {
                 Map<String, Object> user = (Map<String, Object>) byEmail.get(0);
                 return UUID.fromString((String) user.get("id"));
             }
-
             if (attempt < userLookupRetryMaxAttempts) {
-                try {
-                    Thread.sleep(userLookupRetryDelayMs);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new TechnicalException(
-                            ErrorCodes.TECHNICAL_ERROR,
-                            "Interrupted while waiting for Keycloak user availability");
-                }
+                try { Thread.sleep(userLookupRetryDelayMs); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new TechnicalException(ErrorCodes.TECHNICAL_ERROR, "Interrupted"); }
             }
         }
-
-        throw new TechnicalException(
-                ErrorCodes.TECHNICAL_ERROR,
-                "Keycloak user was created but could not be retrieved for password setup");
+        throw new TechnicalException(ErrorCodes.TECHNICAL_ERROR, "Keycloak user not found after creation");
     }
 
     @SuppressWarnings("rawtypes")
-    private List searchUser(String usersUrl,
-                            HttpEntity<Void> getRequest,
-                            String paramName,
-                            String paramValue) {
-        String url = usersUrl
-                + "?" + paramName + "=" + UriUtils.encodeQueryParam(paramValue, StandardCharsets.UTF_8)
-                + "&exact=true";
-        ResponseEntity<List> response = restTemplate.exchange(
-                url, org.springframework.http.HttpMethod.GET, getRequest, List.class
-        );
+    private List searchUser(String usersUrl, HttpEntity<Void> getRequest, String paramName, String paramValue) {
+        String url = usersUrl + "?" + paramName + "=" + UriUtils.encodeQueryParam(paramValue, StandardCharsets.UTF_8) + "&exact=true";
+        ResponseEntity<List> response = restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, getRequest, List.class);
         return response.getBody();
-    }
-
-    @SuppressWarnings("unused")
-    private KeycloakUser createUserFallback(String realm, String username, String email, String password, String firstName, Throwable t) {
-        log.error("Keycloak unavailable for user creation after retries: {}", t.getMessage());
-        throw new TechnicalException(
-                ErrorCodes.TECHNICAL_ERROR,
-                "Keycloak user creation failed and fallback was triggered");
     }
 
     @Override
     @Retry(name = "keycloak")
-    @CircuitBreaker(name = "keycloak", fallbackMethod = "assignRoleFallback")
+    @CircuitBreaker(name = "keycloak")
     public void assignRole(String realm, UUID keycloakUserId, String roleName) {
         log.info("Assigning role '{}' to user {} in realm {}", roleName, keycloakUserId, realm);
-
         String adminToken = obtainAdminToken(realm);
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
 
-        // Try to get existing role from Keycloak
         String roleUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/roles/" + roleName;
         ResponseEntity<Map> roleResponse;
         try {
-            HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-            roleResponse = restTemplate.exchange(
-                    roleUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
-            );
+            roleResponse = restTemplate.exchange(roleUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         } catch (Exception e) {
-            // Role doesn't exist in Keycloak — create it
-            log.info("Role '{}' not found in Keycloak, creating it in realm '{}'", roleName, realm);
-            String createRoleUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/roles";
-            Map<String, Object> newRole = Map.of("name", roleName);
-            HttpEntity<Map<String, Object>> createRequest = new HttpEntity<>(newRole, headers);
-            restTemplate.postForEntity(createRoleUrl, createRequest, Void.class);
-            log.info("Role '{}' created in Keycloak realm '{}'", roleName, realm);
-
-            // Now fetch the created role
-            HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-            roleResponse = restTemplate.exchange(
-                    roleUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
-            );
+            log.info("Creating role '{}' in Keycloak", roleName);
+            restTemplate.postForEntity(keycloakBaseUrl + "/admin/realms/" + realm + "/roles", new HttpEntity<>(Map.of("name", roleName), headers), Void.class);
+            roleResponse = restTemplate.exchange(roleUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         }
 
-        if (roleResponse.getBody() == null) {
-            log.warn("Role '{}' not found in realm '{}' even after creation attempt", roleName, realm);
-            return;
-        }
+        if (roleResponse.getBody() == null) throw new TechnicalException(ErrorCodes.TECHNICAL_ERROR, "Role not found");
 
-        // Assign role to user
-        String assignUrl = keycloakBaseUrl + "/admin/realms/" + realm
-                + "/users/" + keycloakUserId + "/role-mappings/realm";
-        HttpEntity<List<Map>> assignRequest = new HttpEntity<>(List.of(roleResponse.getBody()), headers);
-        restTemplate.postForEntity(assignUrl, assignRequest, Void.class);
-
-        log.info("Role '{}' assigned successfully to user {}", roleName, keycloakUserId);
-    }
-
-    @SuppressWarnings("unused")
-    private void assignRoleFallback(String realm, UUID keycloakUserId, String roleName, Throwable t) {
-        log.error("Keycloak unavailable for role assignment: {}", t.getMessage());
-        log.warn("Role assignment skipped (circuit breaker fallback) - role: {}, user: {}", roleName, keycloakUserId);
+        String assignUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId + "/role-mappings/realm";
+        restTemplate.postForEntity(assignUrl, new HttpEntity<>(List.of(roleResponse.getBody()), headers), Void.class);
+        log.info("Role '{}' assigned successfully", roleName);
     }
 
     @Override
@@ -257,12 +179,9 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @CircuitBreaker(name = "keycloak")
     public TokenResponse authenticate(String realm, String username, String password) {
         log.info("Authenticating user: {} in realm: {}", username, realm);
-
         String tokenUrl = keycloakBaseUrl + "/realms/" + realm + "/protocol/openid-connect/token";
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "password");
         formData.add("client_id", adminClientId);
@@ -271,34 +190,20 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         formData.add("password", password);
         formData.add("scope", "openid");
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(formData, headers);
-
         try {
-            ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
-
+            ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, new HttpEntity<>(formData, headers), Map.class);
             Map<String, Object> body = response.getBody();
             if (body != null) {
                 String accessToken = (String) body.get("access_token");
                 String refreshToken = (String) body.get("refresh_token");
                 Number expiresIn = (Number) body.get("expires_in");
-                String name = extractNameFromJwt(accessToken);
-                log.info("User authenticated successfully: {}", username);
-                return new TokenResponse(accessToken, refreshToken, expiresIn != null ? expiresIn.longValue() : 300L, name);
+                return new TokenResponse(accessToken, refreshToken, expiresIn != null ? expiresIn.longValue() : 300L, extractNameFromJwt(accessToken));
             }
-
-            throw new TechnicalException(
-                    ErrorCodes.Identity.SESSION_INVALID,
-                    "Empty response from Keycloak token endpoint");
+            throw new TechnicalException(ErrorCodes.Identity.SESSION_INVALID, "Empty response from Keycloak");
         } catch (HttpClientErrorException.Unauthorized e) {
-            log.warn("Authentication failed for user: {} - Invalid credentials", username);
-            throw new BusinessException(
-                    ErrorCodes.INVALID_CREDENTIALS,
-                    "Invalid username or password");
-        } catch (HttpClientErrorException e) {
-            log.error("Keycloak authentication error: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
-            throw new BusinessException(
-                    ErrorCodes.INVALID_CREDENTIALS,
-                    "Authentication failed: " + e.getStatusCode());
+            throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS, "Invalid username or password");
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS, "Authentication failed: " + e.getMessage());
         }
     }
 
@@ -306,104 +211,60 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @Retry(name = "keycloak")
     @CircuitBreaker(name = "keycloak")
     public TokenResponse refreshToken(String realm, String refreshToken) {
-        log.info("Refreshing token in realm: {}", realm);
-
         String tokenUrl = keycloakBaseUrl + "/realms/" + realm + "/protocol/openid-connect/token";
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "refresh_token");
         formData.add("client_id", adminClientId);
         formData.add("client_secret", adminClientSecret);
         formData.add("refresh_token", refreshToken);
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(formData, headers);
-        ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
-
+        ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, new HttpEntity<>(formData, headers), Map.class);
         Map<String, Object> body = response.getBody();
         if (body != null) {
             String newAccessToken = (String) body.get("access_token");
-            String newRefreshToken = (String) body.get("refresh_token");
-            Number expiresIn = (Number) body.get("expires_in");
-            String name = extractNameFromJwt(newAccessToken);
-            log.info("Token refreshed successfully");
-            return new TokenResponse(newAccessToken, newRefreshToken, expiresIn != null ? expiresIn.longValue() : 300L, name);
+            return new TokenResponse(newAccessToken, (String) body.get("refresh_token"), 
+                    ((Number) body.get("expires_in")).longValue(), extractNameFromJwt(newAccessToken));
         }
-
-        throw new TechnicalException(
-                ErrorCodes.Identity.SESSION_INVALID,
-                "Empty response from Keycloak token endpoint");
+        throw new TechnicalException(ErrorCodes.Identity.SESSION_INVALID, "Failed to refresh token");
     }
 
     @Override
     @Retry(name = "keycloak")
-    @CircuitBreaker(name = "keycloak", fallbackMethod = "logoutFallback")
+    @CircuitBreaker(name = "keycloak")
     public void logout(String realm, UUID keycloakUserId) {
-        log.info("Logging out user {} from realm {}", keycloakUserId, realm);
-
         String adminToken = obtainAdminToken(realm);
-        String logoutUrl = keycloakBaseUrl + "/admin/realms/" + realm
-                + "/users/" + keycloakUserId + "/logout";
-
+        String logoutUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId + "/logout";
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(adminToken);
-
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-        restTemplate.postForEntity(logoutUrl, request, Void.class);
-
-        log.info("User {} logged out successfully", keycloakUserId);
-    }
-
-    @SuppressWarnings("unused")
-    private void logoutFallback(String realm, UUID keycloakUserId, Throwable t) {
-        log.error("Keycloak unavailable for logout: {}", t.getMessage());
-        log.warn("Logout skipped (circuit breaker fallback) - user: {}", keycloakUserId);
+        restTemplate.postForEntity(logoutUrl, new HttpEntity<>(headers), Void.class);
+        log.info("User {} logged out", keycloakUserId);
     }
 
     @Override
     @Retry(name = "keycloak")
-    @CircuitBreaker(name = "keycloak", fallbackMethod = "setUserAttributeFallback")
+    @CircuitBreaker(name = "keycloak")
     @SuppressWarnings("unchecked")
     public void setUserAttribute(String realm, UUID keycloakUserId, String attributeName, String attributeValue) {
-        log.info("Setting attribute '{}' on user {} in realm {}", attributeName, keycloakUserId, realm);
-
+        log.info("Setting attribute '{}' for user {}", attributeName, keycloakUserId);
         String adminToken = obtainAdminToken(realm);
-
         String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
 
-        HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-        ResponseEntity<Map> userResponse = restTemplate.exchange(
-                userUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
-        );
-
+        ResponseEntity<Map> userResponse = restTemplate.exchange(userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         Map<String, Object> userRep = userResponse.getBody();
-        if (userRep == null) {
-            log.warn("User {} not found in realm {}", keycloakUserId, realm);
-            return;
-        }
+        if (userRep == null) throw new NotFoundException("User", keycloakUserId.toString());
 
         Map<String, List<String>> attributes = (Map<String, List<String>>) userRep.get("attributes");
-        if (attributes == null) {
-            attributes = new java.util.HashMap<>();
-        }
+        if (attributes == null) attributes = new java.util.HashMap<>();
         attributes.put(attributeName, List.of(attributeValue));
         userRep.put("attributes", attributes);
 
-        HttpEntity<Map<String, Object>> updateRequest = new HttpEntity<>(userRep, headers);
-        restTemplate.put(userUrl, updateRequest);
-
-        log.info("Attribute '{}' set successfully on user {}", attributeName, keycloakUserId);
-    }
-
-    @SuppressWarnings("unused")
-    private void setUserAttributeFallback(String realm, UUID keycloakUserId, String attributeName, String attributeValue, Throwable t) {
-        log.error("Keycloak unavailable for attribute set: {}", t.getMessage());
-        log.warn("Attribute set skipped (circuit breaker fallback) - attribute: {}, user: {}", attributeName, keycloakUserId);
+        restTemplate.put(userUrl, new HttpEntity<>(userRep, headers));
+        log.info("Attribute '{}' set successfully", attributeName);
     }
 
     @Override
@@ -411,27 +272,21 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @CircuitBreaker(name = "keycloak")
     @SuppressWarnings("unchecked")
     public void setUserAttributes(String realm, UUID keycloakUserId, Map<String, String> newAttributes) {
-        log.info("Setting {} attributes on user {} in realm {}", newAttributes.keySet(), keycloakUserId, realm);
-
         String adminToken = obtainAdminToken(realm);
         String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
 
-        // GET current user representation
-        ResponseEntity<Map> userResponse = restTemplate.exchange(
-                userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+        ResponseEntity<Map> userResponse = restTemplate.exchange(userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         Map<String, Object> userRep = new java.util.HashMap<>(userResponse.getBody());
-
-        // Merge new attributes with existing ones (single GET-then-PUT avoids lost-update race condition)
-        Map<String, List<String>> existing = (Map<String, List<String>>) userRep.get("attributes");
-        Map<String, List<String>> merged = existing != null ? new java.util.HashMap<>(existing) : new java.util.HashMap<>();
+        Map<String, List<String>> attributes = (Map<String, List<String>>) userRep.get("attributes");
+        if (attributes == null) attributes = new java.util.HashMap<>();
+        Map<String, List<String>> merged = new java.util.HashMap<>(attributes);
         newAttributes.forEach((k, v) -> merged.put(k, List.of(v)));
         userRep.put("attributes", merged);
 
         restTemplate.put(userUrl, new HttpEntity<>(userRep, headers));
-        log.info("Attributes {} set successfully on user {}", newAttributes.keySet(), keycloakUserId);
     }
 
     @Override
@@ -439,32 +294,15 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @CircuitBreaker(name = "keycloak")
     @SuppressWarnings("unchecked")
     public String getUserAttribute(String realm, UUID keycloakUserId, String attributeName) {
-        log.info("Getting attribute '{}' for user {} in realm {}", attributeName, keycloakUserId, realm);
-
         String adminToken = obtainAdminToken(realm);
         String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
-
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
-
-        HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-        ResponseEntity<Map> userResponse = restTemplate.exchange(
-                userUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class
-        );
-
+        ResponseEntity<Map> userResponse = restTemplate.exchange(userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         Map<String, Object> userRep = userResponse.getBody();
-        if (userRep == null) {
-            log.warn("User {} not found in realm {}", keycloakUserId, realm);
-            return null;
-        }
-
+        if (userRep == null) return null;
         Map<String, List<String>> attributes = (Map<String, List<String>>) userRep.get("attributes");
-        if (attributes == null || !attributes.containsKey(attributeName)) {
-            log.warn("Attribute '{}' not found for user {}", attributeName, keycloakUserId);
-            return null;
-        }
-
+        if (attributes == null || !attributes.containsKey(attributeName)) return null;
         List<String> values = attributes.get(attributeName);
         return (values != null && !values.isEmpty()) ? values.get(0) : null;
     }
@@ -473,26 +311,13 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @Retry(name = "keycloak")
     @CircuitBreaker(name = "keycloak")
     public void resetPassword(String realm, UUID keycloakUserId, String newPassword) {
-        log.info("Resetting password for user {} in realm {}", keycloakUserId, realm);
-
         String adminToken = obtainAdminToken(realm);
-        String resetPwUrl = keycloakBaseUrl + "/admin/realms/" + realm
-                + "/users/" + keycloakUserId + "/reset-password";
-
+        String resetPwUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId + "/reset-password";
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
-
-        Map<String, Object> credential = Map.of(
-                "type", "password",
-                "value", newPassword,
-                "temporary", false
-        );
-
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(credential, headers);
-        restTemplate.put(resetPwUrl, request);
-
-        log.info("Password reset successfully for user {}", keycloakUserId);
+        Map<String, Object> credential = Map.of("type", "password", "value", newPassword, "temporary", false);
+        restTemplate.put(resetPwUrl, new HttpEntity<>(credential, headers));
     }
 
     @Override
@@ -500,92 +325,46 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
     @CircuitBreaker(name = "keycloak")
     @SuppressWarnings("unchecked")
     public void updateUserFirstName(String realm, UUID keycloakUserId, String firstName) {
-        log.info("Updating firstName for user {} in realm {}", keycloakUserId, realm);
-
         String adminToken = obtainAdminToken(realm);
         String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
-
-        HttpEntity<Void> getRequest = new HttpEntity<>(headers);
-        ResponseEntity<Map> userResponse = restTemplate.exchange(
-                userUrl, org.springframework.http.HttpMethod.GET, getRequest, Map.class);
-
+        ResponseEntity<Map> userResponse = restTemplate.exchange(userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         Map<String, Object> userRep = new java.util.HashMap<>(userResponse.getBody());
         userRep.put("firstName", firstName != null ? firstName : "");
         userRep.remove("lastName");
-
-        HttpEntity<Map<String, Object>> updateRequest = new HttpEntity<>(userRep, headers);
-        restTemplate.put(userUrl, updateRequest);
-
-        log.info("firstName updated successfully for user {}", keycloakUserId);
+        restTemplate.put(userUrl, new HttpEntity<>(userRep, headers));
     }
 
     @Override
     @Retry(name = "keycloak")
-    @CircuitBreaker(name = "keycloak", fallbackMethod = "getUserDetailsFallback")
+    @CircuitBreaker(name = "keycloak")
     public KeycloakUserDetails getUserDetails(String realm, UUID keycloakUserId) {
         String adminToken = obtainAdminToken(realm);
         String userUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users/" + keycloakUserId;
-
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(adminToken);
-
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-        ResponseEntity<Map> response = restTemplate.exchange(
-                userUrl, org.springframework.http.HttpMethod.GET, request, Map.class);
-
+        ResponseEntity<Map> response = restTemplate.exchange(userUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         Map<String, Object> body = response.getBody();
         if (body == null) return null;
-
-        return new KeycloakUserDetails(
-                keycloakUserId,
-                (String) body.getOrDefault("username", null),
-                (String) body.getOrDefault("firstName", null),
-                (String) body.getOrDefault("lastName", null),
-                (String) body.getOrDefault("email", null),
-                Boolean.TRUE.equals(body.get("enabled")));
+        return new KeycloakUserDetails(keycloakUserId, (String) body.get("username"), (String) body.get("firstName"), (String) body.get("lastName"), (String) body.get("email"), Boolean.TRUE.equals(body.get("enabled")));
     }
 
-    @SuppressWarnings("unused")
-    private KeycloakUserDetails getUserDetailsFallback(String realm, UUID keycloakUserId, Throwable t) {
-        log.error("Keycloak unavailable for user details fetch: {}", t.getMessage());
-        return null;
-    }
-
-    /**
-     * Obtains an admin access token using client credentials grant.
-     */
     private String obtainAdminToken(String realm) {
         String tokenUrl = keycloakBaseUrl + "/realms/" + realm + "/protocol/openid-connect/token";
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "client_credentials");
         formData.add("client_id", adminClientId);
         formData.add("client_secret", adminClientSecret);
-
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(formData, headers);
-        ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
-
+        ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, new HttpEntity<>(formData, headers), Map.class);
         Map<String, Object> body = response.getBody();
-        if (body != null && body.containsKey("access_token")) {
-            return (String) body.get("access_token");
-        }
-
-        throw new TechnicalException(
-                ErrorCodes.TECHNICAL_ERROR,
-                "Failed to obtain admin token from Keycloak");
+        if (body != null && body.containsKey("access_token")) return (String) body.get("access_token");
+        throw new TechnicalException(ErrorCodes.TECHNICAL_ERROR, "Failed to obtain admin token");
     }
 
-    /**
-     * Decodes the JWT payload (base64url) and extracts the "name" claim.
-     * Returns null if the token is malformed or the claim is absent.
-     */
     @SuppressWarnings("unchecked")
     private String extractNameFromJwt(String accessToken) {
         try {
@@ -593,14 +372,9 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
             String[] parts = accessToken.split("\\.");
             if (parts.length < 2) return null;
             byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
-            String payload = new String(decoded, StandardCharsets.UTF_8);
-            Map<String, Object> claims = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(payload, Map.class);
+            Map<String, Object> claims = new com.fasterxml.jackson.databind.ObjectMapper().readValue(new String(decoded, StandardCharsets.UTF_8), Map.class);
             Object name = claims.get("name");
             return name != null ? name.toString() : null;
-        } catch (Exception e) {
-            log.warn("Could not extract name from JWT: {}", e.getMessage());
-            return null;
-        }
+        } catch (Exception e) { return null; }
     }
 }

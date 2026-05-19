@@ -40,6 +40,24 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
         log.info("Activity: Creating draft application for customer: {}", input.customerId());
 
         var tenantId = UUID.fromString(input.tenantId());
+
+        // Idempotency: if this workflow has already created an application
+        // (e.g. activity retry, replay-after-restart, or a half-committed save
+        // whose row IS present), return the existing one instead of generating
+        // a fresh ID + sequence number that would break downstream activities.
+        if (input.workflowId() != null) {
+            var existing = applicationRepository.findByWorkflowId(tenantId, input.workflowId());
+            if (existing.isPresent()) {
+                var app = existing.get();
+                log.info("Activity: Draft already exists for workflowId={}, returning existing {} ({})",
+                        input.workflowId(), app.getApplicationNumber(), app.getId().getValue());
+                return new CreateApplicationResult(
+                        app.getId().getValue().toString(),
+                        app.getApplicationNumber()
+                );
+            }
+        }
+
         var applicationNumber = applicationRepository.generateApplicationNumber(tenantId);
 
         var aggregate = LoanApplicationAggregate.create(

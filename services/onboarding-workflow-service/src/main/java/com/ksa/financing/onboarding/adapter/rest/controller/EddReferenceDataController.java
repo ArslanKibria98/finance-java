@@ -75,6 +75,15 @@ public class EddReferenceDataController {
         return fetchReferenceData(url, "Net Worth Ranges");
     }
 
+    @GetMapping("/occupation")
+    @Operation(summary = "List active occupation options. Optional ?search= forwarded to customer-service.")
+    public ResponseEntity<List<ReferenceDataResponse>> listOccupation(
+            @RequestParam(required = false) String search) {
+        log.debug("Fetching active occupation options from customer-service (search={})", search);
+        var url = appendSearch(customerServiceUrl + "/api/v1/reference-data/occupation/active", search);
+        return fetchReferenceData(url, "Occupation");
+    }
+
     private String appendSearch(String baseUrl, String search) {
         if (search == null || search.isBlank()) return baseUrl;
         return UriComponentsBuilder.fromHttpUrl(baseUrl).queryParam("search", search.trim()).toUriString();
@@ -125,6 +134,7 @@ public class EddReferenceDataController {
                 (String) map.get("descriptionAr"),
                 Boolean.TRUE.equals(map.get("isActive")),
                 map.get("displayOrder") != null ? ((Number) map.get("displayOrder")).intValue() : 0,
+                map.get("score") != null ? ((Number) map.get("score")).intValue() : 0,
                 map.get("createdAt") != null ? Instant.parse(map.get("createdAt").toString()) : null,
                 map.get("updatedAt") != null ? Instant.parse(map.get("updatedAt").toString()) : null
         );

@@ -4,6 +4,7 @@ import com.ksa.financing.identity.domain.port.in.SetPinUseCase;
 import com.ksa.financing.identity.domain.port.out.KeycloakAdapterPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -13,7 +14,9 @@ import java.util.UUID;
 @Slf4j
 public class SetPinService implements SetPinUseCase {
 
-    private static final String REALM = "CompanyRealm";
+    @Value("${keycloak.realm:CompanyRealm}")
+    private String realm;
+
     private static final String PIN_ATTRIBUTE = "app_pin";
 
     private final KeycloakAdapterPort keycloakAdapter;
@@ -25,8 +28,7 @@ public class SetPinService implements SetPinUseCase {
         try {
             UUID keycloakUserId = UUID.fromString(command.keycloakUserId());
 
-            // Store PIN as a user attribute in Keycloak (plain text for now)
-            keycloakAdapter.setUserAttribute(REALM, keycloakUserId, PIN_ATTRIBUTE, command.pin());
+            keycloakAdapter.setUserAttribute(realm, keycloakUserId, PIN_ATTRIBUTE, command.pin());
 
             log.info("App PIN set successfully for nationalId={}", command.nationalId());
             return new SetPinResult(true, "PIN set successfully");

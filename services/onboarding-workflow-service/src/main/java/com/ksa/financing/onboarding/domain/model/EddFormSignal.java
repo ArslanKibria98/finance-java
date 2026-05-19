@@ -25,6 +25,9 @@ public record EddFormSignal(
     String sourceOfFunds,
     String sourceOfFundsDetails,
 
+    /** Occupation LOV code (nullable for replay of older workflow signal payloads). */
+    String occupation,
+
     // Related Persons
     List<RelatedPerson> relatedPersons,
 

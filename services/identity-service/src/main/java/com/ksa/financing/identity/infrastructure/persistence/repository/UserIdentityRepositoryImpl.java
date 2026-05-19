@@ -4,6 +4,7 @@ import com.ksa.financing.identity.domain.model.UserIdentity;
 import com.ksa.financing.identity.domain.port.out.UserIdentityRepository;
 import com.ksa.financing.identity.infrastructure.persistence.entity.UserIdentityJpaEntity;
 import com.ksa.financing.identity.infrastructure.persistence.mapper.UserIdentityPersistenceMapper;
+import com.ksa.financing.infra.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
@@ -12,6 +13,7 @@ import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,8 +57,7 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     @Override
     public Optional<UserIdentity> findByInternalCustomerId(UUID customerId) {
         log.debug("Finding user identity by internal customer ID: {}", customerId);
-        return jpaRepository.findById(customerId)
-                .filter(entity -> entity.getInternalCustomerId() != null && entity.getInternalCustomerId().equals(customerId))
+        return jpaRepository.findByInternalCustomerId(customerId)
                 .map(mapper::toDomain);
     }
 
@@ -70,7 +71,14 @@ public class UserIdentityRepositoryImpl implements UserIdentityRepository {
     @Override
     public Optional<UserIdentity> findByMobileNumber(String mobileNumber) {
         log.debug("Finding user identity by mobile number: ****{}", mobileNumber != null && mobileNumber.length() > 4 ? mobileNumber.substring(mobileNumber.length() - 4) : "****");
-        return jpaRepository.findByMobileNumber(mobileNumber)
+        List<UserIdentityJpaEntity> matches = jpaRepository.findByMobileNumber(mobileNumber);
+        if (matches == null || matches.isEmpty()) {
+            return Optional.empty();
+        }
+        return matches.stream()
+                .filter(e -> e.getInternalCustomerId() != null)
+                .findFirst()
+                .or(() -> Optional.of(matches.get(0)))
                 .map(mapper::toDomain);
     }
 

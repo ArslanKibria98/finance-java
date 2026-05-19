@@ -189,23 +189,23 @@ public class LoanController {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> forwardToCollections(String invoiceId, LocalDate newDueDate, Jwt jwt) {
-        // Spring's default RestTemplate uses HttpURLConnection which rejects PATCH.
-        // Use the JDK HttpClient instead so this one call works without adding a bean.
+        // Use the injected RestTemplate (HttpComponents 5 backed — supports PATCH)
+        // so the outbound audit interceptor captures the call into Elasticsearch.
         try {
-            var body = "{\"newDueDate\":\"" + newDueDate + "\"}";
-            var request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(collectionsServiceUrl + "/api/v1/admin/invoices/" + invoiceId + "/due-date"))
-                    .header("Authorization", "Bearer " + jwt.getTokenValue())
-                    .header("Content-Type", "application/json")
-                    .method("PATCH", java.net.http.HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-            var client = java.net.http.HttpClient.newHttpClient();
-            var resp = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() / 100 != 2 || resp.body() == null) {
-                log.warn("Collections sync non-2xx for invoice {}: status={} body={}", invoiceId, resp.statusCode(), resp.body());
+            var url = collectionsServiceUrl + "/api/v1/admin/invoices/" + invoiceId + "/due-date";
+            var headers = new HttpHeaders();
+            headers.setBearerAuth(jwt.getTokenValue());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, Object> body = Map.of("newDueDate", newDueDate.toString());
+            var entity = new HttpEntity<Map<String, Object>>(body, headers);
+
+            ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.PATCH, entity, String.class);
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                log.warn("Collections sync non-2xx for invoice {}: status={} body={}",
+                        invoiceId, resp.getStatusCode().value(), resp.getBody());
                 return null;
             }
-            var node = objectMapper.readTree(resp.body());
+            var node = objectMapper.readTree(resp.getBody());
             var payload = node.has("data") ? node.get("data") : node;
             return objectMapper.convertValue(payload, Map.class);
         } catch (Exception ex) {

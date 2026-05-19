@@ -1,0 +1,56 @@
+server:
+  port: 8096
+
+spring:
+  application:
+    name: notification-service
+  
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/notification_db}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_BASE_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:CompanyRealm}/protocol/openid-connect/certs
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+novu:
+  api-key: ${NOVU_API_KEY:d5a05c8e47e1554d2b85df902079575a}
+  base-url: ${NOVU_BASE_URL:https://api.novu.co/v1}
+  admin-subscriber-id: ${ADMIN_SUBSCRIBER_ID:admin_global}
+
+logging:
+  level:
+    com.ksa.financing: DEBUG
+    org.springframework.kafka: INFO

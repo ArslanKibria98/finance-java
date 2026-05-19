@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Import base configuration from infra SDK -->
-    <include resource="logback-base.xml"/>
+    <!-- Import base configuration from infra SDK (Logstash TCP + api-audit logger) -->
+    <include resource="logback-ksa-base.xml"/>
 
     <!-- Spring Profile-specific configurations -->
     <springProfile name="dev">

@@ -63,7 +63,7 @@ public class TestSupportController {
     private final DelinquencyEngine delinquencyEngine;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     @Value("${app.services.lending-service-url:${LENDING_SERVICE_URL:http://lending-service:8097}}")
     private String lendingServiceUrl;

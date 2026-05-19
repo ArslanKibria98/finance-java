@@ -31,7 +31,8 @@ public class WalletCreationActivityImpl implements WalletCreationActivity {
                             tenantUuid,
                             UUID.fromString(input.customerId()),
                             input.currency() != null ? input.currency() : "SAR",
-                            input.iban()
+                            input.iban(),
+                            input.fullName()
                     )
             );
 

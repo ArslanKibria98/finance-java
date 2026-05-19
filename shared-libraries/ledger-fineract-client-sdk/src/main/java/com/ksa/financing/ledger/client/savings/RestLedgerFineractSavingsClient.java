@@ -152,7 +152,8 @@ public class RestLedgerFineractSavingsClient implements LedgerFineractSavingsCli
     @Override
     public Long deposit(UUID tenantId, Long savingsId, BigDecimal amount,
                         String externalReference, String idempotencyKey) {
-        Map<String, Object> body = txBody(amount, externalReference);
+        BigDecimal normalizedAmount = amount != null ? amount.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        Map<String, Object> body = txBody(normalizedAmount, externalReference);
         Map<String, Object> resp = exchange(HttpMethod.POST, tenantId, idempotencyKey,
                 "/accounts/" + savingsId + "/deposit", body);
         return extractLong(resp, "resourceId");
@@ -161,7 +162,8 @@ public class RestLedgerFineractSavingsClient implements LedgerFineractSavingsCli
     @Override
     public Long withdraw(UUID tenantId, Long savingsId, BigDecimal amount,
                          String externalReference, String idempotencyKey) {
-        Map<String, Object> body = txBody(amount, externalReference);
+        BigDecimal normalizedAmount = amount != null ? amount.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        Map<String, Object> body = txBody(normalizedAmount, externalReference);
         Map<String, Object> resp = exchange(HttpMethod.POST, tenantId, idempotencyKey,
                 "/accounts/" + savingsId + "/withdraw", body);
         return extractLong(resp, "resourceId");
@@ -173,6 +175,7 @@ public class RestLedgerFineractSavingsClient implements LedgerFineractSavingsCli
                                        Long toOfficeId, Long toClientId, Long toSavingsId,
                                        BigDecimal amount, String description, String idempotencyKey) {
         String today = LocalDate.now().format(FINERACT_DATE);
+        BigDecimal normalizedAmount = amount != null ? amount.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("fromOfficeId", fromOfficeId != null ? fromOfficeId : 1);
         body.put("fromClientId", fromClientId);
@@ -182,7 +185,7 @@ public class RestLedgerFineractSavingsClient implements LedgerFineractSavingsCli
         body.put("toClientId", toClientId);
         body.put("toAccountType", 2);
         body.put("toAccountId", toSavingsId);
-        body.put("transferAmount", amount);
+        body.put("transferAmount", normalizedAmount);
         body.put("transferDate", today);
         body.put("transferDescription", description != null ? description : "P2P");
         body.put("locale", LOCALE);

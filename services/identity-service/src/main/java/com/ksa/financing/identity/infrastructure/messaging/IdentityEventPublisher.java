@@ -22,13 +22,16 @@ public class IdentityEventPublisher implements EventPublisherPort {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
-    public void publishUserRegistered(UUID userId, UUID tenantId) {
+    public void publishUserRegistered(UUID userId, UUID tenantId, String fcmToken) {
         try {
             log.info("Publishing user-registered event for userId: {}, tenantId: {}", userId, tenantId);
 
             Map<String, Object> payload = new HashMap<>();
             payload.put("userId", userId.toString());
             payload.put("tenantId", tenantId.toString());
+            if (fcmToken != null) {
+                payload.put("fcmToken", fcmToken);
+            }
 
             Map<String, Object> event = new HashMap<>();
             event.put("eventType", "USER_REGISTERED");

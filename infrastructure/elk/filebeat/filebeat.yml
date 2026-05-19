@@ -1,0 +1,54 @@
+################# Filebeat #################
+# Harvests Docker container stdout logs (already JSON via Logback LogstashEncoder)
+# Adds Docker metadata (container, image, labels) and ships to Elasticsearch.
+# Pairs with Logback TCP path (5000) — Filebeat is the safety-net for stdout.
+
+filebeat.inputs:
+  - type: container
+    paths:
+      - /var/lib/docker/containers/*/*.log
+    stream: all
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: message
+
+# Enrich with docker metadata
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+  - add_host_metadata: ~
+  - drop_fields:
+      fields: ["host.os", "host.architecture", "agent.ephemeral_id", "ecs.version"]
+      ignore_missing: true
+  # Only keep ksa-* containers (filters out keycloak, kafka noise if not wanted)
+  - drop_event:
+      when:
+        not:
+          regexp:
+            container.name: "^ksa-.*"
+
+# Multi-line stack traces (Java) — already handled by Logback JSON, but safety net for non-JSON
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+
+# Output: direct to Elasticsearch (skip Logstash for raw container logs)
+# Logstash path is used for app-level TCP appender — keep them separate.
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_URL:elasticsearch:9200}"]
+  index: "filebeat-docker-%{+yyyy.MM.dd}"
+
+setup.template.name: "filebeat-docker"
+setup.template.pattern: "filebeat-docker-*"
+setup.ilm.enabled: false
+
+# Kibana data view auto-setup
+setup.kibana:
+  host: "${KIBANA_URL:kibana:5601}"
+
+logging.level: info
+logging.to_files: false
+logging.to_stderr: true
+
+monitoring.enabled: false

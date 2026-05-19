@@ -11,6 +11,8 @@ public interface LookupUserUseCase {
 
     Optional<UserLookupResult> lookupByNationalId(String nationalId);
 
+    Optional<UserLookupResult> lookupByCustomerId(UUID internalCustomerId);
+
     record UserLookupResult(
             UUID keycloakUserId,
             UUID customerId,

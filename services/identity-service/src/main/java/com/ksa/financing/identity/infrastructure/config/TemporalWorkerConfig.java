@@ -45,7 +45,7 @@ public class TemporalWorkerConfig {
 
         // Register activity implementations
         worker.registerActivitiesImplementations(
-                new KeycloakUserCreationActivityImpl(registerFromOnboardingUseCase, keycloakAdapterPort),
+                new KeycloakUserCreationActivityImpl(registerFromOnboardingUseCase, keycloakAdapterPort, realm),
                 new SetPinActivityImpl(setPinUseCase),
                 new ForgotPasscodeActivityImpl(userIdentityRepository, keycloakAdapterPort, realm)
         );

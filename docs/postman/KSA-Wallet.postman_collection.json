@@ -1,0 +1,349 @@
+{
+  "info": {
+    "name": "KSA - Wallet (Transfers + Withdrawals)",
+    "description": "Unified wallet collection: login → balances → wallet-to-wallet transfers → bank withdrawals.\n\n**Architecture:**\n- wallet-service is the API surface\n- All Fineract calls flow through ledger-service `/internal/fineract-proxy/savings/**`\n- Withdrawals go through `BankRailsPort` (currently `MockSarieBankRailsAdapter`)\n\n**Demo wallets** (Keycloak realm `CompanyRealm`):\n- Wallet A: NID `1010219431` / PIN `147852` → `+966561343161` (savings 146)\n- Wallet B: NID `1211111111` / PIN `147852` → `+966591591591` (savings 150)\n\n**Tenant**: `00000000-0000-0000-0000-000000000001`\n\nRun `0. Login with Mobile` first — it auto-saves the JWT into `{{jwt}}` so every other request uses it.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://46.62.226.94:8000/wallet-service", "description": "wallet-service via Kong" },
+    { "key": "identityUrl", "value": "http://46.62.226.94:8000/identity-service", "description": "identity-service via Kong" },
+    { "key": "jwt", "value": "", "description": "auto-set by login request" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "walletA", "value": "22a7defd-c377-4239-bd68-a40dfb632ae8" },
+    { "key": "walletB", "value": "43564271-7ea5-4047-b36f-79afeb5d07fe" },
+    { "key": "nidA", "value": "1010219431" },
+    { "key": "nidB", "value": "1211111111" },
+    { "key": "mobileA", "value": "+966561343161" },
+    { "key": "mobileB", "value": "+966591591591" },
+    { "key": "pin", "value": "147852" },
+    { "key": "ibanValid", "value": "SA4420000001234567891234" },
+    { "key": "lastTransferId", "value": "" },
+    { "key": "lastWithdrawalId", "value": "" },
+    { "key": "lastBeneficiaryId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{jwt}}" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "0. Login with Mobile (auto-sets {{jwt}})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const resp = pm.response.json();",
+                  "const data = resp.data || resp;",
+                  "if (data.accessToken) {",
+                  "    pm.collectionVariables.set('jwt', data.accessToken);",
+                  "    console.log('JWT set: ' + data.accessToken.substring(0, 20) + '...');",
+                  "}",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Token returned', () => pm.expect(data.accessToken).to.not.be.empty);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Device-Id", "value": "postman-wallet" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"{{mobileA}}\",\n  \"pin\": \"{{pin}}\"\n}"
+            },
+            "url": "{{identityUrl}}/api/v1/auth/login-with-mobile-pin",
+            "description": "Authenticate with mobile number (international format `+9665...`) and 6-digit PIN.\nResponse `accessToken` is auto-saved to `{{jwt}}` and used as the bearer token for every other request."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Balance",
+      "item": [
+        {
+          "name": "Get balance by wallet ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/{{walletA}}/balance"
+          }
+        },
+        {
+          "name": "Get my balance (from JWT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/me/balance",
+            "description": "Resolves wallet from JWT — no walletId in URL."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallet-to-Wallet Transfers",
+      "item": [
+        {
+          "name": "Lookup recipient (by mobile or IBAN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/transfers/recipient?accountNumber={{mobileB}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "wallets", "transfers", "recipient"],
+              "query": [{ "key": "accountNumber", "value": "{{mobileB}}" }]
+            },
+            "description": "Resolve recipient details (walletId, IBAN, masked name, wallet status) before confirming a transfer.\n\n`accountNumber` accepts either:\n- Mobile in international format (e.g. `+966509509509`)\n- IBAN (e.g. `SA6280000000000000000189`)\n\nThe service auto-detects format (2 leading letters → IBAN, otherwise → mobile)."
+          }
+        },
+        {
+          "name": "Bulk check recipients (by mobile list)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumbers\": [\n    \"{{mobileA}}\",\n    \"{{mobileB}}\",\n    \"+966999000000\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/transfers/recipients/check",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "wallets", "transfers", "recipients", "check"]
+            },
+            "description": "Bulk presence check. For each mobile number in the request, returns `exists: true` if that number is registered AND has an ACTIVE wallet, else `false`.\n\nUse case: \"Find friends with wallet\" — client uploads phone contacts, gets a list back marking which ones can receive transfers.\n\nMax 500 numbers per request."
+          }
+        },
+        {
+          "name": "Transfer by mobile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const resp = pm.response.json();",
+                  "const d = resp.data || resp;",
+                  "if (d && d.id) pm.collectionVariables.set('lastTransferId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverMobile\": \"{{mobileB}}\",\n  \"amount\": 250.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"P2P via mobile\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/by-mobile",
+            "description": "Sender resolved from JWT, receiver resolved from `receiverMobile`. No wallet IDs in the body."
+          }
+        },
+        {
+          "name": "Transfer by wallet ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const resp = pm.response.json();",
+                  "const d = resp.data || resp;",
+                  "if (d && d.id) pm.collectionVariables.set('lastTransferId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationWalletId\": \"{{walletB}}\",\n  \"amount\": 1000.00,\n  \"currency\": \"SAR\",\n  \"purposeNote\": \"Lunch repayment\",\n  \"channel\": \"P2P_WALLET_ID\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/transfers"
+          }
+        },
+        {
+          "name": "Get transfer by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/{{lastTransferId}}"
+          }
+        },
+        {
+          "name": "List transfers by wallet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/by-wallet/{{walletA}}"
+          }
+        },
+        {
+          "name": "Transaction history (Fineract + transfers)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/{{walletA}}/transactions?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "wallets", "{{walletA}}", "transactions"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Unified bank-statement style transaction list: TOP_UP / TRANSFER_OUT / TRANSFER_IN / WITHDRAWAL / FEE / OTHER."
+          }
+        },
+        {
+          "name": "Recent transactions — last 10 (from JWT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/me/transactions/recent",
+            "description": "Returns the authenticated customer's last 10 transactions. Wallet is resolved from the JWT — no walletId in the URL. Response shape is identical to `Transaction history`, just capped at 10 records (page=0, size=10)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Beneficiaries",
+      "item": [
+        {
+          "name": "Add IBAN beneficiary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b && b.id) pm.collectionVariables.set('lastBeneficiaryId', b.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletId\": \"{{walletA}}\",\n  \"nickname\": \"My Al Rajhi acct\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"iban\": \"{{ibanValid}}\",\n  \"bankCode\": \"RJHISARI\",\n  \"bankName\": \"Al Rajhi Bank\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries"
+          }
+        },
+        {
+          "name": "List my beneficiaries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries"
+          }
+        },
+        {
+          "name": "Get beneficiary by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries/{{lastBeneficiaryId}}"
+          }
+        },
+        {
+          "name": "Deactivate beneficiary",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/beneficiaries/{{lastBeneficiaryId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Withdrawals",
+      "item": [
+        {
+          "name": "Initiate withdrawal — ad-hoc IBAN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const w = pm.response.json();",
+                  "if (w && w.id) pm.collectionVariables.set('lastWithdrawalId', w.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" },
+              { "key": "X-Device-Id", "value": "postman-wallet" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"destinationIban\": \"{{ibanValid}}\",\n  \"beneficiaryName\": \"AHMED ALI\",\n  \"destinationBankName\": \"Al Rajhi Bank\",\n  \"destinationBankCode\": \"RJHISARI\",\n  \"amount\": 100.00,\n  \"currency\": \"SAR\",\n  \"channel\": \"BANK_IBAN\",\n  \"purposeNote\": \"Rent payment\",\n  \"purposeCode\": \"RENT\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "Initiate withdrawal — saved beneficiary",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{walletA}}\",\n  \"beneficiaryId\": \"{{lastBeneficiaryId}}\",\n  \"amount\": 200.00,\n  \"currency\": \"SAR\",\n  \"channel\": \"BANK_IBAN\",\n  \"purposeNote\": \"Salary transfer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals"
+          }
+        },
+        {
+          "name": "Get withdrawal by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals/{{lastWithdrawalId}}"
+          }
+        },
+        {
+          "name": "List withdrawals by wallet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/wallets/withdrawals/by-wallet/{{walletA}}"
+          }
+        }
+      ]
+    }
+  ]
+}

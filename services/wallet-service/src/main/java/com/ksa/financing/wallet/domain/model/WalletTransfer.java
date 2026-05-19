@@ -19,6 +19,8 @@ public class WalletTransfer {
     private String currency;
     private TransferStatus status;
     private String purposeNote;
+    private String recipientMaskedName;
+    private String senderMaskedName;
     private UUID debitMovementId;
     private UUID creditMovementId;
     private UUID feeMovementId;
@@ -67,6 +69,10 @@ public class WalletTransfer {
     public void setStatus(TransferStatus status) { this.status = status; }
     public String getPurposeNote() { return purposeNote; }
     public void setPurposeNote(String purposeNote) { this.purposeNote = purposeNote; }
+    public String getRecipientMaskedName() { return recipientMaskedName; }
+    public void setRecipientMaskedName(String recipientMaskedName) { this.recipientMaskedName = recipientMaskedName; }
+    public String getSenderMaskedName() { return senderMaskedName; }
+    public void setSenderMaskedName(String senderMaskedName) { this.senderMaskedName = senderMaskedName; }
     public UUID getDebitMovementId() { return debitMovementId; }
     public void setDebitMovementId(UUID debitMovementId) { this.debitMovementId = debitMovementId; }
     public UUID getCreditMovementId() { return creditMovementId; }

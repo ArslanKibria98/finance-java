@@ -114,10 +114,11 @@ public class SuggestProductsUseCaseImpl implements SuggestProductsUseCase {
         var finCalc = FinanceCalculationService.calculate(
                 maxPrincipal,
                 product.profitRate(),
-                product.costOfTermPercent(),
                 tenureMonths,
                 BigDecimal.ZERO,
-                BigDecimal.ZERO
+                BigDecimal.ZERO,
+                product.vatPercent(),
+                product.isDisbursementInclusive()
         );
 
         var affordability = AffordabilityCalculationService.check(

@@ -23,6 +23,9 @@ public class Wallet {
     private boolean ledgerSynced;
     private Instant lastLedgerSyncAt;
     private String iban;
+    private String maskedName;
+    private String englishFirstName;
+    private String englishThirdName;
     private boolean autoDebitEnabled;
     private Instant createdAt;
     private Instant updatedAt;
@@ -64,6 +67,12 @@ public class Wallet {
     public void setLastLedgerSyncAt(Instant lastLedgerSyncAt) { this.lastLedgerSyncAt = lastLedgerSyncAt; }
     public String getIban() { return iban; }
     public void setIban(String iban) { this.iban = iban; }
+    public String getMaskedName() { return maskedName; }
+    public void setMaskedName(String maskedName) { this.maskedName = maskedName; }
+    public String getEnglishFirstName() { return englishFirstName; }
+    public void setEnglishFirstName(String englishFirstName) { this.englishFirstName = englishFirstName; }
+    public String getEnglishThirdName() { return englishThirdName; }
+    public void setEnglishThirdName(String englishThirdName) { this.englishThirdName = englishThirdName; }
     public boolean isAutoDebitEnabled() { return autoDebitEnabled; }
     public void setAutoDebitEnabled(boolean autoDebitEnabled) { this.autoDebitEnabled = autoDebitEnabled; }
     public Instant getCreatedAt() { return createdAt; }

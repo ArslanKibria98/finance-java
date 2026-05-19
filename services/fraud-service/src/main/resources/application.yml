@@ -34,6 +34,23 @@ spring:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/islamic-financing}
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/islamic-financing/protocol/openid-connect/certs}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+kafka:
+  topics:
+    fraud-detected:   ${KAFKA_TOPIC_FRAUD_DETECTED:financing.fraud.detected}
+    fraud-alert:      ${KAFKA_TOPIC_FRAUD_ALERT:financing.fraud.alert}
+    blacklist-added:  ${KAFKA_TOPIC_BLACKLIST_ADDED:financing.blacklist.added}
+
+fraud:
+  notifications:
+    adapter: ${FRAUD_NOTIFICATIONS_ADAPTER:kafka}
 
 server:
   port: ${SERVER_PORT:8092}

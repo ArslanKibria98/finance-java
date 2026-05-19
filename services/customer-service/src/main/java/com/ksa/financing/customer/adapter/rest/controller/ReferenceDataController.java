@@ -7,11 +7,13 @@ import com.ksa.financing.customer.application.dto.ReferenceDataResponse;
 import com.ksa.financing.customer.application.dto.UpdateNetWorthRangeRequest;
 import com.ksa.financing.customer.application.dto.UpdateReferenceDataRequest;
 import com.ksa.financing.customer.domain.model.NetWorthRangeOption;
+import com.ksa.financing.customer.domain.model.OccupationOption;
 import com.ksa.financing.customer.domain.model.PurposeOfFinanceOption;
 import com.ksa.financing.customer.domain.model.SourceOfFundsOption;
 import com.ksa.financing.customer.domain.model.SourceOfIncomeOption;
 import com.ksa.financing.customer.domain.model.SourceOfWealthOption;
 import com.ksa.financing.customer.domain.port.in.ManageNetWorthRangeUseCase;
+import com.ksa.financing.customer.domain.port.in.ManageOccupationUseCase;
 import com.ksa.financing.customer.domain.port.in.ManagePurposeOfFinanceUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfFundsUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfIncomeUseCase;
@@ -47,12 +49,13 @@ import java.util.UUID;
 @RequestMapping("/api/v1/reference-data")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "EDD Reference Data", description = "Admin-managed reference data for Enhanced Due Diligence (Source of Wealth, Source of Funds, Net Worth Ranges)")
+@Tag(name = "EDD Reference Data", description = "Admin-managed reference data (Source of Wealth, Funds, Income, Occupation, Purpose of Finance, Net Worth)")
 public class ReferenceDataController {
 
     private final ManageSourceOfWealthUseCase sourceOfWealthUseCase;
     private final ManageSourceOfFundsUseCase sourceOfFundsUseCase;
     private final ManageSourceOfIncomeUseCase sourceOfIncomeUseCase;
+    private final ManageOccupationUseCase occupationUseCase;
     private final ManagePurposeOfFinanceUseCase purposeOfFinanceUseCase;
     private final ManageNetWorthRangeUseCase netWorthRangeUseCase;
 
@@ -444,6 +447,134 @@ public class ReferenceDataController {
     }
 
     // ========================================================================
+    // OCCUPATION
+    // ========================================================================
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "create")
+    @PostMapping("/occupation")
+    @Operation(summary = "Create occupation option", description = "Creates a new admin-managed occupation dropdown option")
+    @ApiResponse(responseCode = "201", description = "Option created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate code")
+    public ResponseEntity<ReferenceDataResponse> createOccupation(
+            @Valid @RequestBody CreateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Creating occupation option: {} for tenant: {}", request.code(), tenantId);
+
+        var command = new ManageOccupationUseCase.CreateOccupationCommand(
+                request.code(), request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(), request.displayOrder());
+
+        OccupationOption created = occupationUseCase.create(tenantId, command);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    }
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "read")
+    @GetMapping("/occupation")
+    @Operation(summary = "List all occupation options", description = "Returns all options including inactive (admin view)")
+    @ApiResponse(responseCode = "200", description = "Options retrieved")
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllOccupation(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
+
+        UUID tenantId = extractTenantId(jwt);
+        var responses = occupationUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/occupation/active")
+    @Operation(summary = "List active occupation options",
+               description = "Returns only active options sorted by display order (for dropdown population). "
+                           + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
+    @ApiResponse(responseCode = "200", description = "Active options retrieved")
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActiveOccupation(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
+
+        UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
+        var responses = occupationUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
+        return ResponseEntity.ok(responses);
+    }
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "read")
+    @GetMapping("/occupation/{id}")
+    @Operation(summary = "Get occupation option by ID")
+    @ApiResponse(responseCode = "200", description = "Option found")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> getOccupationById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        OccupationOption option = occupationUseCase.getById(tenantId, id);
+        return ResponseEntity.ok(toResponse(option));
+    }
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "update")
+    @PutMapping("/occupation/{id}")
+    @Operation(summary = "Update occupation option", description = "Updates an existing option (partial update supported)")
+    @ApiResponse(responseCode = "200", description = "Option updated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> updateOccupation(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Updating occupation option: {} for tenant: {}", id, tenantId);
+
+        var command = new ManageOccupationUseCase.UpdateOccupationCommand(
+                request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(),
+                request.isActive(), request.displayOrder());
+
+        OccupationOption updated = occupationUseCase.update(tenantId, id, command);
+        return ResponseEntity.ok(toResponse(updated));
+    }
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "delete")
+    @DeleteMapping("/occupation/{id}")
+    @Operation(summary = "Permanently delete occupation option", description = "Soft-deletes the option permanently. Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deleteOccupation(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        occupationUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "update")
+    @PostMapping("/occupation/{id}/activate")
+    @Operation(summary = "Activate occupation option")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    public ResponseEntity<Void> activateOccupation(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        occupationUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.occupation", act = "update")
+    @PostMapping("/occupation/{id}/deactivate")
+    @Operation(summary = "Deactivate occupation option")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    public ResponseEntity<Void> deactivateOccupation(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        occupationUseCase.deactivate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ========================================================================
     // PURPOSE OF FINANCE
     // ========================================================================
 
@@ -770,6 +901,14 @@ public class ReferenceDataController {
     }
 
     private ReferenceDataResponse toResponse(SourceOfFundsOption o) {
+        return new ReferenceDataResponse(
+                o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
+                o.getDescriptionEn(), o.getDescriptionAr(),
+                o.isActive(), o.getDisplayOrder(),
+                o.getCreatedAt(), o.getUpdatedAt());
+    }
+
+    private ReferenceDataResponse toResponse(OccupationOption o) {
         return new ReferenceDataResponse(
                 o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
                 o.getDescriptionEn(), o.getDescriptionAr(),

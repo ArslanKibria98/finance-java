@@ -4,6 +4,7 @@ import com.ksa.financing.customer.domain.port.in.CreateCustomerUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageBankAccountsUseCase;
 import com.ksa.financing.customer.domain.port.in.SubmitPepAnswerUseCase;
 import com.ksa.financing.customer.domain.port.in.UpdateCustomerUseCase;
+import com.ksa.financing.customer.domain.port.out.IdentityLinkPort;
 import com.ksa.financing.customer.workflow.activity.impl.ProfileCreationActivityImpl;
 import com.ksa.financing.customer.workflow.activity.impl.UpdateCustomerActivityImpl;
 import com.ksa.islamic.orchestration.common.TaskQueue;
@@ -27,6 +28,7 @@ public class TemporalWorkerConfig {
     private final UpdateCustomerUseCase updateCustomerUseCase;
     private final ManageBankAccountsUseCase manageBankAccountsUseCase;
     private final SubmitPepAnswerUseCase submitPepAnswerUseCase;
+    private final IdentityLinkPort identityLinkPort;
 
     @PostConstruct
     public void startWorker() {
@@ -35,7 +37,7 @@ public class TemporalWorkerConfig {
         Worker worker = workerFactory.newWorker(TaskQueue.CUSTOMER_QUEUE, defaultWorkerOptions);
 
         worker.registerActivitiesImplementations(
-                new ProfileCreationActivityImpl(createCustomerUseCase),
+                new ProfileCreationActivityImpl(createCustomerUseCase, identityLinkPort),
                 new UpdateCustomerActivityImpl(updateCustomerUseCase, manageBankAccountsUseCase, submitPepAnswerUseCase)
         );
 

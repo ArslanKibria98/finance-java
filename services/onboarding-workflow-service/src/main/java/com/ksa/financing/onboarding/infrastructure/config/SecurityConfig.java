@@ -52,6 +52,8 @@ public class SecurityConfig {
                 new AntPathRequestMatcher("/api/v1/onboarding/resend-otp"),
                 new AntPathRequestMatcher("/api/v1/onboarding/nafath-callback"),
                 new AntPathRequestMatcher("/api/v1/onboarding/status"),
+                new AntPathRequestMatcher("/api/v1/onboarding/submit-dynamic-step"),
+                new AntPathRequestMatcher("/api/v1/onboarding/admin/**"),
                 new AntPathRequestMatcher("/api/v1/onboarding/reference-data/**"),
                 new AntPathRequestMatcher("/api/health/**"),
                 new AntPathRequestMatcher("/actuator/**"),

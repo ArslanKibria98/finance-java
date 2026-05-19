@@ -80,24 +80,34 @@ public class LedgerProxySavingsAdapter implements FineractSavingsPort {
     @Override
     public Long deposit(Long savingsId, BigDecimal amount, String externalReference) {
         return client.deposit(currentTenantId(), savingsId, amount, externalReference,
-                externalReference != null ? externalReference : idempotencyFor("deposit", savingsId + "-" + amount));
+                externalReference != null
+                        ? externalReference
+                        : idempotencyFor("deposit", savingsId + "-" + amount + "-" + UUID.randomUUID()));
     }
 
     @Override
     public Long withdraw(Long savingsId, BigDecimal amount, String externalReference) {
         return client.withdraw(currentTenantId(), savingsId, amount, externalReference,
-                externalReference != null ? externalReference : idempotencyFor("withdraw", savingsId + "-" + amount));
+                externalReference != null
+                        ? externalReference
+                        : idempotencyFor("withdraw", savingsId + "-" + amount + "-" + UUID.randomUUID()));
     }
 
     @Override
     public Long transferBetweenSavings(Long fromClientId, Long fromSavingsId,
                                        Long toClientId, Long toSavingsId,
                                        BigDecimal amount, String description) {
+        // description carries the unique per-attempt transferNumber (TRF-<ts>-<uuid8>),
+        // so use it as the idempotency suffix. Same retry → same key → cached reply;
+        // new transfer → new transferNumber → new key → fresh Fineract call.
+        String suffix = (description != null && !description.isBlank())
+                ? description
+                : fromSavingsId + "-" + toSavingsId + "-" + amount + "-" + UUID.randomUUID();
         return client.transferBetweenSavings(currentTenantId(),
                 officeId.longValue(), fromClientId, fromSavingsId,
                 officeId.longValue(), toClientId, toSavingsId,
                 amount, description,
-                idempotencyFor("transfer", fromSavingsId + "-" + toSavingsId + "-" + amount));
+                idempotencyFor("transfer", suffix));
     }
 
     @Override

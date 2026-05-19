@@ -33,11 +33,14 @@
                 <thread>thread</thread>
                 <level>level</level>
             </fieldNames>
-            <customFields>{"service":"${appName}","environment":"${ENV}"}</customFields>
+            <customFields>{"service.name":"${appName}","service":"${appName}","environment":"${ENV}"}</customFields>
             <includeMdcKeyName>correlationId</includeMdcKeyName>
             <includeMdcKeyName>traceId</includeMdcKeyName>
             <includeMdcKeyName>spanId</includeMdcKeyName>
             <includeMdcKeyName>tenantId</includeMdcKeyName>
+            <includeMdcKeyName>trace.id</includeMdcKeyName>
+            <includeMdcKeyName>transaction.id</includeMdcKeyName>
+            <includeMdcKeyName>span.id</includeMdcKeyName>
             <includeContext>false</includeContext>
             <includeCallerData>false</includeCallerData>
         </encoder>
@@ -47,11 +50,14 @@
     <appender name="KSA_LOGSTASH_TCP" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
         <destination>${LOGSTASH_HOST}:${LOGSTASH_PORT}</destination>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <customFields>{"service":"${appName}","environment":"${ENV}"}</customFields>
+            <customFields>{"service.name":"${appName}","service":"${appName}","environment":"${ENV}"}</customFields>
             <includeMdcKeyName>correlationId</includeMdcKeyName>
             <includeMdcKeyName>traceId</includeMdcKeyName>
             <includeMdcKeyName>spanId</includeMdcKeyName>
             <includeMdcKeyName>tenantId</includeMdcKeyName>
+            <includeMdcKeyName>trace.id</includeMdcKeyName>
+            <includeMdcKeyName>transaction.id</includeMdcKeyName>
+            <includeMdcKeyName>span.id</includeMdcKeyName>
         </encoder>
         <keepAliveDuration>5 minutes</keepAliveDuration>
         <reconnectionDelay>10 seconds</reconnectionDelay>

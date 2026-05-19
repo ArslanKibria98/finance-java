@@ -1,5 +1,26 @@
 version: '3.8'
 
+# ===========================================================================
+# Shared HikariCP tuning — applied to ALL Java services to prevent
+# Postgres "idle-session timeout" FATAL connection-termination errors.
+#
+# How it works:
+#   - keepalive-time: 2 min — Hikari pings idle connections (SELECT 1)
+#     so Postgres never marks them as idle and terminates them.
+#   - max-lifetime: 15 min — recycle connections BEFORE Postgres timeout.
+#   - idle-timeout: 5 min — close excess idle connections faster.
+#   - minimum-idle: 2 — keep pool lean (less idle = less idle-timeout risk).
+#
+# Spring Boot relaxed binding: SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME
+# overrides spring.datasource.hikari.keepalive-time in application.yml.
+# ===========================================================================
+x-hikari-tuning: &hikari-tuning
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+  SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: "300000"
+  SPRING_DATASOURCE_HIKARI_MAX_LIFETIME: "900000"
+  SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME: "120000"
+  SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT: "5000"
+
 services:
   # PostgreSQL Database
   postgres:
@@ -214,11 +235,105 @@ services:
       - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_URL:-http://46.62.226.94:5601}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
+    networks:
+      - ksa-network
+
+  # One-shot: install ILM policy + index templates into Elasticsearch
+  es-setup:
+    image: curlimages/curl:8.10.1
+    container_name: ksa-es-setup
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    volumes:
+      - ./infrastructure/elk/elasticsearch:/setup:ro
+    entrypoint: ["/bin/sh", "/setup/setup-templates.sh"]
+    restart: "no"
+    networks:
+      - ksa-network
+
+  # One-shot: import Kibana data views + dashboards
+  kibana-setup:
+    image: curlimages/curl:8.10.1
+    container_name: ksa-kibana-setup
+    depends_on:
+      kibana:
+        condition: service_healthy
+      es-setup:
+        condition: service_completed_successfully
+    environment:
+      - KIBANA_URL=http://kibana:5601
+    volumes:
+      - ./infrastructure/elk/kibana:/setup:ro
+    entrypoint: ["/bin/sh", "/setup/setup-kibana.sh"]
+    restart: "no"
+    networks:
+      - ksa-network
+
+  # Elastic APM Server - receives traces from Java agents
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:9.3.0
+    container_name: ksa-apm-server
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    ports:
+      - "8201:8200"
+    environment:
+      - ELASTICSEARCH_URL=elasticsearch:9200
+      - KIBANA_URL=kibana:5601
+      - APM_ENVIRONMENT=${APM_ENVIRONMENT:-dev}
+    volumes:
+      - ./infrastructure/elk/apm-server/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
+    command: ["--strict.perms=false"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8200' 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ksa-network
+
+  # Filebeat - harvests Docker container stdout (safety net for app logs)
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:9.3.0
+    container_name: ksa-filebeat
+    user: root
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      es-setup:
+        condition: service_completed_successfully
+    environment:
+      - ELASTICSEARCH_URL=elasticsearch:9200
+      - KIBANA_URL=kibana:5601
+    volumes:
+      - ./infrastructure/elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat_data:/usr/share/filebeat/data
+    command: ["--strict.perms=false"]
+    networks:
+      - ksa-network
+
+  # Init: downloads Elastic APM Java agent jar into shared volume
+  apm-agent-init:
+    build:
+      context: ./infrastructure/elk/apm-agent
+    container_name: ksa-apm-agent-init
+    volumes:
+      - apm_agent_data:/shared
+    restart: "no"
     networks:
       - ksa-network
 
@@ -344,6 +459,9 @@ services:
       - "8001:8001"
     volumes:
       - ./infrastructure/kong/kong.yml:/etc/kong/kong.yml:ro
+    extra_hosts:
+      # Allow Kong to reach PM2 QA services bound to the host (ports 91XX)
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -386,6 +504,24 @@ services:
       KEYCLOAK_SSO_CLIENT_ID: react-frontend
       KEYCLOAK_SSO_REDIRECT_URI: http://65.108.31.172:7374/callback
       CUSTOMER_SERVICE_URL: http://customer-service:8084
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: identity-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -395,6 +531,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8083/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -435,8 +573,25 @@ services:
       ONBOARDING_SERVICE_URL: http://onboarding-workflow-service:8089
       PROFILE_PICTURE_STORAGE_PATH: /app/uploads/profile-pictures
       PROFILE_PICTURE_BASE_URL: http://46.62.226.94:8000
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: customer-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
     volumes:
       - profile-pictures:/app/uploads/profile-pictures
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -444,6 +599,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8084/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -475,6 +632,24 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: global-profile-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -482,6 +657,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8085/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -513,6 +690,25 @@ services:
       PII_VAULT_MASTER_KEY: ""
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: pii-vault-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: "off"
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+      ELASTIC_APM_SANITIZE_FIELD_NAMES: "password,token,*card*,authorization,*nid*,*pii*,*ssn*"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -520,6 +716,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8086/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -550,6 +748,24 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: kyc-adapter-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -557,6 +773,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8087/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -595,6 +813,24 @@ services:
       FINERACT_TENANT_ID: default
       FINERACT_SAVINGS_PRODUCT_ID: 1
       CUSTOMER_SERVICE_URL: http://customer-service:8084
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: wallet-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -602,6 +838,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8088/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -638,11 +876,36 @@ services:
       RISK_SERVICE_URL: http://risk-service:8090
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/onboarding_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: onboarding-workflow-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       temporal:
         condition: service_healthy
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8089/api/health || exit 1"]
       interval: 30s
@@ -672,6 +935,28 @@ services:
       FRAUD_SERVICE_URL: http://fraud-service:8092
       PRODUCT_SERVICE_URL: http://product-service:8091
       MIDDLEWARE_SERVICE_URL: http://middleware-third-party:8093
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      LOG_LEVEL: INFO
+      APP_LOG_LEVEL: DEBUG
+      # --- Elastic APM agent (auto-attached via JAVA_TOOL_OPTIONS) ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: risk-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_CAPTURE_HEADERS: "true"
+      ELASTIC_APM_LOG_SENDING: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -679,6 +964,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8090/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -705,6 +992,24 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/CompanyRealm/protocol/openid-connect/certs
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: fraud-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -712,6 +1017,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8092/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -749,6 +1056,24 @@ services:
       FINERACT_PASSWORD: password
       FINERACT_TENANT_ID: default
       LEDGER_SERVICE_URL: http://ledger-service:8095
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: product-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -756,6 +1081,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8091/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -804,11 +1131,31 @@ services:
       FINERACT_USERNAME: mifos
       FINERACT_PASSWORD: password
       FINERACT_TENANT_ID: default
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: lending-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8097/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -849,11 +1196,31 @@ services:
       KAFKA_TOPIC_RECONCILIATION_DISCREPANCY: financing.reconciliation.discrepancy
       # GL account code for the balancing leg of admin-movements API (COA must exist for each tenant)
       LEDGER_ADMIN_ADJUSTMENT_OFFSET_ACCOUNT_CODE: ${LEDGER_ADMIN_ADJUSTMENT_OFFSET_ACCOUNT_CODE:-3000}
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: ledger-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8095/actuator/health/liveness || exit 1"]
       interval: 30s
@@ -894,6 +1261,24 @@ services:
       HYPERPAY_WIDGET_URL: https://eu-prod.oppwa.com/v1/paymentWidgets.js
       LOG_LEVEL: INFO
       APP_LOG_LEVEL: DEBUG
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: collections-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -901,6 +1286,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8099/actuator/health || exit 1"]
       interval: 30s
@@ -931,13 +1318,85 @@ services:
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:4200,http://65.108.31.172:7374
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: middleware-third-party
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8093/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
+  # Notification Service - Novu Orchestrator
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: ksa-notification-service
+    ports:
+      - "8096:8096"
+    environment:
+      SERVER_PORT: 8096
+      DATABASE_URL: jdbc:postgresql://postgres:5432/notification_db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      NOVU_API_KEY: ${NOVU_API_KEY:-your-novu-api-key}
+      NOVU_BASE_URL: https://api.novu.co/v1
+      # --- HikariCP idle-session-timeout fix (shared) ---
+      <<: *hikari-tuning
+      # --- ELK / Logging ---
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      # --- Elastic APM ---
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: notification-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8096/actuator/health/liveness || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -1003,3 +1462,5 @@ volumes:
   portainer_data:
   profile-pictures:
   minio_data:
+  apm_agent_data:
+  filebeat_data:

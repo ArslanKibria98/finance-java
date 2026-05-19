@@ -13,11 +13,14 @@ public class KeycloakUserCreationActivityImpl implements KeycloakUserCreationAct
 
     private final RegisterFromOnboardingUseCase registerFromOnboardingUseCase;
     private final KeycloakAdapterPort keycloakAdapter;
+    private final String realm;
 
     public KeycloakUserCreationActivityImpl(RegisterFromOnboardingUseCase registerFromOnboardingUseCase,
-                                            KeycloakAdapterPort keycloakAdapter) {
+                                            KeycloakAdapterPort keycloakAdapter,
+                                            String realm) {
         this.registerFromOnboardingUseCase = registerFromOnboardingUseCase;
         this.keycloakAdapter = keycloakAdapter;
+        this.realm = realm;
     }
 
     @Override
@@ -30,7 +33,8 @@ public class KeycloakUserCreationActivityImpl implements KeycloakUserCreationAct
                                     input.nationalId(),
                                     input.mobileNumber(),
                                     input.globalUid(),
-                                    input.firstName()
+                                    input.firstName(),
+                                    null
                             )
                     );
 
@@ -55,7 +59,7 @@ public class KeycloakUserCreationActivityImpl implements KeycloakUserCreationAct
                 log.warn("Skipping name update — keycloakUserId or firstName is blank");
                 return;
             }
-            keycloakAdapter.updateUserFirstName("CompanyRealm",
+            keycloakAdapter.updateUserFirstName(this.realm,
                     UUID.fromString(input.keycloakUserId()), input.firstName());
             log.info("Keycloak user name updated successfully for keycloakUserId={}", input.keycloakUserId());
         } catch (Exception e) {

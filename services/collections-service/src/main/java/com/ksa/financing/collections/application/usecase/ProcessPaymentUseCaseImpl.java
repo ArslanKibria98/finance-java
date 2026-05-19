@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityManager;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -75,8 +74,8 @@ public class ProcessPaymentUseCaseImpl implements ProcessPaymentUseCase {
         }
 
         var saved = paymentRepository.save(payment);
-        eventPublisher.publishAll(saved.getUncommittedEvents());
-        saved.markEventsAsCommitted();
+        eventPublisher.publishAll(List.copyOf(payment.getUncommittedEvents()));
+        payment.markEventsAsCommitted();
 
         return saved;
     }
@@ -129,8 +128,10 @@ public class ProcessPaymentUseCaseImpl implements ProcessPaymentUseCase {
         var savedPayment = paymentRepository.save(payment);
         entityManager.flush();
 
-        eventPublisher.publishAll(savedPayment.getUncommittedEvents());
-        savedPayment.markEventsAsCommitted();
+        // Publish from in-memory aggregate: repository save returns reconstituted aggregate without events
+        // (e.g. PaymentCompleted → Kafka → ledger repayment GL).
+        eventPublisher.publishAll(List.copyOf(payment.getUncommittedEvents()));
+        payment.markEventsAsCommitted();
 
         log.info("Payment completed: {} applied {} allocations", command.paymentId(), allocationCount);
         return new PaymentResult(savedPayment, schedule);
@@ -147,8 +148,8 @@ public class ProcessPaymentUseCaseImpl implements ProcessPaymentUseCase {
         payment.fail(command.failureCode(), command.failureMessage());
 
         var saved = paymentRepository.save(payment);
-        eventPublisher.publishAll(saved.getUncommittedEvents());
-        saved.markEventsAsCommitted();
+        eventPublisher.publishAll(List.copyOf(payment.getUncommittedEvents()));
+        payment.markEventsAsCommitted();
 
         return saved;
     }
@@ -164,8 +165,8 @@ public class ProcessPaymentUseCaseImpl implements ProcessPaymentUseCase {
         payment.reverse(command.reason());
 
         var saved = paymentRepository.save(payment);
-        eventPublisher.publishAll(saved.getUncommittedEvents());
-        saved.markEventsAsCommitted();
+        eventPublisher.publishAll(List.copyOf(payment.getUncommittedEvents()));
+        payment.markEventsAsCommitted();
 
         return saved;
     }

@@ -8,7 +8,8 @@ public interface RegisterFromOnboardingUseCase {
         String nationalId,
         String mobileNumber,
         String globalUid,
-        String firstName
+        String firstName,
+        String fcmToken
     ) {}
 
     record RegisterFromOnboardingResult(

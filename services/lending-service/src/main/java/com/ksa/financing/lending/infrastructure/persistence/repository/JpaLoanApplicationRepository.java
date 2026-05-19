@@ -21,6 +21,8 @@ public interface JpaLoanApplicationRepository extends JpaRepository<LoanApplicat
 
     Optional<LoanApplicationJpaEntity> findByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
 
+    Optional<LoanApplicationJpaEntity> findByTenantIdAndWorkflowId(UUID tenantId, String workflowId);
+
     List<LoanApplicationJpaEntity> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
     List<LoanApplicationJpaEntity> findByTenantIdAndCustomerIdOrderByCreatedAtDesc(UUID tenantId, UUID customerId);

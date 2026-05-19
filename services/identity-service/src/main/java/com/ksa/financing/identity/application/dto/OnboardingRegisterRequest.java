@@ -6,5 +6,6 @@ public record OnboardingRegisterRequest(
     @NotBlank String nationalId,
     @NotBlank String mobileNumber,
     String globalUid,
-    String firstName
+    String firstName,
+    String fcmToken
 ) {}

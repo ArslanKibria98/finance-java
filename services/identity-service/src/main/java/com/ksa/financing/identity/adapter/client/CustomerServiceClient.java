@@ -59,8 +59,9 @@ public class CustomerServiceClient implements CustomerLookupPort {
                 if (pepStatusNode != null && !pepStatusNode.isNull()) {
                     pepStatus = pepStatusNode.asText();
                 }
-                log.info("Resolved customer-service ID: {} with pepStatus={}", customerId, pepStatus);
-                return Optional.of(new CustomerLookupResult(customerId, pepStatus));
+                String name = extractName(customerNode);
+                log.info("Resolved customer-service ID: {} with pepStatus={} name={}", customerId, pepStatus, name);
+                return Optional.of(new CustomerLookupResult(customerId, pepStatus, name));
             }
             log.warn("Customer-service response has no 'id' field");
             return Optional.empty();
@@ -69,5 +70,21 @@ public class CustomerServiceClient implements CustomerLookupPort {
             log.error("Customer ID resolution by NID failed: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             return Optional.empty();
         }
+    }
+
+    private String extractName(JsonNode customerNode) {
+        String fullName = textOrNull(customerNode, "fullName");
+        if (fullName != null && !fullName.isBlank()) {
+            return fullName;
+        }
+        String firstName = textOrNull(customerNode, "firstName");
+        String lastName = textOrNull(customerNode, "lastName");
+        String combined = ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
+        return combined.isBlank() ? null : combined;
+    }
+
+    private String textOrNull(JsonNode node, String field) {
+        JsonNode child = node.get(field);
+        return (child == null || child.isNull()) ? null : child.asText();
     }
 }

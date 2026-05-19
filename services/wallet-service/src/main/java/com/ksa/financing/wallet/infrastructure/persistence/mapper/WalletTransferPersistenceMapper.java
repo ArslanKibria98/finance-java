@@ -31,6 +31,8 @@ public class WalletTransferPersistenceMapper {
         entity.setCurrency(domain.getCurrency());
         entity.setStatus(domain.getStatus() != null ? domain.getStatus().name() : null);
         entity.setPurposeNote(domain.getPurposeNote());
+        entity.setRecipientMaskedName(domain.getRecipientMaskedName());
+        entity.setSenderMaskedName(domain.getSenderMaskedName());
         entity.setDebitMovementId(domain.getDebitMovementId());
         entity.setCreditMovementId(domain.getCreditMovementId());
         entity.setFeeMovementId(domain.getFeeMovementId());
@@ -71,6 +73,8 @@ public class WalletTransferPersistenceMapper {
         domain.setCurrency(entity.getCurrency());
         domain.setStatus(entity.getStatus() != null ? TransferStatus.valueOf(entity.getStatus()) : null);
         domain.setPurposeNote(entity.getPurposeNote());
+        domain.setRecipientMaskedName(entity.getRecipientMaskedName());
+        domain.setSenderMaskedName(entity.getSenderMaskedName());
         domain.setDebitMovementId(entity.getDebitMovementId());
         domain.setCreditMovementId(entity.getCreditMovementId());
         domain.setFeeMovementId(entity.getFeeMovementId());

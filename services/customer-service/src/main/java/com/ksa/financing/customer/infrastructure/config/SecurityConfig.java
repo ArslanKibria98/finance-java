@@ -53,6 +53,7 @@ public class SecurityConfig {
                 "/api/v1/reference-data/source-of-wealth/active",
                 "/api/v1/reference-data/source-of-funds/active",
                 "/api/v1/reference-data/source-of-income/active",
+                "/api/v1/reference-data/occupation/active",
                 "/api/v1/reference-data/purpose-of-finance/active",
                 "/api/v1/reference-data/net-worth-ranges/active",
                 "/api/v1/country-config/**",

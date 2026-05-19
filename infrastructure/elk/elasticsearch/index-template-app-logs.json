@@ -1,0 +1,31 @@
+{
+  "index_patterns": ["app-logs-*"],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "ksa-logs-30d",
+      "index.refresh_interval": "5s"
+    },
+    "mappings": {
+      "dynamic": "true",
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "service": { "type": "keyword" },
+        "environment": { "type": "keyword" },
+        "level": { "type": "keyword" },
+        "logger": { "type": "keyword" },
+        "thread": { "type": "keyword" },
+        "message": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } } },
+        "correlationId": { "type": "keyword" },
+        "traceId": { "type": "keyword" },
+        "spanId": { "type": "keyword" },
+        "tenantId": { "type": "keyword" },
+        "userId": { "type": "keyword" },
+        "stack_trace": { "type": "text" },
+        "exception_class": { "type": "keyword" }
+      }
+    }
+  }
+}

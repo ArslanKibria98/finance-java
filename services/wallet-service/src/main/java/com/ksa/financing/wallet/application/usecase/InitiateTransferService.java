@@ -155,6 +155,8 @@ public class InitiateTransferService implements InitiateTransferUseCase {
         transfer.setCurrency(currency);
         transfer.setStatus(TransferStatus.PROCESSING);
         transfer.setPurposeNote(command.purposeNote());
+        transfer.setRecipientMaskedName(resolveMaskedName(destination));
+        transfer.setSenderMaskedName(resolveMaskedName(source));
         transfer.setIdempotencyKey(command.idempotencyKey());
         transfer.setInitiatorUserId(command.initiatorUserId());
         transfer.setInitiatorIp(command.initiatorIp());
@@ -218,6 +220,12 @@ public class InitiateTransferService implements InitiateTransferUseCase {
             throw new BusinessException("WALLET.TRANSFER.AMOUNT_INVALID",
                     "Transfer amount exceeds allowed scale");
         }
+    }
+
+    private String resolveMaskedName(Wallet wallet) {
+        // wallet.maskedName is the single source of truth (frozen at wallet creation
+        // from the NAFATH pool name). No runtime lookup, no random fallback.
+        return wallet != null ? wallet.getMaskedName() : null;
     }
 
     private TransferChannel parseChannel(String input) {

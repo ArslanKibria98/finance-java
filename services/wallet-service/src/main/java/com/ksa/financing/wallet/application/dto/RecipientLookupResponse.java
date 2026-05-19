@@ -6,6 +6,7 @@ public record RecipientLookupResponse(
         boolean found,
         UUID walletId,
         String walletNumber,
+        String iban,
         String maskedName,
         String maskedMobile,
         String currency,
