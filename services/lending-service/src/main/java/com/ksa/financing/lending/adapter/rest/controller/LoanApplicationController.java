@@ -78,6 +78,9 @@ public class LoanApplicationController {
     @Value("${app.services.customer-service-url:${CUSTOMER_SERVICE_URL:http://customer-service:8084}}")
     private String customerServiceUrl;
 
+    @Value("${app.services.risk-service-url:${RISK_SERVICE_URL:http://risk-service:8090}}")
+    private String riskServiceUrl;
+
     public LoanApplicationController(ManageLoanApplicationUseCase useCase,
                                       com.ksa.financing.lending.domain.port.in.ManageLoanUseCase loanUseCase,
                                       com.ksa.financing.lending.domain.port.in.CheckEligibilityUseCase checkEligibilityUseCase,
@@ -116,6 +119,14 @@ public class LoanApplicationController {
         var tenantId = extractTenantId(jwt);
         var userId = extractUserId(jwt);
         var answers = request.eligibilityAnswers() != null ? request.eligibilityAnswers() : Map.<String, String>of();
+
+        // ── RISK GRADE GATE ─────────────────────────────────────────────
+        // Block loan submission ONLY when the customer's risk grade is
+        // HIGH or CRITICAL. LOW / MEDIUM customers pass through.
+        // Note: onboarding general credit score (RED/AMBER/GREEN) is no
+        // longer a blocking gate at submission — it remains advisory and
+        // is handled later by manual underwriter review when needed.
+        runRiskGradeGate(tenantId, request.customerId());
 
         // Validate required fields for APPLY mode
         if (request.requestedAmount() == null || request.requestedAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -1216,21 +1227,29 @@ public class LoanApplicationController {
         var invoiceId = buildInvoiceId(loanId, row.getInstallmentNumber());
         var principal = row.getPrincipalComponent() != null ? row.getPrincipalComponent() : java.math.BigDecimal.ZERO;
         var fee = row.getFeeComponent() != null ? row.getFeeComponent() : java.math.BigDecimal.ZERO;
-        var total = row.getTotalInstallment() != null ? row.getTotalInstallment() : java.math.BigDecimal.ZERO;
-        var profit = total.subtract(principal).subtract(fee).max(java.math.BigDecimal.ZERO);
+        java.math.BigDecimal profit;
+        if (row.getProfitComponent() != null) {
+            profit = row.getProfitComponent();
+        } else {
+            var total = row.getTotalInstallment() != null ? row.getTotalInstallment() : java.math.BigDecimal.ZERO;
+            profit = total.subtract(principal).subtract(fee).max(java.math.BigDecimal.ZERO);
+        }
+        var payable = principal.add(profit).add(fee);
+        var emi = principal.add(profit).setScale(2, java.math.RoundingMode.HALF_UP);
         var isPaid = isPaidStatus(status);
         return new InstallmentScheduleResponse(
                 invoiceId,
                 row.getInstallmentNumber(),
                 row.getDueDate(),
-                total,
+                emi,                         // installmentAmount = EMI (principal + profit, doc §3)
                 principal,
                 profit,
                 fee,
+                payable,
                 row.getClosingPrincipal(),
                 status,
                 isPaid ? java.time.LocalDate.now() : null,
-                isPaid ? total : null,
+                isPaid ? payable : null,
                 isPaid,
                 delinquencySnapshot
         );
@@ -1430,18 +1449,24 @@ public class LoanApplicationController {
         var fee = decimalFrom(next, "feeAmount");
         var dueDate = parseLocalDate(jsonString(next, "dueDate"));
 
+        var safePrincipal = principal != null ? principal : java.math.BigDecimal.ZERO;
+        var safeProfit = profit != null ? profit : java.math.BigDecimal.ZERO;
+        var safeFee = fee != null ? fee : java.math.BigDecimal.ZERO;
+        var payable = safePrincipal.add(safeProfit).add(safeFee);
+        var emi = safePrincipal.add(safeProfit).setScale(2, java.math.RoundingMode.HALF_UP);
         return new InstallmentScheduleResponse(
                 buildInvoiceId(loanId, nextNumber),
                 nextNumber,
                 dueDate,
-                total,
-                principal,
-                profit,
-                fee != null ? fee : java.math.BigDecimal.ZERO,
+                emi,                              // installmentAmount = EMI (doc §3)
+                safePrincipal,
+                safeProfit,
+                safeFee,
+                payable,
                 null,
                 status,
                 isPaid ? java.time.LocalDate.now() : null,
-                isPaid && total != null ? total : null,
+                isPaid ? payable : null,
                 isPaid,
                 next
         );
@@ -1482,14 +1507,17 @@ public class LoanApplicationController {
                 ? java.time.temporal.ChronoUnit.DAYS.between(nextDueDate, today) : 0L;
         var status = daysOverdue > 0 ? "OVERDUE" : "PENDING";
 
+        var payable = principalPortion.add(profitPortion).add(feePortion);
+        var emi = principalPortion.add(profitPortion).setScale(2, java.math.RoundingMode.HALF_UP);
         return new InstallmentScheduleResponse(
                 buildInvoiceId(loanId, nextNumber),
                 nextNumber,
                 nextDueDate,
-                installmentAmount,
+                emi,                                // installmentAmount = EMI (doc §3)
                 principalPortion,
                 profitPortion,
                 feePortion,
+                payable,
                 null,
                 status,
                 null,
@@ -2072,5 +2100,64 @@ public class LoanApplicationController {
                     "No subject claim found in JWT token");
         }
         return UUID.fromString(subject);
+    }
+
+    /**
+     * Customer risk-grade gate.
+     *
+     * <p>Calls customer-service {@code GET /internal/customers/{id}/risk-grade}
+     * and blocks loan submission when the grade is HIGH or CRITICAL.
+     * LOW and MEDIUM customers are allowed through.
+     *
+     * <p>Internal service-to-service call (no JWT; X-Tenant-Id header).
+     * Missing grade or transient errors are fail-open so customers without a
+     * computed risk grade can still apply.
+     */
+    private void runRiskGradeGate(UUID tenantId, String customerIdStr) {
+        if (customerIdStr == null || customerIdStr.isBlank()) return;
+        try {
+            String url = customerServiceUrl
+                    + "/internal/customers/" + customerIdStr + "/risk-grade";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Tenant-Id", tenantId.toString());
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new org.springframework.http.HttpEntity<>(headers),
+                    new org.springframework.core.ParameterizedTypeReference<>() {}
+            );
+
+            if (response.getStatusCode() == HttpStatus.NOT_FOUND || response.getBody() == null) {
+                log.info("[risk-grade-gate] No risk grade for customer={} — allowing", customerIdStr);
+                return;
+            }
+
+            Map<String, Object> raw = response.getBody();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = raw.get("data") instanceof Map
+                    ? (Map<String, Object>) raw.get("data")
+                    : raw;
+
+            String riskGrade = body.get("riskGrade") != null ? body.get("riskGrade").toString() : null;
+            log.info("[risk-grade-gate] customer={} riskGrade={}", customerIdStr, riskGrade);
+
+            if ("HIGH".equalsIgnoreCase(riskGrade) || "CRITICAL".equalsIgnoreCase(riskGrade)) {
+                // i18n template (errors.properties): RISK.SCORE.TOO_HIGH =
+                // "Loan application cannot be submitted — your risk profile is currently
+                //  rated {0}. Please contact our support team for assistance."
+                // Pass riskGrade as {0}. Frontend gets the fully-formed localised message.
+                throw new BusinessException(ErrorCodes.Risk.SCORE_TOO_HIGH,
+                        "Risk grade is " + riskGrade, riskGrade);
+            }
+        } catch (BusinessException be) {
+            throw be;
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound nf) {
+            log.info("[risk-grade-gate] customer={} has no risk grade yet — allowing", customerIdStr);
+        } catch (Exception e) {
+            log.warn("[risk-grade-gate] failed to fetch risk grade for customer={}: {} (fail-open, allowing)",
+                    customerIdStr, e.getMessage());
+        }
     }
 }

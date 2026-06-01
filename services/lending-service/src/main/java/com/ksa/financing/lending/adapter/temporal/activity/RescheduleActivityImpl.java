@@ -702,53 +702,42 @@ public class RescheduleActivityImpl implements RescheduleActivity {
         var existing = amortizationRepository
                 .findByLoanIdAndActiveOrderByInstallmentNumberAsc(loan.getId(), true);
         if (!existing.isEmpty()) return;
-        
+
         if (loan.getTenureMonths() == null || loan.getTenureMonths() <= 0 || loan.getPrincipalAmount() == null) {
             log.warn("Cannot materialize schedule for loanId={}: missing tenure or principal", loanId);
             return;
         }
 
-        log.info("Materializing amortization schedule for loanId={} as it is empty", loanId);
+        log.info("Materializing reducing-balance amortization schedule for loanId={}", loanId);
 
         var startDate = loan.getDisbursementDate() != null
                 ? loan.getDisbursementDate().plusMonths(1)
                 : LocalDate.now().plusMonths(1);
 
-        var principal = loan.getPrincipalAmount();
-        var totalProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
-        var totalFee = loan.getFeeAmount() != null ? loan.getFeeAmount() : BigDecimal.ZERO;
-        var tenure = loan.getTenureMonths();
+        var rows = com.ksa.financing.lending.domain.service.ReducingBalanceScheduleBuilder.build(
+                loan.getPrincipalAmount(),
+                loan.getProfitRate(),
+                loan.getProfitAmount(),
+                loan.getFeeAmount(),
+                loan.getTenureMonths(),
+                startDate);
 
-        var monthlyPrincipal = principal.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
-        var monthlyProfit = totalProfit.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
-        var monthlyFee = totalFee.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
-        var monthlyTotal = monthlyPrincipal.add(monthlyProfit).add(monthlyFee);
-
-        BigDecimal cumulativePrincipal = BigDecimal.ZERO;
-        BigDecimal cumulativeProfit = BigDecimal.ZERO;
-        BigDecimal closing = principal;
-
-        for (int n = 1; n <= tenure; n++) {
-            var opening = closing;
-            closing = closing.subtract(monthlyPrincipal);
-            cumulativePrincipal = cumulativePrincipal.add(monthlyPrincipal);
-            cumulativeProfit = cumulativeProfit.add(monthlyProfit);
-
+        for (var r : rows) {
             var row = AmortizationScheduleJpaEntity.builder()
                     .tenantId(loan.getTenantId())
                     .loanId(loan.getId())
                     .scheduleVersion(1)
                     .active(true)
-                    .installmentNumber(n)
-                    .dueDate(startDate.plusMonths(n - 1L))
-                    .openingPrincipal(opening)
-                    .principalComponent(monthlyPrincipal)
-                    .profitComponent(monthlyProfit)
-                    .feeComponent(monthlyFee)
-                    .totalInstallment(monthlyTotal)
-                    .closingPrincipal(closing.max(BigDecimal.ZERO))
-                    .cumulativePrincipal(cumulativePrincipal)
-                    .cumulativeProfit(cumulativeProfit)
+                    .installmentNumber(r.installmentNumber())
+                    .dueDate(r.dueDate())
+                    .openingPrincipal(r.openingPrincipal())
+                    .principalComponent(r.principalComponent())
+                    .profitComponent(r.profitComponent())
+                    .feeComponent(r.feeComponent())
+                    .totalInstallment(r.totalInstallment())
+                    .closingPrincipal(r.closingPrincipal())
+                    .cumulativePrincipal(r.cumulativePrincipal())
+                    .cumulativeProfit(r.cumulativeProfit())
                     .calculationMethod("REDUCING_BALANCE")
                     .paymentStatus("PENDING")
                     .skipped(false)

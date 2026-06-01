@@ -1,6 +1,8 @@
 package com.ksa.financing.wallet.adapter.rest.controller;
 
 import com.ksa.financing.wallet.domain.model.TransactionPurpose;
+import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.CreditWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.DebitWalletUseCase;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
@@ -38,6 +40,34 @@ public class InternalWalletController {
     private final WalletRepository walletRepository;
     private final CreditWalletUseCase creditWalletUseCase;
     private final DebitWalletUseCase debitWalletUseCase;
+    private final CreateWalletUseCase createWalletUseCase;
+
+    /**
+     * Create a wallet for a freshly-onboarded customer.
+     * Called by onboarding-workflow-service after the customer record is created.
+     */
+    @PostMapping
+    public ResponseEntity<CreateWalletResponse> createWalletInternal(
+            @Valid @RequestBody CreateWalletInternalRequest request) {
+        log.info("Internal: Creating wallet for customer={} tenant={} currency={}",
+                request.customerId(), request.tenantId(), request.currency());
+
+        Wallet wallet = createWalletUseCase.create(new CreateWalletUseCase.CreateWalletCommand(
+                request.tenantId(),
+                request.customerId(),
+                request.currency() != null ? request.currency() : "SAR",
+                request.iban(),
+                request.displayName()
+        ));
+
+        return ResponseEntity.ok(new CreateWalletResponse(
+                wallet.getId(),
+                wallet.getCustomerId(),
+                wallet.getWalletNumber(),
+                wallet.getIban(),
+                wallet.getCurrency()
+        ));
+    }
 
     @GetMapping("/by-customer/{customerId}")
     public ResponseEntity<WalletIbanResponse> getWalletIbanByCustomerId(
@@ -146,5 +176,21 @@ public class InternalWalletController {
             UUID referenceId,
             String description,
             @NotNull String idempotencyKey
+    ) {}
+
+    public record CreateWalletInternalRequest(
+            @NotNull UUID tenantId,
+            @NotNull UUID customerId,
+            String currency,
+            String iban,
+            String displayName
+    ) {}
+
+    public record CreateWalletResponse(
+            UUID walletId,
+            UUID customerId,
+            String walletNumber,
+            String iban,
+            String currency
     ) {}
 }

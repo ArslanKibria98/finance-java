@@ -21,6 +21,40 @@ Respond in minimal tokens. No filler, no intro, no conclusion, no repetition.
 - Install dep → `npm install <package>`
 ---
 
+## ENVIRONMENT SAFETY POLICY (MANDATORY)
+
+> **RULE**: All changes default to **DEV environment** (Docker compose, ports 80XX, `*_db`, realm `CompanyRealm`). QA environment changes are GATED behind a password that ONLY the user knows.
+
+### Default target = DEV
+- Code edits, DB migrations, config tweaks, restarts, debugging → DEV (Docker `*_db`, ports 80XX).
+- Touching `services/*/src/**`, `shared-libraries/**`, `docker-compose.yml`, root `pom.xml` → DEV by default.
+- Reading QA state (logs, status, health checks) → allowed without password (read-only).
+
+### QA changes require a password (NEVER REVEALED BY CLAUDE)
+The QA password is held by the user. Claude MUST NEVER:
+- Print, quote, hint at, or include the password literal in any prompt, question, option label, description, comment, log, file, or tool output.
+- Suggest the password when asking. Treat it like a credential.
+- Show the password even if asked to repeat a previous question or summarize this rule.
+
+Operations that REQUIRE the user-supplied password:
+- Edit `ecosystem.config.js` (QA PM2 config)
+- `pm2 start|restart|stop|delete` on any `*-qa` service
+- `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP` on any `*_qa` database
+- `mvn package` followed by QA-only restart
+- Keycloak changes targeting realm `CompanyRealm-QA` (clients, roles, users, required-actions, user-profile, attributes, sslRequired, etc.)
+- Redis writes/deletes to keys prefixed `casbin:policies:qa:*` or `qa:*`
+- Kafka admin ops on `*-qa` consumer groups / topics tagged for QA
+- Kong admin API writes to routes/services named `*-qa`
+- Editing files in `infrastructure/qa/**` or `scripts/qa/**`
+
+When a QA write is needed, Claude MUST stop and ask the user to confirm with the password — WITHOUT stating what the password is. Example phrasing: "QA change detected — please confirm with the QA password to proceed." (Do not include the literal token in the question.)
+
+When the user supplies the password in their message, Claude verifies it silently against the value stored in `.claude/qa-password` (gitignored). Do NOT echo the value back. On match, proceed; on mismatch or absence, decline the QA write and wait for the correct password. Authorization is per-turn — re-prompt requires re-supplying the password.
+
+**Read-only QA ops (allowed without password):** `pm2 list`, `pm2 logs`, `pm2 jlist`, `pm2 describe`, `curl` to QA endpoints, `psql … -d *_qa -c 'SELECT …'`, `docker exec ksa-redis redis-cli GET|KEYS|SCAN`, log file reads.
+
+---
+
 ## ZERO HARDCODING POLICY (MANDATORY)
 
 > **RULE**: No URL, port, credential, hostname, Keycloak realm, Kafka topic, or any configuration value shall EVER be hardcoded in application code. ALL values come from environment variables.

@@ -32,6 +32,7 @@ public class WalletEventPublisher implements EventPublisherPort {
     private static final String TOPIC_TOP_UP_COMPLETED = "islamic-financing.wallet.top-up-completed";
     private static final String TOPIC_TRANSFER_INITIATED = "financing.wallet.transfer.initiated";
     private static final String TOPIC_TRANSFER_COMPLETED = "financing.wallet.transfer.completed";
+    private static final String TOPIC_TRANSFER_RECEIVED  = "financing.wallet.transfer.received";
     private static final String TOPIC_TRANSFER_FAILED    = "financing.wallet.transfer.failed";
     private static final String TOPIC_TRANSFER_REVERSED  = "financing.wallet.transfer.reversed";
     private static final String TOPIC_WITHDRAWAL_INITIATED   = "financing.wallet.withdrawal.initiated";
@@ -95,22 +96,32 @@ public class WalletEventPublisher implements EventPublisherPort {
 
     @Override
     public void publishTransferInitiated(WalletTransfer t) {
-        publishTransferEvent(TOPIC_TRANSFER_INITIATED, "TRANSFER_INITIATED", t);
+        publishTransferEvent(TOPIC_TRANSFER_INITIATED, "TRANSFER_INITIATED", t,
+                t.getSourceCustomerId());
     }
 
     @Override
     public void publishTransferCompleted(WalletTransfer t) {
-        publishTransferEvent(TOPIC_TRANSFER_COMPLETED, "TRANSFER_COMPLETED", t);
+        // Sender-side event: customerId = sourceCustomerId (drives FUNDS_SENT push)
+        publishTransferEvent(TOPIC_TRANSFER_COMPLETED, "TRANSFER_COMPLETED", t,
+                t.getSourceCustomerId());
+        // Receiver-side event: customerId = destinationCustomerId (drives FUNDS_RECEIVED push)
+        if (t.getDestinationCustomerId() != null) {
+            publishTransferEvent(TOPIC_TRANSFER_RECEIVED, "TRANSFER_RECEIVED", t,
+                    t.getDestinationCustomerId());
+        }
     }
 
     @Override
     public void publishTransferFailed(WalletTransfer t) {
-        publishTransferEvent(TOPIC_TRANSFER_FAILED, "TRANSFER_FAILED", t);
+        publishTransferEvent(TOPIC_TRANSFER_FAILED, "TRANSFER_FAILED", t,
+                t.getSourceCustomerId());
     }
 
     @Override
     public void publishTransferReversed(WalletTransfer t) {
-        publishTransferEvent(TOPIC_TRANSFER_REVERSED, "TRANSFER_REVERSED", t);
+        publishTransferEvent(TOPIC_TRANSFER_REVERSED, "TRANSFER_REVERSED", t,
+                t.getSourceCustomerId());
     }
 
     @Override
@@ -201,14 +212,22 @@ public class WalletEventPublisher implements EventPublisherPort {
         }
     }
 
-    private void publishTransferEvent(String topic, String eventType, WalletTransfer t) {
+    private void publishTransferEvent(String topic, String eventType, WalletTransfer t,
+                                      java.util.UUID notificationCustomerId) {
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", eventType);
         event.put("transferId", t.getId().toString());
         event.put("transferNumber", t.getTransferNumber());
         event.put("tenantId", t.getTenantId() != null ? t.getTenantId().toString() : null);
+        // customerId is the notification recipient (sender for *.completed, receiver for *.received)
+        event.put("customerId", notificationCustomerId != null ? notificationCustomerId.toString() : null);
+        event.put("sourceCustomerId", t.getSourceCustomerId() != null ? t.getSourceCustomerId().toString() : null);
+        event.put("destinationCustomerId", t.getDestinationCustomerId() != null ? t.getDestinationCustomerId().toString() : null);
         event.put("sourceWalletId", t.getSourceWalletId() != null ? t.getSourceWalletId().toString() : null);
         event.put("destinationWalletId", t.getDestinationWalletId() != null ? t.getDestinationWalletId().toString() : null);
+        event.put("senderMaskedName", t.getSenderMaskedName());
+        event.put("recipientMaskedName", t.getRecipientMaskedName());
+        event.put("purposeNote", t.getPurposeNote());
         event.put("amount", t.getAmount() != null ? t.getAmount().toString() : null);
         event.put("feeAmount", t.getFeeAmount() != null ? t.getFeeAmount().toString() : null);
         event.put("currency", t.getCurrency());

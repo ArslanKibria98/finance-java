@@ -1,0 +1,234 @@
+{
+  "info": {
+    "name": "Facia.ai via Middleware-Third-Party (REAL only)",
+    "description": "All Facia.ai cloud APIs routed through middleware-third-party gateway with REAL Facia hits.\n\n**RULE: real Facia always — no mock until explicitly enabled.**\n\n## Why through middleware\n- Credentials owned centrally (`api_environment_configs.headers`)\n- Every call audited in `client_request_dev` with cost tracking\n- Same gateway as SIMAH, NAFATH, MASDAR, etc.\n\n## Why this collection only uses the external endpoint with X-Secret-Key\n\nMiddleware ka rule: client.environment decides mock vs real:\n- `TEST` env client → MockResponseDispatcher (returns 'No handler registered…' canned response)\n- `DEV` / `PROD` env client → real Facia.ai call\n\n`/api/v1/execute/{apiCode}/simple` uses the system default client (`TEST_MOCK_CLIENT`, env=TEST) → **always mocks**. To hit real Facia we use the **external endpoint** `/api/v1/execute/{apiCode}` with `X-Secret-Key` header. The secret belongs to **ONBOARDING_SERVICE** (DEV env, registered in V14 migration). Every request here uses it → guaranteed real.\n\n## API codes (registered in V13)\n\n| Code | Path | Purpose |\n|---|---|---|\n| FACIA_AUTH | POST /request-access-token | Generate access token |\n| FACIA_DOC_VERIFY | POST /document-verification | OCR + authenticity |\n| FACIA_FACE_MATCH | POST /face-match | 1:1 selfie vs document |\n| FACIA_LIVENESS_3D | POST /generate-liveness-url | Hosted 3D liveness URL |\n| FACIA_FACE_SEARCH | POST /face-search | 1:N face search |\n| FACIA_AGE_ESTIMATION | POST /age-estimation | Age from face image |\n| FACIA_DEEPFAKE | POST /deepfake-liveness | Deepfake detection |\n| FACIA_KYC_INTERACTIVE | POST /kyc/interactive | Interactive KYC flow |\n| FACIA_KYC_NON_INTERACTIVE | POST /kyc/non-interactive | One-shot server-side KYC |\n\n## Variables\n- `baseUrl` — `http://46.62.226.94:8000/middleware-third-party` (Kong) or `http://localhost:8093` (direct)\n- `clientSecret` — `ob-svc-mw-secret-2026-x9k4p` (ONBOARDING_SERVICE secret from V14 — DEV env, real calls)\n- `documentImageBase64`, `selfieImageBase64` — paste base64 PNG/JPEG before document/face-match calls\n\n## Verifying it's NOT mock\n\nEvery test asserts:\n```\nresponseBody.message NOT match /No handler registered/i\n```\nIf that assertion fails → you're hitting the mock path. Check `X-Secret-Key` is the ONBOARDING_SERVICE secret (DEV env), not TEST_MOCK_CLIENT.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://46.62.226.94:8000/middleware-third-party", "description": "Kong. Direct: http://localhost:8093" },
+    { "key": "clientSecret", "value": "ob-svc-mw-secret-2026-x9k4p", "description": "ONBOARDING_SERVICE secret (DEV env) — guarantees real Facia hit. DO NOT change to test-mock-client-secret unless you want mocks." },
+    { "key": "documentImageBase64", "value": "", "description": "base64 PNG/JPEG of ID or passport" },
+    { "key": "selfieImageBase64", "value": "", "description": "base64 PNG/JPEG of selfie" },
+    { "key": "customerEmail", "value": "ca-test@example.com" }
+  ],
+  "auth": { "type": "noauth" },
+  "item": [
+    {
+      "name": "1. FACIA_AUTH — Generate access token (REAL)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('NOT mock response', () => {",
+              "    const msg = (d.responseBody && d.responseBody.message) || '';",
+              "    pm.expect(msg).to.not.match(/No handler registered/i);",
+              "});",
+              "console.log('Facia HTTP status:', d.httpStatus);",
+              "console.log('Duration:', d.durationMs, 'ms');",
+              "if (d.responseBody) console.log('Facia body:', JSON.stringify(d.responseBody).substring(0, 250));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_AUTH",
+        "description": "Empty body — middleware injects client_id + client_secret from its env config (api_environment_configs.credentials). Caller never sees the Facia credentials."
+      }
+    },
+    {
+      "name": "2. FACIA_DOC_VERIFY — Document OCR + authenticity",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "pm.test('NOT mock response', () => {",
+              "    const msg = (d.responseBody && d.responseBody.message) || '';",
+              "    pm.expect(msg).to.not.match(/No handler registered/i);",
+              "});",
+              "console.log('Facia HTTP status:', d.httpStatus);",
+              "console.log('Duration:', d.durationMs, 'ms');",
+              "if (d.responseBody) {",
+              "    const facia = (d.responseBody.result && d.responseBody.result.data) ? d.responseBody.result.data : d.responseBody;",
+              "    console.log('Event:', facia.event);",
+              "    console.log('Reference id:', facia.reference_id);",
+              "    console.log('First name:', facia.first_name);",
+              "    console.log('Last name:', facia.last_name);",
+              "    console.log('DOB:', facia.dob);",
+              "    console.log('Document #:', facia.document_number);",
+              "    if (facia.decline_reason) console.log('Decline reason:', facia.decline_reason);",
+              "    if (facia.message) console.log('Facia message:', facia.message);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" },
+          { "key": "X-Customer-Id", "value": "{{customerEmail}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"document_verification\",\n  \"file\": \"data:image/png;base64,{{documentImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_DOC_VERIFY"
+      }
+    },
+    {
+      "name": "3. FACIA_FACE_MATCH — Selfie vs document",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "pm.test('NOT mock response', () => {",
+              "    const msg = (d.responseBody && d.responseBody.message) || '';",
+              "    pm.expect(msg).to.not.match(/No handler registered/i);",
+              "});",
+              "if (d.responseBody && d.responseBody.result && d.responseBody.result.data) {",
+              "    const facia = d.responseBody.result.data;",
+              "    console.log('Similarity score:', facia.similarity_score);",
+              "    console.log('Match:', facia.similarity_status === '1');",
+              "    console.log('Reference id:', facia.reference_id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"photo_id_match\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\",\n  \"id_frame\": \"data:image/png;base64,{{documentImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_FACE_MATCH"
+      }
+    },
+    {
+      "name": "4. FACIA_LIVENESS_3D — Hosted 3D liveness URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_id\": \"{{customerEmail}}\",\n  \"customer_email\": \"{{customerEmail}}\",\n  \"ttl\": 60\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_LIVENESS_3D"
+      }
+    },
+    {
+      "name": "5. FACIA_FACE_SEARCH — 1:N gallery search",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"face_search\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_FACE_SEARCH"
+      }
+    },
+    {
+      "name": "6. FACIA_AGE_ESTIMATION — Age from face",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"age_estimation\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_AGE_ESTIMATION"
+      }
+    },
+    {
+      "name": "7. FACIA_DEEPFAKE — Deepfake liveness",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"deepfake_liveness\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_DEEPFAKE"
+      }
+    },
+    {
+      "name": "8. FACIA_KYC_INTERACTIVE — Interactive KYC",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_id\": \"{{customerEmail}}\",\n  \"customer_email\": \"{{customerEmail}}\",\n  \"flow\": \"document+face\",\n  \"ttl\": 60\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_KYC_INTERACTIVE"
+      }
+    },
+    {
+      "name": "9. FACIA_KYC_NON_INTERACTIVE — One-shot KYC",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Secret-Key", "value": "{{clientSecret}}" },
+          { "key": "X-Caller-Service", "value": "postman" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"document\": \"data:image/png;base64,{{documentImageBase64}}\",\n  \"selfie\": \"data:image/png;base64,{{selfieImageBase64}}\",\n  \"customer_id\": \"{{customerEmail}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/FACIA_KYC_NON_INTERACTIVE"
+      }
+    }
+  ]
+}

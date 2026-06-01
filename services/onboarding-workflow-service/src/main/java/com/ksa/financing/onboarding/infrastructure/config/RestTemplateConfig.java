@@ -19,9 +19,12 @@ public class RestTemplateConfig {
 
     @Bean
     public RestTemplate restTemplate() {
+        // Facia document-verification (OCR + authenticity) can take 30-60s on large
+        // images, sometimes 2-3 min when Facia is under load. Bumped to 5 min to stop
+        // "Read timed out" exceptions from killing onboarding mid-step.
         RequestConfig requestConfig = RequestConfig.custom()
             .setConnectionRequestTimeout(Timeout.ofSeconds(10))
-            .setResponseTimeout(Timeout.ofSeconds(30))
+            .setResponseTimeout(Timeout.ofMinutes(5))
             .build();
 
         CloseableHttpClient httpClient = HttpClients.custom()

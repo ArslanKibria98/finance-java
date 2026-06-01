@@ -47,6 +47,8 @@ public class CustomerPepAnswerRepositoryImpl implements CustomerPepAnswerReposit
         entity.setSourceOfWealthDescription(answer.sourceOfWealthDescription());
         entity.setSourceOfFunds(answer.sourceOfFunds());
         entity.setSourceOfFundsDetails(answer.sourceOfFundsDetails());
+        entity.setOccupation(answer.occupation());
+        entity.setOccupationDetails(answer.occupationDetails());
         entity.setRelatedPersonsJson(writeJson(answer.relatedPersons()));
         entity.setAdditionalNotes(answer.additionalNotes());
         entity.setSubmittedVia(answer.submittedVia() != null ? answer.submittedVia().name() : "POST_LOGIN");
@@ -80,6 +82,8 @@ public class CustomerPepAnswerRepositoryImpl implements CustomerPepAnswerReposit
                 e.getSourceOfWealthDescription(),
                 e.getSourceOfFunds(),
                 e.getSourceOfFundsDetails(),
+                e.getOccupation(),
+                e.getOccupationDetails(),
                 readJson(e.getRelatedPersonsJson()),
                 e.getAdditionalNotes(),
                 parseSubmittedVia(e.getSubmittedVia()),

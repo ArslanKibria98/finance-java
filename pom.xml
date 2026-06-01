@@ -125,8 +125,8 @@
         <module>services/wallet-service</module>
         <!--<module>services/credit-decisioning</module>-->
         <module>services/collections-service</module>
-        <!--
         <module>services/document-service</module>
+        <!--
         <module>services/partner-service</module>
         <module>services/audit-service</module>
         -->

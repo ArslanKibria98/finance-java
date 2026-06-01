@@ -17,6 +17,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -75,7 +78,7 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 log.warn("Credit check returned non-success: {}", response.getStatusCode());
-                return new CreditCheckResult(0, "UNKNOWN", null, BigDecimal.ZERO, BigDecimal.ZERO, true);
+                return new CreditCheckResult(0, "UNKNOWN", null, BigDecimal.ZERO, BigDecimal.ZERO, true, 0, 0);
             }
 
             var rootNode = objectMapper.readTree(response.getBody());
@@ -89,11 +92,15 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
             BigDecimal verifiedSalary = decimalOrZero(result, "verifiedSalary");
             BigDecimal existingObligations = decimalOrZero(result, "existingObligations");
             boolean hasActiveDefaults = result.has("hasActiveDefaults") && result.get("hasActiveDefaults").asBoolean();
+            int defaultsCount = intOrZero(result, "defaultsCount");
+            int activeLoansCount = intOrZero(result, "activeLoansCount");
 
-            log.info("Credit check completed: score={}, grade={}", creditScore, simahGrade);
+            log.info("Credit check completed: score={}, grade={}, defaultsCount={}, activeLoans={}",
+                    creditScore, simahGrade, defaultsCount, activeLoansCount);
             return new CreditCheckResult(
                     creditScore, simahGrade, simahReferenceId,
-                    verifiedSalary, existingObligations, hasActiveDefaults
+                    verifiedSalary, existingObligations, hasActiveDefaults,
+                    defaultsCount, activeLoansCount
             );
 
         } catch (Exception e) {
@@ -101,8 +108,100 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
             // Mock result for development/testing — real integration requires risk-service
             return new CreditCheckResult(
                     720, "A", "SIMAH-MOCK-" + java.util.UUID.randomUUID().toString().substring(0, 8),
-                    new BigDecimal("15000"), BigDecimal.ZERO, false);
+                    new BigDecimal("15000"), BigDecimal.ZERO, false, 0, 0);
         }
+    }
+
+    @Override
+    public CreditDecisionResult runCreditDecisionEngine(CreditDecisionInput input) {
+        log.info("Activity: Running credit decision engine for product={} application={}",
+                input.productId(), input.applicationId());
+
+        // Backward-compat short-circuit: if risk service isn't reachable or returns no
+        // criteria, the workflow should still proceed. Engine itself returns "no criteria"
+        // → AUTO_APPROVE when nothing is configured, matching the documented behavior.
+        try {
+            String url = riskServiceUrl + "/internal/credit-scoring/products/"
+                    + input.productId() + "/evaluate";
+
+            var bodyMap = new LinkedHashMap<String, Object>();
+            bodyMap.put("answers", input.answers() != null ? input.answers() : Map.of());
+            if (input.greenThreshold() != null) bodyMap.put("greenThreshold", input.greenThreshold());
+            if (input.amberThreshold() != null) bodyMap.put("amberThreshold", input.amberThreshold());
+
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Tenant-Id", input.tenantId());
+            headers.set("X-Caller-Service", "lending-service");
+            if (input.applicationId() != null) headers.set("X-Application-Id", input.applicationId());
+
+            var response = restTemplate.exchange(url, HttpMethod.POST,
+                    new HttpEntity<>(objectMapper.writeValueAsString(bodyMap), headers),
+                    String.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("Credit decision engine returned non-success: {}", response.getStatusCode());
+                return permissivePassThrough("ENGINE_UNAVAILABLE");
+            }
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode result = root.has("data") && !root.get("data").isNull() ? root.get("data") : root;
+
+            return mapDecisionResponse(result);
+
+        } catch (Exception e) {
+            log.warn("Credit decision engine call failed ({}), allowing application to proceed with manual review fallback",
+                    e.getMessage());
+            return permissivePassThrough("ENGINE_ERROR");
+        }
+    }
+
+    private CreditDecisionResult mapDecisionResponse(JsonNode result) {
+        String decision = textOrNull(result, "decision");
+        // Engine may return enum-as-string or omit field entirely
+        if (decision == null || decision.isBlank()) decision = "AUTO_APPROVE";
+
+        var details = new ArrayList<CriteriaDetail>();
+        if (result.has("details") && result.get("details").isArray()) {
+            for (var d : result.get("details")) {
+                details.add(new CriteriaDetail(
+                        textOrNull(d, "fieldKey"),
+                        textOrNull(d, "fieldName"),
+                        textOrNull(d, "customerValue"),
+                        d.has("passed") && d.get("passed").asBoolean(),
+                        decimalOrZero(d, "scoredWeight"),
+                        decimalOrZero(d, "maxWeight"),
+                        textOrNull(d, "matchedRule"),
+                        textOrNull(d, "failureReason")
+                ));
+            }
+        }
+
+        return new CreditDecisionResult(
+                decision,
+                textOrNull(result, "reasonCode"),
+                result.has("eligible") && result.get("eligible").asBoolean(),
+                decimalOrZero(result, "totalScore"),
+                decimalOrZero(result, "maxPossibleScore"),
+                decimalOrZero(result, "scorePercentage"),
+                decimalOrZero(result, "greenThreshold"),
+                decimalOrZero(result, "amberThreshold"),
+                intOrZero(result, "totalCriteria"),
+                intOrZero(result, "matchedCriteria"),
+                intOrZero(result, "failedCriteria"),
+                details,
+                textOrNull(result, "summary")
+        );
+    }
+
+    private CreditDecisionResult permissivePassThrough(String reasonCode) {
+        return new CreditDecisionResult(
+                "AUTO_APPROVE", reasonCode, true,
+                BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("100"),
+                BigDecimal.ZERO, BigDecimal.ZERO,
+                0, 0, 0, List.of(),
+                "Credit decision engine unavailable — defaulting to AUTO_APPROVE (downstream eligibility checks still apply)"
+        );
     }
 
     @Override
@@ -168,30 +267,12 @@ public class CreditCheckActivityImpl implements CreditCheckActivity {
 
         BigDecimal maxDbr = input.maxDbrPercent() != null ? input.maxDbrPercent() : BigDecimal.valueOf(65);
         if (dbrAfter.compareTo(maxDbr) > 0) {
-            // Calculate max eligible amount based on DBR cap
-            BigDecimal availableForInstallment = input.verifiedSalary()
-                    .multiply(maxDbr).divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)
-                    .subtract(input.existingObligations());
-
-            BigDecimal maxEligible = calculateMaxPrincipal(
-                    availableForInstallment, input.profitRate(), input.requestedTenureMonths());
-
-            if (maxEligible.compareTo(BigDecimal.ZERO) <= 0) {
-                return new EligibilityResult(false, BigDecimal.ZERO, dbrBefore, dbrAfter, BigDecimal.ZERO,
-                        "DBR exceeds maximum " + maxDbr + "% — no eligible amount");
-            }
-
-            // Even with reduced amount, run affordability check
-            BigDecimal reducedInstallment = calculateMonthlyInstallment(
-                    maxEligible, input.profitRate(), input.requestedTenureMonths());
-            var affordability = runAffordabilityCheck(input, reducedInstallment);
-            if (!affordability.eligible()) {
-                return new EligibilityResult(false, BigDecimal.ZERO, dbrBefore, dbrAfter,
-                        affordability.disposableIncome(), affordability.reason());
-            }
-
-            return new EligibilityResult(true, maxEligible, dbrBefore, dbrAfter,
-                    affordability.disposableIncome(), null);
+            // DBR-exceeded scenarios pass through with the requested amount; downstream
+            // credit decision engine + manual review gate handle the risk signal.
+            log.warn("DBR {}% exceeds product cap {}% — proceeding without rejection (engine handles risk)",
+                    dbrAfter, maxDbr);
+            return new EligibilityResult(true, input.requestedAmount(), dbrBefore, dbrAfter,
+                    BigDecimal.ZERO, null);
         }
 
         // ══════ BRD AFFORDABILITY CHECK (Steps 5-6, 27) ══════

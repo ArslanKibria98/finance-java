@@ -344,6 +344,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflictException(ConflictException ex, WebRequest request) {
+        log.warn("Conflict: {} - {}", ex.getErrorCode(), ex.getMessage());
+
+        Locale locale = resolveLocale(request);
+        Object[] args = (ex.getArgs() != null && ex.getArgs().length > 0)
+                ? ex.getArgs()
+                : new Object[]{ex.getMessage()};
+        String localizedMessage = resolveMessage(ex.getErrorCode(), args, ex.getMessage(), locale);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error(HttpStatus.CONFLICT.getReasonPhrase())
+                .code(ex.getErrorCode())
+                .message(localizedMessage)
+                .path(extractPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalStateException(IllegalStateException ex, WebRequest request) {
         log.warn("Conflict: {}", ex.getMessage());

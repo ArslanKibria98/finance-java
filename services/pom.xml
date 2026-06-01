@@ -32,5 +32,6 @@
         <module>middleware-third-party</module>
         <module>ledger-service</module>
         <module>collections-service</module>
+        <module>document-service</module>
     </modules>
 </project>

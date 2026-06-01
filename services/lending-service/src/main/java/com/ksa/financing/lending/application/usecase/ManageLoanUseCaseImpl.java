@@ -47,12 +47,14 @@ public class ManageLoanUseCaseImpl implements ManageLoanUseCase {
                 command.installmentAmount()
         );
 
+        var events = new java.util.ArrayList<>(loan.getUncommittedEvents());
         loan = loanRepository.save(loan);
 
-        eventPublisher.publishAll(loan.getUncommittedEvents());
+        eventPublisher.publishAll(events);
         loan.markEventsAsCommitted();
 
-        log.info("Created loan: {} from application: {}", loan.getLoanNumber(), command.applicationId());
+        log.info("Created loan: {} from application: {} ({} events published)",
+                loan.getLoanNumber(), command.applicationId(), events.size());
         return loan;
     }
 
@@ -64,12 +66,13 @@ public class ManageLoanUseCaseImpl implements ManageLoanUseCase {
 
         loan.disburse(command.disbursementDate(), command.firstDueDate(), command.maturityDate());
 
+        var events = new java.util.ArrayList<>(loan.getUncommittedEvents());
         loan = loanRepository.save(loan);
 
-        eventPublisher.publishAll(loan.getUncommittedEvents());
+        eventPublisher.publishAll(events);
         loan.markEventsAsCommitted();
 
-        log.info("Disbursed loan: {}", loan.getLoanNumber());
+        log.info("Disbursed loan: {} ({} events published)", loan.getLoanNumber(), events.size());
         return loan;
     }
 

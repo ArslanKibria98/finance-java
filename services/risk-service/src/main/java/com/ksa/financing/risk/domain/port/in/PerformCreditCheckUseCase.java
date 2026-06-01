@@ -21,6 +21,8 @@ public interface PerformCreditCheckUseCase {
             String simahReferenceId,
             BigDecimal verifiedSalary,
             BigDecimal existingObligations,
-            boolean hasActiveDefaults
+            boolean hasActiveDefaults,
+            int defaultsCount,
+            int activeLoansCount
     ) {}
 }

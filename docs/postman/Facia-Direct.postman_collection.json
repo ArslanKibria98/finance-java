@@ -1,0 +1,312 @@
+{
+  "info": {
+    "name": "Facia.ai Direct (testing — bypass middleware)",
+    "description": "Direct Facia.ai REST API collection for end-to-end KYC testing without going through middleware-third-party.\n\n**Use this when:**\n- Validating Facia credentials / sandbox quota\n- Debugging Facia response shapes / decline reasons\n- Comparing direct vs middleware-routed responses\n\n**Don't use this in production code** — production calls must go through middleware (for audit, cost tracking, credential rotation). This is testing-only.\n\n## End-to-end onboarding flow (Canada / Foreign)\n\n```\nStep 1: Generate access token (optional — client-secret header works alone)\nStep 2: Upload ID/Passport          → /document-verification → reference_id + extracted fields\nStep 3: Upload selfie + ID frame    → /face-match            → similarity_score\nStep 4 (optional): 3D liveness URL  → /generate-liveness-url  → liveness_url for mobile/web\nStep 5 (optional): Age estimation   → /age-estimation\nStep 6 (optional): Deepfake check   → /deepfake-liveness\n```\n\n## Variables\n- `baseUrl` — `https://api.facia.ai`\n- `clientId` — `415585bd38`\n- `clientSecret` — `PBi1AeyudzSnDgNQWhnAkWVJrtLj7nohWNturfEC`\n- `documentImageBase64`, `selfieImageBase64` — paste raw base64 (no `data:` prefix needed — collection adds it)\n- Auto-set: `accessToken`, `documentRefId`, `selfieRefId`, `extractedFirstName`, `extractedLastName`, `extractedDob`, `extractedDocNumber`, `extractedAddress`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "https://api.facia.ai" },
+    { "key": "clientId",    "value": "415585bd38" },
+    { "key": "clientSecret","value": "PBi1AeyudzSnDgNQWhnAkWVJrtLj7nohWNturfEC" },
+    { "key": "documentImageBase64", "value": "", "description": "Raw base64 PNG/JPEG of ID or passport (no data: prefix)" },
+    { "key": "selfieImageBase64",   "value": "", "description": "Raw base64 PNG/JPEG of selfie" },
+    { "key": "customerEmail", "value": "ca-test@example.com" },
+    { "key": "accessToken",       "value": "", "description": "auto-set by Step 1" },
+    { "key": "documentRefId",     "value": "", "description": "auto-set by Step 2" },
+    { "key": "selfieRefId",       "value": "", "description": "auto-set by Step 3" },
+    { "key": "extractedFirstName","value": "" },
+    { "key": "extractedLastName", "value": "" },
+    { "key": "extractedDob",      "value": "" },
+    { "key": "extractedDocNumber","value": "" },
+    { "key": "extractedAddress",  "value": "" }
+  ],
+  "auth": { "type": "noauth" },
+  "item": [
+    {
+      "name": "1. Generate access token (auth)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "// Facia wraps token in result.data.access_token or returns at top level — try both",
+              "let token = null;",
+              "if (r.result && r.result.data && r.result.data.access_token) token = r.result.data.access_token;",
+              "else if (r.access_token) token = r.access_token;",
+              "if (token) pm.collectionVariables.set('accessToken', token);",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "if (token) {",
+              "    console.log('access_token =', token.substring(0, 20) + '...');",
+              "} else {",
+              "    console.log('No token in response — client-secret header alone may suffice for other calls');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept",       "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"client_secret\": \"{{clientSecret}}\"\n}"
+        },
+        "url": "{{baseUrl}}/request-access-token",
+        "description": "Optional. For most cloud endpoints the `client-secret` header is enough — no need to call this first. Use if you specifically want a bearer token."
+      }
+    },
+    {
+      "name": "2. Document Verification (ID / Passport — first upload)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('Response received', () => pm.expect(r).to.exist);",
+              "",
+              "const facia = (r.result && r.result.data) ? r.result.data : (r.data || r);",
+              "if (facia.reference_id) pm.collectionVariables.set('documentRefId', facia.reference_id);",
+              "if (facia.first_name)     pm.collectionVariables.set('extractedFirstName', facia.first_name);",
+              "if (facia.last_name)      pm.collectionVariables.set('extractedLastName', facia.last_name);",
+              "if (facia.dob)            pm.collectionVariables.set('extractedDob', facia.dob);",
+              "if (facia.document_number)pm.collectionVariables.set('extractedDocNumber', facia.document_number);",
+              "if (facia.full_address)   pm.collectionVariables.set('extractedAddress', facia.full_address);",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test('event is verification_accepted or declined', () =>",
+              "        pm.expect(['verification_accepted','verification_declined']).to.include(facia.event));",
+              "    console.log('Event:', facia.event);",
+              "    console.log('Ref ID:', facia.reference_id);",
+              "    if (facia.event === 'verification_declined') {",
+              "        console.log('Decline reason:', facia.decline_reason);",
+              "    }",
+              "} else {",
+              "    console.log('Non-200 status:', pm.response.code, '— body:', pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"document_verification\",\n  \"file\": \"data:image/png;base64,{{documentImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/document-verification",
+        "description": "First-time ID / Passport upload. `type` must be exactly `\"document_verification\"`. Returns OCR-extracted fields and a verification verdict (accepted/declined)."
+      }
+    },
+    {
+      "name": "3. Face Match (selfie vs ID — 1:1)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const facia = (r.result && r.result.data) ? r.result.data : (r.data || r);",
+              "if (facia.reference_id) pm.collectionVariables.set('selfieRefId', facia.reference_id);",
+              "",
+              "if (pm.response.code === 200 && facia.similarity_score !== undefined) {",
+              "    console.log('Similarity score:', facia.similarity_score);",
+              "    console.log('Match (1=yes, 0=no):', facia.similarity_status);",
+              "    pm.test('similarity_score returned', () => pm.expect(facia.similarity_score).to.exist);",
+              "} else {",
+              "    console.log('Non-success:', pm.response.code, pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"photo_id_match\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\",\n  \"id_frame\": \"data:image/png;base64,{{documentImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/face-match",
+        "description": "1:1 face match between selfie (`face_frame`) and the previously verified document photo (`id_frame`). `type` must be `photo_id_match`. Returns `similarity_score` (0-1) and `similarity_status` (\"1\" = match, \"0\" = mismatch)."
+      }
+    },
+    {
+      "name": "4. 3D Liveness — generate hosted URL",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const facia = (r.result && r.result.data) ? r.result.data : (r.data || r);",
+              "if (facia.liveness_url) {",
+              "    console.log('Liveness URL:', facia.liveness_url);",
+              "    console.log('Reference ID:', facia.reference_id);",
+              "    pm.test('liveness_url returned', () => pm.expect(facia.liveness_url).to.match(/^https?:/));",
+              "} else {",
+              "    console.log('No liveness_url — status:', pm.response.code, pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_id\": \"{{customerEmail}}\",\n  \"customer_email\": \"{{customerEmail}}\",\n  \"ttl\": 60\n}"
+        },
+        "url": "{{baseUrl}}/generate-liveness-url",
+        "description": "Returns a hosted URL for browser/mobile-embedded 3D liveness check. `ttl` is in minutes (default 60, max 43200). Optional `callback_url` field for webhook on completion. Optional `redirect_url` for post-flow redirect."
+      }
+    },
+    {
+      "name": "5. Face Search (1:N gallery)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"face_search\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/face-search",
+        "description": "Search a face against an enrolled gallery (1:N). Requires previously enrolled faces via /enroll-face endpoint."
+      }
+    },
+    {
+      "name": "6. Age Estimation",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"age_estimation\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/age-estimation"
+      }
+    },
+    {
+      "name": "7. Deepfake Liveness",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"deepfake_liveness\",\n  \"face_frame\": \"data:image/png;base64,{{selfieImageBase64}}\"\n}"
+        },
+        "url": "{{baseUrl}}/deepfake-liveness"
+      }
+    },
+    {
+      "name": "8. KYC Interactive (full hosted flow)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const facia = (r.result && r.result.data) ? r.result.data : (r.data || r);",
+              "if (facia.url) console.log('Interactive KYC URL:', facia.url);",
+              "if (facia.reference_id) console.log('Reference ID:', facia.reference_id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_id\": \"{{customerEmail}}\",\n  \"customer_email\": \"{{customerEmail}}\",\n  \"flow\": \"document+face\",\n  \"ttl\": 60\n}"
+        },
+        "url": "{{baseUrl}}/kyc/interactive"
+      }
+    },
+    {
+      "name": "9. KYC Non-Interactive (one-shot server-side)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Accept",        "value": "application/json" },
+          { "key": "client-secret", "value": "{{clientSecret}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"document\": \"data:image/png;base64,{{documentImageBase64}}\",\n  \"selfie\": \"data:image/png;base64,{{selfieImageBase64}}\",\n  \"customer_id\": \"{{customerEmail}}\"\n}"
+        },
+        "url": "{{baseUrl}}/kyc/non-interactive",
+        "description": "Server-side KYC — submit document + selfie in one call, get back combined OCR + face-match + verdict."
+      }
+    },
+    {
+      "name": "QUICK: credential ping (no quota burn)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) console.log('Creds OK');",
+              "else if (pm.response.code === 401) console.log('Creds INVALID/revoked');",
+              "else console.log('Unexpected status:', pm.response.code, pm.response.text());"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept",       "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_id\": \"{{clientId}}\",\n  \"client_secret\": \"{{clientSecret}}\"\n}"
+        },
+        "url": "{{baseUrl}}/request-access-token",
+        "description": "Cheap credential validity check — hit auth endpoint, doesn't consume verification quota. 200 = creds valid, 401 = revoked, anything else = something else wrong."
+      }
+    }
+  ]
+}

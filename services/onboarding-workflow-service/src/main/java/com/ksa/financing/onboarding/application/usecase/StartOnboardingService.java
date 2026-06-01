@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import com.ksa.islamic.orchestration.common.TaskQueue;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 
 @Service
 public class StartOnboardingService implements StartOnboardingUseCase {
@@ -33,7 +32,6 @@ public class StartOnboardingService implements StartOnboardingUseCase {
         WorkflowOptions options = WorkflowOptions.newBuilder()
                 .setWorkflowId(workflowId)
                 .setTaskQueue(TaskQueue.ONBOARDING_QUEUE)
-                .setWorkflowExecutionTimeout(Duration.ofHours(48))
                 .build();
 
         boolean isResume = false;

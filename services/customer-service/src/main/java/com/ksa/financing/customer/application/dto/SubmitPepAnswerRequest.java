@@ -18,6 +18,8 @@ public record SubmitPepAnswerRequest(
         String sourceOfWealthDescription,
         String sourceOfFunds,
         String sourceOfFundsDetails,
+        String occupation,
+        String occupationDetails,
         @Valid List<RelatedPersonRequest> relatedPersons,
         String additionalNotes
 ) {

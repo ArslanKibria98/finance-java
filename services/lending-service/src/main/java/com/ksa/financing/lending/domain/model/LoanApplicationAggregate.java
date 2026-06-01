@@ -89,6 +89,18 @@ public class LoanApplicationAggregate {
     private BigDecimal dbrAfter;
     private BigDecimal maxEligibleAmount;
 
+    // Step 3.5: Credit Decision Engine result (LOS §5 Step 4 — Green/Amber/Red)
+    private String creditDecision;            // AUTO_APPROVE | REFER_MANUAL_REVIEW | AUTO_REJECT
+    private String creditDecisionReason;       // GREEN_AUTO_APPROVE | AMBER_MANUAL_REVIEW | RED_AUTO_REJECT | NO_CRITERIA | ENGINE_UNAVAILABLE
+    private BigDecimal scoringTotalScore;
+    private BigDecimal scoringMaxScore;
+    private BigDecimal scoringPercentage;
+    private BigDecimal scoringGreenThreshold;
+    private BigDecimal scoringAmberThreshold;
+    private String scoringSummary;
+    private String scoringDetailsJson;
+    private LocalDateTime scoringEvaluatedAt;
+
     // Step 4: Offer
     private BigDecimal offeredAmount;
     private BigDecimal offeredMonthlyInstallment;
@@ -441,6 +453,54 @@ public class LoanApplicationAggregate {
         }
     }
 
+    /**
+     * Persistence-only loader for credit decision fields. Used by the JPA
+     * mapper to repopulate scoring state without going through the recordCreditDecision
+     * domain method (which would mutate updatedAt/updatedBy and is meant for live runs).
+     */
+    public void restoreCreditDecisionFromPersistence(
+            String creditDecision, String creditDecisionReason,
+            BigDecimal totalScore, BigDecimal maxScore, BigDecimal scorePercentage,
+            BigDecimal greenThreshold, BigDecimal amberThreshold,
+            String summary, String detailsJson, LocalDateTime evaluatedAt) {
+        this.creditDecision = creditDecision;
+        this.creditDecisionReason = creditDecisionReason;
+        this.scoringTotalScore = totalScore;
+        this.scoringMaxScore = maxScore;
+        this.scoringPercentage = scorePercentage;
+        this.scoringGreenThreshold = greenThreshold;
+        this.scoringAmberThreshold = amberThreshold;
+        this.scoringSummary = summary;
+        this.scoringDetailsJson = detailsJson;
+        this.scoringEvaluatedAt = evaluatedAt;
+    }
+
+    /**
+     * Records the credit decision engine snapshot on the aggregate.
+     * State transition is NOT performed here — caller decides whether to
+     * follow up with {@link #saveEligibilityResult} (for AUTO_REJECT) or
+     * to continue toward offer/eligibility (for AUTO_APPROVE/AMBER).
+     */
+    public void recordCreditDecision(String decision, String reasonCode,
+                                      BigDecimal totalScore, BigDecimal maxScore,
+                                      BigDecimal scorePercentage,
+                                      BigDecimal greenThreshold, BigDecimal amberThreshold,
+                                      String summary, String detailsJson,
+                                      UUID updatedBy) {
+        this.creditDecision = decision;
+        this.creditDecisionReason = reasonCode;
+        this.scoringTotalScore = totalScore;
+        this.scoringMaxScore = maxScore;
+        this.scoringPercentage = scorePercentage;
+        this.scoringGreenThreshold = greenThreshold;
+        this.scoringAmberThreshold = amberThreshold;
+        this.scoringSummary = summary;
+        this.scoringDetailsJson = detailsJson;
+        this.scoringEvaluatedAt = LocalDateTime.now();
+        this.updatedBy = updatedBy;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     // ==================== STEP 4: OFFER ====================
 
     public void presentOffer(BigDecimal offeredAmount, BigDecimal monthlyInstallment,
@@ -746,6 +806,16 @@ public class LoanApplicationAggregate {
     public BigDecimal getDbrBefore() { return dbrBefore; }
     public BigDecimal getDbrAfter() { return dbrAfter; }
     public BigDecimal getMaxEligibleAmount() { return maxEligibleAmount; }
+    public String getCreditDecision() { return creditDecision; }
+    public String getCreditDecisionReason() { return creditDecisionReason; }
+    public BigDecimal getScoringTotalScore() { return scoringTotalScore; }
+    public BigDecimal getScoringMaxScore() { return scoringMaxScore; }
+    public BigDecimal getScoringPercentage() { return scoringPercentage; }
+    public BigDecimal getScoringGreenThreshold() { return scoringGreenThreshold; }
+    public BigDecimal getScoringAmberThreshold() { return scoringAmberThreshold; }
+    public String getScoringSummary() { return scoringSummary; }
+    public String getScoringDetailsJson() { return scoringDetailsJson; }
+    public LocalDateTime getScoringEvaluatedAt() { return scoringEvaluatedAt; }
     public BigDecimal getOfferedAmount() { return offeredAmount; }
     public BigDecimal getOfferedMonthlyInstallment() { return offeredMonthlyInstallment; }
     public BigDecimal getOfferedTotalProfit() { return offeredTotalProfit; }

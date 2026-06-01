@@ -39,8 +39,15 @@ public class AmlRiskScoringEngine {
                                    Map<String, String> resolvedFactors) {
 
         List<AmlCategoryScoreBreakdown> breakdown = new ArrayList<>();
+        BigDecimal totalScore = BigDecimal.ZERO;
+        boolean dominantOverride = false;
+        String dominantCategoryCode = null;
 
-        // Step 1: Check DOMINANT factors (auto HIGH risk override)
+        // Step 1: DOMINANT factors (PEP, Internal Watchlist) — per AML schema spec,
+        // these are shown in the breakdown but DO NOT contribute to totalScore.
+        // A DOMINANT match FORCES the final risk level to HIGH regardless of
+        // the mutual-exclusive weighted sum (see "Dominant Factors" section in
+        // /docs/AML Risk Schema spec).
         for (AmlRiskCategory category : categories) {
             if (category.categoryType() == AmlCategoryType.DOMINANT && category.active()) {
                 String resolvedFactor = resolvedFactors.get(category.categoryCode());
@@ -60,14 +67,17 @@ public class AmlRiskScoringEngine {
                                 matchedFactor.factorWeightPct(),
                                 matchedFactor.computedRating()
                         ));
-                        return AmlRiskScore.dominantHighRisk(category.categoryCode(), breakdown);
+                        // Mark override but DON'T add to totalScore
+                        dominantOverride = true;
+                        if (dominantCategoryCode == null) {
+                            dominantCategoryCode = category.categoryCode();
+                        }
                     }
                 }
             }
         }
 
         // Step 2: Calculate MUTUAL_EXCLUSIVE weighted sum
-        BigDecimal totalScore = BigDecimal.ZERO;
 
         for (AmlRiskCategory category : categories) {
             if (category.categoryType() == AmlCategoryType.MUTUAL_EXCLUSIVE && category.active()) {
@@ -104,8 +114,16 @@ public class AmlRiskScoringEngine {
             }
         }
 
-        // Step 3: Determine risk level from thresholds
+        // Step 3: Determine risk level from thresholds, then apply DOMINANT override
         AmlRiskLevel level = determineRiskLevel(totalScore, thresholds);
+        if (dominantOverride) {
+            // Spec: any DOMINANT match (PEP_YES / Internal_List_YES) → force HIGH
+            level = AmlRiskLevel.HIGH;
+            return AmlRiskScore.dominantOverride(
+                    totalScore.setScale(2, RoundingMode.HALF_UP),
+                    dominantCategoryCode,
+                    breakdown);
+        }
 
         return AmlRiskScore.fromWeightedSum(
                 totalScore.setScale(2, RoundingMode.HALF_UP),

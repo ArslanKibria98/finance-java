@@ -2,7 +2,6 @@ package com.ksa.financing.notification.application.service;
 
 import com.ksa.financing.notification.domain.model.NotificationPreference;
 import com.ksa.financing.notification.domain.model.TemplateRoutingRule;
-import com.ksa.financing.notification.domain.repository.NotificationPreferenceRepository;
 import com.ksa.financing.notification.domain.repository.TemplateRoutingRuleRepository;
 import com.ksa.financing.notification.infrastructure.external.NovuClient;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,7 @@ import java.util.UUID;
 public class NotificationOrchestrator {
 
     private final TemplateRoutingRuleRepository routingRuleRepository;
-    private final NotificationPreferenceRepository preferenceRepository;
+    private final NotificationPreferenceService preferenceService;
     private final NovuClient novuClient;
 
     @org.springframework.beans.factory.annotation.Value("${novu.admin-subscriber-id:admin_global}")
@@ -34,7 +33,13 @@ public class NotificationOrchestrator {
             "BLACKLIST_ADDED",
             "LOAN_APPROVED",
             "LOAN_DISBURSED",
-            "LOAN_RESCHEDULED"
+            "LOAN_RESCHEDULED",
+            "PAYMENT_FAILED",
+            "PAYMENT_OVERDUE",
+            "LARGE_PAYMENT",
+            "MANUAL_APPROVAL_REQUIRED",
+            "APPROVAL_SLA_BREACHED",
+            "PAYMENT_DUE"
     );
 
     public void processEvent(String eventType, Map<String, Object> payload) {
@@ -56,44 +61,57 @@ public class NotificationOrchestrator {
             return;
         }
 
-        // 2. Determine if this is an Admin Event
-        boolean isAdminEvent = ADMIN_EVENTS.contains(eventType);
-        
-        String targetSubscriberId = isAdminEvent ? adminSubscriberId : (customerId != null ? customerId.toString() : null);
-
-        if (targetSubscriberId == null) {
-            log.warn("Could not determine subscriber for event {}. Skipping.", eventType);
-            return;
-        }
-
-        // 3. Get Preferences (Only for Customers, Admin gets everything)
+        // Customer preferences — auto-creates with default language ('en') if missing
         NotificationPreference prefs = null;
-        if (!isAdminEvent && customerId != null) {
-            prefs = preferenceRepository.findByTenantIdAndCustomerId(tenantId, customerId)
-                    .orElse(NotificationPreference.builder()
-                            .tenantId(tenantId)
-                            .customerId(customerId)
-                            .preferredLanguage("ar")
-                            .smsEnabled(true)
-                            .emailEnabled(true)
-                            .pushEnabled(true)
-                            .build());
+        if (customerId != null) {
+            prefs = preferenceService.getOrCreateDefault(tenantId, customerId);
         }
 
-        // 4. Dispatch to Novu for each matching rule
+        // Dispatch to Novu — each rule decides its own target by rule_code prefix
         for (TemplateRoutingRule rule : rules) {
-            boolean shouldSend = isAdminEvent || isChannelEnabled(rule.getChannel(), prefs);
-            
-            if (shouldSend) {
-                novuClient.triggerEvent(
-                        rule.getNovuTemplateId(),
-                        targetSubscriberId,
-                        payload,
-                        prefs != null ? prefs.getPreferredLanguage() : "en"
-                );
-            } else {
-                log.info("Channel {} is disabled for customer {}. Skipping.", rule.getChannel(), customerId);
+            boolean isAdminRule = rule.getRuleCode() != null && rule.getRuleCode().startsWith("ADMIN_");
+            String targetSubscriberId = isAdminRule
+                    ? adminSubscriberId
+                    : (customerId != null ? customerId.toString() : null);
+
+            if (targetSubscriberId == null) {
+                log.warn("No subscriber resolved for rule {}. Skipping.", rule.getRuleCode());
+                continue;
             }
+
+            // Special case: PAYMENT_DUE admin notification only when actually due (daysUntilDue <= 0)
+            if (isAdminRule && "PAYMENT_DUE".equals(eventType)) {
+                Integer daysUntilDue = extractInt(payload, "daysUntilDue");
+                if (daysUntilDue != null && daysUntilDue > 0) {
+                    log.info("Skipping admin PAYMENT_DUE — daysUntilDue={} (will trigger on due date)", daysUntilDue);
+                    continue;
+                }
+            }
+
+            boolean shouldSend = isAdminRule || isChannelEnabled(rule.getChannel(), prefs);
+            if (!shouldSend) {
+                log.info("Channel {} disabled for customer {}. Skipping rule {}.",
+                        rule.getChannel(), customerId, rule.getRuleCode());
+                continue;
+            }
+
+            novuClient.triggerEvent(
+                    rule.getNovuTemplateId(),
+                    targetSubscriberId,
+                    payload,
+                    prefs != null ? prefs.getPreferredLanguage() : NotificationPreferenceService.DEFAULT_LANGUAGE
+            );
+        }
+    }
+
+    private Integer extractInt(Map<String, Object> payload, String key) {
+        Object val = payload.get(key);
+        if (val == null) return null;
+        if (val instanceof Number n) return n.intValue();
+        try {
+            return Integer.parseInt(val.toString());
+        } catch (Exception e) {
+            return null;
         }
     }
 

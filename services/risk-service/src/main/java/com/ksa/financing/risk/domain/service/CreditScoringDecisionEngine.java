@@ -1,6 +1,11 @@
 package com.ksa.financing.risk.domain.service;
 
-import com.ksa.financing.risk.domain.model.credit.*;
+import com.ksa.financing.risk.domain.model.credit.CreditDecision;
+import com.ksa.financing.risk.domain.model.credit.CreditScoringCriteria;
+import com.ksa.financing.risk.domain.model.credit.CreditScoringFieldDefinition;
+import com.ksa.financing.risk.domain.model.credit.CreditScoringRule;
+import com.ksa.financing.risk.domain.model.credit.CriteriaEvaluationDetail;
+import com.ksa.financing.risk.domain.model.credit.EligibilityEvaluationResult;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -39,6 +44,26 @@ public class CreditScoringDecisionEngine {
             List<CreditScoringFieldDefinition> fieldDefinitions,
             Map<String, String> answers,
             BigDecimal minPassPercentage) {
+        return evaluate(criteria, fieldDefinitions, answers,
+                minPassPercentage, minPassPercentage, minPassPercentage);
+    }
+
+    /**
+     * BRS-aligned overload that produces a Green/Amber/Red decision.
+     *
+     * @param greenThreshold score % at or above which decision is AUTO_APPROVE
+     * @param amberThreshold score % at or above which decision is REFER_MANUAL_REVIEW
+     *                       (below this → AUTO_REJECT)
+     * @param minPassPercentage legacy {@code eligible} boolean threshold; pass the
+     *                          green threshold here to keep backward-compat callers happy.
+     */
+    public EligibilityEvaluationResult evaluate(
+            List<CreditScoringCriteria> criteria,
+            List<CreditScoringFieldDefinition> fieldDefinitions,
+            Map<String, String> answers,
+            BigDecimal minPassPercentage,
+            BigDecimal greenThreshold,
+            BigDecimal amberThreshold) {
 
         if (criteria == null || criteria.isEmpty()) {
             return EligibilityEvaluationResult.noCriteria();
@@ -125,14 +150,36 @@ public class CreditScoringDecisionEngine {
 
         var eligible = scorePercentage.compareTo(minPassPercentage) >= 0;
 
-        var summary = eligible
-                ? String.format("Eligible — score %.1f%% (min %.1f%%)", scorePercentage, minPassPercentage)
-                : String.format("Not eligible — score %.1f%% below minimum %.1f%%", scorePercentage, minPassPercentage);
+        // BRS Green/Amber/Red mapping
+        CreditDecision decision;
+        String reasonCode;
+        if (scorePercentage.compareTo(greenThreshold) >= 0) {
+            decision = CreditDecision.AUTO_APPROVE;
+            reasonCode = "GREEN_AUTO_APPROVE";
+        } else if (scorePercentage.compareTo(amberThreshold) >= 0) {
+            decision = CreditDecision.REFER_MANUAL_REVIEW;
+            reasonCode = "AMBER_MANUAL_REVIEW";
+        } else {
+            decision = CreditDecision.AUTO_REJECT;
+            reasonCode = "RED_AUTO_REJECT";
+        }
+
+        var summary = switch (decision) {
+            case AUTO_APPROVE -> String.format(
+                    "Auto-approve — score %.1f%% (green ≥ %.1f%%)", scorePercentage, greenThreshold);
+            case REFER_MANUAL_REVIEW -> String.format(
+                    "Manual review — score %.1f%% (amber %.1f%%-%.1f%%)",
+                    scorePercentage, amberThreshold, greenThreshold);
+            case AUTO_REJECT -> String.format(
+                    "Auto-reject — score %.1f%% below amber threshold %.1f%%",
+                    scorePercentage, amberThreshold);
+        };
 
         return new EligibilityEvaluationResult(
-                eligible, totalScore, maxPossibleScore, scorePercentage,
-                minPassPercentage, matchedCount + failedCount, matchedCount, failedCount,
-                details, summary);
+                eligible, decision, totalScore, maxPossibleScore, scorePercentage,
+                minPassPercentage, greenThreshold, amberThreshold,
+                matchedCount + failedCount, matchedCount, failedCount,
+                details, reasonCode, summary);
     }
 
     /**

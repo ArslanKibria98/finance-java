@@ -106,6 +106,29 @@ public record LoanApplicationResponse(
         BigDecimal verifiedSalary,
         BigDecimal maxEligibleAmount,
 
+        // Step 3.5: Credit Decision Engine (LOS §5 Step 4 — Green/Amber/Red)
+        @Schema(description = "Credit decision engine outcome: AUTO_APPROVE | REFER_MANUAL_REVIEW | AUTO_REJECT | null")
+        String creditDecision,
+        @Schema(description = "Short reason code: GREEN_AUTO_APPROVE | AMBER_MANUAL_REVIEW | RED_AUTO_REJECT | NO_CRITERIA | ENGINE_UNAVAILABLE")
+        String creditDecisionReason,
+        @Schema(description = "Aggregate score earned across all criteria")
+        BigDecimal scoringTotalScore,
+        @Schema(description = "Maximum achievable score given product criteria")
+        BigDecimal scoringMaxScore,
+        @Schema(description = "Score percentage (0-100) — totalScore / maxScore * 100")
+        BigDecimal scoringPercentage,
+        @Schema(description = "Green threshold used (score % at or above which → AUTO_APPROVE)")
+        BigDecimal scoringGreenThreshold,
+        @Schema(description = "Amber threshold used (score % at or above which → REFER_MANUAL_REVIEW)")
+        BigDecimal scoringAmberThreshold,
+        @Schema(description = "Human-readable decision summary, e.g. \"Auto-approve — score 82.5% (green ≥ 75.0%)\"")
+        String scoringSummary,
+        @Schema(description = "JSON-serialized per-criteria evaluation details (fieldKey, passed, scoredWeight, maxWeight, matchedRule, failureReason)")
+        String scoringDetailsJson,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        @Schema(description = "When the decision engine evaluated this application")
+        LocalDateTime scoringEvaluatedAt,
+
         // Step 4: Offer
         BigDecimal offeredAmount,
         BigDecimal offeredMonthlyInstallment,
@@ -222,11 +245,17 @@ public record LoanApplicationResponse(
         }
 
         // Self-heal stale loan.total_amount rows that pre-date the reschedule recompute fix.
-        // If installment × tenure disagrees with the persisted totalAmount, trust the schedule.
+        // If installment × tenure (+ fees) disagrees with the persisted totalAmount, trust the schedule.
+        // EMI under reducing balance is principal + profit only — fees are paid on top of EMI
+        // (non-inclusive disbursement), so they must be added back to get the true total payable.
         if (dto.installmentAmount() != null && dto.currentTenureMonths() != null
                 && dto.currentTenureMonths() > 0) {
             BigDecimal scheduledTotal = dto.installmentAmount()
                     .multiply(BigDecimal.valueOf(dto.currentTenureMonths()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal selfHealProcFee = dto.processingFee() != null ? dto.processingFee() : BigDecimal.ZERO;
+            BigDecimal selfHealAdminFee = dto.adminFee() != null ? dto.adminFee() : BigDecimal.ZERO;
+            scheduledTotal = scheduledTotal.add(selfHealProcFee).add(selfHealAdminFee)
                     .setScale(2, RoundingMode.HALF_UP);
             if (finalTotalPayable == null
                     || finalTotalPayable.setScale(2, RoundingMode.HALF_UP)
@@ -236,16 +265,25 @@ public record LoanApplicationResponse(
         }
 
         // Derive offeredTotalProfit from finalTotalPayable so it stays consistent
-        // after a tenure extension / reschedule.
+        // after a tenure extension / reschedule. Prefer the stored offeredTotalProfit
+        // when it is non-zero and consistent (within 1 SAR) with the computed value —
+        // it captures the exact walked-schedule sum that may differ from
+        // (totalPayable − principal − fees) by sub-cent rounding remainders.
+        BigDecimal procFeeForProfit = dto.processingFee() != null ? dto.processingFee() : BigDecimal.ZERO;
+        BigDecimal adminFeeForProfit = dto.adminFee() != null ? dto.adminFee() : BigDecimal.ZERO;
         BigDecimal displayedTotalProfit = dto.offeredTotalProfit();
         if (finalTotalPayable != null && dto.principalAmount() != null) {
-            BigDecimal procFee = dto.processingFee() != null ? dto.processingFee() : BigDecimal.ZERO;
-            BigDecimal adminFee = dto.adminFee() != null ? dto.adminFee() : BigDecimal.ZERO;
-            displayedTotalProfit = finalTotalPayable
+            BigDecimal computed = finalTotalPayable
                     .subtract(dto.principalAmount())
-                    .subtract(procFee)
-                    .subtract(adminFee)
+                    .subtract(procFeeForProfit)
+                    .subtract(adminFeeForProfit)
                     .max(BigDecimal.ZERO);
+            if (displayedTotalProfit == null
+                    || displayedTotalProfit.compareTo(BigDecimal.ZERO) == 0
+                    || displayedTotalProfit.subtract(computed).abs()
+                            .compareTo(new BigDecimal("1.00")) > 0) {
+                displayedTotalProfit = computed;
+            }
         }
 
         return new LoanApplicationResponse(
@@ -307,6 +345,17 @@ public record LoanApplicationResponse(
                 dto.simahReferenceId(),
                 scale2(dto.verifiedSalary()),
                 scale2(dto.maxEligibleAmount()),
+                // Credit Decision Engine (LOS §5 Step 4)
+                dto.creditDecision(),
+                dto.creditDecisionReason(),
+                scale2(dto.scoringTotalScore()),
+                scale2(dto.scoringMaxScore()),
+                scale2(dto.scoringPercentage()),
+                scale2(dto.scoringGreenThreshold()),
+                scale2(dto.scoringAmberThreshold()),
+                dto.scoringSummary(),
+                dto.scoringDetailsJson(),
+                dto.scoringEvaluatedAt(),
                 // Offer
                 scale2(dto.offeredAmount()),
                 scale2(dto.installmentAmount() != null ? dto.installmentAmount() : dto.offeredMonthlyInstallment()),

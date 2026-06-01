@@ -9,12 +9,14 @@ import com.ksa.financing.customer.application.dto.UpdateReferenceDataRequest;
 import com.ksa.financing.customer.domain.model.NetWorthRangeOption;
 import com.ksa.financing.customer.domain.model.OccupationOption;
 import com.ksa.financing.customer.domain.model.PurposeOfFinanceOption;
+import com.ksa.financing.customer.domain.model.RelationshipOption;
 import com.ksa.financing.customer.domain.model.SourceOfFundsOption;
 import com.ksa.financing.customer.domain.model.SourceOfIncomeOption;
 import com.ksa.financing.customer.domain.model.SourceOfWealthOption;
 import com.ksa.financing.customer.domain.port.in.ManageNetWorthRangeUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageOccupationUseCase;
 import com.ksa.financing.customer.domain.port.in.ManagePurposeOfFinanceUseCase;
+import com.ksa.financing.customer.domain.port.in.ManageRelationshipUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfFundsUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfIncomeUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageSourceOfWealthUseCase;
@@ -58,6 +60,7 @@ public class ReferenceDataController {
     private final ManageOccupationUseCase occupationUseCase;
     private final ManagePurposeOfFinanceUseCase purposeOfFinanceUseCase;
     private final ManageNetWorthRangeUseCase netWorthRangeUseCase;
+    private final ManageRelationshipUseCase relationshipUseCase;
 
     // ========================================================================
     // SOURCE OF WEALTH
@@ -833,6 +836,134 @@ public class ReferenceDataController {
     }
 
     // ========================================================================
+    // RELATIONSHIP
+    // ========================================================================
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "create")
+    @PostMapping("/relationship")
+    @Operation(summary = "Create relationship option", description = "Creates a new admin-managed relationship dropdown option (e.g., Father, Mother, Spouse)")
+    @ApiResponse(responseCode = "201", description = "Option created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate code")
+    public ResponseEntity<ReferenceDataResponse> createRelationship(
+            @Valid @RequestBody CreateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Creating relationship option: {} for tenant: {}", request.code(), tenantId);
+
+        var command = new ManageRelationshipUseCase.CreateRelationshipCommand(
+                request.code(), request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(), request.displayOrder());
+
+        RelationshipOption created = relationshipUseCase.create(tenantId, command);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    }
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "read")
+    @GetMapping("/relationship")
+    @Operation(summary = "List all relationship options", description = "Returns all options including inactive (admin view)")
+    @ApiResponse(responseCode = "200", description = "Options retrieved")
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllRelationship(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
+
+        UUID tenantId = extractTenantId(jwt);
+        var responses = relationshipUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/relationship/active")
+    @Operation(summary = "List active relationship options",
+               description = "Returns only active options sorted by display order (for dropdown population). "
+                           + "Public endpoint — accepts X-Tenant-Id header or JWT for tenant identification.")
+    @ApiResponse(responseCode = "200", description = "Active options retrieved")
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActiveRelationship(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest,
+            PageQuery pageQuery) {
+
+        UUID tenantId = extractTenantIdFromJwtOrHeader(jwt, httpRequest);
+        var responses = relationshipUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
+        return ResponseEntity.ok(responses);
+    }
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "read")
+    @GetMapping("/relationship/{id}")
+    @Operation(summary = "Get relationship option by ID")
+    @ApiResponse(responseCode = "200", description = "Option found")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> getRelationshipById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        RelationshipOption option = relationshipUseCase.getById(tenantId, id);
+        return ResponseEntity.ok(toResponse(option));
+    }
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "update")
+    @PutMapping("/relationship/{id}")
+    @Operation(summary = "Update relationship option", description = "Updates an existing option (partial update supported)")
+    @ApiResponse(responseCode = "200", description = "Option updated")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> updateRelationship(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateReferenceDataRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        log.info("Updating relationship option: {} for tenant: {}", id, tenantId);
+
+        var command = new ManageRelationshipUseCase.UpdateRelationshipCommand(
+                request.nameEn(), request.nameAr(),
+                request.descriptionEn(), request.descriptionAr(),
+                request.isActive(), request.displayOrder());
+
+        RelationshipOption updated = relationshipUseCase.update(tenantId, id, command);
+        return ResponseEntity.ok(toResponse(updated));
+    }
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "delete")
+    @DeleteMapping("/relationship/{id}")
+    @Operation(summary = "Permanently delete relationship option", description = "Soft-deletes the option permanently. Use activate/deactivate for toggling visibility.")
+    @ApiResponse(responseCode = "204", description = "Option deleted")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<Void> deleteRelationship(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        relationshipUseCase.delete(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "update")
+    @PostMapping("/relationship/{id}/activate")
+    @Operation(summary = "Activate relationship option")
+    @ApiResponse(responseCode = "204", description = "Option activated")
+    public ResponseEntity<Void> activateRelationship(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        relationshipUseCase.activate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SecuredEndpoint(obj = "reference-data.relationship", act = "update")
+    @PostMapping("/relationship/{id}/deactivate")
+    @Operation(summary = "Deactivate relationship option")
+    @ApiResponse(responseCode = "204", description = "Option deactivated")
+    public ResponseEntity<Void> deactivateRelationship(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        relationshipUseCase.deactivate(tenantId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ========================================================================
     // HELPER METHODS
     // ========================================================================
 
@@ -909,6 +1040,14 @@ public class ReferenceDataController {
     }
 
     private ReferenceDataResponse toResponse(OccupationOption o) {
+        return new ReferenceDataResponse(
+                o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
+                o.getDescriptionEn(), o.getDescriptionAr(),
+                o.isActive(), o.getDisplayOrder(),
+                o.getCreatedAt(), o.getUpdatedAt());
+    }
+
+    private ReferenceDataResponse toResponse(RelationshipOption o) {
         return new ReferenceDataResponse(
                 o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
                 o.getDescriptionEn(), o.getDescriptionAr(),

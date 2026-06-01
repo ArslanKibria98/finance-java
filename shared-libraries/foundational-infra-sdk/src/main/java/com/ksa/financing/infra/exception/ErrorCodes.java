@@ -128,6 +128,15 @@ public final class ErrorCodes {
         public static final String HAS_ACTIVE_LOANS       = "PRODUCT.DELETE.HAS_ACTIVE_LOANS";
     }
 
+    // ── Onboarding ─────────────────────────────────────────────────
+
+    public static final class Onboarding {
+        private Onboarding() {}
+        public static final String EMAIL_ALREADY_REGISTERED   = "ONBOARDING.EMAIL.ALREADY_REGISTERED";
+        public static final String MOBILE_ALREADY_REGISTERED  = "ONBOARDING.MOBILE.ALREADY_REGISTERED";
+        public static final String ACCOUNT_ALREADY_REGISTERED = "ONBOARDING.ACCOUNT.ALREADY_REGISTERED";
+    }
+
     // ── Collections ────────────────────────────────────────────────
 
     public static final class Collections {

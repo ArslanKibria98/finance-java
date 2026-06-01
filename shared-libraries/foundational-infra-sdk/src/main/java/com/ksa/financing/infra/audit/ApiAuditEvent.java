@@ -60,6 +60,10 @@ public class ApiAuditEvent {
     String spanId;
 
     String thirdPartyName;
+    // Logical third-party operation code (e.g. FACIA_DOC_VERIFY, NAFATH_INITIATE).
+    // Mirrors the middleware-third-party `third_party_api` field so a single
+    // dashboard filter covers both real middleware calls and locally-mocked ones.
+    String thirdPartyApi;
 
     String errorCode;
     String errorMessage;

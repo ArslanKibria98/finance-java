@@ -20,12 +20,36 @@ public record AmlRiskScore(
 ) {
 
     /**
-     * Factory for a dominant-factor override result (auto HIGH risk).
+     * @deprecated Use {@link #dominantOverride(BigDecimal, String, List)} instead.
+     * Old behaviour forced totalScore=999 which contradicted the AML schema
+     * (DOMINANT factors override RISK LEVEL only, not the underlying weighted
+     * sum). Kept for backward compatibility.
      */
+    @Deprecated
     public static AmlRiskScore dominantHighRisk(String dominantCategoryCode, List<AmlCategoryScoreBreakdown> breakdown) {
         return new AmlRiskScore(
             UUID.randomUUID(),
             new BigDecimal("999"),
+            AmlRiskLevel.HIGH,
+            true,
+            dominantCategoryCode,
+            breakdown,
+            Instant.now()
+        );
+    }
+
+    /**
+     * Factory for DOMINANT-override scoring (per AML schema spec):
+     *  - {@code totalScore} preserves the real mutual-exclusive weighted sum
+     *  - {@code riskLevel} is forced to HIGH
+     *  - {@code dominantOverride=true} so the UI / consumers can flag it
+     */
+    public static AmlRiskScore dominantOverride(BigDecimal totalScore,
+                                                 String dominantCategoryCode,
+                                                 List<AmlCategoryScoreBreakdown> breakdown) {
+        return new AmlRiskScore(
+            UUID.randomUUID(),
+            totalScore,
             AmlRiskLevel.HIGH,
             true,
             dominantCategoryCode,

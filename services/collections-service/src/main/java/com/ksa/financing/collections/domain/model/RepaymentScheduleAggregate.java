@@ -543,4 +543,15 @@ public class RepaymentScheduleAggregate {
             BigDecimal overdueAmount,
             LocalDate overdueDate
     ) {}
+
+    public record InstallmentDueSoon(
+            RepaymentScheduleId scheduleId,
+            UUID tenantId,
+            UUID loanId,
+            UUID installmentId,
+            int installmentNumber,
+            BigDecimal amount,
+            LocalDate dueDate,
+            int daysUntilDue
+    ) {}
 }

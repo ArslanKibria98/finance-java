@@ -45,6 +45,8 @@ public class SubmitPepAnswerService implements SubmitPepAnswerUseCase {
                 command.sourceOfWealthDescription(),
                 command.sourceOfFunds(),
                 command.sourceOfFundsDetails(),
+                command.occupation(),
+                command.occupationDetails(),
                 command.relatedPersons(),
                 command.additionalNotes(),
                 existing.map(CustomerPepAnswer::submittedVia).orElse(CustomerPepAnswer.SubmittedVia.POST_LOGIN),

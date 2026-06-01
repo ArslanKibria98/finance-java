@@ -21,5 +21,7 @@ public record SubmitAdditionalInfoRequest(
     // PEP fields (required only when isPep=true)
     String sourceOfFunds,
     String estimatedNetWorth,
-    String sourceOfIncome
+    String sourceOfIncome,
+    // Occupation LOV code (e.g. EMPLOYED_PUBLIC) — used for general credit scoring
+    String occupation
 ) {}

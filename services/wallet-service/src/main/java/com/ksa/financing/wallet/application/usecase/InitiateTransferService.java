@@ -3,14 +3,18 @@ package com.ksa.financing.wallet.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.wallet.domain.model.MovementType;
+import com.ksa.financing.wallet.domain.model.TransactionPurpose;
 import com.ksa.financing.wallet.domain.model.TransferChannel;
 import com.ksa.financing.wallet.domain.model.TransferStatus;
 import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.model.WalletMovement;
 import com.ksa.financing.wallet.domain.model.WalletStatus;
 import com.ksa.financing.wallet.domain.model.WalletTransfer;
 import com.ksa.financing.wallet.domain.port.in.InitiateTransferUseCase;
 import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
 import com.ksa.financing.wallet.domain.port.out.FineractSavingsPort;
+import com.ksa.financing.wallet.domain.port.out.WalletMovementRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletTransferRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class InitiateTransferService implements InitiateTransferUseCase {
 
     private final WalletRepository walletRepository;
     private final WalletTransferRepository transferRepository;
+    private final WalletMovementRepository movementRepository;
     private final FineractSavingsPort fineractPort;
     private final EventPublisherPort eventPublisher;
 
@@ -176,14 +181,23 @@ public class InitiateTransferService implements InitiateTransferUseCase {
                     command.amount(),
                     description);
 
+            // ---- Local projection update (same Tx as Fineract result) ----
+            // Fineract moved the money; now mirror it into wallets + wallet_movements
+            // so balance reads, statements and reconciliation aren't stale.
+            WalletMovement debitMovement = applyDebit(source, command.amount(), saved, currency);
+            WalletMovement creditMovement = applyCredit(destination, command.amount(), saved, currency);
+
             saved.setFineractTransferId(fineractTransferId != null ? fineractTransferId.toString() : null);
+            saved.setDebitMovementId(debitMovement.getId());
+            saved.setCreditMovementId(creditMovement.getId());
             saved.setStatus(TransferStatus.COMPLETED);
             saved.setCompletedAt(Instant.now());
             WalletTransfer completed = transferRepository.save(saved);
 
-            log.info("Transfer COMPLETED transferId={} fineractRef={} src={} dst={} amount={}",
+            log.info("Transfer COMPLETED transferId={} fineractRef={} src={} dst={} amount={} debitMov={} creditMov={}",
                     completed.getId(), fineractTransferId,
-                    source.getId(), destination.getId(), completed.getAmount());
+                    source.getId(), destination.getId(), completed.getAmount(),
+                    debitMovement.getId(), creditMovement.getId());
 
             try {
                 eventPublisher.publishTransferInitiated(completed);
@@ -226,6 +240,58 @@ public class InitiateTransferService implements InitiateTransferUseCase {
         // wallet.maskedName is the single source of truth (frozen at wallet creation
         // from the NAFATH pool name). No runtime lookup, no random fallback.
         return wallet != null ? wallet.getMaskedName() : null;
+    }
+
+    private WalletMovement applyDebit(Wallet wallet, BigDecimal amount, WalletTransfer transfer, String currency) {
+        BigDecimal before = wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : BigDecimal.ZERO;
+        BigDecimal after = before.subtract(amount);
+        // total_balance is a generated column (available + reserved) — do not set it
+        wallet.setAvailableBalance(after);
+        wallet.setUpdatedAt(Instant.now());
+        walletRepository.save(wallet);
+
+        WalletMovement m = new WalletMovement();
+        m.setTenantId(transfer.getTenantId());
+        m.setWalletId(wallet.getId());
+        m.setMovementNumber("MOV" + System.currentTimeMillis() + "-D");
+        m.setMovementType(MovementType.DEBIT);
+        m.setPurpose(TransactionPurpose.TRANSFER_OUT);
+        m.setAmount(amount);
+        m.setBalanceBefore(before);
+        m.setBalanceAfter(after);
+        m.setReferenceType("WALLET_TRANSFER");
+        m.setReferenceId(transfer.getId());
+        m.setDescription("Transfer out " + transfer.getTransferNumber()
+                + (transfer.getPurposeNote() != null ? " — " + transfer.getPurposeNote() : ""));
+        m.setIdempotencyKey(transfer.getIdempotencyKey() + ":DR");
+        m.setCreatedAt(Instant.now());
+        return movementRepository.save(m);
+    }
+
+    private WalletMovement applyCredit(Wallet wallet, BigDecimal amount, WalletTransfer transfer, String currency) {
+        BigDecimal before = wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : BigDecimal.ZERO;
+        BigDecimal after = before.add(amount);
+        // total_balance is a generated column (available + reserved) — do not set it
+        wallet.setAvailableBalance(after);
+        wallet.setUpdatedAt(Instant.now());
+        walletRepository.save(wallet);
+
+        WalletMovement m = new WalletMovement();
+        m.setTenantId(transfer.getTenantId());
+        m.setWalletId(wallet.getId());
+        m.setMovementNumber("MOV" + System.currentTimeMillis() + "-C");
+        m.setMovementType(MovementType.CREDIT);
+        m.setPurpose(TransactionPurpose.TRANSFER_IN);
+        m.setAmount(amount);
+        m.setBalanceBefore(before);
+        m.setBalanceAfter(after);
+        m.setReferenceType("WALLET_TRANSFER");
+        m.setReferenceId(transfer.getId());
+        m.setDescription("Transfer in " + transfer.getTransferNumber()
+                + (transfer.getPurposeNote() != null ? " — " + transfer.getPurposeNote() : ""));
+        m.setIdempotencyKey(transfer.getIdempotencyKey() + ":CR");
+        m.setCreatedAt(Instant.now());
+        return movementRepository.save(m);
     }
 
     private TransferChannel parseChannel(String input) {

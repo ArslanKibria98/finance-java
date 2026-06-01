@@ -344,6 +344,34 @@ public class ApplicationDetailController {
         } else {
             tab.putNull("activeLoan");
         }
+
+        // Credit-scoring engine breakdown — surfaced here so the Loan Information
+        // tab can render the per-criterion explanation alongside the loan details.
+        tab.set("creditScoring", buildCreditScoringNode(app));
+    }
+
+    /** Builds the engine-scoring snapshot (decision, totals, per-criterion breakdown). */
+    private ObjectNode buildCreditScoringNode(LoanApplicationJpaEntity app) {
+        ObjectNode scoring = objectMapper.createObjectNode();
+        scoring.put("totalScore",       str(app.getScoringTotalScore()));
+        scoring.put("maxPossibleScore", str(app.getScoringMaxScore()));
+        scoring.put("scorePercentage",  str(app.getScoringPercentage()));
+        scoring.put("greenThreshold",   str(app.getScoringGreenThreshold()));
+        scoring.put("amberThreshold",   str(app.getScoringAmberThreshold()));
+        scoring.put("decision",         nvl(app.getCreditDecision()));
+        scoring.put("decisionReason",   nvl(app.getCreditDecisionReason()));
+        scoring.put("summary",          nvl(app.getScoringSummary()));
+        scoring.put("evaluatedAt",      str(app.getScoringEvaluatedAt()));
+        if (app.getScoringDetailsJson() != null && !app.getScoringDetailsJson().isBlank()) {
+            try {
+                scoring.set("criteriaBreakdown", objectMapper.readTree(app.getScoringDetailsJson()));
+            } catch (Exception ex) {
+                scoring.putArray("criteriaBreakdown");
+            }
+        } else {
+            scoring.putArray("criteriaBreakdown");
+        }
+        return scoring;
     }
 
     /** Tab 3: Employment & Salary Details */
@@ -417,6 +445,9 @@ public class ApplicationDetailController {
         inquiry.put("simahReferenceId",  nvl(app.getSimahReferenceId()));
         inquiry.put("maxEligibleAmount", str(app.getMaxEligibleAmount()));
         inquiry.put("verifiedSalary",    str(app.getVerifiedSalary()));
+
+        // Credit-scoring engine breakdown — per-criterion weights and decision
+        tab.set("creditScoring", buildCreditScoringNode(app));
 
         // KYC status from Customer360
         JsonNode kyc = safeGet(c360, "kycInfo");

@@ -48,7 +48,9 @@ public class CreditCheckController {
                 "simahReferenceId", result.simahReferenceId(),
                 "verifiedSalary", result.verifiedSalary(),
                 "existingObligations", result.existingObligations(),
-                "hasActiveDefaults", result.hasActiveDefaults()
+                "hasActiveDefaults", result.hasActiveDefaults(),
+                "defaultsCount", result.defaultsCount(),
+                "activeLoansCount", result.activeLoansCount()
         ));
     }
 }

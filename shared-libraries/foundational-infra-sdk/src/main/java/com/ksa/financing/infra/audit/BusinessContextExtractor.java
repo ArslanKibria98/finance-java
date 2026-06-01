@@ -30,17 +30,19 @@ public class BusinessContextExtractor {
     private final ObjectMapper objectMapper;
 
     /** Field synonyms grouped by canonical business identifier. */
-    private static final Map<String, List<String>> FIELD_SYNONYMS = Map.of(
-            "mobile",          List.of("mobile", "mobilenumber", "phone", "phonenumber", "msisdn"),
-            "nationalId",      List.of("nationalid", "national_id", "nid", "iqama", "iqamanumber"),
-            "customerId",      List.of("customerid", "customer_id", "cif", "cifnumber", "globaluid"),
-            "loanId",          List.of("loanid", "loan_id", "loanaccountid"),
-            "applicationId",   List.of("applicationid", "application_id", "loanapplicationid"),
-            "onboardingId",    List.of("onboardingid", "onboarding_id", "workflowid", "workflow_id"),
-            "walletId",        List.of("walletid", "wallet_id"),
-            "productId",       List.of("productid", "product_id", "productcode"),
-            "tenantId",        List.of("tenantid", "tenant_id"),
-            "email",           List.of("email", "emailaddress")
+    private static final Map<String, List<String>> FIELD_SYNONYMS = Map.ofEntries(
+            Map.entry("mobile",            List.of("mobile", "mobilenumber", "phone", "phonenumber", "msisdn")),
+            Map.entry("nationalId",        List.of("nationalid", "national_id", "nid", "iqama", "iqamanumber")),
+            Map.entry("customerId",        List.of("customerid", "customer_id", "cif", "cifnumber", "globaluid")),
+            Map.entry("loanId",            List.of("loanid", "loan_id", "loanaccountid")),
+            Map.entry("loanNumber",        List.of("loannumber", "loan_number")),
+            Map.entry("applicationId",     List.of("applicationid", "application_id", "loanapplicationid")),
+            Map.entry("applicationNumber", List.of("applicationnumber", "application_number", "applicationno", "appnumber")),
+            Map.entry("onboardingId",      List.of("onboardingid", "onboarding_id", "workflowid", "workflow_id")),
+            Map.entry("walletId",          List.of("walletid", "wallet_id")),
+            Map.entry("productId",         List.of("productid", "product_id", "productcode")),
+            Map.entry("tenantId",          List.of("tenantid", "tenant_id")),
+            Map.entry("email",             List.of("email", "emailaddress"))
     );
 
     /** Path patterns: regex → field name. */
@@ -62,6 +64,17 @@ public class BusinessContextExtractor {
      * Returns a flat map keyed by canonical names ("mobile", "nationalId", ...).
      */
     public Map<String, String> extract(String path, String rawRequestBody, String rawResponseBody) {
+        return extract(path, null, rawRequestBody, rawResponseBody);
+    }
+
+    /**
+     * Extract business context from path + headers + raw request/response bodies.
+     * Headers are inspected for X-Mobile-Number, X-National-Id, X-Customer-Id so that
+     * third-party adapters (Nafath, Tahaquq, etc.) which carry identifiers in headers
+     * rather than body still get linked to the customer.
+     */
+    public Map<String, String> extract(String path, Map<String, String> headers,
+                                       String rawRequestBody, String rawResponseBody) {
         Map<String, String> out = new LinkedHashMap<>();
 
         // 1. URL path patterns
@@ -74,10 +87,29 @@ public class BusinessContextExtractor {
             }
         }
 
-        // 2. Request body
+        // 2. Headers (third-party adapters propagate identifiers via X-* headers)
+        if (headers != null) {
+            for (Map.Entry<String, String> e : headers.entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) continue;
+                String hk = e.getKey().toLowerCase(Locale.ROOT);
+                String hv = e.getValue().trim();
+                if (hv.isEmpty()) continue;
+                if (hk.equals("x-mobile-number") || hk.equals("x-mobile")) {
+                    out.putIfAbsent("mobile", hv);
+                } else if (hk.equals("x-national-id") || hk.equals("x-nid")) {
+                    out.putIfAbsent("nationalId", hv);
+                } else if (hk.equals("x-customer-id") || hk.equals("x-cif")) {
+                    out.putIfAbsent("customerId", hv);
+                } else if (hk.equals("x-tenant-id")) {
+                    out.putIfAbsent("tenantId", hv);
+                }
+            }
+        }
+
+        // 3. Request body
         extractFromJson(rawRequestBody, out);
 
-        // 3. Response body (often contains generated IDs)
+        // 4. Response body (often contains generated IDs)
         extractFromJson(rawResponseBody, out);
 
         return out;

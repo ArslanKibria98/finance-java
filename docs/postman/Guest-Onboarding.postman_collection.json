@@ -1,0 +1,203 @@
+{
+  "info": {
+    "name": "Guest Onboarding",
+    "description": "Country-agnostic guest onboarding flow (4 steps). Creates a Keycloak user, issues a JWT, and lets the user reach the dashboard without doing document/selfie KYC.\n\n**Service:** onboarding-workflow-service (port 8089)\n**Base path:** /api/v1/onboarding/guest\n**Workflow ID format:** guest-onboarding-{sha256(email).first16hex}\n\n## Flow\n1. **Initiate** — email + mobile → dual OTP sent (stub: `123456`)\n2. **Verify OTP** — both OTPs in one call → Keycloak user created → JWT issued\n3. **Enable biometrics** — Face ID / Touch ID (can skip)\n4. **Set PIN** — 6-digit PIN → COMPLETED → dashboard\n\n**Important flag:** Every guest workflow carries `onboardingComplete: false` so any downstream consumer can tell that the user still has full KYC pending (document + selfie verification).\n\n## Variables\n- `baseUrl` — Kong: `http://46.62.226.94:8000/onboarding-service` · Direct: `http://localhost:8089`\n- `email`, `mobile` — set before initiate\n- `stubOtp` — `123456`\n- Auto-set: `workflowId`, `accessToken`, `refreshToken`, `keycloakUserId`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://46.62.226.94:8000/onboarding-service", "description": "Kong gateway. For direct hit: http://localhost:8089" },
+    { "key": "email", "value": "guest@example.com" },
+    { "key": "mobile", "value": "+14165551111" },
+    { "key": "stubOtp", "value": "123456" },
+    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "deviceId", "value": "postman-guest" },
+    { "key": "pin", "value": "936182" },
+    { "key": "confirmPin", "value": "936182" },
+    { "key": "workflowId", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "keycloakUserId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}" }]
+  },
+  "item": [
+    {
+      "name": "1. Initiate (sends dual OTP)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "if (d.workflowId) pm.collectionVariables.set('workflowId', d.workflowId);",
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('workflowId set', () => pm.expect(d.workflowId).to.be.a('string').and.not.empty);",
+              "pm.test('currentStep is OTP_SENT', () => pm.expect(d.currentStep).to.eql('OTP_SENT'));",
+              "pm.test('onboardingComplete is false', () => pm.expect(d.onboardingComplete).to.eql(false));",
+              "console.log('workflowId =', d.workflowId);",
+              "console.log('OTP (stub) =', pm.collectionVariables.get('stubOtp'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+          { "key": "X-Device-Id", "value": "{{deviceId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"mobileNumber\": \"{{mobile}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/onboarding/guest/initiate"
+      }
+    },
+    {
+      "name": "2. Verify dual OTP (creates KC user, returns token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "if (d.accessToken) pm.collectionVariables.set('accessToken', d.accessToken);",
+              "if (d.refreshToken) pm.collectionVariables.set('refreshToken', d.refreshToken);",
+              "if (d.keycloakUserId) pm.collectionVariables.set('keycloakUserId', d.keycloakUserId);",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('currentStep is OTP_VERIFIED', () => pm.expect(d.currentStep).to.eql('OTP_VERIFIED'));",
+              "pm.test('accessToken returned', () => pm.expect(d.accessToken).to.be.a('string').and.not.empty);",
+              "pm.test('onboardingComplete still false', () => pm.expect(d.onboardingComplete).to.eql(false));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "{{deviceId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"mobileOtp\": \"{{stubOtp}}\",\n  \"emailOtp\": \"{{stubOtp}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/onboarding/guest/verify-otp"
+      }
+    },
+    {
+      "name": "3. Enable biometrics",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('currentStep is BIOMETRICS_SETUP', () => pm.expect(d.currentStep).to.eql('BIOMETRICS_SETUP'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "{{deviceId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"enabled\": true,\n  \"skipped\": false\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/onboarding/guest/enable-biometrics"
+      }
+    },
+    {
+      "name": "3b. Skip biometrics (alternative)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "{{deviceId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"enabled\": false,\n  \"skipped\": true\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/onboarding/guest/enable-biometrics"
+      }
+    },
+    {
+      "name": "4. Set 6-digit PIN → COMPLETED",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('currentStep is COMPLETED', () => pm.expect(d.currentStep).to.eql('COMPLETED'));",
+              "pm.test('nextAction is DASHBOARD', () => pm.expect(d.nextAction).to.eql('DASHBOARD'));",
+              "pm.test('onboardingComplete still false (full KYC pending)', () => pm.expect(d.onboardingComplete).to.eql(false));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "{{deviceId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"pin\": \"{{pin}}\",\n  \"confirmPin\": \"{{confirmPin}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/onboarding/guest/set-pin"
+      }
+    },
+    {
+      "name": "5. Status (query by email)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "console.log('Current step:', d.currentStep);",
+              "console.log('Keycloak user:', d.keycloakUserId);",
+              "console.log('Onboarding complete:', d.onboardingComplete);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/onboarding/guest/status?email={{email}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "onboarding", "guest", "status"],
+          "query": [{ "key": "email", "value": "{{email}}" }]
+        }
+      }
+    }
+  ]
+}

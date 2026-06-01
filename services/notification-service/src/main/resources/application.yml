@@ -41,14 +41,24 @@ spring:
         spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.LinkedHashMap
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 novu:
-  api-key: ${NOVU_API_KEY:d5a05c8e47e1554d2b85df902079575a}
+  api-key: ${NOVU_API_KEY:8818069d47bb81264f68790716b0f2b6}
   base-url: ${NOVU_BASE_URL:https://api.novu.co/v1}
   admin-subscriber-id: ${ADMIN_SUBSCRIBER_ID:admin_global}
+
+notification:
+  thresholds:
+    large-payment-sar: ${LARGE_PAYMENT_THRESHOLD_SAR:50000}
+
+app:
+  services:
+    identity-service-url: ${IDENTITY_SERVICE_URL:http://identity-service:8083}
 
 logging:
   level:

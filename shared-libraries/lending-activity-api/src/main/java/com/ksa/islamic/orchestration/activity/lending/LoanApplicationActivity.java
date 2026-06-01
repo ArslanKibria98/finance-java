@@ -31,6 +31,9 @@ public interface LoanApplicationActivity {
     void saveEligibilityResult(SaveEligibilityInput input);
 
     @ActivityMethod
+    void saveCreditDecision(SaveCreditDecisionInput input);
+
+    @ActivityMethod
     void saveOffer(SaveOfferInput input);
 
     @ActivityMethod
@@ -162,6 +165,28 @@ public interface LoanApplicationActivity {
             BigDecimal dbrAfter,
             BigDecimal maxEligibleAmount,
             String rejectionReason,
+            String updatedBy
+    ) {}
+
+    /**
+     * Persists the credit decision engine snapshot (LOS §5 Step 4) on the
+     * loan application aggregate. Does NOT transition status.
+     *
+     * <p>The activity implementation serializes the {@code details} list to
+     * JSON (Jackson is allowed inside activities, not workflows).</p>
+     */
+    record SaveCreditDecisionInput(
+            String tenantId,
+            String applicationId,
+            String decision,
+            String reasonCode,
+            BigDecimal totalScore,
+            BigDecimal maxScore,
+            BigDecimal scorePercentage,
+            BigDecimal greenThreshold,
+            BigDecimal amberThreshold,
+            String summary,
+            List<CreditCheckActivity.CriteriaDetail> details,
             String updatedBy
     ) {}
 

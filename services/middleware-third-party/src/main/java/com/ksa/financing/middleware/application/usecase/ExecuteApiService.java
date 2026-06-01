@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.middleware.adapter.mock.MockResponseDispatcher;
+import com.ksa.financing.middleware.application.audit.ClientRequestAuditEmitter;
 import com.ksa.financing.middleware.domain.model.*;
 import com.ksa.financing.middleware.domain.port.in.ExecuteApiUseCase;
 import com.ksa.financing.middleware.domain.port.out.*;
@@ -46,6 +47,7 @@ public class ExecuteApiService implements ExecuteApiUseCase {
     private final MockResponseDispatcher mockResponseDispatcher;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final ClientRequestAuditEmitter auditEmitter;
 
     @Override
     @Transactional
@@ -163,6 +165,7 @@ public class ExecuteApiService implements ExecuteApiUseCase {
 
         clientRequest.markSuccess(mockResult.httpStatus(), responseHeadersJson, responseBodyJson, 0L);
         clientRequest = clientRequestRepository.save(clientRequest);
+        auditEmitter.emit(clientRequest);
 
         log.info("Mock execution completed: apiCode={}, status={}, table={}",
                 apiCode, mockResult.httpStatus(), targetTable(environment));
@@ -216,11 +219,16 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         var httpHeaders = buildHeaders(provider, envConfig, headers);
         var httpMethod = resolveHttpMethod(providerApi.getHttpMethod());
 
+        // If the caller sent no body (or just {}), and the env config has credentials,
+        // build the outgoing body from those credentials. This keeps sensitive client
+        // credentials inside the middleware — callers don't need to pass them.
+        String effectiveBody = injectCredentialsIfEmpty(requestBody, envConfig);
+
         String requestId = generateRequestId();
         var clientRequest = ClientRequest.create(
                 tenantId, providerApi.getId(), client.getId(), requestId,
                 provider.getCode(), apiCode, environment, providerApi.getHttpMethod(),
-                finalUrl, httpHeadersToJson(httpHeaders), ensureJsonBody(requestBody),
+                finalUrl, httpHeadersToJson(httpHeaders), ensureJsonBody(effectiveBody),
                 idempotencyKey, nationalId, mobileNumber, callerService,
                 context.customerId(), context.applicationId(), context.contextType(),
                 providerApi.getCostPerCall(), providerApi.getCostCurrency()
@@ -229,38 +237,47 @@ public class ExecuteApiService implements ExecuteApiUseCase {
 
         long startTime = System.currentTimeMillis();
         try {
-            var httpEntity = new HttpEntity<>(requestBody, httpHeaders);
+            var httpEntity = new HttpEntity<>(effectiveBody, httpHeaders);
             ResponseEntity<String> response = restTemplate.exchange(finalUrl, httpMethod, httpEntity, String.class);
             long duration = System.currentTimeMillis() - startTime;
 
             String respHeadersJson = httpHeadersToJson(response.getHeaders());
-            String respBodyJson = ensureJsonBody(response.getBody());
+            String rawBody = response.getBody();
+            // Provider envelopes (e.g. Facia wraps everything in `result.data`) are
+            // unwrapped before returning so callers see a clean payload.
+            String respBodyJson = unwrapProviderEnvelope(provider.getCode(), rawBody);
             clientRequest.markSuccess(response.getStatusCode().value(),
-                    respHeadersJson, respBodyJson, duration);
-            clientRequestRepository.save(clientRequest);
+                    respHeadersJson, ensureJsonBody(rawBody), duration);
+            clientRequest = clientRequestRepository.save(clientRequest);
+            auditEmitter.emit(clientRequest);
 
             log.info("Live API call succeeded: apiCode={}, env={}, status={}, duration={}ms",
                     apiCode, environment, response.getStatusCode().value(), duration);
 
             return new ExecutionResult(requestId, response.getStatusCode().value(),
-                    response.getBody(), respHeadersJson, duration, true, null);
+                    respBodyJson, respHeadersJson, duration, true, null);
 
         } catch (HttpStatusCodeException ex) {
             long duration = System.currentTimeMillis() - startTime;
+            String rawErrorBody = ex.getResponseBodyAsString();
             clientRequest.markFailed(ex.getStatusCode().value(),
-                    ensureJsonBody(ex.getResponseBodyAsString()), ex.getMessage(), duration);
-            clientRequestRepository.save(clientRequest);
+                    ensureJsonBody(rawErrorBody), ex.getMessage(), duration);
+            clientRequest = clientRequestRepository.save(clientRequest);
+            auditEmitter.emit(clientRequest);
 
             log.warn("Live API call failed: apiCode={}, env={}, status={}, duration={}ms",
                     apiCode, environment, ex.getStatusCode().value(), duration);
 
+            // Unwrap error body too so callers see the inner Facia error fields cleanly.
+            String cleanErrorBody = unwrapProviderEnvelope(provider.getCode(), rawErrorBody);
             return new ExecutionResult(requestId, ex.getStatusCode().value(),
-                    ex.getResponseBodyAsString(), null, duration, false, ex.getMessage());
+                    cleanErrorBody, null, duration, false, ex.getMessage());
 
         } catch (ResourceAccessException ex) {
             long duration = System.currentTimeMillis() - startTime;
             clientRequest.markTimeout(ex.getMessage(), duration);
-            clientRequestRepository.save(clientRequest);
+            clientRequest = clientRequestRepository.save(clientRequest);
+            auditEmitter.emit(clientRequest);
 
             log.error("Live API call timeout: apiCode={}, env={}, duration={}ms",
                     apiCode, environment, duration);
@@ -372,6 +389,76 @@ public class ExecuteApiService implements ExecuteApiUseCase {
             case PATCH -> org.springframework.http.HttpMethod.PATCH;
             case DELETE -> org.springframework.http.HttpMethod.DELETE;
         };
+    }
+
+    /**
+     * If the caller sent no body (null / blank / {@code "{}"}) and the env config has
+     * credentials, builds the outgoing body from those credentials. JSONB keys are
+     * translated from camelCase to snake_case so {@code {clientId, clientSecret}}
+     * becomes {@code {client_id, client_secret}} (standard for OAuth/auth-token APIs
+     * like Facia's {@code /request-access-token}).
+     *
+     * <p>If caller sent a real body, returns it unchanged.</p>
+     */
+    /**
+     * Strip the provider-specific response envelope so callers see a clean payload.
+     *
+     * <p>Facia wraps every successful response in {@code { status, message, result: { data: {...} } }}.
+     * We unwrap to the innermost {@code data} object so callers can read fields like
+     * {@code token}, {@code reference_id}, {@code similarity_score} directly at the top
+     * of {@code responseBody}.</p>
+     *
+     * <p>Audit columns ({@code response_body} in {@code client_request_*}) still keep the
+     * original raw body — only the {@code ExecuteApiResponse.responseBody} field returned
+     * to the caller is unwrapped.</p>
+     */
+    @SuppressWarnings("unchecked")
+    private String unwrapProviderEnvelope(String providerCode, String rawBody) {
+        if (rawBody == null || rawBody.isBlank()) return rawBody;
+        // Only Facia has this nested shape today. Add more providers here as they come on board.
+        if (!"FACIA".equalsIgnoreCase(providerCode)) return rawBody;
+        try {
+            Map<String, Object> envelope = objectMapper.readValue(rawBody, Map.class);
+            Object resultNode = envelope.get("result");
+            if (resultNode instanceof Map<?, ?> resultMap) {
+                Object dataNode = ((Map<String, Object>) resultMap).get("data");
+                if (dataNode != null) {
+                    return objectMapper.writeValueAsString(dataNode);
+                }
+                return objectMapper.writeValueAsString(resultMap);
+            }
+            return rawBody;
+        } catch (Exception e) {
+            // Body wasn't JSON or didn't match envelope shape — return as-is.
+            return rawBody;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String injectCredentialsIfEmpty(String requestBody, ApiEnvironmentConfig envConfig) {
+        boolean isEmpty = requestBody == null
+                || requestBody.isBlank()
+                || "{}".equals(requestBody.trim());
+        if (!isEmpty) return requestBody;
+        if (envConfig == null || envConfig.getCredentials() == null
+                || envConfig.getCredentials().isBlank()) {
+            return requestBody;
+        }
+        try {
+            Map<String, String> creds = objectMapper.readValue(envConfig.getCredentials(), Map.class);
+            Map<String, String> body = new java.util.LinkedHashMap<>();
+            for (var entry : creds.entrySet()) {
+                String key = entry.getKey();
+                String snake = key.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
+                body.put(snake, entry.getValue());
+            }
+            String built = objectMapper.writeValueAsString(body);
+            log.debug("Injected credentials-derived body (caller sent empty): keys={}", body.keySet());
+            return built;
+        } catch (Exception e) {
+            log.warn("Failed to build body from credentials: {}", e.getMessage());
+            return requestBody;
+        }
     }
 
     private HttpHeaders buildHeaders(ThirdPartyProvider provider, ApiEnvironmentConfig envConfig,

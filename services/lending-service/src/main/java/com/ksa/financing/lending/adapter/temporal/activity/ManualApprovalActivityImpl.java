@@ -33,6 +33,7 @@ public class ManualApprovalActivityImpl implements ManualApprovalActivity {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final String productServiceUrl;
     private final String slaBreachTopic;
+    private final String approvalRequiredTopic;
 
     public ManualApprovalActivityImpl(
             RestTemplate restTemplate,
@@ -40,13 +41,15 @@ public class ManualApprovalActivityImpl implements ManualApprovalActivity {
             JpaManualApprovalTaskRepository taskRepository,
             KafkaTemplate<String, Object> kafkaTemplate,
             @Value("${app.services.product-service-url}") String productServiceUrl,
-            @Value("${kafka.topics.approval-sla-breached:financing.loan.approval.sla-breached}") String slaBreachTopic) {
+            @Value("${kafka.topics.approval-sla-breached:financing.loan.approval.sla-breached}") String slaBreachTopic,
+            @Value("${kafka.topics.approval-required:financing.loan.approval.required}") String approvalRequiredTopic) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.taskRepository = taskRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.productServiceUrl = productServiceUrl;
         this.slaBreachTopic = slaBreachTopic;
+        this.approvalRequiredTopic = approvalRequiredTopic;
     }
 
     @Override
@@ -126,6 +129,32 @@ public class ManualApprovalActivityImpl implements ManualApprovalActivity {
         task = taskRepository.save(task);
         log.info("Created manual approval task id={} application={} sla={}",
                 task.getId(), input.applicationNumber(), task.getSlaDeadline());
+
+        // Publish admin notification event
+        try {
+            var event = new java.util.HashMap<String, Object>();
+            event.put("eventType", "MANUAL_APPROVAL_REQUIRED");
+            event.put("tenantId", input.tenantId());
+            event.put("taskId", task.getId().toString());
+            event.put("applicationId", input.applicationId());
+            event.put("applicationNumber", input.applicationNumber());
+            event.put("customerId", input.customerId());
+            event.put("customerName", input.customerName());
+            event.put("productName", input.productName());
+            event.put("requestedAmount", input.requestedAmount() != null ? input.requestedAmount().toPlainString() : null);
+            event.put("tenureMonths", input.tenureMonths());
+            event.put("creditScore", input.creditScore());
+            event.put("dbrPercentage", input.dbrPercentage() != null ? input.dbrPercentage().toPlainString() : null);
+            event.put("assignedRole", task.getAssignedRole());
+            event.put("slaDeadline", task.getSlaDeadline().toString());
+            event.put("occurredAt", OffsetDateTime.now().toString());
+
+            kafkaTemplate.send(approvalRequiredTopic, input.applicationId(), event);
+            log.info("Published MANUAL_APPROVAL_REQUIRED for task={} application={}",
+                    task.getId(), input.applicationNumber());
+        } catch (Exception e) {
+            log.error("Failed to publish MANUAL_APPROVAL_REQUIRED: {}", e.getMessage(), e);
+        }
 
         return new CreateTaskResult(task.getId().toString(), task.getSlaDeadline().toString());
     }

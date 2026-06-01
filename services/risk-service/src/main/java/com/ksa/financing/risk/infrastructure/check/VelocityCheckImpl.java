@@ -2,8 +2,8 @@ package com.ksa.financing.risk.infrastructure.check;
 
 import com.ksa.financing.risk.domain.model.CheckDecision;
 import com.ksa.financing.risk.domain.port.out.VelocityCheck;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class VelocityCheckImpl implements VelocityCheck {
 
@@ -22,11 +21,17 @@ public class VelocityCheckImpl implements VelocityCheck {
     private static final int NID_MAX_PER_DAY = 3;
     private static final int MOBILE_MAX_PER_DAY = 3;
 
-    private static final String KEY_PREFIX = "velocity:";
     private static final DateTimeFormatter HOUR_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHH");
     private static final String DAY_FORMAT_PATTERN = "yyyyMMdd";
 
     private final StringRedisTemplate redisTemplate;
+    private final String keyPrefix;
+
+    public VelocityCheckImpl(StringRedisTemplate redisTemplate,
+                             @Value("${ksa.risk.velocity-prefix:velocity:}") String keyPrefix) {
+        this.redisTemplate = redisTemplate;
+        this.keyPrefix = keyPrefix;
+    }
 
     @Override
     public VelocityResult check(VelocityInput input) {
@@ -38,7 +43,7 @@ public class VelocityCheckImpl implements VelocityCheck {
 
             // Check 1: IP rate limit (max per hour)
             if (input.ipAddress() != null && !input.ipAddress().isBlank()) {
-                String ipKey = KEY_PREFIX + "ip:" + input.ipAddress() + ":" + hourWindow;
+                String ipKey = keyPrefix + "ip:" + input.ipAddress() + ":" + hourWindow;
                 long ipCount = incrementWithExpiry(ipKey, Duration.ofHours(1));
                 if (ipCount > IP_MAX_PER_HOUR) {
                     log.warn("Velocity EXCEEDED: IP {} has {} requests/hour (max={})",
@@ -57,7 +62,7 @@ public class VelocityCheckImpl implements VelocityCheck {
                     : (input.mobileHash() != null && !input.mobileHash().isBlank() ? "mob:" + input.mobileHash() : null);
 
                 if (identityValue != null) {
-                    String deviceSetKey = KEY_PREFIX + "device:unique_ids:" + input.deviceId() + ":" + dayWindow;
+                    String deviceSetKey = keyPrefix + "device:unique_ids:" + input.deviceId() + ":" + dayWindow;
                     redisTemplate.opsForSet().add(deviceSetKey, identityValue);
                     redisTemplate.expire(deviceSetKey, Duration.ofDays(1));
                     Long uniqueIdCount = redisTemplate.opsForSet().size(deviceSetKey);
@@ -75,7 +80,7 @@ public class VelocityCheckImpl implements VelocityCheck {
 
             // Check 3: NID rate limit (max per day)
             if (input.nidHash() != null && !input.nidHash().isBlank()) {
-                String nidKey = KEY_PREFIX + "nid:" + input.nidHash() + ":" + dayWindow;
+                String nidKey = keyPrefix + "nid:" + input.nidHash() + ":" + dayWindow;
                 long nidCount = incrementWithExpiry(nidKey, Duration.ofDays(1));
                 if (nidCount > NID_MAX_PER_DAY) {
                     log.warn("Velocity EXCEEDED: NID hash {} has {} requests/day (max={})",
@@ -88,7 +93,7 @@ public class VelocityCheckImpl implements VelocityCheck {
 
             // Check 4: Mobile rate limit (max per day)
             if (input.mobileHash() != null && !input.mobileHash().isBlank()) {
-                String mobileKey = KEY_PREFIX + "mobile:" + input.mobileHash() + ":" + dayWindow;
+                String mobileKey = keyPrefix + "mobile:" + input.mobileHash() + ":" + dayWindow;
                 long mobileCount = incrementWithExpiry(mobileKey, Duration.ofDays(1));
                 if (mobileCount > MOBILE_MAX_PER_DAY) {
                     log.warn("Velocity EXCEEDED: Mobile hash {} has {} requests/day (max={})",

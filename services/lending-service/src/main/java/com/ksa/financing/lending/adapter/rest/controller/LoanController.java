@@ -136,7 +136,7 @@ public class LoanController {
         return ResponseEntity.ok(result);
     }
 
-    /** Populates amortization_schedules with the legacy-computed schedule if it's empty for this loan. */
+    /** Populates amortization_schedules with a flat-principal reducing-balance schedule if empty. */
     private void materializeAmortizationIfEmpty(com.ksa.financing.lending.infrastructure.persistence.entity.LoanJpaEntity loan) {
         var existing = amortizationScheduleRepository
                 .findByLoanIdAndActiveOrderByInstallmentNumberAsc(loan.getId(), true);
@@ -147,44 +147,37 @@ public class LoanController {
                 ? loan.getDisbursementDate().plusMonths(1)
                 : LocalDate.now().plusMonths(1);
 
-        var principal = loan.getPrincipalAmount();
-        var totalProfit = loan.getProfitAmount() != null ? loan.getProfitAmount() : BigDecimal.ZERO;
-        var tenure = loan.getTenureMonths();
-        var monthlyPrincipal = principal.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
-        var monthlyProfit = totalProfit.divide(BigDecimal.valueOf(tenure), 6, RoundingMode.HALF_UP);
-        var monthlyTotal = monthlyPrincipal.add(monthlyProfit);
+        var rows = com.ksa.financing.lending.domain.service.ReducingBalanceScheduleBuilder.build(
+                loan.getPrincipalAmount(),
+                loan.getProfitRate(),
+                loan.getProfitAmount(),
+                loan.getFeeAmount(),
+                loan.getTenureMonths(),
+                startDate);
 
-        BigDecimal cumulativePrincipal = BigDecimal.ZERO;
-        BigDecimal cumulativeProfit = BigDecimal.ZERO;
-        BigDecimal closing = principal;
-        for (int n = 1; n <= tenure; n++) {
-            var opening = closing;
-            closing = closing.subtract(monthlyPrincipal);
-            cumulativePrincipal = cumulativePrincipal.add(monthlyPrincipal);
-            cumulativeProfit = cumulativeProfit.add(monthlyProfit);
-
+        for (var r : rows) {
             var row = com.ksa.financing.lending.infrastructure.persistence.entity.AmortizationScheduleJpaEntity.builder()
                     .tenantId(loan.getTenantId())
                     .loanId(loan.getId())
                     .scheduleVersion(1)
                     .active(true)
-                    .installmentNumber(n)
-                    .dueDate(startDate.plusMonths(n - 1L))
-                    .openingPrincipal(opening)
-                    .principalComponent(monthlyPrincipal)
-                    .profitComponent(monthlyProfit)
-                    .feeComponent(BigDecimal.ZERO)
-                    .totalInstallment(monthlyTotal)
-                    .closingPrincipal(closing.max(BigDecimal.ZERO))
-                    .cumulativePrincipal(cumulativePrincipal)
-                    .cumulativeProfit(cumulativeProfit)
+                    .installmentNumber(r.installmentNumber())
+                    .dueDate(r.dueDate())
+                    .openingPrincipal(r.openingPrincipal())
+                    .principalComponent(r.principalComponent())
+                    .profitComponent(r.profitComponent())
+                    .feeComponent(r.feeComponent())
+                    .totalInstallment(r.totalInstallment())
+                    .closingPrincipal(r.closingPrincipal())
+                    .cumulativePrincipal(r.cumulativePrincipal())
+                    .cumulativeProfit(r.cumulativeProfit())
                     .calculationMethod("REDUCING_BALANCE")
                     .paymentStatus("PENDING")
                     .skipped(false)
                     .build();
             amortizationScheduleRepository.save(row);
         }
-        log.info("Materialized {} amortization rows for loanId={}", tenure, loan.getId());
+        log.info("Materialized {} reducing-balance rows for loanId={}", rows.size(), loan.getId());
     }
 
     @SuppressWarnings("unchecked")
@@ -525,7 +518,27 @@ public class LoanController {
                     loanId, mapper.toDto(loan), collectionsStatusByInstallment, collectionsSnapshots));
         }
 
+        // First pass: compute payable amount per row and total payable to derive outstandingBalance
+        // as cumulative remaining payable (= P + total profit + total fee − paid so far).
+        var payablesByInstallment = new java.util.LinkedHashMap<Integer, BigDecimal>();
+        BigDecimal totalPayable = BigDecimal.ZERO;
+        for (var row : dbSchedules) {
+            BigDecimal p = row.getPrincipalComponent() != null ? row.getPrincipalComponent() : BigDecimal.ZERO;
+            BigDecimal f = row.getFeeComponent() != null ? row.getFeeComponent() : BigDecimal.ZERO;
+            BigDecimal pr;
+            if (row.getProfitComponent() != null) {
+                pr = row.getProfitComponent();
+            } else {
+                BigDecimal total = row.getTotalInstallment() != null ? row.getTotalInstallment() : BigDecimal.ZERO;
+                pr = total.subtract(p).subtract(f).max(BigDecimal.ZERO);
+            }
+            BigDecimal pay = p.add(pr).add(f).setScale(2, RoundingMode.HALF_UP);
+            payablesByInstallment.put(row.getInstallmentNumber(), pay);
+            totalPayable = totalPayable.add(pay);
+        }
+
         var responses = new ArrayList<InstallmentScheduleResponse>();
+        BigDecimal runningOutstanding = totalPayable;
         for (var row : dbSchedules) {
             var invoiceId = "INV-" + loanId.substring(0, 8).toUpperCase() + "-"
                     + String.format("%03d", row.getInstallmentNumber());
@@ -534,27 +547,43 @@ public class LoanController {
             status = normalizeInstallmentStatus(status);
             var isPaid = "PAID".equalsIgnoreCase(status) || "COMPLETED".equalsIgnoreCase(status);
 
-            // Force component breakdown to match the contract installmentAmount.
-            // Some legacy rows have profit_component computed from a stale rate; the
-            // canonical figure is total_installment, so we derive profit on the fly
-            // to keep `principal + profit + fee == installmentAmount` invariant.
             BigDecimal principal = row.getPrincipalComponent() != null ? row.getPrincipalComponent() : BigDecimal.ZERO;
             BigDecimal fee = row.getFeeComponent() != null ? row.getFeeComponent() : BigDecimal.ZERO;
-            BigDecimal total = row.getTotalInstallment() != null ? row.getTotalInstallment() : BigDecimal.ZERO;
-            BigDecimal profit = total.subtract(principal).subtract(fee).max(BigDecimal.ZERO);
+            BigDecimal profit;
+            if (row.getProfitComponent() != null) {
+                profit = row.getProfitComponent();
+            } else {
+                BigDecimal total = row.getTotalInstallment() != null ? row.getTotalInstallment() : BigDecimal.ZERO;
+                profit = total.subtract(principal).subtract(fee).max(BigDecimal.ZERO);
+            }
+            BigDecimal payable = payablesByInstallment.get(row.getInstallmentNumber());
+
+            // Outstanding = sum of payable amounts for installments due AFTER this one
+            runningOutstanding = runningOutstanding.subtract(payable).setScale(2, RoundingMode.HALF_UP);
+            if (runningOutstanding.signum() < 0) runningOutstanding = BigDecimal.ZERO.setScale(2);
+
+            // Force 2-decimal display
+            principal = principal.setScale(2, RoundingMode.HALF_UP);
+            profit = profit.setScale(2, RoundingMode.HALF_UP);
+            fee = fee.setScale(2, RoundingMode.HALF_UP);
+
+            // Per reducing-balance doc §3,§4: installmentAmount is the EMI (principal + profit),
+            // constant across installments; principal & profit vary monthly.
+            BigDecimal emi = principal.add(profit).setScale(2, RoundingMode.HALF_UP);
 
             responses.add(new InstallmentScheduleResponse(
                     invoiceId,
                     row.getInstallmentNumber(),
                     row.getDueDate(),
-                    total,
+                    emi,                        // installmentAmount = EMI (principal + profit, constant per doc §3)
                     principal,
                     profit,
                     fee,
-                    row.getClosingPrincipal(),
+                    payable,                    // payableAmount = principal + profit + fee
+                    runningOutstanding,         // outstandingBalance = remaining total payable
                     status,
                     isPaid ? LocalDate.now() : null,
-                    isPaid ? total : null,
+                    isPaid ? payable : null,
                     isPaid,
                     collectionsSnapshots.get(row.getInstallmentNumber())
             ));
@@ -612,18 +641,40 @@ public class LoanController {
             status = normalizeInstallmentStatus(status);
             var isPaid = "PAID".equalsIgnoreCase(status) || "COMPLETED".equalsIgnoreCase(status);
 
+            BigDecimal pPrincipal = row.getPrincipalComponent() != null ? row.getPrincipalComponent() : BigDecimal.ZERO;
+            BigDecimal pProfit = row.getProfitComponent() != null ? row.getProfitComponent() : BigDecimal.ZERO;
+            BigDecimal pFee = row.getFeeComponent() != null ? row.getFeeComponent() : BigDecimal.ZERO;
+            BigDecimal pPayable = pPrincipal.add(pProfit).add(pFee);
+            pPrincipal = pPrincipal.setScale(2, RoundingMode.HALF_UP);
+            pProfit = pProfit.setScale(2, RoundingMode.HALF_UP);
+            pFee = pFee.setScale(2, RoundingMode.HALF_UP);
+            pPayable = pPayable.setScale(2, RoundingMode.HALF_UP);
+
+            // Outstanding = sum of payable amounts for installments due AFTER this one
+            BigDecimal pClosing = BigDecimal.ZERO;
+            for (var s : dbSchedules) {
+                if (s.getInstallmentNumber() > installmentNumber) {
+                    BigDecimal sp = s.getPrincipalComponent() != null ? s.getPrincipalComponent() : BigDecimal.ZERO;
+                    BigDecimal spr = s.getProfitComponent() != null ? s.getProfitComponent() : BigDecimal.ZERO;
+                    BigDecimal sf = s.getFeeComponent() != null ? s.getFeeComponent() : BigDecimal.ZERO;
+                    pClosing = pClosing.add(sp).add(spr).add(sf);
+                }
+            }
+            pClosing = pClosing.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal pEmi = pPrincipal.add(pProfit).setScale(2, RoundingMode.HALF_UP);
             installment = new InstallmentScheduleResponse(
                     invoiceId,
                     row.getInstallmentNumber(),
                     row.getDueDate(),
-                    row.getTotalInstallment(),
-                    row.getPrincipalComponent(),
-                    row.getProfitComponent(),
-                    row.getFeeComponent() != null ? row.getFeeComponent() : BigDecimal.ZERO,
-                    row.getClosingPrincipal(),
+                    pEmi,                       // installmentAmount = EMI (principal + profit, doc §3)
+                    pPrincipal,
+                    pProfit,
+                    pFee,
+                    pPayable,                   // payableAmount = principal + profit + fee
+                    pClosing,
                     status,
                     isPaid ? LocalDate.now() : null,
-                    isPaid ? row.getTotalInstallment() : null,
+                    isPaid ? pPayable : null,
                     isPaid,
                     collectionsSnapshots.get(row.getInstallmentNumber())
             );
@@ -728,43 +779,51 @@ public class LoanController {
         }
 
         var principal = dto.principalAmount() != null ? dto.principalAmount() : BigDecimal.ZERO;
+        var rate = dto.profitRate() != null ? dto.profitRate() : BigDecimal.ZERO;
         var totalProfit = dto.profitAmount() != null ? dto.profitAmount() : BigDecimal.ZERO;
         var totalFee = dto.feeAmount() != null ? dto.feeAmount() : BigDecimal.ZERO;
-        var monthlyPrincipal = principal.divide(BigDecimal.valueOf(dto.tenureMonths()), 2, RoundingMode.HALF_UP);
-        var monthlyProfit = totalProfit.divide(BigDecimal.valueOf(dto.tenureMonths()), 2, RoundingMode.HALF_UP);
-        var monthlyFee = totalFee.divide(BigDecimal.valueOf(dto.tenureMonths()), 2, RoundingMode.HALF_UP);
-        var balance = principal.add(totalProfit).add(totalFee);
+
+        var rows = com.ksa.financing.lending.domain.service.ReducingBalanceScheduleBuilder.build(
+                principal, rate, totalProfit, totalFee, dto.tenureMonths(), startDate);
 
         var total = dto.totalAmount() != null ? dto.totalAmount() : BigDecimal.ZERO;
-        var outstanding = dto.totalOutstanding() != null ? dto.totalOutstanding() : BigDecimal.ZERO;
-        var paidAmt = total.subtract(outstanding);
+        var outstandingTotal = dto.totalOutstanding() != null ? dto.totalOutstanding() : BigDecimal.ZERO;
+        var paidAmt = total.subtract(outstandingTotal);
         int paidCount = dto.installmentAmount().compareTo(BigDecimal.ZERO) > 0
                 ? paidAmt.divide(dto.installmentAmount(), 0, RoundingMode.DOWN).intValue() : 0;
 
-        for (int i = 1; i <= dto.tenureMonths(); i++) {
-            balance = balance.subtract(dto.installmentAmount());
-            if (balance.compareTo(BigDecimal.ZERO) < 0) {
-                balance = BigDecimal.ZERO;
-            }
-            var dueDate = startDate.plusMonths(i - 1);
+        // Pre-compute total payable for running outstanding balance
+        BigDecimal totalPayable = BigDecimal.ZERO;
+        for (var r : rows) {
+            totalPayable = totalPayable.add(r.payableAmount());
+        }
+
+        BigDecimal runningOutstanding = totalPayable;
+        for (var r : rows) {
+            int i = r.installmentNumber();
+            var dueDate = r.dueDate();
             var invoiceId = "INV-" + loanId.substring(0, 8).toUpperCase() + "-" + String.format("%03d", i);
             var fallbackStatus = i <= paidCount ? "PAID" : (dueDate.isBefore(LocalDate.now()) ? "OVERDUE" : "PENDING");
             var resolvedStatus = normalizeInstallmentStatus(collectionsStatusByInstallment.getOrDefault(i, fallbackStatus));
             var isPaid = "PAID".equalsIgnoreCase(resolvedStatus) || "COMPLETED".equalsIgnoreCase(resolvedStatus);
             var isOverdue = "OVERDUE".equalsIgnoreCase(resolvedStatus);
 
+            runningOutstanding = runningOutstanding.subtract(r.payableAmount()).setScale(2, RoundingMode.HALF_UP);
+            if (runningOutstanding.signum() < 0) runningOutstanding = BigDecimal.ZERO.setScale(2);
+
             schedule.add(new InstallmentScheduleResponse(
                     invoiceId,
                     i,
                     dueDate,
-                    dto.installmentAmount(),
-                    monthlyPrincipal,
-                    monthlyProfit,
-                    monthlyFee,
-                    balance,
+                    r.totalInstallment(),           // installmentAmount = EMI (principal + profit, doc §3)
+                    r.principalComponent(),
+                    r.profitComponent(),
+                    r.feeComponent(),
+                    r.payableAmount(),              // payableAmount = principal + profit + fee
+                    runningOutstanding,             // outstandingBalance = remaining total payable
                     isPaid ? "PAID" : (isOverdue ? "OVERDUE" : resolvedStatus),
                     isPaid ? LocalDate.now() : null,
-                    isPaid ? dto.installmentAmount() : null,
+                    isPaid ? r.payableAmount() : null,
                     isPaid,
                     collectionsSnapshots != null ? collectionsSnapshots.get(i) : null
             ));

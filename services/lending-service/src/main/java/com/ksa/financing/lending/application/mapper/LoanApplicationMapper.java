@@ -85,6 +85,18 @@ public class LoanApplicationMapper {
                 agg.getVerifiedSalary(),
                 agg.getMaxEligibleAmount(),
 
+                // Step 3.5: Credit Decision Engine
+                agg.getCreditDecision(),
+                agg.getCreditDecisionReason(),
+                agg.getScoringTotalScore(),
+                agg.getScoringMaxScore(),
+                agg.getScoringPercentage(),
+                agg.getScoringGreenThreshold(),
+                agg.getScoringAmberThreshold(),
+                agg.getScoringSummary(),
+                agg.getScoringDetailsJson(),
+                agg.getScoringEvaluatedAt(),
+
                 // Step 4: Offer
                 agg.getOfferedAmount(),
                 agg.getOfferedMonthlyInstallment(),
@@ -151,6 +163,10 @@ public class LoanApplicationMapper {
                 dto.disbursementAccountHolder(), dto.ibanVerified(),
                 dto.simahConsent(), dto.simahConsentAt(), dto.creditScore(), dto.simahReferenceId(),
                 dto.verifiedSalary(), dto.maxEligibleAmount(),
+                dto.creditDecision(), dto.creditDecisionReason(),
+                dto.scoringTotalScore(), dto.scoringMaxScore(), dto.scoringPercentage(),
+                dto.scoringGreenThreshold(), dto.scoringAmberThreshold(),
+                dto.scoringSummary(), dto.scoringDetailsJson(), dto.scoringEvaluatedAt(),
                 dto.offeredAmount(), dto.offeredMonthlyInstallment(), dto.offeredTotalProfit(),
                 dto.offeredTotalPayable(), dto.processingFee(), dto.adminFee(), dto.acceptedAmount(),
                 dto.contractExpiresAt(), dto.otpVerified(), dto.otpAttempts(),

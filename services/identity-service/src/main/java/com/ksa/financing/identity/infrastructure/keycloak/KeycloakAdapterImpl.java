@@ -351,6 +351,26 @@ public class KeycloakAdapterImpl implements KeycloakAdapterPort {
         return new KeycloakUserDetails(keycloakUserId, (String) body.get("username"), (String) body.get("firstName"), (String) body.get("lastName"), (String) body.get("email"), Boolean.TRUE.equals(body.get("enabled")));
     }
 
+    @Override
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
+    @SuppressWarnings("unchecked")
+    public java.util.Optional<KeycloakUser> findUserByEmail(String realm, String email) {
+        if (email == null || email.isBlank()) return java.util.Optional.empty();
+        String adminToken = obtainAdminToken(realm);
+        String usersUrl = keycloakBaseUrl + "/admin/realms/" + realm + "/users";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken);
+        HttpEntity<Void> getRequest = new HttpEntity<>(headers);
+        var rows = searchUser(usersUrl, getRequest, "email", email);
+        if (rows == null || rows.isEmpty()) return java.util.Optional.empty();
+        Map<String, Object> user = (Map<String, Object>) rows.get(0);
+        return java.util.Optional.of(new KeycloakUser(
+                UUID.fromString((String) user.get("id")),
+                (String) user.get("username")
+        ));
+    }
+
     private String obtainAdminToken(String realm) {
         String tokenUrl = keycloakBaseUrl + "/realms/" + realm + "/protocol/openid-connect/token";
         HttpHeaders headers = new HttpHeaders();

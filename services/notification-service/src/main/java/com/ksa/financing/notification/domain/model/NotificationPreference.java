@@ -22,7 +22,7 @@ public class NotificationPreference {
     private UUID customerId;
 
     @Column(name = "preferred_language", nullable = false)
-    private String preferredLanguage = "ar";
+    private String preferredLanguage = "en";
 
     @Column(name = "sms_enabled")
     private boolean smsEnabled = true;

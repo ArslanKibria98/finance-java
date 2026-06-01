@@ -50,12 +50,16 @@ const sharedEnv = {
   TEMPORAL_NAMESPACE: 'qa',
 
   // Keycloak (Docker, but PM2 runs on host so use localhost — Docker hostname `keycloak`
-  // is unresolvable from host network)
-  KEYCLOAK_BASE_URL: 'http://localhost:8080',
+  // is unresolvable from host network).
+  // BASE_URL is browser-facing (used to build SSO authUrl returned to client) → must be public.
+  // AUTH_SERVER_URL is server-to-server (token exchange, JWK fetch) → stays localhost.
+  // QA uses dedicated realm `CompanyRealm-QA` (isolated from dev `CompanyRealm`) so QA
+  // user data (tokens, sessions, registrations) cannot bleed into dev and vice versa.
+  KEYCLOAK_BASE_URL: 'http://46.62.226.94:8080',
   KEYCLOAK_AUTH_SERVER_URL: 'http://localhost:8080',  // IDS reads this for token + JWK endpoints
-  KEYCLOAK_ISSUER_URI: 'http://localhost:8080/realms/CompanyRealm',  // matches `iss` of tokens IDS-qa mints from localhost:8080
-  KEYCLOAK_JWK_SET_URI: 'http://localhost:8080/realms/CompanyRealm/protocol/openid-connect/certs',
-  KEYCLOAK_REALM: 'CompanyRealm',
+  KEYCLOAK_ISSUER_URI: 'http://localhost:8080/realms/CompanyRealm-QA',  // QA-specific issuer
+  KEYCLOAK_JWK_SET_URI: 'http://localhost:8080/realms/CompanyRealm-QA/protocol/openid-connect/certs',
+  KEYCLOAK_REALM: 'CompanyRealm-QA',
   KEYCLOAK_ADMIN_CLIENT_ID: 'admin-dashboard',
   KEYCLOAK_ADMIN_CLIENT_SECRET: 'admin-dashboard-secret',
 
@@ -92,6 +96,17 @@ const sharedEnv = {
   // Auth — isolated Casbin policy cache so QA IDS doesn't overwrite dev's Redis keys
   KSA_AUTHORIZATION_ENABLED: 'true',
   KSA_AUTHORIZATION_CACHE_KEY_PREFIX: 'casbin:policies:qa',
+
+  // Redis namespace isolation for risk-service velocity + foundational-infra-sdk blacklist.
+  // Without these, dev and qa share the same Redis keys → blacklisted device/IP/NID in
+  // either env affects the other; velocity counters get double-incremented.
+  KSA_RISK_VELOCITY_PREFIX: 'qa:velocity:',
+  KSA_BLACKLIST_CACHE_KEY_PREFIX: 'qa:blacklist',
+
+  // CORS — QA browser portals served from 65.108.31.172:7380 (alongside existing 7374).
+  // Without this override, services fall back to their application.yml defaults which
+  // include 7374 but not 7380 → preflight returns "Invalid CORS request".
+  CORS_ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:3001,http://localhost:4200,http://46.62.226.94:3000,http://46.62.226.94:4200,http://65.108.31.172:7374,http://65.108.31.172:7380',
 };
 
 function service(name, port, dbName, extraEnv = {}) {

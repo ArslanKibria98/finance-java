@@ -21,6 +21,8 @@ public interface SubmitPepAnswerUseCase {
             String sourceOfWealthDescription,
             String sourceOfFunds,
             String sourceOfFundsDetails,
+            String occupation,
+            String occupationDetails,
             List<CustomerPepAnswer.RelatedPerson> relatedPersons,
             String additionalNotes,
             UUID submittedBy

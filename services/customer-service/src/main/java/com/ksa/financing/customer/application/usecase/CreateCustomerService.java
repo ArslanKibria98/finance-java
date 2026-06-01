@@ -91,20 +91,21 @@ public class CreateCustomerService implements CreateCustomerUseCase {
         customer.setLastName(command.lastName());
         customer.setFirstNameAr(command.firstNameAr());
         customer.setLastNameAr(command.lastNameAr());
-        customer.setFullName(command.firstName() + " " + (command.middleName() != null ? command.middleName() + " " : "") + command.lastName());
+        String safeFirst = command.firstName() != null ? command.firstName() : "";
+        String safeMiddle = command.middleName() != null ? command.middleName() + " " : "";
+        String safeLast = command.lastName() != null ? command.lastName() : "";
+        customer.setFullName((safeFirst + " " + safeMiddle + safeLast).trim());
         customer.setDateOfBirth(command.dateOfBirth() != null ? command.dateOfBirth() : java.time.LocalDate.of(1970, 1, 1));
-        if (command.gender() != null) customer.setGender(Gender.valueOf(command.gender()));
+        customer.setGender(parseEnumOrNull(Gender.class, command.gender(), "gender"));
         customer.setNationality(command.nationality());
-        customer.setResidencyType(ResidencyType.valueOf(command.residencyType()));
+        customer.setResidencyType(parseEnumOrDefault(ResidencyType.class, command.residencyType(),
+                ResidencyType.VISITOR, "residencyType"));
         customer.setMobileNumber(command.mobileNumber());
         customer.setEmail(command.email());
         customer.setKycStatus(KycStatus.PENDING);
         customer.setPepStatus(PepStatus.PENDING);
-        customer.setLifecycleStage(
-                command.lifecycleStage() != null
-                        ? LifecycleStage.valueOf(command.lifecycleStage())
-                        : LifecycleStage.LEAD
-        );
+        customer.setLifecycleStage(parseEnumOrDefault(LifecycleStage.class, command.lifecycleStage(),
+                LifecycleStage.LEAD, "lifecycleStage"));
         customer.setGlobalUid(globalUid);
         customer.setKeycloakUserId(command.keycloakUserId());
         customer.setActive(true);
@@ -130,5 +131,22 @@ public class CreateCustomerService implements CreateCustomerUseCase {
 
     private String generateCifNumber() {
         return "CIF" + System.currentTimeMillis() % 10000000000L;
+    }
+
+    private static <E extends Enum<E>> E parseEnumOrNull(Class<E> type, String value, String fieldName) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Enum.valueOf(type, value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(
+                    ErrorCodes.VALIDATION_FAILED,
+                    "Invalid value for " + fieldName + ": '" + value + "'. Allowed: " + java.util.Arrays.toString(type.getEnumConstants()),
+                    value);
+        }
+    }
+
+    private static <E extends Enum<E>> E parseEnumOrDefault(Class<E> type, String value, E fallback, String fieldName) {
+        E parsed = parseEnumOrNull(type, value, fieldName);
+        return parsed != null ? parsed : fallback;
     }
 }

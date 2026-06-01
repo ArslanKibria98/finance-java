@@ -109,28 +109,40 @@ public class UpdateCustomerActivityImpl implements UpdateCustomerActivity {
             }
             UUID customerId = UUID.fromString(input.customerId());
 
-            // Aligned with AML thresholds: LOW 0-30, MEDIUM 31-41, HIGH 42+
-            // Score 999 = PEP dominant override → HIGH
+            // PRIMARY path: trust explicit riskLevel (set by AML engine — preserves
+            // dominant overrides like PEP). FALLBACK: derive from score thresholds
+            // (LOW 0-30, MEDIUM 31-41, HIGH 42+).
             RiskGrade grade;
             int score = input.riskScore();
-            if (score >= 42) grade = RiskGrade.HIGH;
-            else if (score >= 31) grade = RiskGrade.MEDIUM;
-            else grade = RiskGrade.LOW;
+            String explicitLevel = input.riskLevel();
+            if (explicitLevel != null && !explicitLevel.isBlank()) {
+                try {
+                    grade = RiskGrade.valueOf(explicitLevel.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid riskLevel='{}' for customerId={}, falling back to score thresholds",
+                            explicitLevel, input.customerId());
+                    grade = mapScoreToGrade(score);
+                }
+            } else {
+                grade = mapScoreToGrade(score);
+            }
 
             updateCustomerUseCase.updateRiskGrade(tenantId, customerId, grade);
 
-            // If score >= 42 (HIGH), also set pepFlag for PEP dominant overrides (score=999)
-            if (score >= 999) {
-                updateCustomerUseCase.updatePepFlag(tenantId, customerId, true);
-                log.info("PEP flag set to true for customerId={} (dominant override score={})", input.customerId(), score);
-            }
-
-            log.info("Risk grade updated to {} (score={}) for customerId={}", grade, score, input.customerId());
+            log.info("Risk grade updated to {} (score={}, explicitLevel={}) for customerId={}",
+                    grade, score, explicitLevel, input.customerId());
             return new UpdateRiskGradeResult(true, grade.name());
         } catch (Exception e) {
             log.error("Risk grade update failed for customerId={}: {}", input.customerId(), e.getMessage(), e);
             throw Activity.wrap(e);
         }
+    }
+
+    /** Threshold-based fallback when no explicit riskLevel is supplied. */
+    private static RiskGrade mapScoreToGrade(int score) {
+        if (score >= 42) return RiskGrade.HIGH;
+        if (score >= 31) return RiskGrade.MEDIUM;
+        return RiskGrade.LOW;
     }
 
     @Override
@@ -158,6 +170,8 @@ public class UpdateCustomerActivityImpl implements UpdateCustomerActivity {
                             null, // sourceOfWealthDescription
                             input.sourceOfFunds(),
                             null, // sourceOfFundsDetails
+                            input.occupation(),
+                            null, // occupationDetails
                             java.util.List.of(),
                             "Submitted during onboarding",
                             customerId // best available actor in onboarding context

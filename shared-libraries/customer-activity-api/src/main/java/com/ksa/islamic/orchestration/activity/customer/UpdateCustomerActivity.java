@@ -35,7 +35,11 @@ public interface UpdateCustomerActivity {
     record UpdateRiskGradeInput(
         String customerId,
         int riskScore,
-        String tenantId
+        String tenantId,
+        // OPTIONAL: pass the explicit riskLevel (LOW/MEDIUM/HIGH) from AML.
+        // When provided, customer-service uses it directly (preserves dominant
+        // overrides like PEP). When null, falls back to score→band threshold mapping.
+        String riskLevel
     ) {}
 
     record UpdateRiskGradeResult(
@@ -49,7 +53,8 @@ public interface UpdateCustomerActivity {
         boolean isPep,
         String sourceOfFunds,
         String estimatedNetWorth,
-        String sourceOfIncome
+        String sourceOfIncome,
+        String occupation
     ) {}
 
     record SubmitPepFromOnboardingResult(

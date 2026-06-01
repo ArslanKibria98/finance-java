@@ -37,8 +37,10 @@ class MurabahaCalculatorTest {
         startDate = LocalDate.of(2024, 1, 1);
     }
 
+    private static final BigDecimal TOL = new BigDecimal("1.50");
+
     @Test
-    @DisplayName("Should calculate basic Murabaha with 5% profit rate for 12 months")
+    @DisplayName("Should calculate basic Murabaha with 5% profit rate for 12 months (reducing balance)")
     void shouldCalculateBasicMurabaha() {
         // Given
         SarMoney costPrice = SarMoney.of(100000);
@@ -48,17 +50,17 @@ class MurabahaCalculatorTest {
         // When
         MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
-        // Then
+        // Then — reducing-balance: P=100k, r=5%, n=12 → EMI=8560.75, profit=2728.98
         assertThat(result).isNotNull();
         assertThat(result.costPrice()).isEqualTo(costPrice);
-        assertThat(result.profitAmount()).isEqualTo(SarMoney.of(5000.00));
-        assertThat(result.salePrice()).isEqualTo(SarMoney.of(105000.00));
-        assertThat(result.monthlyInstallment()).isEqualTo(SarMoney.of(8750.00));
+        assertThat(result.profitAmount().getValue()).isCloseTo(new BigDecimal("2728.98"), within(TOL));
+        assertThat(result.salePrice().getValue()).isCloseTo(new BigDecimal("102728.98"), within(TOL));
+        assertThat(result.monthlyInstallment().getValue()).isCloseTo(new BigDecimal("8560.75"), within(TOL));
         assertThat(result.schedule()).hasSize(12);
     }
 
     @Test
-    @DisplayName("Should calculate Murabaha with 10% profit rate for 24 months")
+    @DisplayName("Should calculate Murabaha with 10% profit rate for 24 months (reducing balance)")
     void shouldCalculateMurabahaWith10PercentFor24Months() {
         // Given
         SarMoney costPrice = SarMoney.of(50000);
@@ -68,15 +70,15 @@ class MurabahaCalculatorTest {
         // When
         MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
-        // Then
-        assertThat(result.profitAmount()).isEqualTo(SarMoney.of(5000.00));
-        assertThat(result.salePrice()).isEqualTo(SarMoney.of(55000.00));
-        assertThat(result.monthlyInstallment()).isEqualTo(SarMoney.of(2291.67));
+        // Then — reducing-balance: P=50k, r=10%, n=24 → EMI≈2307.25, profit≈5373.92
+        assertThat(result.profitAmount().getValue()).isCloseTo(new BigDecimal("5373.92"), within(TOL));
+        assertThat(result.salePrice().getValue()).isCloseTo(new BigDecimal("55373.92"), within(TOL));
+        assertThat(result.monthlyInstallment().getValue()).isCloseTo(new BigDecimal("2307.25"), within(TOL));
         assertThat(result.schedule()).hasSize(24);
     }
 
     @Test
-    @DisplayName("Should calculate Murabaha with 15% profit rate for 36 months")
+    @DisplayName("Should calculate Murabaha with 15% profit rate for 36 months (reducing balance)")
     void shouldCalculateMurabahaWith15PercentFor36Months() {
         // Given
         SarMoney costPrice = SarMoney.of(200000);
@@ -86,15 +88,15 @@ class MurabahaCalculatorTest {
         // When
         MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
-        // Then
-        assertThat(result.profitAmount()).isEqualTo(SarMoney.of(30000.00));
-        assertThat(result.salePrice()).isEqualTo(SarMoney.of(230000.00));
-        assertThat(result.monthlyInstallment()).isEqualTo(SarMoney.of(6388.89));
+        // Then — reducing-balance: P=200k, r=15%, n=36 → EMI≈6933.20, profit≈49590.33
+        assertThat(result.profitAmount().getValue()).isCloseTo(new BigDecimal("49590.33"), within(TOL));
+        assertThat(result.salePrice().getValue()).isCloseTo(new BigDecimal("249590.33"), within(TOL));
+        assertThat(result.monthlyInstallment().getValue()).isCloseTo(new BigDecimal("6933.20"), within(TOL));
         assertThat(result.schedule()).hasSize(36);
     }
 
     @Test
-    @DisplayName("Should calculate Murabaha for 60 months tenure")
+    @DisplayName("Should calculate Murabaha for 60 months tenure (reducing balance)")
     void shouldCalculateMurabahaFor60Months() {
         // Given
         SarMoney costPrice = SarMoney.of(150000);
@@ -104,10 +106,10 @@ class MurabahaCalculatorTest {
         // When
         MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
-        // Then
-        assertThat(result.profitAmount()).isEqualTo(SarMoney.of(12000.00));
-        assertThat(result.salePrice()).isEqualTo(SarMoney.of(162000.00));
-        assertThat(result.monthlyInstallment()).isEqualTo(SarMoney.of(2700.00));
+        // Then — reducing-balance: P=150k, r=8%, n=60 → EMI≈3041.46, profit≈32487.50
+        assertThat(result.profitAmount().getValue()).isCloseTo(new BigDecimal("32487.50"), within(TOL));
+        assertThat(result.salePrice().getValue()).isCloseTo(new BigDecimal("182487.50"), within(TOL));
+        assertThat(result.monthlyInstallment().getValue()).isCloseTo(new BigDecimal("3041.46"), within(TOL));
         assertThat(result.schedule()).hasSize(60);
     }
 
@@ -140,7 +142,7 @@ class MurabahaCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should calculate monthly installment correctly")
+    @DisplayName("Should calculate monthly installment correctly (reducing balance)")
     void shouldCalculateMonthlyInstallmentCorrectly() {
         // Given
         SarMoney costPrice = SarMoney.of(100000);
@@ -150,36 +152,38 @@ class MurabahaCalculatorTest {
         // When
         SarMoney monthlyInstallment = MurabahaCalculator.calculateMonthlyInstallment(costPrice, profitRate, tenure, SarMoney.zero());
 
-        // Then
-        assertThat(monthlyInstallment).isEqualTo(SarMoney.of(8750.00));
+        // Then — reducing-balance EMI for P=100k, r=5%, n=12
+        assertThat(monthlyInstallment.getValue()).isCloseTo(new BigDecimal("8560.75"), within(TOL));
     }
 
     @Test
-    @DisplayName("Should calculate profit amount correctly")
+    @DisplayName("Should calculate profit amount over tenure (reducing balance)")
     void shouldCalculateProfitAmountCorrectly() {
         // Given
         SarMoney costPrice = SarMoney.of(100000);
         ProfitRate profitRate = ProfitRate.ofPercentage(5.0);
+        Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        SarMoney profitAmount = MurabahaCalculator.calculateProfitAmount(costPrice, profitRate);
+        SarMoney profitAmount = MurabahaCalculator.calculateProfitAmount(costPrice, profitRate, tenure);
 
-        // Then
-        assertThat(profitAmount).isEqualTo(SarMoney.of(5000.00));
+        // Then — reducing-balance total profit for P=100k, r=5%, n=12
+        assertThat(profitAmount.getValue()).isCloseTo(new BigDecimal("2728.98"), within(TOL));
     }
 
     @Test
-    @DisplayName("Should calculate sale price correctly")
+    @DisplayName("Should calculate sale price over tenure (reducing balance)")
     void shouldCalculateSalePriceCorrectly() {
         // Given
         SarMoney costPrice = SarMoney.of(100000);
         ProfitRate profitRate = ProfitRate.ofPercentage(5.0);
+        Tenure tenure = Tenure.ofMonths(12);
 
         // When
-        SarMoney salePrice = MurabahaCalculator.calculateSalePrice(costPrice, profitRate);
+        SarMoney salePrice = MurabahaCalculator.calculateSalePrice(costPrice, profitRate, tenure);
 
-        // Then
-        assertThat(salePrice).isEqualTo(SarMoney.of(105000.00));
+        // Then — cost + reducing-balance total profit
+        assertThat(salePrice.getValue()).isCloseTo(new BigDecimal("102728.98"), within(TOL));
     }
 
     @Test
@@ -346,7 +350,7 @@ class MurabahaCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should calculate Murabaha with very small amount")
+    @DisplayName("Should calculate Murabaha with very small amount (reducing balance)")
     void shouldCalculateMurabahaWithSmallAmount() {
         // Given
         SarMoney costPrice = SarMoney.of(1000);
@@ -356,14 +360,14 @@ class MurabahaCalculatorTest {
         // When
         MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
-        // Then
-        assertThat(result.profitAmount()).isEqualTo(SarMoney.of(50.00));
-        assertThat(result.salePrice()).isEqualTo(SarMoney.of(1050.00));
-        assertThat(result.monthlyInstallment()).isEqualTo(SarMoney.of(87.50));
+        // Then — reducing-balance: P=1k, r=5%, n=12
+        assertThat(result.profitAmount().getValue()).isCloseTo(new BigDecimal("27.30"), within(TOL));
+        assertThat(result.salePrice().getValue()).isCloseTo(new BigDecimal("1027.30"), within(TOL));
+        assertThat(result.monthlyInstallment().getValue()).isCloseTo(new BigDecimal("85.61"), within(TOL));
     }
 
     @Test
-    @DisplayName("Should calculate Murabaha with large amount")
+    @DisplayName("Should calculate Murabaha with large amount (reducing balance)")
     void shouldCalculateMurabahaWithLargeAmount() {
         // Given
         SarMoney costPrice = SarMoney.of(1000000);
@@ -373,10 +377,10 @@ class MurabahaCalculatorTest {
         // When
         MurabahaCalculation result = MurabahaCalculator.calculate(costPrice, profitRate, tenure, startDate, SarMoney.zero());
 
-        // Then
-        assertThat(result.profitAmount()).isEqualTo(SarMoney.of(50000.00));
-        assertThat(result.salePrice()).isEqualTo(SarMoney.of(1050000.00));
-        assertThat(result.monthlyInstallment()).isEqualTo(SarMoney.of(87500.00));
+        // Then — reducing-balance: P=1M, r=5%, n=12
+        assertThat(result.profitAmount().getValue()).isCloseTo(new BigDecimal("27289.79"), within(TOL));
+        assertThat(result.salePrice().getValue()).isCloseTo(new BigDecimal("1027289.79"), within(TOL));
+        assertThat(result.monthlyInstallment().getValue()).isCloseTo(new BigDecimal("85607.48"), within(TOL));
     }
 
     @Test

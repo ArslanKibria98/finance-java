@@ -1,5 +1,6 @@
 package com.ksa.financing.notification.adapter.rest.controller;
 
+import com.ksa.financing.notification.infrastructure.external.IdentityServiceClient;
 import com.ksa.financing.notification.infrastructure.external.NovuClient;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -17,13 +18,17 @@ import java.util.Map;
 public class DeviceController {
 
     private final NovuClient novuClient;
+    private final IdentityServiceClient identityServiceClient;
 
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> registerDevice(@Valid @RequestBody DeviceRegistrationRequest request) {
-        log.info("Received device registration request for customer: {}", request.customerId());
-        
-        // Update Novu subscriber with FCM token
-        novuClient.setSubscriberCredentials(request.customerId(), request.fcmToken());
+        // Mobile app sends only {customerId, fcmToken}. We resolve the Novu push integration
+        // (fcm vs firebase-cloud-messaging-for-sullis) server-side by reading the
+        // Keycloak onboarding_flow attribute via identity-service.
+        String providerId = identityServiceClient.resolveNotificationProvider(request.customerId());
+        log.info("Device register customerId={} resolved providerId={}", request.customerId(), providerId);
+
+        novuClient.setSubscriberCredentials(request.customerId(), request.fcmToken(), providerId);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,

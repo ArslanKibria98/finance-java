@@ -3,6 +3,7 @@ package com.ksa.financing.onboarding.domain.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 
@@ -51,6 +52,10 @@ public class OnboardingState implements Serializable {
     private String amlDominantCategory; // PEP or INTERNAL_LIST if dominant override
     private boolean pinSet;             // true when customer has set their app PIN
     private String countryCode;         // ISO 3166-1 alpha-3 (SAU, ARE, PAK)
+    // General (product-agnostic) credit score — updated incrementally during onboarding
+    private String generalCreditDecision;
+    private BigDecimal generalCreditScorePercentage;
+    private String generalCreditStage;
     private Instant startedAt;
     private Instant lastUpdatedAt;
 
@@ -380,4 +385,13 @@ public class OnboardingState implements Serializable {
     public void setPinSet(boolean pinSet) {
         this.pinSet = pinSet;
     }
+
+    public String getGeneralCreditDecision() { return generalCreditDecision; }
+    public void setGeneralCreditDecision(String d) { this.generalCreditDecision = d; }
+
+    public BigDecimal getGeneralCreditScorePercentage() { return generalCreditScorePercentage; }
+    public void setGeneralCreditScorePercentage(BigDecimal p) { this.generalCreditScorePercentage = p; }
+
+    public String getGeneralCreditStage() { return generalCreditStage; }
+    public void setGeneralCreditStage(String s) { this.generalCreditStage = s; }
 }

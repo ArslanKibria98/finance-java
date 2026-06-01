@@ -204,8 +204,11 @@ public class CreditScoringController {
             @Valid @RequestBody EvaluateEligibilityRequest request,
             @AuthenticationPrincipal Jwt jwt) {
         var tenantId = extractTenantId(jwt);
-        log.info("Evaluating eligibility for product={} tenant={}", productId, tenantId);
-        return evaluateEligibilityUseCase.evaluate(tenantId, productId, request.answers());
+        log.info("Evaluating eligibility for product={} tenant={} green={} amber={}",
+                productId, tenantId, request.greenThreshold(), request.amberThreshold());
+        return evaluateEligibilityUseCase.evaluate(
+                tenantId, productId, request.answers(),
+                request.greenThreshold(), request.amberThreshold());
     }
 
     // ==================== Helpers ====================

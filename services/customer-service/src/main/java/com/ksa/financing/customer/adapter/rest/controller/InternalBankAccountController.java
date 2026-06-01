@@ -73,6 +73,26 @@ public class InternalBankAccountController {
             String mobileNumber
     ) {}
 
+    /**
+     * Returns the customer's current risk grade (LOW / MEDIUM / HIGH / CRITICAL).
+     * Used by lending-service to gate loan submission for HIGH-risk customers.
+     */
+    @GetMapping("/{customerId}/risk-grade")
+    public ResponseEntity<java.util.Map<String, Object>> getRiskGrade(
+            @PathVariable UUID customerId) {
+        try {
+            Customer c = getCustomerUseCase.getById(customerId);
+            String riskGrade = c.getRiskGrade() != null ? c.getRiskGrade().name() : null;
+            return ResponseEntity.ok(java.util.Map.of(
+                    "customerId", customerId.toString(),
+                    "riskGrade", riskGrade == null ? "" : riskGrade
+            ));
+        } catch (Exception e) {
+            log.info("Customer not found for riskGrade lookup: {}", customerId);
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @GetMapping("/exists/mobile")
     public ResponseEntity<java.util.Map<String, Boolean>> existsByMobileNumber(
             @RequestParam String mobileNumber) {

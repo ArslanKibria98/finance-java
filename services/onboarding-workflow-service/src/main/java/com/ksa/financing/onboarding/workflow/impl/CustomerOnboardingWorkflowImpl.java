@@ -10,6 +10,7 @@ import com.ksa.islamic.orchestration.activity.identity.SetPinActivity;
 import com.ksa.islamic.orchestration.activity.kyc.*;
 import com.ksa.islamic.orchestration.activity.notification.NotificationActivity;
 import com.ksa.islamic.orchestration.activity.risk.AmlRiskScoringActivity;
+import com.ksa.islamic.orchestration.activity.risk.GeneralScoringActivity;
 import com.ksa.islamic.orchestration.activity.risk.RiskDecisionActivity;
 import com.ksa.islamic.orchestration.activity.wallet.WalletCreationActivity;
 import com.ksa.islamic.orchestration.common.TaskQueue;
@@ -81,6 +82,12 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
 
     private EddFormSignal eddFormSignal;
     private boolean eddFormReceived = false;
+
+    // Cached results from upstream activities so the FINAL ONBOARDING_COMPLETE
+    // scoring snapshot includes salary + yakeen demographics even though the
+    // local vars at those call-sites went out of scope.
+    private YakeenVerificationActivity.YakeenVerificationResult lastYakeenResult;
+    private SalaryFetchActivity.SalaryFetchResult lastSalaryResult;
 
     private SetPinSignal setPinSignal;
     private boolean setPinReceived = false;
@@ -161,6 +168,10 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
 
     private final AmlRiskScoringActivity amlRiskScoringActivity =
             Workflow.newActivityStub(AmlRiskScoringActivity.class, withQueue(TaskQueue.RISK_ASSESSMENT_QUEUE, defaultOptions));
+
+    // General (product-agnostic) credit scoring — called incrementally after each onboarding stage
+    private final GeneralScoringActivity generalScoringActivity =
+            Workflow.newActivityStub(GeneralScoringActivity.class, withQueue(TaskQueue.RISK_ASSESSMENT_QUEUE, defaultOptions));
 
     // Customer activities → customer-service
     private final ProfileCreationActivity profileActivity =
@@ -266,10 +277,9 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // =================================================================
             log.info("Waiting for OTP verification signal for workflow: {}", workflowId);
 
-            boolean otpSignalReceived = Workflow.await(Duration.ofMinutes(10), () -> otpVerifiedReceived);
-            if (!otpSignalReceived) {
-                return fail(workflowId, "OTP verification timed out (10 minutes)");
-            }
+            // Wait indefinitely — user can retry OTP via REST as many times as needed;
+            // signal arrives only on successful verification.
+            Workflow.await(() -> otpVerifiedReceived);
 
             // Validate device trust
             if (!validateDevice(otpVerifiedSignal.deviceInfo())) {
@@ -285,10 +295,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             updateState(OnboardingStep.TERMS_PENDING);
             log.info("Waiting for terms acceptance signal for workflow: {}", workflowId);
 
-            boolean termsSignalReceived = Workflow.await(Duration.ofHours(24), () -> termsAcceptedReceived);
-            if (!termsSignalReceived) {
-                return fail(workflowId, "Terms acceptance timed out (24 hours)");
-            }
+            // Wait indefinitely — user can accept terms whenever they're ready.
+            Workflow.await(() -> termsAcceptedReceived);
 
             if (!validateDevice(termsAcceptedSignal.deviceInfo())) {
                 return fail(workflowId, "Device changed during onboarding — untrusted device");
@@ -303,10 +311,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // =================================================================
             log.info("Waiting for Nafath initiation signal for workflow: {}", workflowId);
 
-            boolean nafathInitSignalReceived = Workflow.await(Duration.ofHours(24), () -> nafathInitiateReceived);
-            if (!nafathInitSignalReceived) {
-                return fail(workflowId, "Nafath initiation timed out (24 hours)");
-            }
+            // Wait indefinitely — user can initiate Nafath whenever ready.
+            Workflow.await(() -> nafathInitiateReceived);
 
             if (!validateDevice(nafathInitiateSignal.deviceInfo())) {
                 return fail(workflowId, "Device changed during onboarding — untrusted device");
@@ -340,14 +346,16 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // =================================================================
             log.info("Waiting for Nafath callback signal for workflow: {}", workflowId);
 
-            boolean nafathCbReceived = Workflow.await(Duration.ofMinutes(30), () -> nafathCallbackReceived);
-            if (!nafathCbReceived) {
-                return fail(workflowId, "Nafath verification timed out (30 minutes)");
-            }
+            // Wait indefinitely — user can complete Nafath on the gov portal at their pace.
+            Workflow.await(() -> nafathCallbackReceived);
             if (!nafathCallbackSignal.accepted()) {
                 return fail(workflowId, "Nafath verification rejected: " + nafathCallbackSignal.rejectionReason());
             }
             updateState(OnboardingStep.NAFATH_VERIFIED);
+
+            // General credit scoring after Nafath (we now have gender, nationality, dob, city)
+            runIncrementalScoring(workflowId, request.tenantId(), state.getCustomerId(),
+                    GeneralScoringActivity.Stages.NAFATH_VERIFIED, null, null);
 
             // =================================================================
             // STEP 5a: Auto -- Yakeen + Sanctions + Profile Creation
@@ -424,6 +432,13 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // Lifecycle: Nafath verified, proceeding to additional info
             state.setLifecycleStage("QUALIFIED");
 
+            // Cache yakeen result so ONBOARDING_COMPLETE scoring still has it
+            this.lastYakeenResult = yakeenResult;
+
+            // General credit scoring after Yakeen (gender/nationality fallback in case Nafath missed them)
+            runIncrementalScoring(workflowId, request.tenantId(), state.getCustomerId(),
+                    GeneralScoringActivity.Stages.YAKEEN_VERIFIED, yakeenResult, null);
+
             // Profile creation (non-blocking).
             // Name source priority: NAFATH (englishFirstName + englishThirdName, the
             // mocked-pool merged name) → Yakeen → null. Yakeen currently returns
@@ -483,10 +498,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // =================================================================
             log.info("Waiting for additional info signal for workflow: {}", workflowId);
 
-            boolean additionalInfoSignalReceived = Workflow.await(Duration.ofHours(24), () -> additionalInfoReceived);
-            if (!additionalInfoSignalReceived) {
-                return fail(workflowId, "Additional info submission timed out (24 hours)");
-            }
+            // Wait indefinitely — user can submit additional info whenever ready.
+            Workflow.await(() -> additionalInfoReceived);
 
             if (!validateDevice(additionalInfoSignal.deviceInfo())) {
                 return fail(workflowId, "Device changed during onboarding — untrusted device");
@@ -545,6 +558,10 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                             workflowId, additionalInfoSignal.sourceOfFunds(),
                             additionalInfoSignal.estimatedNetWorth(), additionalInfoSignal.sourceOfIncome());
                 }
+
+                // General credit scoring after EDD/additional info — now have employer, salary, SoF, SoW, occupation
+                runIncrementalScoring(workflowId, request.tenantId(), state.getCustomerId(),
+                        GeneralScoringActivity.Stages.EDD_SUBMITTED, null, null);
 
                 // 6C: AML Risk Scoring — calls risk-service weighted scoring engine
                 try {
@@ -632,9 +649,29 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                     // Update customer risk grade based on score
                     if (state.getCustomerId() != null) {
                         try {
+                            // Pick the HIGHEST of {AML, Risk Decision, General Credit Scoring}.
+                            // Mapping:
+                            //   General Credit AUTO_REJECT     → HIGH
+                            //   General Credit REFER_REVIEW    → MEDIUM
+                            //   General Credit AUTO_APPROVE    → LOW
+                            // Higher of all three is the customer's final risk_grade.
+                            String finalRiskLevel = riskResult.riskLevel();
+                            String amlLevel       = state.getAmlRiskLevel();
+                            String creditDecision = state.getGeneralCreditDecision();
+                            String creditLevel    = mapCreditDecisionToLevel(creditDecision);
+
+                            // Pick the highest severity across the three engines
+                            finalRiskLevel = pickHighestLevel(finalRiskLevel, amlLevel, creditLevel);
+
+                            log.info("Final risk grade: aml={}, riskDecision={}, generalCredit={} ({}), final={}",
+                                    amlLevel, riskResult.riskLevel(), creditDecision, creditLevel, finalRiskLevel);
+
                             updateCustomerActivity.updateRiskGrade(
                                     new UpdateCustomerActivity.UpdateRiskGradeInput(
-                                            state.getCustomerId(), riskResult.riskScore(), request.tenantId()
+                                            state.getCustomerId(),
+                                            riskResult.riskScore(),
+                                            request.tenantId(),
+                                            finalRiskLevel
                                     )
                             );
                         } catch (Exception e) {
@@ -700,7 +737,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                                     true,
                                     additionalInfoSignal.sourceOfFunds(),
                                     additionalInfoSignal.estimatedNetWorth(),
-                                    additionalInfoSignal.sourceOfIncome()
+                                    additionalInfoSignal.sourceOfIncome(),
+                                    additionalInfoSignal.occupation()
                             )
                     );
                     log.info("Onboarding PEP data persisted for customer: {}", state.getCustomerId());
@@ -735,6 +773,12 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                 if (salaryResult.fetched()) {
                     log.info("Salary fetched: {} {}", salaryResult.netSalary(), salaryResult.currency());
                 }
+                // Cache so ONBOARDING_COMPLETE scoring still has GOSI numbers
+                this.lastSalaryResult = salaryResult;
+                // General credit scoring after GOSI salary fetch — most authoritative salary signal
+                runIncrementalScoring(workflowId, request.tenantId(), state.getCustomerId(),
+                        GeneralScoringActivity.Stages.SALARY_FETCHED,
+                        null, salaryResult);
             } catch (Exception e) {
                 log.warn("Salary fetch failed (non-critical): {}", e.getMessage());
             }
@@ -784,10 +828,8 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
                 updateState(OnboardingStep.PIN_SETUP);
                 log.info("Step 8: Waiting for PIN setup signal for workflow: {}", workflowId);
 
-                boolean pinSignalReceived = Workflow.await(Duration.ofHours(24), () -> setPinReceived);
-                if (!pinSignalReceived) {
-                    return fail(workflowId, "PIN setup timed out (24 hours)");
-                }
+                // Wait indefinitely — user can set PIN at their pace.
+                Workflow.await(() -> setPinReceived);
 
                 // Validate device trust for PIN signal — flag but don't hard-fail
                 if (setPinSignal.deviceId() != null && state.getInitialDeviceId() != null
@@ -823,7 +865,12 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             // SUCCESS
             // =================================================================
             updateState(OnboardingStep.COMPLETED);
-            log.info("Onboarding completed successfully for workflow: {}", workflowId);
+            // Final general credit scoring — full data set available; snapshot becomes the "completed" reference
+            runIncrementalScoring(workflowId, request.tenantId(), state.getCustomerId(),
+                    GeneralScoringActivity.Stages.ONBOARDING_COMPLETE,
+                    this.lastYakeenResult, this.lastSalaryResult);
+            log.info("Onboarding completed successfully for workflow: {}, generalCreditDecision={} ({}%)",
+                    workflowId, state.getGeneralCreditDecision(), state.getGeneralCreditScorePercentage());
 
             return new OnboardingResult(
                     workflowId,
@@ -1000,5 +1047,244 @@ public class CustomerOnboardingWorkflowImpl implements CustomerOnboardingWorkflo
             sb.append(s);
         }
         return sb.length() == 0 ? null : sb.toString();
+    }
+
+    // ====================================================================
+    // GENERAL CREDIT SCORING (incremental, per stage)
+    // Builds an answers map from whatever data is known so far and calls
+    // risk-service. Persists a snapshot + updates customer current cache.
+    // Failures are swallowed (non-critical to onboarding completion).
+    // ====================================================================
+
+    private void runIncrementalScoring(String workflowId,
+                                       String tenantId,
+                                       String customerId,
+                                       String stage,
+                                       YakeenVerificationActivity.YakeenVerificationResult yakeenResult,
+                                       SalaryFetchActivity.SalaryFetchResult salaryResult) {
+        try {
+            java.util.Map<String, String> answers = buildScoringAnswers(yakeenResult, salaryResult);
+            if (answers.isEmpty()) {
+                log.debug("[general-scoring] stage={} skipped: no answers collected yet", stage);
+                return;
+            }
+            GeneralScoringActivity.GeneralScoringResult result = generalScoringActivity.scoreIncremental(
+                    new GeneralScoringActivity.GeneralScoringInput(
+                            tenantId,
+                            customerId,
+                            workflowId,
+                            stage,
+                            answers
+                    )
+            );
+            log.info("[general-scoring] stage={} decision={} score={}% matched={}/{}",
+                    stage, result.decision(), result.scorePercentage(),
+                    result.matchedCriteria(), result.totalCriteria());
+            state.setGeneralCreditDecision(result.decision());
+            state.setGeneralCreditScorePercentage(result.scorePercentage());
+            state.setGeneralCreditStage(stage);
+        } catch (Exception e) {
+            log.warn("[general-scoring] stage={} failed (continuing): {}", stage, e.getMessage());
+        }
+    }
+
+    /**
+     * Build the answers map from whatever onboarding data is available so far.
+     * field_key values mirror credit_scoring_field_definitions in risk-service.
+     */
+    private java.util.Map<String, String> buildScoringAnswers(
+            YakeenVerificationActivity.YakeenVerificationResult yakeenResult,
+            SalaryFetchActivity.SalaryFetchResult salaryResult) {
+        java.util.Map<String, String> m = new java.util.HashMap<>();
+
+        // From Nafath
+        var nafath = state.getNafathVerificationData();
+        if (nafath != null) {
+            putIfPresent(m, "gender", normaliseGender(nafath.get("gender")));
+            String nat = normaliseNationality(nafath.get("nationality"));
+            putIfPresent(m, "nationality", nat);
+            putIfPresent(m, "city", normaliseCity(nafath.get("addressCity")));
+            String age = ageFromDob(asString(nafath.get("dateOfBirth")));
+            if (age != null) m.put("age", age);
+            // Derive customer_type from nationality:
+            //   SAUDI            -> CITIZEN
+            //   GCC              -> GCC_NATIONAL
+            //   ARAB/ASIAN/WESTERN/OTHER -> RESIDENT
+            if (nat != null) {
+                String customerType = switch (nat) {
+                    case "SAUDI" -> "CITIZEN";
+                    case "GCC"   -> "GCC_NATIONAL";
+                    default       -> "RESIDENT";
+                };
+                m.put("customer_type", customerType);
+            }
+        }
+
+        // From Yakeen (fallback for gender/nationality if Nafath didn't supply)
+        if (yakeenResult != null && yakeenResult.verified()) {
+            m.putIfAbsent("gender", normaliseGender(yakeenResult.gender()));
+            m.putIfAbsent("nationality", normaliseNationality(yakeenResult.nationality()));
+            m.putIfAbsent("city", normaliseCity(yakeenResult.addressCity()));
+        }
+
+        // From AdditionalInfo signal (employer + employment + EDD answers)
+        if (additionalInfoSignal != null) {
+            putIfPresent(m, "employer_name", normaliseEmployerName(additionalInfoSignal.employerName()));
+            putIfPresent(m, "employment_type", additionalInfoSignal.employmentType());
+            if (additionalInfoSignal.basicSalary() != null) {
+                m.put("salary", String.valueOf(additionalInfoSignal.basicSalary().longValue()));
+            }
+            if (additionalInfoSignal.grossSalary() != null) {
+                m.put("total_income", String.valueOf(additionalInfoSignal.grossSalary().longValue()));
+            }
+            // EDD answers (PEP path)
+            putIfPresent(m, "source_of_funds", additionalInfoSignal.sourceOfFunds());
+            putIfPresent(m, "source_of_wealth", additionalInfoSignal.sourceOfIncome());
+            putIfPresent(m, "net_worth_range", additionalInfoSignal.estimatedNetWorth());
+            putIfPresent(m, "occupation", additionalInfoSignal.occupation());
+        }
+
+        // From EDD form signal (richer PEP form)
+        if (eddFormSignal != null) {
+            m.putIfAbsent("source_of_funds", eddFormSignal.sourceOfFunds());
+            m.putIfAbsent("source_of_wealth", eddFormSignal.primarySourceOfWealth());
+            m.putIfAbsent("net_worth_range", eddFormSignal.estimatedNetWorth());
+            m.putIfAbsent("occupation", eddFormSignal.occupation());
+        }
+
+        // From GOSI salary fetch — overrides additionalInfoSignal values if present
+        if (salaryResult != null && salaryResult.fetched()) {
+            if (salaryResult.basicSalary() > 0) {
+                m.put("salary", String.valueOf((long) salaryResult.basicSalary()));
+            }
+            if (salaryResult.grossSalary() > 0) {
+                m.put("total_income", String.valueOf((long) salaryResult.grossSalary()));
+            }
+            if (salaryResult.employerName() != null) {
+                m.put("employer_name", normaliseEmployerName(salaryResult.employerName()));
+            }
+        }
+
+        // Drop any null / empty values (the engine treats absent as no-match)
+        m.values().removeIf(v -> v == null || v.isBlank());
+        return m;
+    }
+
+    private static void putIfPresent(java.util.Map<String, String> m, String key, Object value) {
+        if (value == null) return;
+        String s = value.toString().trim();
+        if (s.isEmpty()) return;
+        m.put(key, s);
+    }
+
+    private static String asString(Object v) { return v == null ? null : v.toString(); }
+
+    /** Map General Credit Scoring decision → risk level string. */
+    private static String mapCreditDecisionToLevel(String decision) {
+        if (decision == null) return null;
+        return switch (decision.toUpperCase()) {
+            case "AUTO_REJECT"           -> "HIGH";
+            case "REFER_MANUAL_REVIEW"   -> "MEDIUM";
+            case "AUTO_APPROVE"          -> "LOW";
+            default                       -> null;
+        };
+    }
+
+    /** Returns the HIGHEST severity level out of the given inputs (HIGH > MEDIUM > LOW). */
+    private static String pickHighestLevel(String... levels) {
+        int rank = 0;
+        for (String l : levels) {
+            if (l == null) continue;
+            switch (l.toUpperCase()) {
+                case "HIGH"   -> rank = Math.max(rank, 3);
+                case "MEDIUM" -> rank = Math.max(rank, 2);
+                case "LOW"    -> rank = Math.max(rank, 1);
+                default        -> { /* ignore unknown */ }
+            }
+        }
+        return switch (rank) {
+            case 3 -> "HIGH";
+            case 2 -> "MEDIUM";
+            case 1 -> "LOW";
+            default -> "LOW";
+        };
+    }
+
+    /**
+     * Normalise free-text employer names to LOV codes that match scoring rules.
+     * e.g. "Saudi Aramco" → "ARAMCO", "SABIC Industries" → "SABIC".
+     * Falls back to OTHER if no known employer match found.
+     */
+    private static String normaliseEmployerName(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String upper = raw.toUpperCase();
+        if (upper.contains("ARAMCO"))             return "ARAMCO";
+        if (upper.contains("SABIC"))              return "SABIC";
+        if (upper.contains("STC") || upper.contains("SAUDI TELECOM")) return "STC";
+        if (upper.contains("SEC") || upper.contains("ELECTRICITY"))   return "SEC";
+        if (upper.contains("MOH") || upper.contains("MINISTRY OF HEALTH"))    return "MOH";
+        if (upper.contains("MOE") || upper.contains("MINISTRY OF EDUCATION")) return "MOE";
+        if (upper.contains("MOD") || upper.contains("MINISTRY OF DEFENSE"))   return "MOD";
+        if (upper.contains("MOI") || upper.contains("MINISTRY OF INTERIOR"))  return "MOI";
+        if (upper.contains("MAADEN"))                                          return "MAADEN";
+        if (upper.contains("SNB") || upper.contains("SAUDI NATIONAL BANK"))    return "SNB";
+        if (upper.contains("ALRAJHI") || upper.contains("RAJHI"))              return "ALRAJHI";
+        // Already an LOV code (no spaces, all caps)?
+        if (raw.matches("^[A-Z_]+$")) return raw;
+        return "OTHER";
+    }
+
+    /** Nafath returns "M"/"F"; scoring rules use MALE/FEMALE. */
+    private static String normaliseGender(Object raw) {
+        if (raw == null) return null;
+        String s = raw.toString().trim().toUpperCase();
+        if (s.isEmpty()) return null;
+        return switch (s) {
+            case "M", "MALE"   -> "MALE";
+            case "F", "FEMALE" -> "FEMALE";
+            default            -> s;
+        };
+    }
+
+    /** Nafath returns "SAU"; scoring rules use SAUDI/GCC/ARAB/ASIAN/WESTERN/OTHER. */
+    private static String normaliseNationality(Object raw) {
+        if (raw == null) return null;
+        String s = raw.toString().trim().toUpperCase();
+        return switch (s) {
+            case "SAU", "SA", "SAUDI"           -> "SAUDI";
+            case "ARE", "BHR", "KWT", "OMN", "QAT" -> "GCC";
+            case ""                              -> null;
+            default                              -> s;
+        };
+    }
+
+    /** Map Arabic / mixed city strings to canonical LOV codes. */
+    private static String normaliseCity(Object raw) {
+        if (raw == null) return null;
+        String s = raw.toString().trim().toUpperCase();
+        if (s.isEmpty()) return null;
+        // Pass through known codes; the engine handles unknown by skipping
+        return s;
+    }
+
+    /** Date-of-birth string (yyyy-MM-dd or yyyyMMdd) -> age in years. */
+    private static String ageFromDob(String dob) {
+        if (dob == null || dob.isBlank()) return null;
+        try {
+            java.time.LocalDate d;
+            if (dob.contains("-")) d = java.time.LocalDate.parse(dob);
+            else if (dob.length() == 8) {
+                d = java.time.LocalDate.of(
+                        Integer.parseInt(dob.substring(0, 4)),
+                        Integer.parseInt(dob.substring(4, 6)),
+                        Integer.parseInt(dob.substring(6, 8)));
+            } else {
+                return null;
+            }
+            int age = java.time.Period.between(d, java.time.LocalDate.now()).getYears();
+            return age < 0 || age > 130 ? null : String.valueOf(age);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 }

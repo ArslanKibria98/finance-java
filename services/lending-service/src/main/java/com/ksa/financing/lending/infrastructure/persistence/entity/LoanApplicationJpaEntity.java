@@ -197,6 +197,39 @@ public class LoanApplicationJpaEntity {
     @Column(name = "max_eligible_amount", precision = 20, scale = 6)
     private BigDecimal maxEligibleAmount;
 
+    // ══════════ Step 3.5: Credit Decision Engine (LOS §5 Step 4) ══════════
+
+    @Column(name = "credit_decision", length = 32)
+    private String creditDecision;
+
+    @Column(name = "credit_decision_reason", length = 64)
+    private String creditDecisionReason;
+
+    @Column(name = "scoring_total_score", precision = 10, scale = 2)
+    private BigDecimal scoringTotalScore;
+
+    @Column(name = "scoring_max_score", precision = 10, scale = 2)
+    private BigDecimal scoringMaxScore;
+
+    @Column(name = "scoring_percentage", precision = 5, scale = 2)
+    private BigDecimal scoringPercentage;
+
+    @Column(name = "scoring_green_threshold", precision = 5, scale = 2)
+    private BigDecimal scoringGreenThreshold;
+
+    @Column(name = "scoring_amber_threshold", precision = 5, scale = 2)
+    private BigDecimal scoringAmberThreshold;
+
+    @Column(name = "scoring_summary", columnDefinition = "TEXT")
+    private String scoringSummary;
+
+    @Column(name = "scoring_details", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String scoringDetailsJson;
+
+    @Column(name = "scoring_evaluated_at")
+    private LocalDateTime scoringEvaluatedAt;
+
     // ══════════ Step 4: Offer ══════════
 
     @Column(name = "offered_amount", precision = 20, scale = 6)

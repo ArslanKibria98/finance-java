@@ -22,7 +22,8 @@ import java.util.List;
 /**
  * Security config for middleware-third-party service.
  * Admin endpoints (providers, clients, env-configs, etc.) require JWT auth.
- * API execution endpoints (/api/v1/execute) use client secretKey auth (public).
+ * /api/v1/execute/{apiCode}        → JWT (Bearer) + X-Secret-Key (client auth).
+ * /api/v1/execute/{apiCode}/simple → public (X-Secret-Key only — used by mobile/web flows pre-login).
  */
 @Configuration
 @EnableWebSecurity
@@ -45,7 +46,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**", "/actuator/prometheus",
                     "/v3/api-docs/**", "/swagger-ui/**").permitAll()
-                .requestMatchers("/api/v1/execute/**").permitAll()
+                .requestMatchers("/api/v1/execute/*/simple").permitAll()
+                .requestMatchers("/api/v1/execute/*").authenticated()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll())
             .oauth2ResourceServer(oauth2 -> oauth2

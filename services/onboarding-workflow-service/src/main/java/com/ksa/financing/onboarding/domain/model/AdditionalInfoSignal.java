@@ -19,5 +19,6 @@ public record AdditionalInfoSignal(
     // PEP fields (only used when isPep=true)
     String sourceOfFunds,
     String estimatedNetWorth,
-    String sourceOfIncome
+    String sourceOfIncome,
+    String occupation
 ) {}

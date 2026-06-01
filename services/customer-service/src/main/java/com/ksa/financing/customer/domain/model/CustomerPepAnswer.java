@@ -23,6 +23,8 @@ public record CustomerPepAnswer(
     String sourceOfWealthDescription,
     String sourceOfFunds,
     String sourceOfFundsDetails,
+    String occupation,
+    String occupationDetails,
     List<RelatedPerson> relatedPersons,
     String additionalNotes,
     SubmittedVia submittedVia,

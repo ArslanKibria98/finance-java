@@ -52,8 +52,12 @@ class EarlySettlementCalculatorTest {
         contractEndDate = contractStartDate.plusMonths(12);
     }
 
+    // Reducing-balance reference (P=100k, r=5%, n=12): totalProfit ≈ 2728.98
+    // 6m of 12m settlement: days ratio 182/366 = 0.4973 → earned ≈ 1357.18, unearned ≈ 1371.80
+    private static final BigDecimal TOL = new BigDecimal("2.00");
+
     @Test
-    @DisplayName("Should calculate full Ibra (100% waiver) after 6 months")
+    @DisplayName("Should calculate full Ibra (100% waiver) after 6 months (reducing balance)")
     void shouldCalculateFullIbraAfter6Months() {
         // Given
         LocalDate settlementDate = contractStartDate.plusMonths(6);
@@ -67,21 +71,21 @@ class EarlySettlementCalculatorTest {
         assertThat(result).isNotNull();
         assertThat(result.settlementDate()).isEqualTo(settlementDate);
 
-        // After 6 months, 50% profit earned, 50% unearned
+        // After ~50% of contract time, ~50% of reducing-balance profit earned
         assertThat(result.earnedProfit().getValue()).isCloseTo(
-                new BigDecimal("2500.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("1357.18"), within(TOL)
         );
 
         // Full Ibra means 100% of unearned profit waived
         assertThat(result.waivedProfit().getValue()).isCloseTo(
-                new BigDecimal("2500.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("1371.80"), within(TOL)
         );
 
         assertThat(result.hasIbra()).isTrue();
     }
 
     @Test
-    @DisplayName("Should calculate partial Ibra (50% waiver) after 6 months")
+    @DisplayName("Should calculate partial Ibra (50% waiver) after 6 months (reducing balance)")
     void shouldCalculatePartialIbraAfter6Months() {
         // Given
         LocalDate settlementDate = contractStartDate.plusMonths(6);
@@ -95,9 +99,9 @@ class EarlySettlementCalculatorTest {
         // Then
         assertThat(result).isNotNull();
 
-        // With 50% waiver, half of unearned profit is waived
+        // 50% of unearned (~1371.80) ≈ 685.90
         assertThat(result.waivedProfit().getValue()).isCloseTo(
-                new BigDecimal("1250.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("685.90"), within(TOL)
         );
 
         assertThat(result.hasIbra()).isTrue();
@@ -125,7 +129,7 @@ class EarlySettlementCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should calculate Ibra at 25% of tenure (3 months)")
+    @DisplayName("Should calculate Ibra at 25% of tenure (3 months, reducing balance)")
     void shouldCalculateIbraAt25PercentOfTenure() {
         // Given
         LocalDate settlementDate = contractStartDate.plusMonths(3);
@@ -138,19 +142,19 @@ class EarlySettlementCalculatorTest {
         // Then
         assertThat(result).isNotNull();
 
-        // After 3 months, 25% profit earned, 75% unearned
+        // ~25% of contract time → ~25% of reducing-balance profit (2728.98 × 91/366 ≈ 678.62)
         assertThat(result.earnedProfit().getValue()).isCloseTo(
-                new BigDecimal("1250.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("678.62"), within(TOL)
         );
 
-        // Full Ibra means 75% of total profit waived
+        // Full Ibra waives the remaining ~75% (~2050.36)
         assertThat(result.waivedProfit().getValue()).isCloseTo(
-                new BigDecimal("3750.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("2050.36"), within(TOL)
         );
     }
 
     @Test
-    @DisplayName("Should calculate Ibra at 75% of tenure (9 months)")
+    @DisplayName("Should calculate Ibra at 75% of tenure (9 months, reducing balance)")
     void shouldCalculateIbraAt75PercentOfTenure() {
         // Given
         LocalDate settlementDate = contractStartDate.plusMonths(9);
@@ -163,19 +167,19 @@ class EarlySettlementCalculatorTest {
         // Then
         assertThat(result).isNotNull();
 
-        // After 9 months, 75% profit earned, 25% unearned
+        // ~75% of contract time → ~75% of reducing-balance profit (2728.98 × 274/366 ≈ 2042.83)
         assertThat(result.earnedProfit().getValue()).isCloseTo(
-                new BigDecimal("3750.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("2042.83"), within(TOL)
         );
 
-        // Full Ibra means 25% of total profit waived
+        // Full Ibra waives ~25% (~686.15)
         assertThat(result.waivedProfit().getValue()).isCloseTo(
-                new BigDecimal("1250.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("686.15"), within(TOL)
         );
     }
 
     @Test
-    @DisplayName("Should calculate settlement on day 1 (maximum Ibra benefit)")
+    @DisplayName("Should calculate settlement on day 1 (maximum Ibra benefit, reducing balance)")
     void shouldCalculateSettlementOnDay1() {
         // Given
         LocalDate settlementDate = contractStartDate.plusDays(1);
@@ -189,10 +193,10 @@ class EarlySettlementCalculatorTest {
         assertThat(result).isNotNull();
 
         // Almost all profit is unearned on day 1
-        assertThat(result.earnedProfit().getValue()).isLessThan(new BigDecimal("50.00"));
+        assertThat(result.earnedProfit().getValue()).isLessThan(new BigDecimal("20.00"));
 
-        // Almost all profit should be waived with full Ibra
-        assertThat(result.waivedProfit().getValue()).isGreaterThan(new BigDecimal("4950.00"));
+        // Almost all reducing-balance profit (~2728.98) is waived with full Ibra
+        assertThat(result.waivedProfit().getValue()).isGreaterThan(new BigDecimal("2700.00"));
 
         // Customer saves almost the entire profit amount
         assertThat(result.getCustomerSavings()).isEqualTo(result.waivedProfit());
@@ -221,7 +225,7 @@ class EarlySettlementCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should calculate earned profit correctly based on time elapsed")
+    @DisplayName("Should calculate earned profit correctly based on time elapsed (reducing balance)")
     void shouldCalculateEarnedProfitBasedOnTimeElapsed() {
         // Given
         LocalDate settlementDate = contractStartDate.plusMonths(6);
@@ -231,23 +235,26 @@ class EarlySettlementCalculatorTest {
                 totalProfit, contractStartDate, contractEndDate, settlementDate
         );
 
-        // Then - After 6 months of 12-month contract, 50% of profit is earned
+        // Then — ~50% of contract time elapsed → ~50% of reducing-balance profit
+        // (2728.98 × 182/366 ≈ 1357.18)
         assertThat(earnedProfit.getValue()).isCloseTo(
-                new BigDecimal("2500.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("1357.18"), within(TOL)
         );
     }
 
     @Test
-    @DisplayName("Should calculate unearned profit correctly")
+    @DisplayName("Should calculate unearned profit correctly (reducing balance)")
     void shouldCalculateUnearnedProfitCorrectly() {
         // Given
-        SarMoney earnedProfit = SarMoney.of(2500.00);
+        SarMoney earnedProfit = SarMoney.of(1357.18);
 
         // When
         SarMoney unearnedProfit = EarlySettlementCalculator.calculateUnearnedProfit(totalProfit, earnedProfit);
 
-        // Then
-        assertThat(unearnedProfit).isEqualTo(SarMoney.of(2500.00));
+        // Then — totalProfit (2728.98) − earned (1357.18) = unearned (~1371.80)
+        assertThat(unearnedProfit.getValue()).isCloseTo(
+                new BigDecimal("1371.80"), within(TOL)
+        );
     }
 
     @Test
@@ -282,7 +289,7 @@ class EarlySettlementCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should calculate settlement with different profit rate (10%)")
+    @DisplayName("Should calculate settlement with different profit rate (10%, reducing balance)")
     void shouldCalculateSettlementWithDifferentProfitRate() {
         // Given
         ProfitRate higherRate = ProfitRate.ofPercentage(10.0);
@@ -298,19 +305,19 @@ class EarlySettlementCalculatorTest {
         // Then
         assertThat(result).isNotNull();
 
-        // With 10% rate, total profit is SAR 10,000
-        // After 6 months, earned profit ~SAR 5,000, unearned ~SAR 5,000
+        // Reducing-balance P=100k, r=10%, n=12: totalProfit ≈ 5499
+        // After ~50% time, earned ≈ 2735, waived ≈ 2764
         assertThat(result.earnedProfit().getValue()).isCloseTo(
-                new BigDecimal("5000.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("2735.00"), within(new BigDecimal("5.00"))
         );
 
         assertThat(result.waivedProfit().getValue()).isCloseTo(
-                new BigDecimal("5000.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("2764.00"), within(new BigDecimal("5.00"))
         );
     }
 
     @Test
-    @DisplayName("Should calculate settlement with different tenure (24 months)")
+    @DisplayName("Should calculate settlement with different tenure (24 months, reducing balance)")
     void shouldCalculateSettlementWithDifferentTenure() {
         // Given
         ProfitRate profitRate = ProfitRate.ofPercentage(5.0);
@@ -326,9 +333,10 @@ class EarlySettlementCalculatorTest {
         // Then
         assertThat(result).isNotNull();
 
-        // After 12 months of 24-month contract, 50% of profit earned
+        // Reducing-balance P=100k, r=5%, n=24: totalProfit ≈ 5298
+        // After ~50% time (12m of 24m), earned ≈ 2649
         assertThat(result.earnedProfit().getValue()).isCloseTo(
-                new BigDecimal("2500.00"), within(new BigDecimal("1.00"))
+                new BigDecimal("2649.29"), within(new BigDecimal("5.00"))
         );
     }
 

@@ -8,6 +8,22 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        connecttimeout: ${MAIL_CONNECT_TIMEOUT_MS:5000}
+        timeout: ${MAIL_TIMEOUT_MS:5000}
+        writetimeout: ${MAIL_WRITE_TIMEOUT_MS:5000}
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/onboarding_db?stringtype=unspecified}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -72,7 +88,7 @@ springdoc:
     url: ../v3/api-docs
     tags-sorter: alpha
     doc-expansion: list
-  packages-to-scan: com.ksa.financing.onboarding.adapter.rest.controller
+  packages-to-scan: com.ksa.financing.onboarding.adapter.rest.controller,com.ksa.financing.onboarding.canada.adapter.rest.controller,com.ksa.financing.onboarding.guest.adapter.rest.controller,com.ksa.financing.onboarding.foreign.adapter.rest.controller
 
 temporal:
   server:
@@ -90,9 +106,54 @@ app:
     risk-service-url: ${RISK_SERVICE_URL:http://localhost:8090}
     kyc-adapter-url: ${KYC_ADAPTER_URL:http://localhost:8087}
     identity-url: ${IDENTITY_SERVICE_URL:http://localhost:8083}
+    wallet-service-url: ${WALLET_SERVICE_URL:http://localhost:8088}
+    pii-vault-url: ${PII_VAULT_URL:http://localhost:8086}
+    global-profile-url: ${GLOBAL_PROFILE_URL:http://localhost:8085}
+    document-service-url: ${DOCUMENT_SERVICE_URL:http://document-service:8094}
   security:
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://65.108.31.172:7374}
+
+facia:
+  # Phase 2C: Facia calls route through middleware-third-party. Credentials are
+  # owned by middleware (api_environment_configs.headers). These remain here for
+  # reference + mock mode.
+  base-url: ${FACIA_BASE_URL:https://api.facia.ai}
+  client-id: ${FACIA_CLIENT_ID:415585bd38}
+  client-secret: ${FACIA_CLIENT_SECRET:PBi1AeyudzSnDgNQWhnAkWVJrtLj7nohWNturfEC}
+  mock: ${FACIA_MOCK:true}
+
+middleware:
+  base-url: ${MIDDLEWARE_THIRD_PARTY_URL:http://middleware-third-party:8093}
+  client-secret: ${MIDDLEWARE_CLIENT_SECRET:ob-svc-mw-secret-2026-x9k4p}
+
+otp:
+  email:
+    enabled: ${OTP_EMAIL_ENABLED:true}
+    from: ${OTP_EMAIL_FROM:${MAIL_USERNAME:}}
+    from-name: ${OTP_EMAIL_FROM_NAME:Sullis Onboarding}
+    subject: ${OTP_EMAIL_SUBJECT:Your verification code}
+    length: ${OTP_EMAIL_LENGTH:6}
+    ttl-seconds: ${OTP_EMAIL_TTL_SECONDS:300}
+
+canada:
+  onboarding:
+    task-queue: ${CANADA_ONBOARDING_TASK_QUEUE:canada-onboarding-queue}
+
+guest:
+  onboarding:
+    task-queue: ${GUEST_ONBOARDING_TASK_QUEUE:guest-onboarding-queue}
+
+foreign:
+  onboarding:
+    task-queue: ${FOREIGN_ONBOARDING_TASK_QUEUE:foreign-onboarding-queue}
+
+keycloak:
+  base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:CompanyRealm}
+  admin-client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:admin-dashboard}
+  admin-client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:admin-dashboard-secret}
+  default-customer-role: ${KEYCLOAK_DEFAULT_CUSTOMER_ROLE:customer}
 
 ksa:
   authorization:

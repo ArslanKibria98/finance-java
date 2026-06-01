@@ -108,23 +108,21 @@ public final class TawarruqCalculator {
             throw new IllegalArgumentException("Cost price must be positive");
         }
 
-        // Calculate profit amount
-        SarMoney profitAmount = profitRate.multiply(costPrice);
-
-        // Calculate sale price
-        SarMoney salePrice = costPrice.add(profitAmount);
-
-        // Calculate monthly installment (Principal + Profit + Fee)
-        SarMoney monthlyInstallment = salePrice.add(feeAmount).divide(tenure.months());
-
-        // Generate amortization schedule (same as Murabaha - flat distribution)
-        List<InstallmentLine> schedule = AmortizationScheduleGenerator.generateFlatSchedule(
+        // Reducing-balance schedule (per docs/reducing-balance-load-documentation.md)
+        List<InstallmentLine> schedule = AmortizationScheduleGenerator.generateReducingBalanceSchedule(
                 costPrice,
                 profitRate,
                 tenure,
                 startDate,
                 feeAmount
         );
+
+        SarMoney profitAmount = schedule.stream()
+                .map(InstallmentLine::profitComponent)
+                .reduce(SarMoney.zero(), SarMoney::add);
+
+        SarMoney salePrice = costPrice.add(profitAmount);
+        SarMoney monthlyInstallment = schedule.get(0).totalInstallment();
 
         return new TawarruqCalculation(
                 costPrice,

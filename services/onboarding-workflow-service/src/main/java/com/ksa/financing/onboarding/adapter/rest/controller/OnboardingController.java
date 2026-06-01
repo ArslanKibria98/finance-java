@@ -3,8 +3,6 @@ package com.ksa.financing.onboarding.adapter.rest.controller;
 import com.ksa.financing.onboarding.application.dto.*;
 import com.ksa.financing.onboarding.domain.model.*;
 import com.ksa.financing.onboarding.domain.port.in.*;
-import com.ksa.financing.infra.pagination.PageQuery;
-import com.ksa.financing.infra.pagination.PageResponse;
 import com.ksa.financing.onboarding.workflow.CustomerOnboardingWorkflow;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -22,22 +20,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
-import com.ksa.financing.domain.valueobject.NationalId;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
-
-// Dynamic Onboarding Imports
-import com.ksa.financing.onboarding.application.service.CountryWorkflowDispatcher;
-import com.ksa.financing.onboarding.dynamic.dto.DynamicStepMetadata;
-import com.ksa.financing.onboarding.dynamic.service.DynamicOnboardingService;
-import com.ksa.financing.onboarding.infrastructure.persistence.entity.FieldConfigEntity;
-import com.ksa.financing.onboarding.infrastructure.persistence.entity.StepConfigEntity;
-import com.ksa.financing.onboarding.infrastructure.persistence.entity.StepSubmissionEntity;
-import com.ksa.financing.onboarding.infrastructure.persistence.entity.WorkflowConfigEntity;
-import com.ksa.financing.onboarding.infrastructure.persistence.repository.StepConfigRepository;
-import com.ksa.financing.onboarding.infrastructure.persistence.repository.StepSubmissionRepository;
-import com.ksa.financing.onboarding.infrastructure.persistence.repository.WorkflowConfigRepository;
-import com.ksa.financing.onboarding.infrastructure.persistence.repository.FieldConfigRepository;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -67,12 +51,6 @@ public class OnboardingController {
     private final AcceptTermsUseCase acceptTermsUseCase;
     private final InitiateNafathUseCase initiateNafathUseCase;
     private final SubmitAdditionalInfoUseCase submitAdditionalInfoUseCase;
-    private final CountryWorkflowDispatcher dispatcher;
-    private final DynamicOnboardingService dynamicOnboardingService;
-    private final WorkflowConfigRepository workflowConfigRepository;
-    private final StepConfigRepository stepConfigRepository;
-    private final StepSubmissionRepository stepSubmissionRepository;
-    private final FieldConfigRepository fieldConfigRepository;
     private final WorkflowClient workflowClient;
     private final RestTemplate restTemplate;
 
@@ -94,12 +72,6 @@ public class OnboardingController {
                                 AcceptTermsUseCase acceptTermsUseCase,
                                 InitiateNafathUseCase initiateNafathUseCase,
                                 SubmitAdditionalInfoUseCase submitAdditionalInfoUseCase,
-                                CountryWorkflowDispatcher dispatcher,
-                                DynamicOnboardingService dynamicOnboardingService,
-                                WorkflowConfigRepository workflowConfigRepository,
-                                StepConfigRepository stepConfigRepository,
-                                StepSubmissionRepository stepSubmissionRepository,
-                                FieldConfigRepository fieldConfigRepository,
                                 WorkflowClient workflowClient,
                                 RestTemplate restTemplate) {
         this.startOnboardingUseCase = startOnboardingUseCase;
@@ -108,12 +80,6 @@ public class OnboardingController {
         this.acceptTermsUseCase = acceptTermsUseCase;
         this.initiateNafathUseCase = initiateNafathUseCase;
         this.submitAdditionalInfoUseCase = submitAdditionalInfoUseCase;
-        this.dispatcher = dispatcher;
-        this.dynamicOnboardingService = dynamicOnboardingService;
-        this.workflowConfigRepository = workflowConfigRepository;
-        this.stepConfigRepository = stepConfigRepository;
-        this.stepSubmissionRepository = stepSubmissionRepository;
-        this.fieldConfigRepository = fieldConfigRepository;
         this.workflowClient = workflowClient;
         this.restTemplate = restTemplate;
     }
@@ -129,15 +95,6 @@ public class OnboardingController {
         log.info("Onboarding initiate for NID ending ...{}", maskNid(request.nationalId()));
         DeviceInfo deviceInfo = extractDeviceInfo(httpRequest);
         String tenantId = extractTenantIdFromHeader(httpRequest);
-        String countryCode = request.resolvedCountryCode();
-
-        // Check if this country uses the new Dynamic Onboarding Engine
-        if (dispatcher.isDynamicWorkflow(countryCode)) {
-            log.info("Routing request for country {} to Dynamic Onboarding Engine", countryCode);
-            DynamicStepMetadata metadata = dynamicOnboardingService.initiate(
-                    request.nationalId(), request.mobileNumber(), countryCode);
-            return ResponseEntity.status(HttpStatus.CREATED).body(metadata);
-        }
 
         // ===== RISK GATE: Call internal checks API before starting workflow =====
         var riskGateResult = runInternalChecksGate(
@@ -567,7 +524,8 @@ public class OnboardingController {
                 Boolean.TRUE.equals(request.isPep()),
                 request.sourceOfFunds(),
                 request.estimatedNetWorth(),
-                request.sourceOfIncome()
+                request.sourceOfIncome(),
+                request.occupation()
         );
 
         SubmitAdditionalInfoUseCase.SubmitAdditionalInfoResult result =
@@ -810,101 +768,6 @@ public class OnboardingController {
                 StepInfo.buildSteps(currentStep, failedAtStep),
                 Instant.now().toString()
         ));
-    }
-
-    // ==================== Dynamic Onboarding Endpoints ====================
-
-    @PostMapping("/submit-dynamic-step")
-    @Operation(summary = "Submit dynamic onboarding step", description = "Handles generic step submissions for non-KSA countries", tags = "Dynamic Onboarding")
-    public ResponseEntity<DynamicStepMetadata> submitDynamicStep(
-            @RequestParam String sessionId,
-            @RequestParam String countryCode,
-            @RequestParam String stepName,
-            @RequestBody Map<String, Object> data) {
-
-        log.info("Processing dynamic step submission: country={}, step={}, session={}", 
-                countryCode, stepName, sessionId);
-        
-        DynamicStepMetadata result = dynamicOnboardingService.submitStep(sessionId, countryCode, stepName, data);
-        return ResponseEntity.ok(result);
-    }
-
-    // ==================== Admin Dashboard APIs ====================
-
-    @GetMapping("/admin/workflows")
-    @Operation(summary = "Get all workflows", tags = "Admin")
-    public ResponseEntity<List<WorkflowConfigEntity>> getAllWorkflows() {
-        return ResponseEntity.ok(workflowConfigRepository.findAll());
-    }
-
-    @PostMapping("/admin/workflows")
-    @Operation(summary = "Create new workflow", tags = "Admin")
-    public ResponseEntity<WorkflowConfigEntity> createWorkflow(@RequestBody WorkflowConfigEntity config) {
-        return ResponseEntity.ok(workflowConfigRepository.save(config));
-    }
-
-    @GetMapping("/admin/steps/{countryCode}")
-    @Operation(summary = "Get steps for a country", tags = "Admin")
-    public ResponseEntity<List<StepConfigEntity>> getSteps(@PathVariable String countryCode) {
-        return ResponseEntity.ok(stepConfigRepository.findByCountryCodeOrderByOrderIndexAsc(countryCode));
-    }
-
-    @PostMapping("/admin/steps")
-    @Operation(summary = "Create/Update a step", tags = "Admin")
-    public ResponseEntity<StepConfigEntity> saveStep(@RequestBody StepConfigEntity step) {
-        return ResponseEntity.ok(stepConfigRepository.save(step));
-    }
-
-    @PostMapping("/admin/fields")
-    @Operation(summary = "Create/Update a field", tags = "Admin")
-    public ResponseEntity<FieldConfigEntity> saveField(@RequestBody Map<String, Object> payload) {
-        String stepIdStr = (String) payload.get("stepId");
-        if (stepIdStr == null) {
-            throw new IllegalArgumentException("stepId is required");
-        }
-        StepConfigEntity step = stepConfigRepository.findById(UUID.fromString(stepIdStr))
-            .orElseThrow(() -> new IllegalArgumentException("Step not found: " + stepIdStr));
-        
-        FieldConfigEntity field = new FieldConfigEntity();
-        field.setStep(step);
-        field.setFieldKey((String) payload.get("fieldKey"));
-        field.setFieldLabel(payload.containsKey("label") ? (String) payload.get("label") : (String) payload.get("fieldLabel"));
-        field.setFieldType((String) payload.get("fieldType"));
-        
-        if (payload.containsKey("isPii")) field.setIsPii((Boolean) payload.get("isPii"));
-        if (payload.containsKey("isMandatory")) field.setIsMandatory((Boolean) payload.get("isMandatory"));
-        if (payload.containsKey("validationRegex")) field.setValidationRegex((String) payload.get("validationRegex"));
-        
-        int orderIndex = payload.containsKey("orderIndex") ? ((Number) payload.get("orderIndex")).intValue() : 0;
-        field.setOrderIndex(orderIndex);
-        
-        return ResponseEntity.ok(fieldConfigRepository.save(field));
-    }
-
-    @PostMapping("/admin/workflows/{countryCode}/publish")
-    @Operation(summary = "Publish (activate) a country workflow", tags = "Admin")
-    public ResponseEntity<WorkflowConfigEntity> publishWorkflow(@PathVariable String countryCode) {
-        WorkflowConfigEntity config = workflowConfigRepository.findById(countryCode.toUpperCase())
-                .orElseThrow(() -> new RuntimeException("Workflow not found for country: " + countryCode));
-        config.setIsActive(true);
-        config.setUpdatedAt(java.time.OffsetDateTime.now());
-        return ResponseEntity.ok(workflowConfigRepository.save(config));
-    }
-
-    @PostMapping("/admin/workflows/{countryCode}/unpublish")
-    @Operation(summary = "Unpublish (deactivate) a country workflow", tags = "Admin")
-    public ResponseEntity<WorkflowConfigEntity> unpublishWorkflow(@PathVariable String countryCode) {
-        WorkflowConfigEntity config = workflowConfigRepository.findById(countryCode.toUpperCase())
-                .orElseThrow(() -> new RuntimeException("Workflow not found for country: " + countryCode));
-        config.setIsActive(false);
-        config.setUpdatedAt(java.time.OffsetDateTime.now());
-        return ResponseEntity.ok(workflowConfigRepository.save(config));
-    }
-
-    @GetMapping("/admin/submissions/{sessionId}")
-    @Operation(summary = "View raw submissions for a session", tags = "Admin")
-    public ResponseEntity<List<StepSubmissionEntity>> getSubmissions(@PathVariable String sessionId) {
-        return ResponseEntity.ok(stepSubmissionRepository.findBySessionIdOrderByCreatedAtAsc(sessionId));
     }
 
     // ==================== Status Query (PUBLIC) ====================

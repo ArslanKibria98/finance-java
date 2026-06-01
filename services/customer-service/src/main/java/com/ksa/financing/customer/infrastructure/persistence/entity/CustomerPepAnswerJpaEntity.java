@@ -64,6 +64,12 @@ public class CustomerPepAnswerJpaEntity {
     @Column(name = "source_of_funds_details", columnDefinition = "TEXT")
     private String sourceOfFundsDetails;
 
+    @Column(name = "occupation", length = 50)
+    private String occupation;
+
+    @Column(name = "occupation_details", columnDefinition = "TEXT")
+    private String occupationDetails;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "related_persons", columnDefinition = "jsonb")
     private String relatedPersonsJson;

@@ -59,6 +59,7 @@ public class ApiAuditLogger {
         m.put("trace_id", e.getTraceId());
         m.put("span_id", e.getSpanId());
         m.put("third_party_name", e.getThirdPartyName());
+        m.put("third_party_api", e.getThirdPartyApi());
         m.put("error_code", e.getErrorCode());
         m.put("error_message", e.getErrorMessage());
         m.put("stack_trace", e.getStackTrace());

@@ -168,3 +168,4 @@ data/
 .claude/settings.local.json
 docs/islamic-financing/
 infrastructure/nginx/html/docs/
+.claude/qa-password

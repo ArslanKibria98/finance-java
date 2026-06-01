@@ -11,6 +11,7 @@ import com.ksa.financing.risk.domain.model.NidBlacklistEntry;
 import com.ksa.financing.risk.domain.port.in.ManageBlacklistUseCase;
 import com.ksa.financing.risk.domain.port.out.BlacklistRepository;
 import com.ksa.financing.risk.infrastructure.blacklist.BlacklistRedisSyncService;
+import com.ksa.financing.risk.infrastructure.messaging.KafkaBlacklistEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
 
     private final BlacklistRepository blacklistRepository;
     private final BlacklistRedisSyncService redisSync;
+    private final KafkaBlacklistEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -43,6 +45,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
             }
             log.info("NID re-blacklisted: {}", maskNid(nationalId));
             redisSync.onNidBlacklisted(nationalId, reason);
+            eventPublisher.publishBlacklisted("NID", nationalId, reason);
             return blacklistRepository.findNidByNationalId(nationalId).orElseThrow();
         }
 
@@ -51,6 +54,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
         var saved = blacklistRepository.saveNid(entry);
         log.info("NID blacklisted: {}", maskNid(nationalId));
         redisSync.onNidBlacklisted(nationalId, reason);
+        eventPublisher.publishBlacklisted("NID", nationalId, reason);
         return saved;
     }
 
@@ -104,6 +108,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
             }
             log.info("Mobile re-blacklisted: {}", maskMobile(mobileNumber));
             redisSync.onMobileBlacklisted(mobileNumber, reason);
+            eventPublisher.publishBlacklisted("MOBILE", mobileNumber, reason);
             return blacklistRepository.findMobileByNumber(mobileNumber).orElseThrow();
         }
 
@@ -112,6 +117,7 @@ public class ManageBlacklistUseCaseImpl implements ManageBlacklistUseCase {
         var saved = blacklistRepository.saveMobile(entry);
         log.info("Mobile blacklisted: {}", maskMobile(mobileNumber));
         redisSync.onMobileBlacklisted(mobileNumber, reason);
+        eventPublisher.publishBlacklisted("MOBILE", mobileNumber, reason);
         return saved;
     }
 

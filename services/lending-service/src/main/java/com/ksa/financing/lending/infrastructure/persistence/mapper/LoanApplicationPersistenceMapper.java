@@ -86,6 +86,18 @@ public class LoanApplicationPersistenceMapper {
         entity.setVerifiedSalary(agg.getVerifiedSalary());
         entity.setMaxEligibleAmount(agg.getMaxEligibleAmount());
 
+        // Step 3.5: Credit Decision Engine (LOS §5 Step 4)
+        entity.setCreditDecision(agg.getCreditDecision());
+        entity.setCreditDecisionReason(agg.getCreditDecisionReason());
+        entity.setScoringTotalScore(agg.getScoringTotalScore());
+        entity.setScoringMaxScore(agg.getScoringMaxScore());
+        entity.setScoringPercentage(agg.getScoringPercentage());
+        entity.setScoringGreenThreshold(agg.getScoringGreenThreshold());
+        entity.setScoringAmberThreshold(agg.getScoringAmberThreshold());
+        entity.setScoringSummary(agg.getScoringSummary());
+        entity.setScoringDetailsJson(agg.getScoringDetailsJson());
+        entity.setScoringEvaluatedAt(agg.getScoringEvaluatedAt());
+
         // Step 4: Offer
         entity.setOfferedAmount(agg.getOfferedAmount());
         entity.setOfferedMonthlyInstallment(agg.getOfferedMonthlyInstallment());
@@ -243,6 +255,20 @@ public class LoanApplicationPersistenceMapper {
                 e.getDisbursementDurationHours() != null ? e.getDisbursementDurationHours() : 0);
         agg.setDisbursementScheduledAt(e.getDisbursementScheduledAt());
         agg.setAwaitDisbursedAt(e.getAwaitDisbursedAt());
+
+        // Step 3.5: Credit Decision Engine snapshot
+        agg.restoreCreditDecisionFromPersistence(
+                e.getCreditDecision(),
+                e.getCreditDecisionReason(),
+                e.getScoringTotalScore(),
+                e.getScoringMaxScore(),
+                e.getScoringPercentage(),
+                e.getScoringGreenThreshold(),
+                e.getScoringAmberThreshold(),
+                e.getScoringSummary(),
+                e.getScoringDetailsJson(),
+                e.getScoringEvaluatedAt()
+        );
 
         return agg;
     }

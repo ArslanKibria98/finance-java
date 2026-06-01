@@ -151,8 +151,14 @@ public class ApiAuditFilter extends OncePerRequestFilter implements Ordered {
         }
 
         // Extract business context (mobile, nationalId, customerId, loanId, ...)
-        // from RAW bodies before masking — masked values would be unusable for journey tracking.
-        Map<String, String> business = businessExtractor.extract(req.getRequestURI(), rawReqBody, rawRespBody);
+        // from headers + RAW bodies before masking — masked values would be unusable for journey tracking.
+        Map<String, String> reqHeaders = new java.util.LinkedHashMap<>();
+        java.util.Enumeration<String> headerNames = req.getHeaderNames();
+        while (headerNames != null && headerNames.hasMoreElements()) {
+            String n = headerNames.nextElement();
+            reqHeaders.put(n, req.getHeader(n));
+        }
+        Map<String, String> business = businessExtractor.extract(req.getRequestURI(), reqHeaders, rawReqBody, rawRespBody);
 
         JwtPrincipal principal = resolvePrincipal(req);
 

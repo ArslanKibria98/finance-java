@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "Email + PIN Login (Canada / Foreign / Guest)",
+    "description": "Login endpoint for users onboarded via the email-based flows.\n\n**Service:** identity-service (port 8083)\n**Endpoint:** `POST /api/v1/auth/login-with-email-pin`\n\n## How it works\n1. Looks up the Keycloak user by email\n2. Reads `pin_hash` attribute (bcrypt) and verifies against the submitted 6-digit PIN\n3. Resets the user's Keycloak password to a one-shot random secret\n4. Issues a real Keycloak JWT via password grant\n5. Returns access + refresh token + onboarding metadata (flow, complete flag, mobile)\n\n## Use after onboarding completes\nRun any of the onboarding collections first (Canada / Foreign / Guest). When the workflow reaches `COMPLETED` and Keycloak has the `pin_hash` attribute set, this login endpoint will work.\n\n## Variables\n- `baseUrl` — Kong: `http://46.62.226.94:8000/identity-service` · Direct: `http://localhost:8083`\n- `email` — the email used during onboarding\n- `pin` — the 6-digit PIN set in step 7 (Canada/Foreign) or step 4 (Guest)\n- Auto-set: `accessToken`, `refreshToken`, `keycloakUserId`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://46.62.226.94:8000/identity-service", "description": "Kong gateway. For direct hit: http://localhost:8083" },
+    { "key": "email", "value": "ca-test@example.com" },
+    { "key": "pin", "value": "936182" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "keycloakUserId", "value": "" }
+  ],
+  "auth": { "type": "noauth" },
+  "item": [
+    {
+      "name": "Login with email + PIN",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "if (d.accessToken) pm.collectionVariables.set('accessToken', d.accessToken);",
+              "if (d.refreshToken) pm.collectionVariables.set('refreshToken', d.refreshToken);",
+              "if (d.keycloakUserId) pm.collectionVariables.set('keycloakUserId', d.keycloakUserId);",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('accessToken returned', () => pm.expect(d.accessToken).to.be.a('string').and.not.empty);",
+              "pm.test('tokenType is Bearer', () => pm.expect(d.tokenType).to.eql('Bearer'));",
+              "console.log('kcUserId =', d.keycloakUserId);",
+              "console.log('onboarding_flow =', d.onboardingFlow);",
+              "console.log('onboarding_complete =', d.onboardingComplete);",
+              "console.log('mobile_number =', d.mobileNumber);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"pin\": \"{{pin}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login-with-email-pin"
+      }
+    },
+    {
+      "name": "Wrong PIN (expect 422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Invalid PIN', () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"pin\": \"000000\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login-with-email-pin"
+      }
+    },
+    {
+      "name": "Unknown email (expect 404)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"nobody-x9z@example.com\",\n  \"pin\": \"123456\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login-with-email-pin"
+      }
+    },
+    {
+      "name": "Refresh token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "const d = r.data || r;",
+              "if (d.accessToken) pm.collectionVariables.set('accessToken', d.accessToken);",
+              "if (d.refreshToken) pm.collectionVariables.set('refreshToken', d.refreshToken);",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh"
+      }
+    }
+  ]
+}

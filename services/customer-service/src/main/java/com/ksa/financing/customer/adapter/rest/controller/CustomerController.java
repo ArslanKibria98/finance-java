@@ -568,6 +568,8 @@ public class CustomerController {
                 request.sourceOfWealthDescription(),
                 request.sourceOfFunds(),
                 request.sourceOfFundsDetails(),
+                request.occupation(),
+                request.occupationDetails(),
                 request.relatedPersons() == null ? List.of() : request.relatedPersons().stream()
                         .map(p -> new com.ksa.financing.customer.domain.model.CustomerPepAnswer.RelatedPerson(
                                 p.name(), p.relationship(), p.position()))

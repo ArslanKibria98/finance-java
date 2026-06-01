@@ -77,6 +77,18 @@ public record LoanApplicationDto(
         BigDecimal verifiedSalary,
         BigDecimal maxEligibleAmount,
 
+        // Step 3.5: Credit Decision Engine (LOS §5 Step 4 — Green/Amber/Red)
+        String creditDecision,
+        String creditDecisionReason,
+        BigDecimal scoringTotalScore,
+        BigDecimal scoringMaxScore,
+        BigDecimal scoringPercentage,
+        BigDecimal scoringGreenThreshold,
+        BigDecimal scoringAmberThreshold,
+        String scoringSummary,
+        String scoringDetailsJson,
+        LocalDateTime scoringEvaluatedAt,
+
         // Step 4: Offer
         BigDecimal offeredAmount,
         BigDecimal offeredMonthlyInstallment,

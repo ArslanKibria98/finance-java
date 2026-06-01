@@ -1,5 +1,6 @@
 package com.ksa.financing.lending.adapter.temporal.activity;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ksa.financing.lending.application.usecase.BankAccountLookupService;
 import com.ksa.financing.lending.domain.model.*;
 import com.ksa.financing.lending.domain.port.in.ManageLoanUseCase;
@@ -31,6 +32,7 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
     private final BankAccountLookupService bankAccountLookupService;
     private final FraudEventNotifier fraudEventNotifier;
     private final JpaLoanApplicationRepository jpaRepository;
+    private final ObjectMapper objectMapper;
 
     // ══════════ APPLICATION LIFECYCLE ══════════
 
@@ -192,6 +194,40 @@ public class LoanApplicationActivityImpl implements LoanApplicationActivity {
 
         applicationRepository.save(aggregate);
         publishEvents(aggregate);
+    }
+
+    @Override
+    @Transactional
+    public void saveCreditDecision(SaveCreditDecisionInput input) {
+        log.info("Activity: Saving credit decision {} for application: {}",
+                input.decision(), input.applicationId());
+
+        var aggregate = findApplication(input.tenantId(), input.applicationId());
+
+        String detailsJson = null;
+        if (input.details() != null && !input.details().isEmpty()) {
+            try {
+                detailsJson = objectMapper.writeValueAsString(input.details());
+            } catch (Exception e) {
+                log.warn("Failed to serialize scoring details to JSON for application {}: {}",
+                        input.applicationId(), e.getMessage());
+            }
+        }
+
+        aggregate.recordCreditDecision(
+                input.decision(),
+                input.reasonCode(),
+                input.totalScore(),
+                input.maxScore(),
+                input.scorePercentage(),
+                input.greenThreshold(),
+                input.amberThreshold(),
+                input.summary(),
+                detailsJson,
+                input.updatedBy() != null ? UUID.fromString(input.updatedBy()) : null
+        );
+
+        applicationRepository.save(aggregate);
     }
 
     @Override

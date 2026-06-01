@@ -88,23 +88,24 @@ public final class MurabahaCalculator {
             throw new IllegalArgumentException("Cost price must be positive");
         }
 
-        // Calculate profit amount
-        SarMoney profitAmount = profitRate.multiply(costPrice);
-
-        // Calculate sale price
-        SarMoney salePrice = costPrice.add(profitAmount);
-
-        // Calculate monthly installment (Principal + Profit + Fee)
-        SarMoney monthlyInstallment = salePrice.add(feeAmount).divide(tenure.months());
-
-        // Generate amortization schedule
-        List<InstallmentLine> schedule = AmortizationScheduleGenerator.generateFlatSchedule(
+        // Reducing-balance schedule (per docs/reducing-balance-load-documentation.md)
+        List<InstallmentLine> schedule = AmortizationScheduleGenerator.generateReducingBalanceSchedule(
                 costPrice,
                 profitRate,
                 tenure,
                 startDate,
                 feeAmount
         );
+
+        // Total profit = sum of monthly profits on declining outstanding
+        SarMoney profitAmount = schedule.stream()
+                .map(InstallmentLine::profitComponent)
+                .reduce(SarMoney.zero(), SarMoney::add);
+
+        SarMoney salePrice = costPrice.add(profitAmount);
+
+        // EMI is constant across installments (last one absorbs rounding); take from first row
+        SarMoney monthlyInstallment = schedule.get(0).totalInstallment();
 
         return new MurabahaCalculation(
                 costPrice,
@@ -183,34 +184,46 @@ public final class MurabahaCalculator {
      * @param profitRate The profit rate
      * @return The profit amount
      */
+    public static SarMoney calculateProfitAmount(SarMoney costPrice, ProfitRate profitRate, Tenure tenure) {
+        Objects.requireNonNull(costPrice, "Cost price cannot be null");
+        Objects.requireNonNull(profitRate, "Profit rate cannot be null");
+        Objects.requireNonNull(tenure, "Tenure cannot be null");
+        return AmortizationScheduleGenerator.calculateTotalProfit(costPrice, profitRate, tenure);
+    }
+
+    /**
+     * @deprecated Reducing-balance profit depends on tenure. Use
+     * {@link #calculateProfitAmount(SarMoney, ProfitRate, Tenure)}.
+     */
+    @Deprecated
     public static SarMoney calculateProfitAmount(SarMoney costPrice, ProfitRate profitRate) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
-        return profitRate.multiply(costPrice);
+        return SarMoney.zero();
     }
 
     /**
-     * Calculate only the sale price (without full calculation).
-     *
-     * @param costPrice  The cost price
-     * @param profitRate The profit rate
-     * @return The sale price (cost + profit)
+     * Sale price = cost + total reducing-balance profit over the given tenure.
      */
+    public static SarMoney calculateSalePrice(SarMoney costPrice, ProfitRate profitRate, Tenure tenure) {
+        Objects.requireNonNull(costPrice, "Cost price cannot be null");
+        Objects.requireNonNull(profitRate, "Profit rate cannot be null");
+        Objects.requireNonNull(tenure, "Tenure cannot be null");
+        return costPrice.add(calculateProfitAmount(costPrice, profitRate, tenure));
+    }
+
+    /**
+     * @deprecated Reducing-balance sale price requires tenure. Use
+     * {@link #calculateSalePrice(SarMoney, ProfitRate, Tenure)}.
+     */
+    @Deprecated
     public static SarMoney calculateSalePrice(SarMoney costPrice, ProfitRate profitRate) {
         Objects.requireNonNull(costPrice, "Cost price cannot be null");
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
-        SarMoney profit = calculateProfitAmount(costPrice, profitRate);
-        return costPrice.add(profit);
+        return costPrice;
     }
 
-    /**
-     * Calculate only the monthly installment (without full calculation).
-     *
-     * @param costPrice  The cost price
-     * @param profitRate The profit rate
-     * @param tenure     The tenure
-     * @return The monthly installment amount
-     */
+    /** Reducing-balance EMI (principal+profit) plus evenly-distributed fee component. */
     public static SarMoney calculateMonthlyInstallment(
             SarMoney costPrice,
             ProfitRate profitRate,
@@ -221,8 +234,8 @@ public final class MurabahaCalculator {
         Objects.requireNonNull(profitRate, "Profit rate cannot be null");
         Objects.requireNonNull(tenure, "Tenure cannot be null");
 
-        SarMoney salePrice = calculateSalePrice(costPrice, profitRate);
-        return salePrice.add(feeAmount).divide(tenure.months());
+        return AmortizationScheduleGenerator.calculateMonthlyInstallment(
+                costPrice, profitRate, tenure, feeAmount);
     }
 
     /**

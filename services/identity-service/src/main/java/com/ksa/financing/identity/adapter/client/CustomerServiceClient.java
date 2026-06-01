@@ -29,9 +29,18 @@ public class CustomerServiceClient implements CustomerLookupPort {
     }
 
     @Override
+    public Optional<CustomerLookupResult> resolveCustomerById(String customerId, String bearerToken) {
+        if (customerId == null || customerId.isBlank()) return Optional.empty();
+        return doLookup(customerServiceUrl + "/api/v1/customers/" + customerId, bearerToken);
+    }
+
+    @Override
     public Optional<CustomerLookupResult> resolveCustomerByNationalId(String nationalId, String bearerToken) {
-        String url = customerServiceUrl + "/api/v1/customers/by-nid/" + nationalId;
-        log.info("Resolving customer ID from customer-service: {}", url);
+        return doLookup(customerServiceUrl + "/api/v1/customers/by-nid/" + nationalId, bearerToken);
+    }
+
+    private Optional<CustomerLookupResult> doLookup(String url, String bearerToken) {
+        log.info("Resolving customer from customer-service: {}", url);
         try {
             var headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

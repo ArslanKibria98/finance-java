@@ -1,5 +1,6 @@
 package com.ksa.financing.lending.domain.service;
 
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -8,6 +9,10 @@ import java.math.BigDecimal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Tests for the reducing-balance amortization engine per
+ * {@code docs/reducing-balance-load-documentation.md}.
+ */
 class FinanceCalculationServiceTest {
 
     private static final BigDecimal PRINCIPAL = new BigDecimal("100000");
@@ -16,73 +21,70 @@ class FinanceCalculationServiceTest {
     private static final BigDecimal ADMIN_FEE = new BigDecimal("200");
     private static final BigDecimal VAT_15 = new BigDecimal("15");
 
+    // Reducing-balance reference values for P=100k, r=5%:
+    //   n=12 → EMI=8560.75, profit≈2728.98
+    //   n=24 → EMI=4387.14, profit≈5291.34
+    private static final Offset<BigDecimal> TOL = Offset.offset(new BigDecimal("1.50"));
+
     @Test
-    @DisplayName("CASE 2B: fees + inclusive=FALSE → fees added to profit")
-    void case_2B_feesAddedToRepayment() {
+    @DisplayName("Fees non-inclusive → fees added as separate per-installment component on top of EMI")
+    void feesNonInclusive_addedToInstallment() {
         var result = FinanceCalculationService.calculate(
                 PRINCIPAL, PROFIT_RATE_5_PCT, 24,
                 PROC_FEE, ADMIN_FEE, VAT_15, false);
 
-        // profitFromPercentage = 100000 × 0.05 × (24/12) = 10,000
-        // totalProfitBeforeVat = 10,000 + 500 + 200 = 10,700
-        // vatOnProfit = 10,700 × 0.15 = 1,605
-        // totalPayable = 100,000 + (10,700 − 1,605) + 1,605 = 110,700
-        // EMI = 110,700 / 24 = 4,612.50
-
-        assertThat(result.profitBeforeVat()).isEqualByComparingTo("10700.00");
-        assertThat(result.vatAmount()).isEqualByComparingTo("1605.00");
-        assertThat(result.profitAfterVat()).isEqualByComparingTo("9095.00");
-        assertThat(result.totalPayable()).isEqualByComparingTo("110700.00");
-        assertThat(result.monthlyInstallment()).isEqualByComparingTo("4612.50");
+        // Profit comes purely from reducing-balance schedule (NOT inflated by fees)
+        assertThat(result.profitBeforeVat()).isCloseTo(new BigDecimal("5291.34"), TOL);
+        // VAT on profit = 5291.34 × 0.15 ≈ 793.70
+        assertThat(result.vatAmount()).isCloseTo(new BigDecimal("793.70"), TOL);
+        // totalPayable = principal + profit + fees = 100000 + 5291.34 + 700 = 105991.34
+        assertThat(result.totalPayable()).isCloseTo(new BigDecimal("105991.34"), TOL);
+        // EMI = annuity EMI (4387.14) + fee/24 (29.17) ≈ 4416.31
+        assertThat(result.monthlyInstallment()).isCloseTo(new BigDecimal("4416.31"), TOL);
         assertThat(result.isDisbursementInclusive()).isFalse();
     }
 
     @Test
-    @DisplayName("CASE 2A: fees + inclusive=TRUE → fees NOT added (already deducted Day-0)")
-    void case_2A_feesDeductedAtDisbursement() {
+    @DisplayName("Fees inclusive → fees deducted at disbursement, NOT in EMI")
+    void feesInclusive_excludedFromInstallment() {
         var result = FinanceCalculationService.calculate(
                 PRINCIPAL, PROFIT_RATE_5_PCT, 24,
                 PROC_FEE, ADMIN_FEE, VAT_15, true);
 
-        // totalProfitBeforeVat = 10,000 (fees excluded)
-        // totalPayable = 100,000 + 10,000 = 110,000
-        // EMI = 110,000 / 24 = 4,583.33
-
-        assertThat(result.profitBeforeVat()).isEqualByComparingTo("10000.00");
-        assertThat(result.totalPayable()).isEqualByComparingTo("110000.00");
-        assertThat(result.monthlyInstallment()).isEqualByComparingTo("4583.33");
+        assertThat(result.profitBeforeVat()).isCloseTo(new BigDecimal("5291.34"), TOL);
+        assertThat(result.totalPayable()).isCloseTo(new BigDecimal("105291.34"), TOL);
+        assertThat(result.monthlyInstallment()).isCloseTo(new BigDecimal("4387.14"), TOL);
         assertThat(result.isDisbursementInclusive()).isTrue();
     }
 
     @Test
-    @DisplayName("CASE 2C: no fees → totalProfit = profitFromPercentage only")
-    void case_2C_noFees() {
+    @DisplayName("No fees → totalPayable = principal + reducing-balance profit")
+    void noFees() {
         var result = FinanceCalculationService.calculate(
                 PRINCIPAL, PROFIT_RATE_5_PCT, 24,
                 BigDecimal.ZERO, BigDecimal.ZERO, VAT_15, false);
 
-        assertThat(result.profitBeforeVat()).isEqualByComparingTo("10000.00");
-        assertThat(result.totalPayable()).isEqualByComparingTo("110000.00");
-        assertThat(result.monthlyInstallment()).isEqualByComparingTo("4583.33");
+        assertThat(result.profitBeforeVat()).isCloseTo(new BigDecimal("5291.34"), TOL);
+        assertThat(result.totalPayable()).isCloseTo(new BigDecimal("105291.34"), TOL);
+        assertThat(result.monthlyInstallment()).isCloseTo(new BigDecimal("4387.14"), TOL);
     }
 
     @Test
-    @DisplayName("CASE 1: profitRate < 1% → totalProfit = fees only")
-    void case_1_zeroOrSubOnePercentProfit() {
+    @DisplayName("Very low rate → reducing-balance profit is small but non-zero")
+    void lowRate() {
         var result = FinanceCalculationService.calculate(
                 PRINCIPAL, new BigDecimal("0.005"), 24,
                 PROC_FEE, ADMIN_FEE, VAT_15, false);
 
-        // CASE 1: totalProfitBeforeVat = 500 + 200 = 700
-        // totalPayable = 100,000 + 700 = 100,700
-        assertThat(result.profitBeforeVat()).isEqualByComparingTo("700.00");
-        assertThat(result.totalPayable()).isEqualByComparingTo("100700.00");
-        assertThat(result.monthlyInstallment()).isEqualByComparingTo("4195.83");
+        // P=100k, r=0.5%, n=24 reducing balance → profit ≈ 521.67
+        assertThat(result.profitBeforeVat()).isCloseTo(new BigDecimal("521.67"), TOL);
+        // totalPayable = 100000 + 521.67 + 700 (fees, non-inclusive) ≈ 101221.67
+        assertThat(result.totalPayable()).isCloseTo(new BigDecimal("101221.67"), TOL);
     }
 
     @Test
-    @DisplayName("Annual rate prorating: 12 months vs 24 months should scale profit linearly")
-    void annualRateProrating() {
+    @DisplayName("Tenure increases total profit (non-linear under reducing balance)")
+    void tenureIncreasesProfit() {
         var twelve = FinanceCalculationService.calculate(
                 PRINCIPAL, PROFIT_RATE_5_PCT, 12,
                 BigDecimal.ZERO, BigDecimal.ZERO, VAT_15, true);
@@ -90,13 +92,16 @@ class FinanceCalculationServiceTest {
                 PRINCIPAL, PROFIT_RATE_5_PCT, 24,
                 BigDecimal.ZERO, BigDecimal.ZERO, VAT_15, true);
 
-        assertThat(twelve.profitBeforeVat()).isEqualByComparingTo("5000.00");
-        assertThat(twentyFour.profitBeforeVat()).isEqualByComparingTo("10000.00");
+        // Reducing-balance profits — NOT linear with tenure (flat rate would have been 5000 vs 10000)
+        assertThat(twelve.profitBeforeVat()).isCloseTo(new BigDecimal("2728.98"), TOL);
+        assertThat(twentyFour.profitBeforeVat()).isCloseTo(new BigDecimal("5291.34"), TOL);
+        // Doubling tenure gives < 2× profit (because principal declines faster initially)
+        assertThat(twentyFour.profitBeforeVat()).isLessThan(twelve.profitBeforeVat().multiply(new BigDecimal("2")));
     }
 
     @Test
-    @DisplayName("VAT cancellation in totalPayable: Step 4 (−vat) + Step 5 (+vat) is net-zero")
-    void vatNetCancellationInTotalPayable() {
+    @DisplayName("VAT amount = profit × VAT%, totalPayable identical with/without VAT")
+    void vatAppliedToProfit() {
         var withVat = FinanceCalculationService.calculate(
                 PRINCIPAL, PROFIT_RATE_5_PCT, 24,
                 BigDecimal.ZERO, BigDecimal.ZERO, VAT_15, true);
@@ -104,11 +109,11 @@ class FinanceCalculationServiceTest {
                 PRINCIPAL, PROFIT_RATE_5_PCT, 24,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, true);
 
-        // totalPayable should be identical regardless of VAT — formula self-cancels VAT
-        assertThat(withVat.totalPayable()).isEqualByComparingTo(withoutVat.totalPayable());
-        // But vatAmount differs
-        assertThat(withVat.vatAmount()).isEqualByComparingTo("1500.00");
-        assertThat(withoutVat.vatAmount()).isEqualByComparingTo("0.00");
+        // totalPayable identical (VAT is inside profit split, sums back)
+        assertThat(withVat.totalPayable()).isCloseTo(withoutVat.totalPayable(), TOL);
+        // VAT = 5291.34 × 0.15 ≈ 793.70
+        assertThat(withVat.vatAmount()).isCloseTo(new BigDecimal("793.70"), TOL);
+        assertThat(withoutVat.vatAmount()).isCloseTo(BigDecimal.ZERO, TOL);
     }
 
     @Test
@@ -117,8 +122,8 @@ class FinanceCalculationServiceTest {
         var result = FinanceCalculationService.calculate(
                 PRINCIPAL, PROFIT_RATE_5_PCT, null, 24, PROC_FEE, ADMIN_FEE);
 
-        // Defaults: VAT=15, isDisbursementInclusive=TRUE → CASE 2A
-        assertThat(result.profitBeforeVat()).isEqualByComparingTo("10000.00");
+        // Defaults: VAT=15, isDisbursementInclusive=TRUE → fees excluded from schedule
+        assertThat(result.profitBeforeVat()).isCloseTo(new BigDecimal("5291.34"), TOL);
         assertThat(result.isDisbursementInclusive()).isTrue();
         assertThat(result.vatPercentage()).isEqualByComparingTo("15");
     }

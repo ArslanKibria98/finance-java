@@ -37,6 +37,35 @@ public class SecurityConfig {
     private String allowedOrigins;
 
     /**
+     * Truly-public chain — Authorization header is IGNORED entirely. Mobile app can send
+     * a stale/expired token and these endpoints still return 200. No JWT decoding is
+     * configured, so an invalid Bearer cannot produce a 401 here.
+     *
+     * <p>Use for endpoints that do not need tenant context from the JWT (country list,
+     * health, swagger). Tenant-aware public endpoints belong on {@link #publicFilterChain}.
+     */
+    @Bean
+    @Order(0)
+    public SecurityFilterChain trulyPublicFilterChain(HttpSecurity http) throws Exception {
+        return http
+            .securityMatcher(
+                "/api/v1/country-config/**",
+                "/api/health/**",
+                "/actuator/health/**",
+                "/actuator/prometheus",
+                "/v3/api-docs/**",
+                "/swagger-ui/**",
+                "/swagger-ui.html"
+            )
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .build();
+    }
+
+    /**
      * Public filter chain for read-only reference data endpoints (dropdown options).
      * These are called by onboarding-service without JWT (service-to-service).
      * Tenant identification via X-Tenant-Id header OR JWT claim if Authorization header is present.
@@ -56,15 +85,9 @@ public class SecurityConfig {
                 "/api/v1/reference-data/occupation/active",
                 "/api/v1/reference-data/purpose-of-finance/active",
                 "/api/v1/reference-data/net-worth-ranges/active",
-                "/api/v1/country-config/**",
+                "/api/v1/reference-data/relationship/active",
                 "/api/v1/customers/*/profile-picture",
-                "/internal/**",
-                "/api/health/**",
-                "/actuator/health/**",
-                "/actuator/prometheus",
-                "/v3/api-docs/**",
-                "/swagger-ui/**",
-                "/swagger-ui.html"
+                "/internal/**"
             )
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())

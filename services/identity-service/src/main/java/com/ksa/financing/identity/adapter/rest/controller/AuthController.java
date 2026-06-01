@@ -3,6 +3,8 @@ package com.ksa.financing.identity.adapter.rest.controller;
 import com.ksa.financing.domain.valueobject.NationalId;
 import com.ksa.financing.identity.application.dto.AuthRequest;
 import com.ksa.financing.identity.application.dto.AuthResponse;
+import com.ksa.financing.identity.application.dto.LoginWithEmailPinRequest;
+import com.ksa.financing.identity.application.dto.LoginWithEmailPinResponse;
 import com.ksa.financing.identity.application.dto.LoginWithMobilePinRequest;
 import com.ksa.financing.identity.application.dto.LoginWithPinRequest;
 import com.ksa.financing.identity.application.dto.OnboardingRegisterRequest;
@@ -17,6 +19,7 @@ import com.ksa.financing.identity.domain.port.in.AuthenticateUserUseCase;
 import com.ksa.financing.identity.domain.port.in.ChangePasscodeUseCase;
 import com.ksa.financing.identity.domain.port.in.ForgotPasscodeUseCase;
 import com.ksa.financing.identity.domain.port.in.VerifyMpinUseCase;
+import com.ksa.financing.identity.domain.port.in.LoginWithEmailPinUseCase;
 import com.ksa.financing.identity.domain.port.in.LoginWithPinUseCase;
 import com.ksa.financing.identity.domain.port.in.LogoutUseCase;
 import com.ksa.financing.identity.domain.port.in.RegisterFromOnboardingUseCase;
@@ -58,6 +61,7 @@ public class AuthController {
     private final AuthenticateUserUseCase authenticateUserUseCase;
     private final RegisterFromOnboardingUseCase registerFromOnboardingUseCase;
     private final LoginWithPinUseCase loginWithPinUseCase;
+    private final LoginWithEmailPinUseCase loginWithEmailPinUseCase;
     private final SsoUseCase ssoUseCase;
     private final LogoutUseCase logoutUseCase;
     private final ChangePasscodeUseCase changePasscodeUseCase;
@@ -238,6 +242,39 @@ public class AuthController {
         log.info("Mobile PIN login successful for mobile ending in: ****{}",
                 request.mobileNumber().substring(request.mobileNumber().length() - 4));
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login-with-email-pin")
+    @Operation(summary = "Login with email and PIN (Canada / Foreign / Guest flows)",
+            description = "Authenticates a user onboarded via the email-based flows (Canada, Foreign, Guest). "
+                    + "Verifies the 6-digit PIN against the bcrypt hash stored on the Keycloak user "
+                    + "attribute `pin_hash`, then issues a real Keycloak JWT. Response also surfaces "
+                    + "the onboarding_flow + onboarding_complete attributes so the mobile dashboard "
+                    + "knows whether the user has finished full KYC or is still a guest.")
+    @ApiResponse(responseCode = "200", description = "Login successful",
+            content = @Content(schema = @Schema(implementation = LoginWithEmailPinResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request — email or PIN format incorrect")
+    @ApiResponse(responseCode = "404", description = "User not found for the given email")
+    @ApiResponse(responseCode = "422", description = "Invalid PIN or PIN not set for this account")
+    public ResponseEntity<LoginWithEmailPinResponse> loginWithEmailPin(
+            @Valid @RequestBody LoginWithEmailPinRequest request) {
+        var command = new LoginWithEmailPinUseCase.LoginWithEmailPinCommand(
+                request.email(), request.pin());
+        var result = loginWithEmailPinUseCase.login(command);
+        return ResponseEntity.ok(new LoginWithEmailPinResponse(
+                result.accessToken(),
+                result.refreshToken(),
+                result.expiresIn(),
+                result.tokenType(),
+                result.keycloakUserId(),
+                result.customerId(),
+                result.pepStatus(),
+                result.name(),
+                result.email(),
+                result.mobileNumber(),
+                result.onboardingFlow(),
+                result.onboardingComplete()
+        ));
     }
 
     @PostMapping("/logout")

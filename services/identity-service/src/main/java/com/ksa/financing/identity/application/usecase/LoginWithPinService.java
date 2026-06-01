@@ -4,6 +4,7 @@ import com.ksa.financing.identity.domain.model.UserIdentity;
 import com.ksa.financing.identity.domain.model.UserStatus;
 import com.ksa.financing.identity.domain.port.in.LoginWithPinUseCase;
 import com.ksa.financing.identity.domain.port.out.CustomerLookupPort;
+import com.ksa.financing.identity.domain.port.out.EventPublisherPort;
 import com.ksa.financing.identity.domain.port.out.KeycloakAdapterPort;
 import com.ksa.financing.identity.domain.port.out.UserIdentityRepository;
 import com.ksa.financing.identity.infrastructure.blacklist.LoginGuardService;
@@ -31,6 +32,7 @@ public class LoginWithPinService implements LoginWithPinUseCase {
     private final UserIdentityRepository userIdentityRepository;
     private final CustomerLookupPort customerLookupPort;
     private final LoginGuardService loginGuard;
+    private final EventPublisherPort eventPublisher;
 
     @Override
     public LoginWithPinResult login(LoginWithPinCommand command) {
@@ -179,6 +181,23 @@ public class LoginWithPinService implements LoginWithPinUseCase {
             pepStatus = lookup.pepStatus();
             customerName = lookup.name();
         }
+
+        // Publish USER_LOGIN event for notification orchestration
+        UUID customerUuid = null;
+        if (customerId != null) {
+            try {
+                customerUuid = UUID.fromString(customerId);
+            } catch (IllegalArgumentException ignored) {
+                // customerId may be non-UUID (e.g., internalUserId fallback) — skip
+            }
+        }
+        eventPublisher.publishUserLogin(
+                identity.getInternalUserId(),
+                identity.getTenantId(),
+                customerUuid,
+                identity.getMobileNumber(),
+                resolveName(tokenResponse.name(), customerName)
+        );
 
         return new LoginWithPinResult(
                 tokenResponse.accessToken(),

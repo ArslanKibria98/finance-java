@@ -48,6 +48,8 @@ public class PerformCreditCheckService implements PerformCreditCheckUseCase {
         BigDecimal verifiedSalary = BigDecimal.ZERO;
         BigDecimal existingObligations = BigDecimal.ZERO;
         boolean hasActiveDefaults = false;
+        int defaultsCount = 0;
+        int activeLoansCount = 0;
 
         // 1. Call SIMAH_SCORE_CREDIT for credit score.
         // SIMAH wraps its payload as { "isSuccess": true, "data": { "score": 750, "rating": "Good" } }
@@ -100,7 +102,11 @@ public class PerformCreditCheckService implements PerformCreditCheckUseCase {
                     command.customerId(), command.applicationId());
             JsonNode payload = unwrapSimahPayload(negativeResponse);
             if (payload != null) {
-                hasActiveDefaults = payload.has("hasDefaults") && payload.get("hasDefaults").asBoolean();
+                hasActiveDefaults = (payload.has("hasDefaults") && payload.get("hasDefaults").asBoolean())
+                        || (payload.has("hasNegativeRecords") && payload.get("hasNegativeRecords").asBoolean());
+                if (payload.has("totalDefaults")) {
+                    defaultsCount = payload.get("totalDefaults").asInt(0);
+                }
             }
         } catch (Exception e) {
             log.warn("SIMAH_NEGATIVE_CONSUMER call failed: {}, assuming no defaults", e.getMessage());
@@ -114,9 +120,14 @@ public class PerformCreditCheckService implements PerformCreditCheckUseCase {
                     command.customerId(), command.applicationId());
             JsonNode payload = unwrapSimahPayload(commitResponse);
             if (payload != null) {
-                existingObligations = payload.has("totalMonthlyInstallment")
-                        ? new BigDecimal(payload.get("totalMonthlyInstallment").asText())
-                        : BigDecimal.ZERO;
+                if (payload.has("totalMonthlyInstallment")) {
+                    existingObligations = new BigDecimal(payload.get("totalMonthlyInstallment").asText());
+                } else if (payload.has("totalMonthlyPayment")) {
+                    existingObligations = new BigDecimal(payload.get("totalMonthlyPayment").asText());
+                }
+                if (payload.has("totalCommitments")) {
+                    activeLoansCount = payload.get("totalCommitments").asInt(0);
+                }
             }
         } catch (Exception e) {
             log.warn("SIMAH_CREDIT_COMMITMENTS call failed: {}, assuming zero obligations", e.getMessage());
@@ -130,9 +141,9 @@ public class PerformCreditCheckService implements PerformCreditCheckUseCase {
         }
 
         var result = new CreditCheckResult(creditScore, simahGrade, simahReferenceId,
-                verifiedSalary, existingObligations, hasActiveDefaults);
-        log.info("Credit check completed: score={}, grade={}, salary={}, obligations={}, defaults={}",
-                creditScore, simahGrade, verifiedSalary, existingObligations, hasActiveDefaults);
+                verifiedSalary, existingObligations, hasActiveDefaults, defaultsCount, activeLoansCount);
+        log.info("Credit check completed: score={}, grade={}, salary={}, obligations={}, defaults={}, defaultsCount={}, activeLoans={}",
+                creditScore, simahGrade, verifiedSalary, existingObligations, hasActiveDefaults, defaultsCount, activeLoansCount);
         return result;
     }
 
@@ -226,6 +237,6 @@ public class PerformCreditCheckService implements PerformCreditCheckUseCase {
     private CreditCheckResult mockResult() {
         return new CreditCheckResult(
                 720, "A", "SIMAH-MOCK-" + UUID.randomUUID().toString().substring(0, 8),
-                new BigDecimal("15000"), BigDecimal.ZERO, false);
+                new BigDecimal("15000"), BigDecimal.ZERO, false, 0, 0);
     }
 }

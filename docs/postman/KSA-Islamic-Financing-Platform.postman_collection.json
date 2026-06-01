@@ -81,6 +81,16 @@
       "type": "string"
     },
     {
+      "key": "occupationOptionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "relationshipOptionId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "productId",
       "value": "4210f18e-8c35-4b12-9b7f-c96de95767c7",
       "type": "string"
@@ -1236,6 +1246,69 @@
             "method": "GET",
             "url": "{{kongUrl}}/onboarding-service/api/v1/onboarding/reference-data/net-worth-ranges",
             "description": "Kong -> onboarding-workflow-service:8089\nPUBLIC — Lists active Net Worth Range dropdown options for EDD form.\nProxies to customer-service /api/v1/reference-data/net-worth-ranges/active.\nReturns standard ApiResponse: {data: [{id, code, nameEn, nameAr, descriptionEn, descriptionAr, isActive, displayOrder, createdAt, updatedAt}], message, timestamp}\nSorted by displayOrder ascending."
+          }
+        },
+        {
+          "name": "[onboarding-service] EDD: List Occupation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var data = json.data || json;",
+                  "pm.test('Occupation options retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data).to.be.an('array');",
+                  "});",
+                  "if (data.length > 0) { console.log('Occupation options: ' + data.length); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/onboarding-service/api/v1/onboarding/reference-data/occupation",
+            "description": "Kong -> onboarding-workflow-service:8089\nPUBLIC — Lists active occupation dropdown options for EDD form.\nProxies to customer-service /api/v1/reference-data/occupation/active.\nOptional `?search=` query forwarded to customer-service (case-insensitive LIKE on nameEn, nameAr, code).\nReturns standard ApiResponse: {data: [{id, code, nameEn, nameAr, descriptionEn, descriptionAr, isActive, displayOrder, createdAt, updatedAt}], message, timestamp}\nSorted by displayOrder ascending."
+          }
+        },
+        {
+          "name": "[onboarding-service] EDD: List Relationship",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var data = json.data || json;",
+                  "pm.test('Relationship options retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data).to.be.an('array');",
+                  "});",
+                  "if (data.length > 0) {",
+                  "    pm.test('Options have required fields', function() {",
+                  "        pm.expect(data[0].code).to.not.be.undefined;",
+                  "        pm.expect(data[0].nameEn).to.not.be.undefined;",
+                  "        pm.expect(data[0].nameAr).to.not.be.undefined;",
+                  "    });",
+                  "    console.log('Relationship options: ' + data.length);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/onboarding-service/api/v1/onboarding/reference-data/relationship",
+            "description": "Kong -> onboarding-workflow-service:8089\nPUBLIC — Lists active relationship dropdown options (next-of-kin / family contacts) for EDD form.\nProxies to customer-service /api/v1/reference-data/relationship/active.\nOptional `?search=` query forwarded to customer-service (case-insensitive LIKE on nameEn, nameAr, code).\nSeed data: FATHER, MOTHER, SPOUSE, SON, DAUGHTER, BROTHER, SISTER, GRANDFATHER, GRANDMOTHER, UNCLE, AUNT, COUSIN, FRIEND, OTHER.\nReturns standard ApiResponse: {data: [{id, code, nameEn, nameAr, descriptionEn, descriptionAr, isActive, displayOrder, createdAt, updatedAt}], message, timestamp}\nSorted by displayOrder ascending."
+          }
+        },
+        {
+          "name": "[onboarding-service] EDD: List Relationship (search 'father')",
+          "request": {
+            "method": "GET",
+            "url": "{{kongUrl}}/onboarding-service/api/v1/onboarding/reference-data/relationship?search=father",
+            "description": "Same as above, with `?search=father` forwarded to customer-service. Case-insensitive contains match on code, nameEn, nameAr."
           }
         }
       ]
@@ -3746,6 +3819,342 @@
                   ]
                 },
                 "description": "Decision Engine — Tests a failing eligibility scenario (low income, unemployed, low credit score).\nExpected: eligible=false with low scorePercentage."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "5b - General Credit Scoring (Onboarding)",
+          "description": "Product-AGNOSTIC scoring used during customer onboarding. Configured once per tenant. Fields covered: demographics (Nafath/Yakeen), employment+salary (GOSI), and EDD form (source_of_funds, source_of_wealth, net_worth_range, occupation). SIMAH and loan-application fields are NOT here — those stay in '5 - Credit Scoring' product criteria.",
+          "item": [
+            {
+              "name": "[risk-service] List General Scoring Criteria",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria"]
+                },
+                "description": "Returns all general (onboarding) credit scoring criteria for the tenant with their rules. These are product-agnostic — used by every customer's onboarding workflow."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Save General Scoring Criteria (Replace All)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Save general criteria returned 200', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"criteria\": [\n    {\n      \"fieldDefinitionId\": \"{{genderFieldId}}\",\n      \"customName\": \"Gender\",\n      \"custom\": false,\n      \"enabled\": true,\n      \"sortOrder\": 1,\n      \"rules\": [\n        { \"operator\": \"EQ\", \"value\": \"MALE\",   \"weight\": 2.0, \"percentage\": 10 },\n        { \"operator\": \"EQ\", \"value\": \"FEMALE\", \"weight\": 2.0, \"percentage\": 10 }\n      ]\n    },\n    {\n      \"fieldDefinitionId\": \"{{occupationFieldId}}\",\n      \"customName\": \"Occupation\",\n      \"custom\": false,\n      \"enabled\": true,\n      \"sortOrder\": 16,\n      \"rules\": [\n        { \"operator\": \"EQ\", \"value\": \"EMPLOYED_PUBLIC\",  \"weight\": 3.5, \"percentage\": 22 },\n        { \"operator\": \"EQ\", \"value\": \"EMPLOYED_PRIVATE\", \"weight\": 3.0, \"percentage\": 20 },\n        { \"operator\": \"EQ\", \"value\": \"SELF_EMPLOYED\",    \"weight\": 2.0, \"percentage\": 12 },\n        { \"operator\": \"EQ\", \"value\": \"RETIRED\",          \"weight\": 2.0, \"percentage\": 10 },\n        { \"operator\": \"EQ\", \"value\": \"STUDENT\",          \"weight\": 0.5, \"percentage\": 3 },\n        { \"operator\": \"EQ\", \"value\": \"UNEMPLOYED\",       \"weight\": 0.5, \"percentage\": 2 }\n      ]\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria"]
+                },
+                "description": "Replaces ALL general scoring criteria with the provided list. Use the IDs from `GET /credit-scoring/field-definitions/all` for fieldDefinitionId. Only include criteria for ONBOARDING fields (gender, nationality, age, salary, employment_type, source_of_funds, source_of_wealth, net_worth_range, occupation, etc.). Do NOT include SIMAH/loan/collateral here."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Get ONE Criterion by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria/{{generalCriteriaId}}",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria","{{generalCriteriaId}}"]
+                },
+                "description": "Returns ONE general criterion + its rules by id."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Add ONE Criterion (Tenant Admin)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Create criterion returned 201', function() { pm.response.to.have.status(201); });",
+                      "var d = pm.response.json().data || pm.response.json();",
+                      "if (d && d.id) { pm.collectionVariables.set('generalCriteriaId', d.id); console.log('Saved generalCriteriaId = ' + d.id); }"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fieldDefinitionId\": null,\n  \"customName\": \"Custom — Vehicle Ownership\",\n  \"custom\": true,\n  \"enabled\": true,\n  \"sortOrder\": 30,\n  \"rules\": [\n    { \"operator\": \"EQ\", \"value\": \"OWNED\",  \"weight\": 2.5, \"percentage\": 15 },\n    { \"operator\": \"EQ\", \"value\": \"LEASED\", \"weight\": 1.5, \"percentage\": 8 },\n    { \"operator\": \"EQ\", \"value\": \"NONE\",   \"weight\": 0.5, \"percentage\": 2 }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria"]
+                },
+                "description": "Adds ONE new criterion (tenant-level admin add). Pass fieldDefinitionId for predefined fields, or set custom=true with a customName for ad-hoc criteria. Returns 201 with the saved record (auto-saves id into {{generalCriteriaId}} via test script)."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Update ONE Criterion by ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Update criterion returned 200', function() { pm.response.to.have.status(200); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fieldDefinitionId\": null,\n  \"customName\": \"Custom — Vehicle Ownership (Updated)\",\n  \"custom\": true,\n  \"enabled\": true,\n  \"sortOrder\": 30,\n  \"rules\": [\n    { \"operator\": \"EQ\", \"value\": \"OWNED\",  \"weight\": 3.0, \"percentage\": 20 },\n    { \"operator\": \"EQ\", \"value\": \"LEASED\", \"weight\": 2.0, \"percentage\": 12 }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria/{{generalCriteriaId}}",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria","{{generalCriteriaId}}"]
+                },
+                "description": "Updates ONE criterion + replaces ALL its rules with the provided list. Use this for inline edits in the admin UI."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Delete ONE Criterion by ID",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria/{{generalCriteriaId}}",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria","{{generalCriteriaId}}"]
+                },
+                "description": "Deletes ONE criterion (rules cascade)."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Delete ALL General Criteria",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/criteria",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","criteria"]
+                },
+                "description": "Danger: wipes all general scoring criteria for the tenant."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Get General Scoring Config (Thresholds)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/config",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","config"]
+                },
+                "description": "Returns the tenant's thresholds: minPassPercentage, greenThreshold, amberThreshold, enabled. Defaults: 50 / 75 / 50."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Update General Scoring Config (Thresholds)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"minPassPercentage\": 50.00,\n  \"greenThreshold\": 75.00,\n  \"amberThreshold\": 50.00,\n  \"enabled\": true\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/config",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","config"]
+                },
+                "description": "Updates the Green/Amber/Red thresholds. Decision mapping in the engine:\n - scorePercentage >= greenThreshold → AUTO_APPROVE\n - scorePercentage >= amberThreshold → REFER_MANUAL_REVIEW\n - scorePercentage <  amberThreshold → AUTO_REJECT"
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Evaluate General Scoring (Preview)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var data = pm.response.json();",
+                      "pm.test('Evaluate returned a decision', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(data.decision).to.be.oneOf(['AUTO_APPROVE','REFER_MANUAL_REVIEW','AUTO_REJECT']);",
+                      "    pm.expect(data.scorePercentage).to.be.a('number');",
+                      "});",
+                      "console.log('Decision: ' + data.decision + ' | Score: ' + data.scorePercentage + '% | Matched: ' + data.matchedCriteria + '/' + data.totalCriteria);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"stage\": \"PREVIEW\",\n  \"persistSnapshot\": false,\n  \"answers\": {\n    \"gender\": \"MALE\",\n    \"nationality\": \"SAUDI\",\n    \"age\": \"35\",\n    \"city\": \"RIYADH\",\n    \"marital_status\": \"MARRIED\",\n    \"education_level\": \"BACHELOR\",\n    \"employment_type\": \"GOVERNMENT\",\n    \"employment_sector\": \"OIL_AND_GAS\",\n    \"employer_name\": \"ARAMCO\",\n    \"salary\": \"18000\",\n    \"total_income\": \"22000\",\n    \"years_of_employment\": \"8\",\n    \"source_of_funds\": \"EMPLOYMENT_SALARY\",\n    \"source_of_wealth\": \"BUSINESS_INCOME\",\n    \"net_worth_range\": \"RANGE_1M_5M\",\n    \"occupation\": \"EMPLOYED_PUBLIC\",\n    \"customer_type\": \"CITIZEN\",\n    \"residency_type\": \"OWNED\",\n    \"number_of_dependents\": \"2\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/evaluate",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","evaluate"]
+                },
+                "description": "Admin/preview mode evaluation against general scoring rules (persistSnapshot=false). Useful for testing weightages before rolling out to production. Returns Green/Amber/Red decision with full per-criterion breakdown."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Evaluate General Scoring (Risky Profile)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"stage\": \"PREVIEW\",\n  \"persistSnapshot\": false,\n  \"answers\": {\n    \"gender\": \"MALE\",\n    \"nationality\": \"OTHER\",\n    \"age\": \"22\",\n    \"city\": \"OTHER\",\n    \"marital_status\": \"SINGLE\",\n    \"education_level\": \"BELOW_HIGH_SCHOOL\",\n    \"employment_type\": \"SELF_EMPLOYED\",\n    \"employment_sector\": \"OTHER\",\n    \"employer_name\": \"OTHER\",\n    \"salary\": \"3500\",\n    \"total_income\": \"4000\",\n    \"years_of_employment\": \"0\",\n    \"source_of_funds\": \"CRYPTO_PROCEEDS\",\n    \"source_of_wealth\": \"CRYPTO_TRADING\",\n    \"net_worth_range\": \"UNDER_50K\",\n    \"occupation\": \"UNEMPLOYED\",\n    \"customer_type\": \"RESIDENT\",\n    \"residency_type\": \"RENTED\",\n    \"number_of_dependents\": \"7\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/evaluate",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","evaluate"]
+                },
+                "description": "Risky profile test — low salary, unemployed, crypto sources, no employment history. Expected: AUTO_REJECT (RED) with low scorePercentage."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Evaluate + Persist Snapshot for a Customer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"workflowId\": \"manual-test-001\",\n  \"stage\": \"ONBOARDING_COMPLETE\",\n  \"persistSnapshot\": true,\n  \"answers\": {\n    \"gender\": \"MALE\",\n    \"nationality\": \"SAUDI\",\n    \"age\": \"35\",\n    \"salary\": \"15000\",\n    \"employment_type\": \"GOVERNMENT\",\n    \"source_of_funds\": \"EMPLOYMENT_SALARY\",\n    \"occupation\": \"EMPLOYED_PUBLIC\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/evaluate",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","evaluate"]
+                },
+                "description": "Same as evaluate but persists a snapshot in customer_credit_score_snapshots and updates customer_credit_score_current cache. Set {{customerId}} to a real UUID."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Get Customer Current Score",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/customers/{{customerId}}/current",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","customers","{{customerId}}","current"]
+                },
+                "description": "Returns the cached latest general scoring summary for a customer (one row per customer)."
+              },
+              "response": []
+            },
+            {
+              "name": "[risk-service] Get Customer Snapshot History",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/api/v1/risk/credit-scoring/general/customers/{{customerId}}/history",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","api","v1","risk","credit-scoring","general","customers","{{customerId}}","history"]
+                },
+                "description": "Returns the full history of scoring snapshots (one per onboarding stage: NAFATH_VERIFIED, EDD_SUBMITTED, SALARY_FETCHED, AML_SCORED, ONBOARDING_COMPLETE). Ordered newest first."
+              },
+              "response": []
+            },
+            {
+              "name": "[INTERNAL] Evaluate General Scoring (Service-to-Service)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"workflowId\": \"workflow-12345\",\n  \"stage\": \"NAFATH_VERIFIED\",\n  \"answers\": {\n    \"gender\": \"MALE\",\n    \"nationality\": \"SAUDI\",\n    \"age\": \"35\",\n    \"city\": \"RIYADH\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{kongUrl}}/risk-service/internal/credit-scoring/general/evaluate",
+                  "host": ["{{kongUrl}}"],
+                  "path": ["risk-service","internal","credit-scoring","general","evaluate"]
+                },
+                "description": "Service-to-service endpoint called by the onboarding workflow's GeneralScoringActivity. No JWT — uses X-Tenant-Id header. Default behaviour: persistSnapshot=true. Stage values: NAFATH_VERIFIED, YAKEEN_VERIFIED, EDD_SUBMITTED, SALARY_FETCHED, AML_SCORED, ONBOARDING_COMPLETE."
               },
               "response": []
             }
@@ -6266,6 +6675,228 @@
                 "method": "DELETE",
                 "url": "{{kongUrl}}/customer-service/api/v1/reference-data/net-worth-ranges/{{nwrOptionId}}",
                 "description": "Kong -> customer-service:8084\nJWT REQUIRED (admin/super_admin) — Soft-deactivates the option (sets is_active = false).\nThe option will no longer appear in /active endpoint but remains in admin list."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Occupation",
+          "item": [
+            {
+              "name": "[OCC] Create Occupation Option",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const j = pm.response.json();",
+                      "const data = j.data !== undefined ? j.data : j;",
+                      "if (data && data.id) pm.collectionVariables.set('occupationOptionId', data.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"CONSULTANT_IT\",\n  \"nameEn\": \"IT Consultant\",\n  \"nameAr\": \"استشاري تقنية معلومات\",\n  \"descriptionEn\": \"Independent or employed IT consulting\",\n  \"descriptionAr\": \"استشارات تقنية معلومات\",\n  \"displayOrder\": 50\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation",
+                "description": "Kong -> customer-service:8084\nJWT REQUIRED. Casbin: reference-data.occupation + create.\nReturns 201 with created option."
+              }
+            },
+            {
+              "name": "[OCC] List All (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation?page=0&size=50",
+                "description": "Paged list including inactive (admin view). Supports search/sort/filters via PageQuery."
+              }
+            },
+            {
+              "name": "[OCC] List Active (Dropdown)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/active?page=0&size=100",
+                "description": "PUBLIC — Active occupation dropdown options. Accepts X-Tenant-Id header OR JWT with tenant_id."
+              }
+            },
+            {
+              "name": "[OCC] Get by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}",
+                "description": "Get occupation option by ID. Set {{occupationOptionId}} from Create response."
+              }
+            },
+            {
+              "name": "[OCC] Update Option",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nameEn\": \"IT Consultant (updated)\",\n  \"nameAr\": \"استشاري تقنية معلومات (محدّث)\",\n  \"descriptionEn\": \"Updated description\",\n  \"descriptionAr\": \"وصف محدّث\",\n  \"isActive\": true,\n  \"displayOrder\": 51\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}",
+                "description": "Partial update — null fields are ignored. `code` is immutable."
+              }
+            },
+            {
+              "name": "[OCC] Activate Option",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}/activate",
+                "description": "Sets is_active = true. Returns 204 No Content."
+              }
+            },
+            {
+              "name": "[OCC] Deactivate Option",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}/deactivate",
+                "description": "Sets is_active = false (hidden from /active). Returns 204 No Content."
+              }
+            },
+            {
+              "name": "[OCC] Delete (Soft)",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/occupation/{{occupationOptionId}}",
+                "description": "Soft delete (sets is_deleted = true AND is_active = false). Returns 204."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Relationship",
+          "description": "Next-of-kin / family contact relationship LOV.\n\nSeed data (V21 migration): FATHER, MOTHER, SPOUSE, SON, DAUGHTER, BROTHER, SISTER, GRANDFATHER, GRANDMOTHER, UNCLE, AUNT, COUSIN, FRIEND, OTHER.\n\nCasbin: reference-data.relationship × create | read | update | delete.",
+          "item": [
+            {
+              "name": "[REL] Create Relationship Option",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const j = pm.response.json();",
+                      "const data = j.data !== undefined ? j.data : j;",
+                      "if (data && data.id) pm.collectionVariables.set('relationshipOptionId', data.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"STEP_FATHER\",\n  \"nameEn\": \"Step Father\",\n  \"nameAr\": \"زوج الأم\",\n  \"descriptionEn\": \"Step father / second husband of mother\",\n  \"descriptionAr\": \"زوج الأم الثاني\",\n  \"displayOrder\": 15\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship",
+                "description": "Kong -> customer-service:8084\nJWT REQUIRED. Casbin: reference-data.relationship + create.\nReturns 201 with created option. Test script auto-saves `id` into `relationshipOptionId`."
+              }
+            },
+            {
+              "name": "[REL] List All (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship?page=0&size=50",
+                "description": "Paged list including inactive (admin view). Supports `search`, `sort`, `filters[code]=...` per PageQuery contract."
+              }
+            },
+            {
+              "name": "[REL] List Active (Dropdown)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/active?page=0&size=100",
+                "description": "PUBLIC — Active relationship dropdown options sorted by display_order. Accepts X-Tenant-Id header OR JWT with tenant_id."
+              }
+            },
+            {
+              "name": "[REL] List Active — search 'father'",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/active?page=0&size=20&search=father",
+                "description": "Case-insensitive contains search across code, nameEn, nameAr."
+              }
+            },
+            {
+              "name": "[REL] Get by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/{{relationshipOptionId}}",
+                "description": "Get relationship option by ID. Set {{relationshipOptionId}} from Create response."
+              }
+            },
+            {
+              "name": "[REL] Update Option (partial)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "Content-Type", "value": "application/json", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nameEn\": \"Step Father (updated)\",\n  \"nameAr\": \"زوج الأم (محدّث)\",\n  \"descriptionEn\": \"Updated description\",\n  \"descriptionAr\": \"وصف محدّث\",\n  \"isActive\": true,\n  \"displayOrder\": 16\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/{{relationshipOptionId}}",
+                "description": "Partial update — null fields are ignored. `code` is immutable (not in UpdateRelationshipCommand)."
+              }
+            },
+            {
+              "name": "[REL] Activate Option",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/{{relationshipOptionId}}/activate",
+                "description": "Sets is_active = true. Returns 204 No Content."
+              }
+            },
+            {
+              "name": "[REL] Deactivate Option",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/{{relationshipOptionId}}/deactivate",
+                "description": "Sets is_active = false (hidden from /active endpoint but row remains). Returns 204 No Content."
+              }
+            },
+            {
+              "name": "[REL] Delete (Soft)",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/relationship/{{relationshipOptionId}}",
+                "description": "Soft delete (sets is_deleted = true AND is_active = false). Returns 204."
               }
             }
           ]

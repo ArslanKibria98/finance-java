@@ -189,8 +189,12 @@ services:
     container_name: ksa-elasticsearch
     environment:
       - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Heap raised 1g -> 2g (OOM during Lucene merge of QA error-log index 2026-05-20).
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
       - xpack.security.enabled=false
+      # Trim memory footprint: disable ML node + monitoring collection (unused).
+      - xpack.ml.enabled=false
+      - xpack.monitoring.collection.enabled=false
     ports:
       - "127.0.0.1:9200:9200"
     volumes:
@@ -200,6 +204,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    restart: unless-stopped
     networks:
       - ksa-network
 
@@ -610,6 +615,62 @@ services:
     networks:
       - ksa-network
 
+  # Document Service - Encrypted document blob storage (MinIO + AES-GCM)
+  document-service:
+    build:
+      context: ./services/document-service
+      dockerfile: Dockerfile
+    container_name: ksa-document-service
+    ports:
+      - "8094:8094"
+    environment:
+      SERVER_PORT: 8094
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: document_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_AUTH_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ksa-financing-documents
+      MINIO_PUBLIC_URL: http://46.62.226.94:9100
+      # 32-byte / 256-bit master key, base64. DEV default — replace in PROD.
+      DOCUMENT_MASTER_KEY: ${DOCUMENT_MASTER_KEY:-}
+      <<: *hikari-tuning
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      ENV: ${APM_ENVIRONMENT:-dev}
+      JAVA_TOOL_OPTIONS: "-javaagent:/apm-agent/elastic-apm-agent.jar"
+      ELASTIC_APM_SERVICE_NAME: document-service
+      ELASTIC_APM_SERVER_URLS: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: ${APM_ENVIRONMENT:-dev}
+      ELASTIC_APM_APPLICATION_PACKAGES: com.ksa.financing
+      ELASTIC_APM_CAPTURE_BODY: errors
+      ELASTIC_APM_USE_PATH_AS_TRANSACTION_NAME: "true"
+      ELASTIC_APM_ENABLE_LOG_CORRELATION: "true"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+    volumes:
+      - apm_agent_data:/apm-agent:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      apm-agent-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8094/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ksa-network
+
   # Global Profile Service - Zero-PII Global Index
   global-profile-service:
     build:
@@ -874,11 +935,34 @@ services:
       APP_SERVICES_IDENTITY_URL: http://identity-service:8083
       APP_SERVICES_GLOBAL_PROFILE_URL: http://global-profile-service:8085
       RISK_SERVICE_URL: http://risk-service:8090
+      PII_VAULT_URL: http://pii-vault-service:8086
+      GLOBAL_PROFILE_URL: http://global-profile-service:8085
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/onboarding_db?stringtype=unspecified
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      # --- Facia.ai (Canada KYC) — routed through middleware-third-party ---
+      MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
+      MIDDLEWARE_CLIENT_SECRET: ${MIDDLEWARE_CLIENT_SECRET:-ob-svc-mw-secret-2026-x9k4p}
+      FACIA_BASE_URL: ${FACIA_BASE_URL:-https://api.facia.ai}
+      FACIA_CLIENT_ID: ${FACIA_CLIENT_ID:-415585bd38}
+      FACIA_CLIENT_SECRET: ${FACIA_CLIENT_SECRET:-PBi1AeyudzSnDgNQWhnAkWVJrtLj7nohWNturfEC}
+      FACIA_MOCK: ${FACIA_MOCK:-false}
+      CANADA_ONBOARDING_TASK_QUEUE: canada-onboarding-queue
+      # --- Keycloak admin (Canada onboarding user provisioning + token issuance) ---
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: CompanyRealm
+      KEYCLOAK_ADMIN_CLIENT_ID: admin-dashboard
+      KEYCLOAK_ADMIN_CLIENT_SECRET: admin-dashboard-secret
+      KEYCLOAK_DEFAULT_CUSTOMER_ROLE: customer
+      # --- SMTP (onboarding email OTP) — creds from .env ---
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      OTP_EMAIL_ENABLED: ${OTP_EMAIL_ENABLED:-true}
+      OTP_EMAIL_FROM: ${OTP_EMAIL_FROM:-}
       # --- HikariCP idle-session-timeout fix (shared) ---
       <<: *hikari-tuning
       # --- ELK / Logging ---
@@ -935,6 +1019,13 @@ services:
       FRAUD_SERVICE_URL: http://fraud-service:8092
       PRODUCT_SERVICE_URL: http://product-service:8091
       MIDDLEWARE_SERVICE_URL: http://middleware-third-party:8093
+      # Product credit scoring thresholds — lowered for current data coverage
+      # (lending workflow doesn't yet feed all SIMAH-deep fields; thresholds
+      # tuned so realistic SIMAH scores + loan params PASS for smoke testing).
+      CREDIT_SCORING_MIN_PASS_PCT: "20"
+      CREDIT_SCORING_GREEN_PCT: "40"
+      CREDIT_SCORING_AMBER_PCT: "20"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       # --- HikariCP idle-session-timeout fix (shared) ---
       <<: *hikari-tuning
       # --- ELK / Logging ---

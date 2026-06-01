@@ -208,6 +208,10 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
     private int manualApprovalSlaDays = 2;
     private boolean manualReviewRequired;
 
+    // Credit decision engine state (LOS §5 Step 4 — Green/Amber/Red)
+    private CreditCheckActivity.CreditDecisionResult creditDecision;
+    private boolean amberManualReviewRequired;
+
     // Revert state
     private int targetStepIndex = 0;
     private boolean goBackRequested = false;
@@ -915,7 +919,62 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
                 )
         );
 
-        // 3b: Calculate eligibility using product criteria + credit data
+        // 3b: Product-driven credit decision engine (LOS §5 Step 4)
+        // Runs the configured criteria + weights and produces Green/Amber/Red.
+        // Green → continue normally; Amber → flag for manual review;
+        // Red → reject immediately (downstream DBR/affordability skipped).
+        subStep = "CREDIT_DECISIONING";
+        creditDecision = creditCheckActivity.runCreditDecisionEngine(
+                new CreditCheckActivity.CreditDecisionInput(
+                        tenantId, productId, applicationId,
+                        buildScoringAnswers(creditResult),
+                        null, null  // use risk-service configured thresholds
+                )
+        );
+        log.info("Credit decision engine: {} ({}% score) — {}",
+                creditDecision.decision(), creditDecision.scorePercentage(), creditDecision.summary());
+
+        // Persist decision snapshot on the aggregate regardless of outcome
+        lendingActivity.saveCreditDecision(new LoanApplicationActivity.SaveCreditDecisionInput(
+                tenantId, applicationId,
+                creditDecision.decision(),
+                creditDecision.reasonCode(),
+                creditDecision.totalScore(),
+                creditDecision.maxPossibleScore(),
+                creditDecision.scorePercentage(),
+                creditDecision.greenThreshold(),
+                creditDecision.amberThreshold(),
+                creditDecision.summary(),
+                creditDecision.details(),
+                createdBy
+        ));
+
+        if ("AUTO_REJECT".equals(creditDecision.decision())) {
+            String rejectionReason = creditDecision.summary() != null
+                    ? creditDecision.summary()
+                    : "Credit decision engine: AUTO_REJECT";
+            lendingActivity.saveEligibilityResult(new LoanApplicationActivity.SaveEligibilityInput(
+                    tenantId, applicationId,
+                    false,
+                    creditDecision.totalScore().intValue(),
+                    creditResult.simahReferenceId(),
+                    creditResult.verifiedSalary(),
+                    BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    rejectionReason,
+                    createdBy
+            ));
+            errorMessage = rejectionReason;
+            throw ApplicationFailure.newFailure(rejectionReason, "CREDIT_DECISION_REJECT");
+        }
+
+        if ("REFER_MANUAL_REVIEW".equals(creditDecision.decision())) {
+            amberManualReviewRequired = true;
+            manualReviewRequired = true;
+            log.info("Credit decision = AMBER; application flagged for manual review at approval gate");
+        }
+
+        // 3c: Calculate eligibility using product criteria + credit data
         subStep = "CALCULATING_ELIGIBILITY";
         // Use signal profit rate as fallback when product validation returned null
         BigDecimal effectiveProfitRate = productValidation.profitRate() != null
@@ -964,7 +1023,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         lendingActivity.saveEligibilityResult(new LoanApplicationActivity.SaveEligibilityInput(
                 tenantId, applicationId,
                 eligibilityResult.eligible(),
-                creditResult.creditScore(),
+                creditDecision.totalScore().intValue(),
                 creditResult.simahReferenceId(),
                 creditResult.verifiedSalary(),
                 eligibilityResult.dbrBefore(),
@@ -1020,7 +1079,7 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
 
         eligibilityData = new EligibilityData(
                 true,
-                creditResult.creditScore(),
+                creditDecision.totalScore().intValue(),
                 eligibilityResult.dbrBefore(),
                 eligibilityResult.dbrAfter(),
                 eligibilityResult.maxEligibleAmount(),
@@ -1944,6 +2003,63 @@ public class LoanApplicationWorkflowImpl implements LoanApplicationWorkflow {
         if (education != null) total = total.add(education);
         if (transportation != null) total = total.add(transportation);
         return total;
+    }
+
+    /**
+     * Builds the answers map for the product-driven credit decision engine
+     * (LOS §5 Step 4 Scorecard inputs: Age, Employer, Salary, Simah Score).
+     * Keys MUST match {@code credit_scoring_field_definitions.field_key} rows
+     * configured on the risk-service side; unknown keys are simply ignored by
+     * the engine (criteria for absent keys score as "missing").
+     */
+    private Map<String, String> buildScoringAnswers(CreditCheckActivity.CreditCheckResult cr) {
+        var m = new java.util.LinkedHashMap<String, String>();
+
+        // Keys MUST match credit_scoring_field_definitions.field_key seeded by
+        // risk-service migration V7. Anything outside that set will simply be
+        // ignored by the engine (criteria look up by field_key).
+
+        // SIMAH-derived
+        m.put("simah_score", String.valueOf(cr.creditScore()));
+        if (cr.verifiedSalary() != null) m.put("salary", cr.verifiedSalary().toPlainString());
+        if (cr.existingObligations() != null) m.put("existing_obligations", cr.existingObligations().toPlainString());
+        m.put("previous_defaults", String.valueOf(cr.hasActiveDefaults()));
+        m.put("simah_defaults", String.valueOf(cr.defaultsCount()));
+        m.put("number_of_active_loans", String.valueOf(cr.activeLoansCount()));
+
+        // Derived: DBR % = existing_obligations / verified_salary * 100
+        if (cr.verifiedSalary() != null && cr.verifiedSalary().compareTo(java.math.BigDecimal.ZERO) > 0
+                && cr.existingObligations() != null) {
+            var dbr = cr.existingObligations()
+                    .multiply(java.math.BigDecimal.valueOf(100))
+                    .divide(cr.verifiedSalary(), 2, java.math.RoundingMode.HALF_UP);
+            m.put("dbr_percentage", dbr.toPlainString());
+        }
+
+        // Customer-declared / verified (from customer-service)
+        if (customerValidation != null) {
+            m.put("age", String.valueOf(customerValidation.age()));
+            m.put("months_in_current_job", String.valueOf(customerValidation.employmentDurationMonths()));
+            if (customerValidation.employmentType() != null) m.put("employment_type", customerValidation.employmentType());
+            if (customerValidation.employerName() != null) m.put("employer_name", customerValidation.employerName());
+        }
+
+        // Loan-request context
+        if (monthlyIncome != null) m.put("total_income", monthlyIncome.toPlainString());
+        if (requestedAmount != null) m.put("loan_amount_requested", requestedAmount.toPlainString());
+        if (requestedTenureMonths > 0) m.put("loan_tenure_requested", String.valueOf(requestedTenureMonths));
+
+        // Free-form answers supplied by the mobile app on initiate take precedence
+        // for any key not already populated above.
+        if (eligibilityAnswers != null) {
+            for (var e : eligibilityAnswers.entrySet()) {
+                if (e.getKey() != null && e.getValue() != null) {
+                    m.putIfAbsent(e.getKey(), e.getValue());
+                }
+            }
+        }
+
+        return m;
     }
 
     private void resetFlagsForGoBack(int targetStep) {

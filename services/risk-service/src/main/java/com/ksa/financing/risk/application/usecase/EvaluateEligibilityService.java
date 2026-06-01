@@ -27,13 +27,27 @@ public class EvaluateEligibilityService implements EvaluateEligibilityUseCase {
     @Value("${app.risk.credit-scoring.min-pass-percentage:60}")
     private BigDecimal minPassPercentage;
 
+    @Value("${app.risk.credit-scoring.green-threshold:75}")
+    private BigDecimal greenThreshold;
+
+    @Value("${app.risk.credit-scoring.amber-threshold:50}")
+    private BigDecimal amberThreshold;
+
     @Override
     @Transactional(readOnly = true)
     public EligibilityEvaluationResult evaluate(UUID tenantId, UUID productId, Map<String, String> answers) {
+        return evaluate(tenantId, productId, answers, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EligibilityEvaluationResult evaluate(UUID tenantId, UUID productId,
+                                                 Map<String, String> answers,
+                                                 BigDecimal greenOverride,
+                                                 BigDecimal amberOverride) {
         log.info("Evaluating eligibility for product={} tenant={} with {} answers",
                 productId, tenantId, answers != null ? answers.size() : 0);
 
-        // Load product criteria with rules
         var criteria = repository.findCriteriaByProductId(tenantId, productId);
 
         if (criteria.isEmpty()) {
@@ -41,15 +55,17 @@ public class EvaluateEligibilityService implements EvaluateEligibilityUseCase {
             return EligibilityEvaluationResult.noCriteria();
         }
 
-        // Load all field definitions for the tenant (to resolve field_key from criteria)
         var fieldDefinitions = repository.findAllFieldDefinitions(tenantId);
 
-        // Run decision engine
-        var result = decisionEngine.evaluate(criteria, fieldDefinitions, answers, minPassPercentage);
+        BigDecimal green = greenOverride != null ? greenOverride : greenThreshold;
+        BigDecimal amber = amberOverride != null ? amberOverride : amberThreshold;
 
-        log.info("Eligibility result for product={}: eligible={}, score={}/{}  ({}%)",
-                productId, result.eligible(), result.totalScore(),
-                result.maxPossibleScore(), result.scorePercentage());
+        var result = decisionEngine.evaluate(criteria, fieldDefinitions, answers,
+                minPassPercentage, green, amber);
+
+        log.info("Eligibility result for product={}: decision={}, score={}/{} ({}%), green={}, amber={}",
+                productId, result.decision(), result.totalScore(),
+                result.maxPossibleScore(), result.scorePercentage(), green, amber);
 
         return result;
     }
@@ -59,7 +75,6 @@ public class EvaluateEligibilityService implements EvaluateEligibilityUseCase {
     public List<CreditScoringFieldDefinition> getProductFields(UUID tenantId, UUID productId) {
         log.info("Getting eligibility fields for product={} tenant={}", productId, tenantId);
 
-        // Get fields that have enabled criteria for this product
         var productFields = repository.findFieldDefinitionsByProductId(tenantId, productId);
 
         if (!productFields.isEmpty()) {
@@ -67,7 +82,6 @@ public class EvaluateEligibilityService implements EvaluateEligibilityUseCase {
             return productFields;
         }
 
-        // Fallback: return all active field definitions
         log.info("No product-specific fields, returning all active definitions for tenant={}", tenantId);
         return repository.findAllFieldDefinitions(tenantId).stream()
                 .filter(CreditScoringFieldDefinition::active)

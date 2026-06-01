@@ -87,16 +87,10 @@ public class GetCustomerService implements GetCustomerUseCase {
                 .findByCustomer(customer.getTenantId(), customer.getId())
                 .isPresent();
 
-        PepStatus targetStatus;
-        if (hasPepAnswers) {
-            targetStatus = PepStatus.COMPLETED;
-        } else if (customer.isPepFlag()) {
-            // PEP detected but no answers yet
-            targetStatus = PepStatus.PENDING;
-        } else {
-            // Not a PEP, no answers needed
-            targetStatus = PepStatus.COMPLETED;
-        }
+        // COMPLETED only when the customer has actually submitted PEP/EDD answers
+        // (onboarding EDD form for isPep=true, or post-login PEP screen).
+        // Otherwise PENDING — the mobile app must still prompt the post-login PEP screen.
+        PepStatus targetStatus = hasPepAnswers ? PepStatus.COMPLETED : PepStatus.PENDING;
 
         if (customer.getPepStatus() != targetStatus) {
             customer.setPepStatus(targetStatus);
