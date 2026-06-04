@@ -8,6 +8,12 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+  servlet:
+    multipart:
+      # KYC document / selfie uploads (e.g. Sullis) forwarded through the gateway.
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:15MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:20MB}
+
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:middleware_third_party_db}
     username: ${DB_USERNAME:postgres}
@@ -40,6 +46,9 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
+    # Migrations store JSON request templates containing ${field} tokens that must
+    # survive verbatim into the DB — disable Flyway's own ${} placeholder substitution.
+    placeholder-replacement: false
 
   security:
     oauth2:
@@ -65,6 +74,17 @@ app:
     # X-Secret-Key — the middleware resolves this client by code and uses its env
     # (TEST -> mock + client_request_test, DEV -> live + client_request_dev, etc.).
     default-client-code: ${MIDDLEWARE_DEFAULT_CLIENT_CODE:TEST_MOCK_CLIENT}
+
+    # After a successful payment-rail call (Scotia commit), mirror the money into our wallets
+    # via wallet-service /internal/wallets/settle (debit debtorAccount + credit creditorAccount).
+    wallet-settlement:
+      enabled: ${WALLET_SETTLEMENT_ENABLED:true}
+      # Validate debtor (present + funded) BEFORE the Scotia rail → caller gets 422 on
+      # insufficient/missing debtor and Scotia is never called.
+      validate-before-rail: ${WALLET_SETTLEMENT_VALIDATE:true}
+      api-codes: ${WALLET_SETTLEMENT_API_CODES:SCOTIABANK_PAYMENT_COMMIT}
+      wallet-service-url: ${WALLET_SERVICE_URL:http://wallet-service:8088}
+      default-currency: ${WALLET_SETTLEMENT_CURRENCY:CAD}
 
 management:
   endpoints:

@@ -62,6 +62,7 @@ public class SecurityConfig {
                 new AntPathRequestMatcher("/api/v1/onboarding/foreign/initiate"),
                 new AntPathRequestMatcher("/api/v1/onboarding/foreign/verify-otp"),
                 new AntPathRequestMatcher("/api/v1/onboarding/foreign/status"),
+                new AntPathRequestMatcher("/api/v1/onboarding/sms/**"),
                 new AntPathRequestMatcher("/api/health/**"),
                 new AntPathRequestMatcher("/actuator/**"),
                 new AntPathRequestMatcher("/v3/api-docs/**"),

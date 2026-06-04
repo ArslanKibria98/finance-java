@@ -35,6 +35,13 @@ public interface LedgerFineractSavingsClient {
     Long withdraw(UUID tenantId, Long savingsId, BigDecimal amount,
                   String externalReference, String idempotencyKey);
 
+    /** Place an amount hold (Fineract holdAmount). Returns the hold transaction id. */
+    Long holdAmount(UUID tenantId, Long savingsId, BigDecimal amount,
+                    String externalReference, String idempotencyKey);
+
+    /** Release a previously held amount (Fineract releaseAmount) by hold transaction id. */
+    void releaseHold(UUID tenantId, Long savingsId, Long holdTransactionId, String idempotencyKey);
+
     Long transferBetweenSavings(UUID tenantId,
                                 Long fromOfficeId, Long fromClientId, Long fromSavingsId,
                                 Long toOfficeId,   Long toClientId,   Long toSavingsId,

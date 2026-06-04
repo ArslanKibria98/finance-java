@@ -6900,6 +6900,61 @@
               }
             }
           ]
+        },
+        {
+          "name": "Canadian Bank",
+          "description": "Canadian financial institution LOV (read-only). `code` = 3-digit FI number, `nameAr` is null (Arabic not maintained).\n\nSeed data (V22 migration): 39 institutions (Bank of Montreal 001, Bank of Nova Scotia 002, Royal Bank of Canada 003, ... Alberta Credit Unions 899).\n\nJWT REQUIRED on all endpoints (NOT public). Casbin: reference-data.canadian-bank x read — roles super_admin | admin | csa | customer.",
+          "item": [
+            {
+              "name": "[CAD-BANK] List All (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/canadian-bank?page=0&size=50",
+                "description": "Paged list including inactive (admin view). JWT REQUIRED. Supports `search` (code, nameEn), `sort`, `filters[code]=...` per PageQuery contract."
+              }
+            },
+            {
+              "name": "[CAD-BANK] List Active (Dropdown)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const j = pm.response.json();",
+                      "const rows = j.data !== undefined ? j.data : j;",
+                      "if (Array.isArray(rows) && rows.length && rows[0].id) pm.collectionVariables.set('canadianBankOptionId', rows[0].id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/canadian-bank/active?page=0&size=100",
+                "description": "Active bank dropdown options sorted by display_order. JWT REQUIRED (not public — tenant_id taken from token). Test script auto-saves first row `id` into `canadianBankOptionId`."
+              }
+            },
+            {
+              "name": "[CAD-BANK] List Active — search 'royal'",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/canadian-bank/active?page=0&size=20&search=royal",
+                "description": "Case-insensitive contains search across code, nameEn, nameAr."
+              }
+            },
+            {
+              "name": "[CAD-BANK] Get by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+                "url": "{{kongUrl}}/customer-service/api/v1/reference-data/canadian-bank/{{canadianBankOptionId}}",
+                "description": "Get Canadian bank option by ID. Set {{canadianBankOptionId}} from the List Active response."
+              }
+            }
+          ]
         }
       ]
     },

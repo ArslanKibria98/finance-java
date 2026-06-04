@@ -15,6 +15,7 @@ public class ProviderApi {
     private String descriptionAr;
     private HttpMethod httpMethod;
     private String endpointPath;
+    private String requestTemplate;
     private ApiStatus status;
     private boolean async;
     private Integer timeoutMs;
@@ -65,6 +66,7 @@ public class ProviderApi {
     public String getDescriptionAr() { return descriptionAr; }
     public HttpMethod getHttpMethod() { return httpMethod; }
     public String getEndpointPath() { return endpointPath; }
+    public String getRequestTemplate() { return requestTemplate; }
     public ApiStatus getStatus() { return status; }
     public boolean isAsync() { return async; }
     public Integer getTimeoutMs() { return timeoutMs; }
@@ -87,6 +89,7 @@ public class ProviderApi {
     public void setDescriptionAr(String descriptionAr) { this.descriptionAr = descriptionAr; }
     public void setHttpMethod(HttpMethod httpMethod) { this.httpMethod = httpMethod; }
     public void setEndpointPath(String endpointPath) { this.endpointPath = endpointPath; }
+    public void setRequestTemplate(String requestTemplate) { this.requestTemplate = requestTemplate; }
     public void setStatus(ApiStatus status) { this.status = status; }
     public void setAsync(boolean async) { this.async = async; }
     public void setTimeoutMs(Integer timeoutMs) { this.timeoutMs = timeoutMs; }

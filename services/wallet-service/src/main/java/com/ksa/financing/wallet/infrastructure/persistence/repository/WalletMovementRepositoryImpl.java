@@ -9,6 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,5 +48,15 @@ public class WalletMovementRepositoryImpl implements WalletMovementRepository {
                 .stream()
                 .map(mapper::toDomain)
                 .toList();
+    }
+
+    /** Outgoing customer-initiated spend (transfers + withdrawals) since the given instant. */
+    private static final List<String> SPEND_PURPOSES = List.of("TRANSFER_OUT", "WITHDRAWAL", "IBFT_HOLD");
+
+    @Override
+    public BigDecimal sumSpendSince(UUID tenantId, UUID walletId, Instant since) {
+        OffsetDateTime sinceOdt = since.atOffset(ZoneOffset.UTC);
+        BigDecimal sum = jpaWalletMovementRepository.sumSpendSince(tenantId, walletId, SPEND_PURPOSES, sinceOdt);
+        return sum != null ? sum : BigDecimal.ZERO;
     }
 }

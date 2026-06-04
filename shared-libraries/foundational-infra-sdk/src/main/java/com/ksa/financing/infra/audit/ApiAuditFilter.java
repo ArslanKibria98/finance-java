@@ -112,6 +112,15 @@ public class ApiAuditFilter extends OncePerRequestFilter implements Ordered {
     private HttpServletRequest wrapRequest(HttpServletRequest request) {
         if (request instanceof CachedBodyRequestWrapper c) return c;
         if (request instanceof ContentCachingRequestWrapper w) return w;
+        // NEVER buffer a multipart/form-data body: eagerly reading the stream here
+        // consumes it, so the downstream StandardServletMultipartResolver.getParts()
+        // fails with "Stream closed" (breaks file-upload endpoints, e.g. Sullis KYC
+        // document/selfie upload through the middleware). Binary upload bodies are
+        // not useful in the audit log anyway — leave the request untouched.
+        String contentType = request.getContentType();
+        if (contentType != null && contentType.toLowerCase().startsWith("multipart/")) {
+            return request;
+        }
         int contentLength = request.getContentLength();
         int cap = properties.getMaxBodySizeBytes();
         if (properties.isCaptureRequestBody() && contentLength >= 0 && contentLength <= cap) {

@@ -1,0 +1,536 @@
+{
+  "info": {
+    "name": "KSA — Wallet Transaction Limits (Admin)",
+    "description": "Wallet **transaction (spend) limits** — daily / monthly / yearly — with the **customer requests → admin approves** workflow.\n\n## Two tokens\n- **`{{customerToken}}`** (role `customer`) — used for the USER-side endpoints: view my limits, request a limit increase, list my requests. Set by **`0b. Login (Customer)`**.\n- **`{{adminToken}}`** (role `super_admin`) — collection default; used for the ADMIN-side endpoints: platform bounds, list pending, approve, reject. Set by **`0a. Login (Admin)`**.\n\nThe customer raises the request; the admin decides it. Each side carries its own token, exactly like production.\n\n## Flow (run top→bottom)\n1. `0a` admin login, `0b` customer login\n2. Admin sets MIN/MAX bounds (daily+monthly+yearly)\n3. Customer views limits + usage (BEFORE)\n4. **Customer requests a limit increase** → captures `{{lastLimitRequestId}}`\n5. Customer lists their requests / Admin lists PENDING\n6. **Admin approves** → new limits applied to the wallet (or rejects)\n7. Customer views limits again (AFTER → reflects approved limits)\n\nEnforcement: transfers + withdrawals exceeding the cumulative daily / monthly / yearly limit are blocked with `WALLET.BALANCE.LIMIT_EXCEEDED`.\n\n`{{walletId}}` is owned by the customer `{{customerEmail}}` so the request is for their own wallet. Swap all three (`walletId`, `customerEmail`, `customerPin`) to target a different customer.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://46.62.226.94:8000/wallet-service",
+      "type": "string",
+      "description": "wallet-service via Kong. Use http://localhost:8000/wallet-service for local."
+    },
+    {
+      "key": "identityUrl",
+      "value": "http://46.62.226.94:8000/identity-service",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string",
+      "description": "super_admin JWT — auto-set by '0a. Login (Admin)'"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string",
+      "description": "customer JWT — auto-set by '0b. Login (Customer)'"
+    },
+    {
+      "key": "customerEmail",
+      "value": "foreign-test12354666@example.com",
+      "type": "string",
+      "description": "Owner of {{walletId}} (Foreign/email onboarding flow)"
+    },
+    {
+      "key": "customerPin",
+      "value": "147852",
+      "type": "string",
+      "description": "6-digit onboarding PIN for {{customerEmail}}"
+    },
+    {
+      "key": "tenantId",
+      "value": "00000000-0000-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "walletId",
+      "value": "e12a1d87-859f-42c7-b341-02aec6276c9e",
+      "type": "string",
+      "description": "ACTIVE wallet owned by {{customerEmail}}"
+    },
+    {
+      "key": "lastLimitRequestId",
+      "value": "",
+      "type": "string",
+      "description": "auto-set by 'Request Limit Increase'"
+    }
+  ],
+  "item": [
+    {
+      "name": "0a. Login (Admin) — auto-sets {{adminToken}}",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  var j = pm.response.json();",
+              "  var t = j.data && (j.data.accessToken || j.data.access_token);",
+              "  if (t) { pm.collectionVariables.set('adminToken', t); console.log('adminToken set'); }",
+              "} else { console.log('admin login failed: ' + pm.response.code); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"Admin@1234\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{identityUrl}}/api/v1/auth/login",
+          "host": [
+            "{{identityUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "0b. Login (Customer) — auto-sets {{customerToken}}",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  var j = pm.response.json();",
+              "  var t = j.data && (j.data.accessToken || j.data.access_token);",
+              "  if (t) { pm.collectionVariables.set('customerToken', t); console.log('customerToken set'); }",
+              "} else { console.log('customer login failed: ' + pm.response.code); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"pin\": \"{{customerPin}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{identityUrl}}/api/v1/auth/login-with-email-pin",
+          "host": [
+            "{{identityUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "login-with-email-pin"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "1. Admin — Get Limit Bounds (min/max daily+monthly+yearly)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-bounds",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "admin",
+            "wallets",
+            "limit-bounds"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Admin — Set Limit Bounds (daily + monthly + yearly)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-bounds",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "admin",
+            "wallets",
+            "limit-bounds"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Customer — Get My Wallet Limits + Usage (BEFORE)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/{{walletId}}/limits",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "{{walletId}}",
+            "limits"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Customer — Request Limit Increase → sets {{lastLimitRequestId}}",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "  var j = pm.response.json();",
+              "  if (j.data && j.data.id) { pm.collectionVariables.set('lastLimitRequestId', j.data.id); console.log('lastLimitRequestId=' + j.data.id); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestedDailyLimit\": 40000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/{{walletId}}/limit-requests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "{{walletId}}",
+            "limit-requests"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Customer — List My Limit Requests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/{{walletId}}/limit-requests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "{{walletId}}",
+            "limit-requests"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Admin — List PENDING Requests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-requests?status=PENDING",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "admin",
+            "wallets",
+            "limit-requests"
+          ],
+          "query": [
+            {
+              "key": "status",
+              "value": "PENDING"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Admin — APPROVE Request (applies new limits)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notes\": \"Approved \\u2014 KYC verified\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-requests/{{lastLimitRequestId}}/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "admin",
+            "wallets",
+            "limit-requests",
+            "{{lastLimitRequestId}}",
+            "approve"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "8. Admin — REJECT Request (alternative to approve)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rejectionReason\": \"Insufficient income proof\",\n  \"notes\": \"Re-apply with payslip\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-requests/{{lastLimitRequestId}}/reject",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "admin",
+            "wallets",
+            "limit-requests",
+            "{{lastLimitRequestId}}",
+            "reject"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "9. Customer — Get My Wallet Limits + Usage (AFTER approve)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/wallets/{{walletId}}/limits",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "{{walletId}}",
+            "limits"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

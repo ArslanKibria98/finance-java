@@ -14,6 +14,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -38,6 +42,16 @@ public class WalletWithdrawalRepositoryImpl implements WalletWithdrawalRepositor
         WalletWithdrawalJpaEntity entity = mapper.toEntity(w);
         WalletWithdrawalJpaEntity saved = jpaRepo.save(entity);
         return mapper.toDomain(saved);
+    }
+
+    /** Withdrawal statuses that do NOT consume the transaction limit (failed / cancelled / refunded). */
+    private static final List<String> NON_COUNTING_STATUSES = List.of("FAILED", "CANCELLED", "COMPENSATED");
+
+    @Override
+    public BigDecimal sumWithdrawnSince(UUID tenantId, UUID walletId, Instant since) {
+        OffsetDateTime sinceOdt = since.atOffset(ZoneOffset.UTC);
+        BigDecimal sum = jpaRepo.sumWithdrawnSince(tenantId, walletId, NON_COUNTING_STATUSES, sinceOdt);
+        return sum != null ? sum : BigDecimal.ZERO;
     }
 
     @Override

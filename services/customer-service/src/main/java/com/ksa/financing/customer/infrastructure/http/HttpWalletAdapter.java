@@ -34,10 +34,15 @@ public class HttpWalletAdapter implements WalletPort {
     }
 
     @Override
-    @Retry(name = "internal-rest")
-    @CircuitBreaker(name = "internal-rest", fallbackMethod = "getIbanFallback")
     public Optional<String> getIbanByCustomerId(UUID tenantId, UUID customerId) {
-        log.debug("Fetching wallet IBAN for customer: {} tenant: {}", customerId, tenantId);
+        return getWalletInfoByCustomerId(tenantId, customerId).map(WalletInfo::iban);
+    }
+
+    @Override
+    @Retry(name = "internal-rest")
+    @CircuitBreaker(name = "internal-rest", fallbackMethod = "getWalletInfoFallback")
+    public Optional<WalletInfo> getWalletInfoByCustomerId(UUID tenantId, UUID customerId) {
+        log.debug("Fetching wallet info for customer: {} tenant: {}", customerId, tenantId);
 
         String url = walletServiceBaseUrl + "/internal/wallets/by-customer/" + customerId;
 
@@ -54,8 +59,10 @@ public class HttpWalletAdapter implements WalletPort {
                 if (body.containsKey("data") && body.get("data") instanceof Map) {
                     body = (Map) body.get("data");
                 }
-                Object iban = body.get("iban");
-                return Optional.ofNullable(iban != null ? iban.toString() : null);
+                return Optional.of(new WalletInfo(
+                        str(body.get("iban")),
+                        str(body.get("accountNumber")),
+                        str(body.get("walletNumber"))));
             }
             return Optional.empty();
         } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
@@ -64,9 +71,13 @@ public class HttpWalletAdapter implements WalletPort {
         }
     }
 
+    private static String str(Object o) {
+        return o != null ? o.toString() : null;
+    }
+
     @SuppressWarnings("unused")
-    private Optional<String> getIbanFallback(UUID tenantId, UUID customerId, Throwable t) {
-        log.warn("Wallet service unavailable for customer: {} — returning empty IBAN: {}", customerId, t.getMessage());
+    private Optional<WalletInfo> getWalletInfoFallback(UUID tenantId, UUID customerId, Throwable t) {
+        log.warn("Wallet service unavailable for customer: {} — returning empty wallet info: {}", customerId, t.getMessage());
         return Optional.empty();
     }
 }

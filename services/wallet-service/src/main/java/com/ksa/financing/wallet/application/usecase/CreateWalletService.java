@@ -2,9 +2,12 @@ package com.ksa.financing.wallet.application.usecase;
 
 // TODO: Move FineractSyncWorkflow interface to domain/port or application layer to fix adapter dependency (hexagonal violation)
 import com.ksa.financing.wallet.adapter.temporal.workflow.FineractSyncWorkflow;
+import com.ksa.financing.wallet.application.support.AccountNumberGenerator;
 import com.ksa.financing.wallet.domain.model.Wallet;
 import com.ksa.financing.wallet.domain.model.WalletStatus;
+import com.ksa.financing.wallet.domain.model.WalletLimitBounds;
 import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
+import com.ksa.financing.wallet.domain.port.in.ManageWalletLimitBoundsUseCase;
 import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
 import com.ksa.financing.wallet.domain.port.out.RecipientLookupPort;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
@@ -15,6 +18,7 @@ import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -33,17 +37,26 @@ public class CreateWalletService implements CreateWalletUseCase {
     private final WorkflowClient workflowClient;
     private final WalletFineractFeatureFlag fineractConfig;
     private final RecipientLookupPort recipientLookupPort;
+    private final ManageWalletLimitBoundsUseCase limitBoundsUseCase;
+    private final String scotiaFiNumber;
+    private final String scotiaTransit;
 
     public CreateWalletService(WalletRepository walletRepository,
                                EventPublisherPort eventPublisher,
                                WorkflowClient workflowClient,
                                WalletFineractFeatureFlag fineractConfig,
-                               RecipientLookupPort recipientLookupPort) {
+                               RecipientLookupPort recipientLookupPort,
+                               ManageWalletLimitBoundsUseCase limitBoundsUseCase,
+                               @Value("${ksa.wallet.scotia.fi-number:002}") String scotiaFiNumber,
+                               @Value("${ksa.wallet.scotia.transit:80150}") String scotiaTransit) {
         this.walletRepository = walletRepository;
         this.eventPublisher = eventPublisher;
         this.workflowClient = workflowClient;
         this.fineractConfig = fineractConfig;
         this.recipientLookupPort = recipientLookupPort;
+        this.limitBoundsUseCase = limitBoundsUseCase;
+        this.scotiaFiNumber = scotiaFiNumber;
+        this.scotiaTransit = scotiaTransit;
     }
 
     @Override
@@ -58,6 +71,9 @@ public class CreateWalletService implements CreateWalletUseCase {
         wallet.setTenantId(command.tenantId());
         wallet.setCustomerId(command.customerId());
         wallet.setWalletNumber("WLT" + System.currentTimeMillis() % 10000000000L);
+        // Virtual Canadian-format account number used as the RTP debtor/creditor reference.
+        wallet.setAccountNumber(AccountNumberGenerator.generate(
+                scotiaFiNumber, scotiaTransit, walletRepository.nextAccountNumberSequence()));
         wallet.setCurrency(command.currency() != null ? command.currency() : "SAR");
         wallet.setAvailableBalance(BigDecimal.ZERO);
         wallet.setReservedBalance(BigDecimal.ZERO);
@@ -67,6 +83,11 @@ public class CreateWalletService implements CreateWalletUseCase {
         wallet.setSingleTopUpLimit(new BigDecimal("10000"));
         wallet.setTodayTopUpAmount(BigDecimal.ZERO);
         wallet.setMonthTopUpAmount(BigDecimal.ZERO);
+        // Transaction (spend) limits — seed from the tenant's admin-configured defaults.
+        WalletLimitBounds bounds = limitBoundsUseCase.getBounds(command.tenantId());
+        wallet.setDailyTransactionLimit(bounds.getDefaultDailyLimit());
+        wallet.setMonthlyTransactionLimit(bounds.getDefaultMonthlyLimit());
+        wallet.setYearlyTransactionLimit(bounds.getDefaultYearlyLimit());
         // IBAN: prefer caller-supplied. Otherwise, when Fineract sync is enabled we leave
         // it null at creation and the FineractSync activity derives a deterministic IBAN
         // from the Fineract savings account id (see FineractSyncActivityImpl.linkWalletToFineract).

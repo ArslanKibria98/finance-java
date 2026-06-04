@@ -32,6 +32,11 @@ public class CanadaOnboardingState implements Serializable {
     private String faciaFaceMatchReferenceId;
     private Double faceMatchScore;
 
+    // Sullis KYC session — created at document upload, reused at selfie/submit.
+    // Stored per workflow so concurrent onboardings never cross sessions.
+    private String sullisSessionId;
+    private String sullisAttemptId;
+
     private String customerId;
     private String walletId;
     private String keycloakUserId;
@@ -115,6 +120,12 @@ public class CanadaOnboardingState implements Serializable {
 
     public String getFaciaFaceMatchReferenceId() { return faciaFaceMatchReferenceId; }
     public void setFaciaFaceMatchReferenceId(String faciaFaceMatchReferenceId) { this.faciaFaceMatchReferenceId = faciaFaceMatchReferenceId; }
+
+    public String getSullisSessionId() { return sullisSessionId; }
+    public void setSullisSessionId(String sullisSessionId) { this.sullisSessionId = sullisSessionId; }
+
+    public String getSullisAttemptId() { return sullisAttemptId; }
+    public void setSullisAttemptId(String sullisAttemptId) { this.sullisAttemptId = sullisAttemptId; }
 
     public Double getFaceMatchScore() { return faceMatchScore; }
     public void setFaceMatchScore(Double faceMatchScore) { this.faceMatchScore = faceMatchScore; }

@@ -874,6 +874,9 @@ services:
       FINERACT_TENANT_ID: default
       FINERACT_SAVINGS_PRODUCT_ID: 1
       CUSTOMER_SERVICE_URL: http://customer-service:8084
+      LEDGER_SERVICE_URL: http://ledger-service:8095
+      # --- Scotia RTP external fund transfers (routed through middleware-third-party) ---
+      MIDDLEWARE_THIRD_PARTY_URL: http://middleware-third-party:8093
       # --- HikariCP idle-session-timeout fix (shared) ---
       <<: *hikari-tuning
       # --- ELK / Logging ---
@@ -949,7 +952,17 @@ services:
       FACIA_CLIENT_ID: ${FACIA_CLIENT_ID:-415585bd38}
       FACIA_CLIENT_SECRET: ${FACIA_CLIENT_SECRET:-PBi1AeyudzSnDgNQWhnAkWVJrtLj7nohWNturfEC}
       FACIA_MOCK: ${FACIA_MOCK:-false}
+      # --- Sullis KYC (Foreign onboarding) — routed through middleware-third-party ---
+      # mock=true until the Sullis sandbox (192.168.6.51:8084) is reachable from here;
+      # flip to false to route live through the middleware (provider SULLIS).
+      SULLIS_MOCK: ${SULLIS_MOCK:-true}
+      SULLIS_WEBHOOK_URL: ${SULLIS_WEBHOOK_URL:-https://onboarding.kfs.com/webhooks/kyc}
       CANADA_ONBOARDING_TASK_QUEUE: canada-onboarding-queue
+      # --- Twilio SMS — routes through middleware-third-party (creds in the panel) ---
+      TWILIO_ENABLED: ${TWILIO_ENABLED:-false}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_API_CODE: ${TWILIO_API_CODE:-TWILIO_SEND_SMS}
+      TWILIO_TEST_MODE: ${TWILIO_TEST_MODE:-false}
       # --- Keycloak admin (Canada onboarding user provisioning + token issuance) ---
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: CompanyRealm

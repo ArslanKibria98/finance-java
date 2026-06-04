@@ -6,6 +6,7 @@ import com.ksa.financing.customer.application.dto.NetWorthRangeResponse;
 import com.ksa.financing.customer.application.dto.ReferenceDataResponse;
 import com.ksa.financing.customer.application.dto.UpdateNetWorthRangeRequest;
 import com.ksa.financing.customer.application.dto.UpdateReferenceDataRequest;
+import com.ksa.financing.customer.domain.model.CanadianBankOption;
 import com.ksa.financing.customer.domain.model.NetWorthRangeOption;
 import com.ksa.financing.customer.domain.model.OccupationOption;
 import com.ksa.financing.customer.domain.model.PurposeOfFinanceOption;
@@ -13,6 +14,7 @@ import com.ksa.financing.customer.domain.model.RelationshipOption;
 import com.ksa.financing.customer.domain.model.SourceOfFundsOption;
 import com.ksa.financing.customer.domain.model.SourceOfIncomeOption;
 import com.ksa.financing.customer.domain.model.SourceOfWealthOption;
+import com.ksa.financing.customer.domain.port.in.GetCanadianBankUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageNetWorthRangeUseCase;
 import com.ksa.financing.customer.domain.port.in.ManageOccupationUseCase;
 import com.ksa.financing.customer.domain.port.in.ManagePurposeOfFinanceUseCase;
@@ -61,6 +63,7 @@ public class ReferenceDataController {
     private final ManagePurposeOfFinanceUseCase purposeOfFinanceUseCase;
     private final ManageNetWorthRangeUseCase netWorthRangeUseCase;
     private final ManageRelationshipUseCase relationshipUseCase;
+    private final GetCanadianBankUseCase canadianBankUseCase;
 
     // ========================================================================
     // SOURCE OF WEALTH
@@ -964,6 +967,52 @@ public class ReferenceDataController {
     }
 
     // ========================================================================
+    // CANADIAN BANKS (read-only LOV — token required, not public)
+    // ========================================================================
+
+    @SecuredEndpoint(obj = "reference-data.canadian-bank", act = "read")
+    @GetMapping("/canadian-bank")
+    @Operation(summary = "List all Canadian bank options",
+               description = "Returns all Canadian financial institutions including inactive (admin view). Requires JWT.")
+    @ApiResponse(responseCode = "200", description = "Options retrieved")
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getAllCanadianBank(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
+
+        UUID tenantId = extractTenantId(jwt);
+        var responses = canadianBankUseCase.getAll(tenantId, pageQuery).map(this::toResponse);
+        return ResponseEntity.ok(responses);
+    }
+
+    @SecuredEndpoint(obj = "reference-data.canadian-bank", act = "read")
+    @GetMapping("/canadian-bank/active")
+    @Operation(summary = "List active Canadian bank options",
+               description = "Returns only active Canadian financial institutions sorted by display order (for dropdown population). Requires JWT.")
+    @ApiResponse(responseCode = "200", description = "Active options retrieved")
+    public ResponseEntity<PageResponse<ReferenceDataResponse>> getActiveCanadianBank(
+            @AuthenticationPrincipal Jwt jwt,
+            PageQuery pageQuery) {
+
+        UUID tenantId = extractTenantId(jwt);
+        var responses = canadianBankUseCase.getActive(tenantId, pageQuery).map(this::toResponse);
+        return ResponseEntity.ok(responses);
+    }
+
+    @SecuredEndpoint(obj = "reference-data.canadian-bank", act = "read")
+    @GetMapping("/canadian-bank/{id}")
+    @Operation(summary = "Get Canadian bank option by ID")
+    @ApiResponse(responseCode = "200", description = "Option found")
+    @ApiResponse(responseCode = "404", description = "Option not found")
+    public ResponseEntity<ReferenceDataResponse> getCanadianBankById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UUID tenantId = extractTenantId(jwt);
+        CanadianBankOption option = canadianBankUseCase.getById(tenantId, id);
+        return ResponseEntity.ok(toResponse(option));
+    }
+
+    // ========================================================================
     // HELPER METHODS
     // ========================================================================
 
@@ -1048,6 +1097,14 @@ public class ReferenceDataController {
     }
 
     private ReferenceDataResponse toResponse(RelationshipOption o) {
+        return new ReferenceDataResponse(
+                o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
+                o.getDescriptionEn(), o.getDescriptionAr(),
+                o.isActive(), o.getDisplayOrder(),
+                o.getCreatedAt(), o.getUpdatedAt());
+    }
+
+    private ReferenceDataResponse toResponse(CanadianBankOption o) {
         return new ReferenceDataResponse(
                 o.getId(), o.getCode(), o.getNameEn(), o.getNameAr(),
                 o.getDescriptionEn(), o.getDescriptionAr(),

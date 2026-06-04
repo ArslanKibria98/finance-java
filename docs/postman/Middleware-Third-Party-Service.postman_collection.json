@@ -10,7 +10,7 @@
       "value": "http://46.62.226.94:8000/middleware-third-party",
       "type": "string",
       "description": "Kong gateway URL with middleware path prefix. Change host to localhost:8000 for local Kong."
-    }, 
+    },
     {
       "key": "kongUrl",
       "value": "http://46.62.226.94:8000/middleware-third-party",
@@ -82,6 +82,26 @@
     {
       "key": "apiCostCode",
       "value": "SAFEWATCH_SCAN_SESSION",
+      "type": "string"
+    },
+    {
+      "key": "submissionId",
+      "value": "1000000001"
+    },
+    {
+      "key": "scotiaDevSecret",
+      "value": "scotia-eft-dev-secret-2026",
+      "type": "string",
+      "description": "SCOTIA_EFT_CLIENT secret (env=DEV) — routes Scotia calls to DEV + client_request_dev"
+    },
+    {
+      "key": "rtpPaymentId",
+      "value": "6000792097",
+      "type": "string"
+    },
+    {
+      "key": "wirePaymentId",
+      "value": "17000000001",
       "type": "string"
     }
   ],
@@ -5338,6 +5358,663 @@
                     "execute",
                     "PAYMENT_GUARD_ACCOUNT_REGISTRATION",
                     "simple"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "SCOTIABANK (EFT)",
+          "item": [
+            {
+              "name": "Execute - SCOTIA Account Validation",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_ACCOUNT_VALIDATION",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_ACCOUNT_VALIDATION"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"accountNumber\": \"800020403814\",\n  \"institutionNumber\": \"002\",\n  \"transit\": \"80002\",\n  \"fullName\": \"Test 1 Company\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Execute - SCOTIA EFT Create",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_EFT_CREATE",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_EFT_CREATE"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 10.01,\n  \"debtorName\": \"Debtor\",\n  \"debtorAccount\": \"123-12345-1234567\",\n  \"creditorName\": \"Creditor\",\n  \"creditorAccount\": \"123-12345-1234567\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) { var j = pm.response.json(); var sid = j.data && j.data.responseBody && j.data.responseBody.data && j.data.responseBody.data.submission_id; if (sid) { pm.collectionVariables.set('submissionId', sid); } if (j.data) pm.collectionVariables.set('requestId', j.data.requestId); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Execute - SCOTIA EFT Submit",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  },
+                  {
+                    "key": "X-Path-Params",
+                    "value": "{\"submissionId\":\"{{submissionId}}\"}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_EFT_SUBMIT",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_EFT_SUBMIT"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Execute - SCOTIA EFT Inquire",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  },
+                  {
+                    "key": "X-Path-Params",
+                    "value": "{\"submissionId\":\"{{submissionId}}\"}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_EFT_INQUIRE",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_EFT_INQUIRE"
+                  ]
+                }
+              }
+            }
+          ],
+          "description": "Scotia EFT via DEV client (SCOTIA_EFT_CLIENT). Uses the authenticated /api/v1/execute/{apiCode} endpoint: Bearer {{adminToken}} + X-Secret-Key={{scotiaDevSecret}}. Routes to DEV env -> live Scotia call -> client_request_dev. Note: developer.api.scotiabank.com/mock URLs need a portal session; server-to-server returns 302 until real DEV creds/cookie are set."
+        },
+        {
+          "name": "SCOTIABANK (RTP)",
+          "description": "Scotiabank Real-Time Payments (INTERAC e-Transfer for Business). Flow: Options Inquiry -> Commit Transaction (captures rtpPaymentId) -> Summary (poll). Details/Cancel optional. DEV served by mock (portal proxy is session-gated).",
+          "item": [
+            {
+              "name": "Execute - SCOTIA RTP Payment Options Inquiry",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_PAYMENT_OPTIONS_INQUIRY",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_PAYMENT_OPTIONS_INQUIRY"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"depositHandle\": \"002-01800-0000233\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Execute - SCOTIA RTP Commit Transaction (send payment)",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_PAYMENT_COMMIT",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_PAYMENT_COMMIT"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 10.01,\n  \"debtorAccount\": \"002-80150-6666600\",\n  \"creditorAccount\": \"002-80010-9999999\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  var j = pm.response.json();",
+                      "  var pid = j.data && j.data.responseBody && j.data.responseBody.data && j.data.responseBody.data.payment_id;",
+                      "  if (pid) { pm.collectionVariables.set('rtpPaymentId', pid); }",
+                      "  if (j.data) pm.collectionVariables.set('requestId', j.data.requestId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Execute - SCOTIA RTP Payment Summary (status)",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  },
+                  {
+                    "key": "X-Path-Params",
+                    "value": "{\"id\":\"{{rtpPaymentId}}\"}"
+                  },
+                  {
+                    "key": "X-Forward-Headers",
+                    "value": "{\"payment-id-source\":\"MESSAGE_IDENTIFICATION\"}",
+                    "disabled": true,
+                    "description": "Enable to query by your own message_identification instead of the Scotia payment_id (default PAYMENT_ID)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_PAYMENT_SUMMARY",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_PAYMENT_SUMMARY"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Execute - SCOTIA RTP Payment Details",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  },
+                  {
+                    "key": "X-Path-Params",
+                    "value": "{\"payment-id\":\"{{rtpPaymentId}}\"}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_PAYMENT_DETAILS",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_PAYMENT_DETAILS"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Execute - SCOTIA RTP Cancel Payment (unclaimed)",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  },
+                  {
+                    "key": "X-Path-Params",
+                    "value": "{\"payment-id\":\"{{rtpPaymentId}}\"}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_PAYMENT_CANCEL",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_PAYMENT_CANCEL"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"cancel reason\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "SCOTIABANK (WIRE)",
+          "description": "Scotiabank Wire Payments (one-time wire transfer CA/US/intl). Flow: Validate -> Create (captures wirePaymentId) -> Inquire. DEV served by mock (portal proxy 40 is session-gated).",
+          "item": [
+            {
+              "name": "Execute - SCOTIA WIRE Validate",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_WIRE_VALIDATE",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_WIRE_VALIDATE"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 500,\n  \"debtorName\": \"XYZ Communications\",\n  \"debtorAccount\": \"002-80002-0000515\",\n  \"creditorName\": \"ABC Technologies\",\n  \"creditorAccount\": \"353453535\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Execute - SCOTIA WIRE Create",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_WIRE_CREATE",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_WIRE_CREATE"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 500,\n  \"debtorName\": \"XYZ Communications\",\n  \"debtorAccount\": \"002-80002-0000515\",\n  \"creditorName\": \"ABC Technologies\",\n  \"creditorAccount\": \"353453535\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  var j = pm.response.json();",
+                      "  var pid = j.data && j.data.responseBody && j.data.responseBody.data && j.data.responseBody.data.payment_id;",
+                      "  if (pid) { pm.collectionVariables.set('wirePaymentId', pid); }",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Execute - SCOTIA WIRE Inquire",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Secret-Key",
+                    "value": "{{scotiaDevSecret}}"
+                  },
+                  {
+                    "key": "X-Caller-Service",
+                    "value": "postman-test"
+                  },
+                  {
+                    "key": "X-Path-Params",
+                    "value": "{\"payment-id\":\"{{wirePaymentId}}\"}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{kongUrl}}/api/v1/execute/SCOTIABANK_WIRE_INQUIRE",
+                  "host": [
+                    "{{kongUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "execute",
+                    "SCOTIABANK_WIRE_INQUIRE"
                   ]
                 }
               }

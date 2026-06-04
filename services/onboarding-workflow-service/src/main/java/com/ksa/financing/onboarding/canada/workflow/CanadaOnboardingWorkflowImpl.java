@@ -1,10 +1,11 @@
 package com.ksa.financing.onboarding.canada.workflow;
 
 import com.ksa.financing.onboarding.shared.activity.DualOtpActivity;
-import com.ksa.financing.onboarding.shared.activity.FaciaActivity;
+import com.ksa.financing.onboarding.shared.activity.SullisActivity;
 import com.ksa.financing.onboarding.shared.activity.OnboardingProfileActivity;
-import com.ksa.financing.onboarding.shared.facia.FaciaDocumentResult;
-import com.ksa.financing.onboarding.shared.facia.FaciaFaceMatchResult;
+import com.ksa.financing.onboarding.shared.sullis.SullisContext;
+import com.ksa.financing.onboarding.shared.sullis.SullisDocumentResult;
+import com.ksa.financing.onboarding.shared.sullis.SullisVerificationResult;
 import com.ksa.financing.onboarding.canada.domain.model.BiometricsSignal;
 import com.ksa.financing.onboarding.canada.domain.model.CanadaOnboardingRequest;
 import com.ksa.financing.onboarding.canada.domain.model.CanadaOnboardingResult;
@@ -96,7 +97,7 @@ public class CanadaOnboardingWorkflowImpl implements CanadaOnboardingWorkflow {
             .build();
 
     private final DualOtpActivity otpActivity = Workflow.newActivityStub(DualOtpActivity.class, defaultOptions);
-    private final FaciaActivity faciaActivity = Workflow.newActivityStub(FaciaActivity.class, faciaOptions);
+    private final SullisActivity sullisActivity = Workflow.newActivityStub(SullisActivity.class, faciaOptions);
     private final OnboardingProfileActivity profileActivity = Workflow.newActivityStub(OnboardingProfileActivity.class, defaultOptions);
 
     // -------------------------------------------------------------------------
@@ -164,25 +165,34 @@ public class CanadaOnboardingWorkflowImpl implements CanadaOnboardingWorkflow {
 
         // ----- Step 4: wait for document upload + Facia verification -----
         // Loop on FACIA decline so user can retry with a clearer / unexpired document.
-        FaciaDocumentResult docResult;
+        // Sullis: one session (3 attempts) for the document phase. First try creates the
+        // session; each OCR-failure retry reuses it and starts a NEW attempt (type=ID→
+        // NATIONAL_ID / PASSPORT). Session/attempt ids persisted so the selfie phase reuses them.
+        SullisDocumentResult docResult;
         while (true) {
             Workflow.await(() -> docSubmittedReceived);
             docSubmittedReceived = false;
-            docResult = faciaActivity.verifyDocumentWithContext(
+            docResult = sullisActivity.verifyDocument(
                     docSubmittedSignal.documentImageBase64(),
-                    new com.ksa.financing.onboarding.shared.facia.FaciaContext(
+                    state.getWorkflowId(),
+                    sullisDocType(state.getDocumentType()),
+                    state.getSullisSessionId(),
+                    new SullisContext(
                             request.mobileNumber(), null, null,
                             state.getWorkflowId(), "ONBOARDING_CANADA",
                             state.getWorkflowId() + ":doc"));
             state.setDocumentAttempts(state.getDocumentAttempts() + 1);
+            // Remember the session even on decline so the next retry reuses it (new attempt).
+            if (docResult.sessionId() != null) state.setSullisSessionId(docResult.sessionId());
             if (docResult.accepted()) {
+                state.setSullisAttemptId(docResult.attemptId());
                 state.setFailureReason(null);
                 break;
             }
             state.setFailureReason("Document verification declined: " + docResult.declineReason());
         }
         state.setDocumentImageBase64(docSubmittedSignal.documentImageBase64());
-        state.setFaciaDocumentReferenceId(docResult.referenceId());
+        state.setFaciaDocumentReferenceId(docResult.uploadId());
         state.setExtractedData(new LinkedHashMap<>(docResult.extractedData()));
         setStep(CanadaOnboardingStep.DOC_VERIFIED);
 
@@ -200,27 +210,32 @@ public class CanadaOnboardingWorkflowImpl implements CanadaOnboardingWorkflow {
 
         // ----- Step 6: wait for selfie + face match + downstream profile + wallet -----
         // Loop on face mismatch so the user can retake the selfie.
-        FaciaFaceMatchResult faceResult;
+        // Sullis: upload selfie + run the verification pipeline using the stored
+        // session/attempt. The submit outcome (VERIFIED) + faceMatch score gate the loop.
+        SullisVerificationResult faceResult;
         while (true) {
             Workflow.await(() -> selfieReceived);
             selfieReceived = false;
-            faceResult = faciaActivity.faceMatchWithContext(
-                    selfieSignal.selfieImageBase64(), state.getDocumentImageBase64(),
-                    new com.ksa.financing.onboarding.shared.facia.FaciaContext(
+            faceResult = sullisActivity.submitVerification(
+                    selfieSignal.selfieImageBase64(),
+                    state.getSullisSessionId(), state.getSullisAttemptId(),
+                    new SullisContext(
                             request.mobileNumber(), null, null,
                             state.getWorkflowId(), "ONBOARDING_CANADA",
                             state.getWorkflowId() + ":selfie"));
             state.setSelfieAttempts(state.getSelfieAttempts() + 1);
-            state.setFaciaFaceMatchReferenceId(faceResult.referenceId());
-            state.setFaceMatchScore(faceResult.similarityScore());
-            if (faceResult.match()
-                    && faceResult.similarityScore() != null
-                    && faceResult.similarityScore() >= FACE_MATCH_THRESHOLD) {
+            state.setFaciaFaceMatchReferenceId(faceResult.attemptId());
+            state.setFaceMatchScore(faceResult.faceMatchScore());
+            // Trust Sullis's own verification outcome (VERIFIED). Sullis already factors in
+            // faceMatch + liveness + same-person when deciding the outcome — imposing a
+            // separate local faceMatch threshold would override the vendor's decision
+            // (e.g. Sullis VERIFIED at faceMatch 0.61 must NOT be declined locally).
+            if (faceResult.approved()) {
                 state.setFailureReason(null);
                 break;
             }
-            state.setFailureReason("Face match failed: score="
-                    + faceResult.similarityScore() + " reason=" + faceResult.failureReason());
+            state.setFailureReason("Verification declined: outcome=" + faceResult.outcome()
+                    + " score=" + faceResult.faceMatchScore() + " reason=" + faceResult.reason());
         }
         var profile = profileActivity.createCustomerProfile(request.email(),
                 request.mobileNumber(), state.getKeycloakUserId(),
@@ -339,5 +354,15 @@ public class CanadaOnboardingWorkflowImpl implements CanadaOnboardingWorkflow {
 
     private static String strOf(Object v) {
         return v == null ? null : v.toString();
+    }
+
+    /**
+     * Map the document type the user selected at {@code /select-document} to the Sullis
+     * {@code type} query param: PASSPORT → PASSPORT, everything else (ID / NATIONAL_ID) →
+     * NATIONAL_ID. Foreign flow is passport-only and hardcodes PASSPORT separately.
+     */
+    private static String sullisDocType(com.ksa.financing.onboarding.canada.domain.model.DocumentType selected) {
+        return selected == com.ksa.financing.onboarding.canada.domain.model.DocumentType.PASSPORT
+                ? "PASSPORT" : "NATIONAL_ID";
     }
 }

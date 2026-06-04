@@ -131,6 +131,7 @@ public class NotificationKafkaListener {
             }
             String customerId = asString(payload.get("customerId"));
             String email = asString(payload.get("email"));
+            String firstNameField = asString(payload.get("firstName"));
             String fullName = asString(payload.get("fullName"));
             if (customerId == null) {
                 log.debug("customer profile event on {} missing customerId — skipping", topic);
@@ -138,7 +139,12 @@ public class NotificationKafkaListener {
             }
 
             String firstName = null, lastName = null;
-            if (fullName != null && !fullName.isBlank()) {
+            if (firstNameField != null && !firstNameField.isBlank()) {
+                // Preferred: customer's own name only. last_name holds the father's name and must
+                // not be stored on the Novu subscriber — leave lastName null.
+                firstName = firstNameField;
+            } else if (fullName != null && !fullName.isBlank()) {
+                // Fallback for older events that only carried fullName.
                 String[] parts = fullName.trim().split("\\s+", 2);
                 firstName = parts[0];
                 lastName = parts.length > 1 ? parts[1] : null;

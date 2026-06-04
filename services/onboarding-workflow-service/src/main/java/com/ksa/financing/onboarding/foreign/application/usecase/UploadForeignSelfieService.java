@@ -24,7 +24,7 @@ public class UploadForeignSelfieService implements UploadForeignSelfieUseCase {
         int beforeAttempts = before.getSelfieAttempts();
 
         client.stub(workflowId).selfieSubmitted(new ForeignSelfieSubmittedSignal(selfieImageBase64, deviceInfo));
-        ForeignOnboardingState state = client.awaitSelfieAttempt(workflowId, beforeAttempts, 60, 1000);
+        ForeignOnboardingState state = client.awaitSelfieAttempt(workflowId, beforeAttempts, 120, 1000);
         if (state.getCurrentStep() == ForeignOnboardingStep.FAILED) {
             return new UploadSelfieResult(workflowId, ForeignOnboardingStep.FAILED,
                     state.getFaciaFaceMatchReferenceId(), state.getFaceMatchScore(),
@@ -39,6 +39,12 @@ public class UploadForeignSelfieService implements UploadForeignSelfieUseCase {
                     null, null,
                     "Selfie verification declined", state.getFailureReason());
         }
+        // Face match passed. selfieAttempts bumps BEFORE the workflow runs the
+        // create-customer + create-wallet activities and advances to SELFIE_VERIFIED,
+        // so the attempt-await above returns while step is still DATA_CONFIRMED and
+        // customerId/walletId are null. Await the step transition so the response
+        // carries the real advanced state.
+        state = client.awaitStep(workflowId, ForeignOnboardingStep.SELFIE_VERIFIED, 120, 1000);
         return new UploadSelfieResult(workflowId,
                 state.getCurrentStep() != null ? state.getCurrentStep() : ForeignOnboardingStep.SELFIE_VERIFIED,
                 state.getFaciaFaceMatchReferenceId(),

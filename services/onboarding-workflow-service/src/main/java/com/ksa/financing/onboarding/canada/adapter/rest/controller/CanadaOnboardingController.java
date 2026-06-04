@@ -209,15 +209,16 @@ public class CanadaOnboardingController {
     // ==================== Step 4: Upload document → Facia OCR ====================
 
     @SecuredEndpoint(obj = "onboarding", act = "update")
-    @PostMapping("/upload-document")
-    @Operation(summary = "Upload document image to Facia for OCR + authenticity",
+    @PostMapping(value = "/upload-document", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload document image (multipart file) to Sullis for OCR + authenticity",
             tags = "4. Canada — Document",
             security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<CanadaDocumentDataResponse> uploadDocument(
-            @Valid @RequestBody CanadaSubmitDocumentRequest request,
+            @RequestParam("email") String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             HttpServletRequest httpRequest) {
-        String workflowId = workflowClient.workflowIdFor(request.email());
-        var result = submitDocumentUseCase.submit(workflowId, request.documentImageBase64(), device(httpRequest));
+        String workflowId = workflowClient.workflowIdFor(email);
+        var result = submitDocumentUseCase.submit(workflowId, toBase64(file), device(httpRequest));
         // Document-verification retries keep workflow at DOC_SELECTED; only failureReason==null
         // means Facia accepted and workflow advanced to DOC_VERIFIED.
         HttpStatus status = result.failureReason() != null
@@ -232,7 +233,7 @@ public class CanadaOnboardingController {
                 result.message(),
                 result.failureReason(),
                 Instant.now().toString(),
-                resolveMobile(request.email())));
+                resolveMobile(email)));
     }
 
     // ==================== Step 5: Confirm extracted data ====================
@@ -265,15 +266,16 @@ public class CanadaOnboardingController {
     // ==================== Step 6: Upload selfie → Facia face-match ====================
 
     @SecuredEndpoint(obj = "onboarding", act = "update")
-    @PostMapping("/upload-selfie")
-    @Operation(summary = "Upload selfie for Facia face-match against ID/Passport",
+    @PostMapping(value = "/upload-selfie", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload selfie (multipart file) for Sullis face-match + verification",
             tags = "6. Canada — Selfie",
             security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<CanadaSubmitSelfieResponse> uploadSelfie(
-            @Valid @RequestBody CanadaSubmitSelfieRequest request,
+            @RequestParam("email") String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             HttpServletRequest httpRequest) {
-        String workflowId = workflowClient.workflowIdFor(request.email());
-        var result = submitSelfieUseCase.submit(workflowId, request.selfieImageBase64(), device(httpRequest));
+        String workflowId = workflowClient.workflowIdFor(email);
+        var result = submitSelfieUseCase.submit(workflowId, toBase64(file), device(httpRequest));
         // Face-match retries keep workflow at DOC_CONFIRMED; only failureReason==null
         // means Facia matched and workflow advanced to SELFIE_VERIFIED.
         HttpStatus status = result.failureReason() != null
@@ -290,7 +292,7 @@ public class CanadaOnboardingController {
                 result.message(),
                 result.failureReason(),
                 Instant.now().toString(),
-                resolveMobile(request.email())));
+                resolveMobile(email)));
     }
 
     // ==================== Step 7: Set PIN ====================
@@ -382,6 +384,26 @@ public class CanadaOnboardingController {
                 req.getHeader("X-Longitude"),
                 req.getHeader("X-Client-Ip"),
                 req.getHeader("X-User-Agent"));
+    }
+
+    /**
+     * Read the uploaded image part and Base64-encode it. The internal flow (Temporal
+     * signals, workflow, Sullis activity, document archive) keeps using base64 strings,
+     * so only the REST contract changes from JSON-base64 to a multipart file.
+     */
+    private static String toBase64(org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new com.ksa.financing.infra.exception.BusinessException(
+                    com.ksa.financing.infra.exception.ErrorCodes.BAD_REQUEST,
+                    "Multipart 'file' part is required");
+        }
+        try {
+            return java.util.Base64.getEncoder().encodeToString(file.getBytes());
+        } catch (java.io.IOException e) {
+            throw new com.ksa.financing.infra.exception.BusinessException(
+                    com.ksa.financing.infra.exception.ErrorCodes.BAD_REQUEST,
+                    "Failed to read uploaded file: " + e.getMessage());
+        }
     }
 
     /**

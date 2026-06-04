@@ -1,10 +1,11 @@
 package com.ksa.financing.onboarding.foreign.workflow;
 
 import com.ksa.financing.onboarding.shared.activity.DualOtpActivity;
-import com.ksa.financing.onboarding.shared.activity.FaciaActivity;
+import com.ksa.financing.onboarding.shared.activity.SullisActivity;
 import com.ksa.financing.onboarding.shared.activity.OnboardingProfileActivity;
-import com.ksa.financing.onboarding.shared.facia.FaciaDocumentResult;
-import com.ksa.financing.onboarding.shared.facia.FaciaFaceMatchResult;
+import com.ksa.financing.onboarding.shared.sullis.SullisContext;
+import com.ksa.financing.onboarding.shared.sullis.SullisDocumentResult;
+import com.ksa.financing.onboarding.shared.sullis.SullisVerificationResult;
 import com.ksa.financing.onboarding.foreign.domain.model.ForeignBiometricsSignal;
 import com.ksa.financing.onboarding.foreign.domain.model.ForeignDataConfirmedSignal;
 import com.ksa.financing.onboarding.foreign.domain.model.ForeignOnboardingRequest;
@@ -75,7 +76,7 @@ public class ForeignOnboardingWorkflowImpl implements ForeignOnboardingWorkflow 
             .build();
 
     private final DualOtpActivity otpActivity = Workflow.newActivityStub(DualOtpActivity.class, defaultOptions);
-    private final FaciaActivity faciaActivity = Workflow.newActivityStub(FaciaActivity.class, faciaOptions);
+    private final SullisActivity sullisActivity = Workflow.newActivityStub(SullisActivity.class, faciaOptions);
     private final OnboardingProfileActivity profileActivity = Workflow.newActivityStub(OnboardingProfileActivity.class, defaultOptions);
 
     @Override
@@ -141,25 +142,34 @@ public class ForeignOnboardingWorkflowImpl implements ForeignOnboardingWorkflow 
         // Loop until FACIA accepts. Each declined attempt bumps passportAttempts +
         // sets failureReason so the service can return the decline reason and the
         // user can retry without restarting the whole workflow.
-        FaciaDocumentResult docResult;
+        // Sullis: create session + start attempt + upload document. The session/attempt
+        // ids are persisted on the workflow state so the later selfie phase reuses them
+        // (and concurrent onboardings never cross sessions).
+        SullisDocumentResult docResult;
         while (true) {
             Workflow.await(() -> passportReceived);
             passportReceived = false;
-            docResult = faciaActivity.verifyDocumentWithContext(
+            docResult = sullisActivity.verifyDocument(
                     passportSignal.passportImageBase64(),
-                    new com.ksa.financing.onboarding.shared.facia.FaciaContext(
+                    state.getWorkflowId(),
+                    "PASSPORT",
+                    state.getSullisSessionId(),
+                    new SullisContext(
                             request.mobileNumber(), null, null,
                             state.getWorkflowId(), "ONBOARDING_FOREIGN",
                             state.getWorkflowId() + ":passport"));
             state.setPassportAttempts(state.getPassportAttempts() + 1);
+            // Remember the session even on decline so the next retry reuses it (new attempt).
+            if (docResult.sessionId() != null) state.setSullisSessionId(docResult.sessionId());
             if (docResult.accepted()) {
+                state.setSullisAttemptId(docResult.attemptId());
                 state.setFailureReason(null);
                 break;
             }
             state.setFailureReason("Passport verification declined: " + docResult.declineReason());
         }
         state.setPassportImageBase64(passportSignal.passportImageBase64());
-        state.setFaciaPassportReferenceId(docResult.referenceId());
+        state.setFaciaPassportReferenceId(docResult.uploadId());
         state.setExtractedData(new LinkedHashMap<>(docResult.extractedData()));
         // Capture passport dates from Facia OCR if present
         Object issueDate = docResult.extractedData().get("issue_date");
@@ -199,27 +209,32 @@ public class ForeignOnboardingWorkflowImpl implements ForeignOnboardingWorkflow 
 
         // ----- Step 5: wait for selfie, face-match, create customer + wallet -----
         // Loop until face matches. User can re-take selfie if FACIA rejects.
-        FaciaFaceMatchResult faceResult;
+        // Sullis: upload selfie + run the verification pipeline using the stored
+        // session/attempt. The submit outcome (APPROVED) + faceMatch score gate the loop.
+        SullisVerificationResult faceResult;
         while (true) {
             Workflow.await(() -> selfieReceived);
             selfieReceived = false;
-            faceResult = faciaActivity.faceMatchWithContext(
-                    selfieSignal.selfieImageBase64(), state.getPassportImageBase64(),
-                    new com.ksa.financing.onboarding.shared.facia.FaciaContext(
+            faceResult = sullisActivity.submitVerification(
+                    selfieSignal.selfieImageBase64(),
+                    state.getSullisSessionId(), state.getSullisAttemptId(),
+                    new SullisContext(
                             request.mobileNumber(), null, null,
                             state.getWorkflowId(), "ONBOARDING_FOREIGN",
                             state.getWorkflowId() + ":selfie"));
             state.setSelfieAttempts(state.getSelfieAttempts() + 1);
-            state.setFaciaFaceMatchReferenceId(faceResult.referenceId());
-            state.setFaceMatchScore(faceResult.similarityScore());
-            if (faceResult.match()
-                    && faceResult.similarityScore() != null
-                    && faceResult.similarityScore() >= FACE_MATCH_THRESHOLD) {
+            state.setFaciaFaceMatchReferenceId(faceResult.attemptId());
+            state.setFaceMatchScore(faceResult.faceMatchScore());
+            // Trust Sullis's own verification outcome (VERIFIED). Sullis already factors in
+            // faceMatch + liveness + same-person when deciding the outcome — imposing a
+            // separate local faceMatch threshold would override the vendor's decision
+            // (e.g. Sullis VERIFIED at faceMatch 0.61 must NOT be declined locally).
+            if (faceResult.approved()) {
                 state.setFailureReason(null);
                 break;
             }
-            state.setFailureReason("Face match failed: score="
-                    + faceResult.similarityScore() + " reason=" + faceResult.failureReason());
+            state.setFailureReason("Verification declined: outcome=" + faceResult.outcome()
+                    + " score=" + faceResult.faceMatchScore() + " reason=" + faceResult.reason());
         }
         var profile = profileActivity.createCustomerProfile(request.email(),
                 request.mobileNumber(), state.getKeycloakUserId(),

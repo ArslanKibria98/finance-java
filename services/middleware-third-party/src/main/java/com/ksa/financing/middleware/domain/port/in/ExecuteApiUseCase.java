@@ -45,6 +45,24 @@ public interface ExecuteApiUseCase {
                             String nationalId, String mobileNumber, String callerService,
                             BusinessContext context);
 
+    /**
+     * Execute a third-party API call that sends a {@code multipart/form-data} body
+     * (binary file upload) — e.g. Sullis document / selfie upload.
+     *
+     * <p>For TEST clients the file is ignored and the registered mock provider answers.
+     * For DEV / PROD the file is streamed to the provider as a multipart part.</p>
+     *
+     * @param file the uploaded file part (field name, original filename, bytes, content type)
+     */
+    ExecutionResult executeMultipart(String secretKey, String apiCode, MultipartPart file,
+                                     Map<String, String> pathParams, Map<String, String> queryParams,
+                                     Map<String, String> headers, String idempotencyKey,
+                                     String nationalId, String mobileNumber, String callerService,
+                                     BusinessContext context);
+
+    /** A single multipart file part forwarded verbatim to the provider. */
+    record MultipartPart(String formField, String fileName, byte[] content, String contentType) {}
+
     record BusinessContext(UUID customerId, String applicationId, String contextType) {
         public static BusinessContext empty() {
             return new BusinessContext(null, null, null);

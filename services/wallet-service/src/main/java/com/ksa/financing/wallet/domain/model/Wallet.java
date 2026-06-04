@@ -9,6 +9,7 @@ public class Wallet {
     private UUID tenantId;
     private String walletNumber;
     private UUID customerId;
+    private String accountNumber;
     private BigDecimal availableBalance;
     private BigDecimal reservedBalance;
     private BigDecimal totalBalance;
@@ -19,6 +20,9 @@ public class Wallet {
     private BigDecimal singleTopUpLimit;
     private BigDecimal todayTopUpAmount;
     private BigDecimal monthTopUpAmount;
+    private BigDecimal dailyTransactionLimit;
+    private BigDecimal monthlyTransactionLimit;
+    private BigDecimal yearlyTransactionLimit;
     private Long fineractSavingsAccountId;
     private boolean ledgerSynced;
     private Instant lastLedgerSyncAt;
@@ -39,6 +43,8 @@ public class Wallet {
     public void setWalletNumber(String walletNumber) { this.walletNumber = walletNumber; }
     public UUID getCustomerId() { return customerId; }
     public void setCustomerId(UUID customerId) { this.customerId = customerId; }
+    public String getAccountNumber() { return accountNumber; }
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
     public BigDecimal getAvailableBalance() { return availableBalance; }
     public void setAvailableBalance(BigDecimal availableBalance) { this.availableBalance = availableBalance; }
     public BigDecimal getReservedBalance() { return reservedBalance; }
@@ -59,6 +65,12 @@ public class Wallet {
     public void setTodayTopUpAmount(BigDecimal todayTopUpAmount) { this.todayTopUpAmount = todayTopUpAmount; }
     public BigDecimal getMonthTopUpAmount() { return monthTopUpAmount; }
     public void setMonthTopUpAmount(BigDecimal monthTopUpAmount) { this.monthTopUpAmount = monthTopUpAmount; }
+    public BigDecimal getDailyTransactionLimit() { return dailyTransactionLimit; }
+    public void setDailyTransactionLimit(BigDecimal dailyTransactionLimit) { this.dailyTransactionLimit = dailyTransactionLimit; }
+    public BigDecimal getMonthlyTransactionLimit() { return monthlyTransactionLimit; }
+    public void setMonthlyTransactionLimit(BigDecimal monthlyTransactionLimit) { this.monthlyTransactionLimit = monthlyTransactionLimit; }
+    public BigDecimal getYearlyTransactionLimit() { return yearlyTransactionLimit; }
+    public void setYearlyTransactionLimit(BigDecimal yearlyTransactionLimit) { this.yearlyTransactionLimit = yearlyTransactionLimit; }
     public Long getFineractSavingsAccountId() { return fineractSavingsAccountId; }
     public void setFineractSavingsAccountId(Long fineractSavingsAccountId) { this.fineractSavingsAccountId = fineractSavingsAccountId; }
     public boolean isLedgerSynced() { return ledgerSynced; }

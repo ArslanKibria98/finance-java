@@ -208,20 +208,16 @@ public class CustomerController {
             log.warn("Employment retrieval failed for customerId={}: {}", id, e.getMessage());
         }
 
-        // Wallet IBAN
-        String iban = null;
-        try {
-            iban = walletPort.getIbanByCustomerId(customer.getTenantId(), id).orElse(null);
-        } catch (Exception e) {
-            log.warn("Wallet IBAN retrieval failed for customerId={}: {}", id, e.getMessage());
-        }
+        // Wallet identifiers (iban + virtual account number)
+        WalletPort.WalletInfo walletInfo = fetchWalletInfo(customer.getTenantId(), id);
 
         return ResponseEntity.ok(new CustomerDetailResponse(
                 toResponse(customer),
                 piiData,
                 bankAccounts,
                 employments,
-                iban
+                walletInfo.iban(),
+                walletInfo.accountNumber()
         ));
     }
 
@@ -256,7 +252,7 @@ public class CustomerController {
         log.info("Getting customer profile for ID: {} tenant: {}", id, tenantId);
 
         Customer customer = getCustomerUseCase.getById(id);
-        String iban = walletPort.getIbanByCustomerId(customer.getTenantId(), id).orElse(null);
+        WalletPort.WalletInfo walletInfo = fetchWalletInfo(customer.getTenantId(), id);
 
         String profilePictureUrl = buildProfilePictureUrl(customer.getId(), customer.getProfilePicture());
         return ResponseEntity.ok(new CustomerProfileResponse(
@@ -267,7 +263,8 @@ public class CustomerController {
                 customer.getNationalId(),
                 customer.getMobileNumber(),
                 customer.getDateOfBirth() != null ? customer.getDateOfBirth().toString() : null,
-                iban,
+                walletInfo.iban(),
+                walletInfo.accountNumber(),
                 profilePictureUrl
         ));
     }
@@ -298,12 +295,7 @@ public class CustomerController {
                     keycloakUserId, self.getId());
         }
 
-        String iban = null;
-        try {
-            iban = walletPort.getIbanByCustomerId(self.getTenantId(), self.getId()).orElse(null);
-        } catch (Exception e) {
-            log.warn("Wallet IBAN lookup failed for customerId={}: {}", self.getId(), e.getMessage());
-        }
+        WalletPort.WalletInfo walletInfo = fetchWalletInfo(self.getTenantId(), self.getId());
 
         String profilePictureUrl = buildProfilePictureUrl(self.getId(), self.getProfilePicture());
 
@@ -315,7 +307,8 @@ public class CustomerController {
                 self.getNationalId(),
                 self.getMobileNumber(),
                 self.getDateOfBirth() != null ? self.getDateOfBirth().toString() : null,
-                iban,
+                walletInfo.iban(),
+                walletInfo.accountNumber(),
                 profilePictureUrl
         ));
     }
@@ -489,12 +482,7 @@ public class CustomerController {
 
         Customer customer = updateCustomerUseCase.update(tenantId, customerId, command);
 
-        String iban = null;
-        try {
-            iban = walletPort.getIbanByCustomerId(customer.getTenantId(), customer.getId()).orElse(null);
-        } catch (Exception e) {
-            log.warn("Wallet IBAN lookup failed for customerId={}: {}", customer.getId(), e.getMessage());
-        }
+        WalletPort.WalletInfo walletInfo = fetchWalletInfo(customer.getTenantId(), customer.getId());
         String profilePictureUrl = buildProfilePictureUrl(customer.getId(), customer.getProfilePicture());
 
         return ResponseEntity.ok(new CustomerProfileResponse(
@@ -505,7 +493,8 @@ public class CustomerController {
                 customer.getNationalId(),
                 customer.getMobileNumber(),
                 customer.getDateOfBirth() != null ? customer.getDateOfBirth().toString() : null,
-                iban,
+                walletInfo.iban(),
+                walletInfo.accountNumber(),
                 profilePictureUrl
         ));
     }
@@ -951,6 +940,17 @@ public class CustomerController {
             int sortOrder
     ) {}
 
+    /** Fetch wallet identifiers (iban + virtual account number) fault-tolerantly. */
+    private WalletPort.WalletInfo fetchWalletInfo(UUID tenantId, UUID customerId) {
+        try {
+            return walletPort.getWalletInfoByCustomerId(tenantId, customerId)
+                    .orElseGet(() -> new WalletPort.WalletInfo(null, null, null));
+        } catch (Exception e) {
+            log.warn("Wallet info lookup failed for customerId={}: {}", customerId, e.getMessage());
+            return new WalletPort.WalletInfo(null, null, null);
+        }
+    }
+
     public record CustomerProfileResponse(
             UUID customerId,
             String firstName,
@@ -960,6 +960,7 @@ public class CustomerController {
             String mobileNumber,
             String dateOfBirth,
             String iban,
+            String accountNumber,
             String profilePicture
     ) {}
 
@@ -982,6 +983,7 @@ public class CustomerController {
             java.util.Map<String, String> piiVault,
             List<BankAccountResponse> bankAccounts,
             List<EmploymentInfoResponse> employments,
-            String walletIban
+            String walletIban,
+            String walletAccountNumber
     ) {}
 }

@@ -94,6 +94,22 @@ public class LedgerProxySavingsAdapter implements FineractSavingsPort {
     }
 
     @Override
+    public Long hold(Long savingsId, BigDecimal amount, String externalReference) {
+        return client.holdAmount(currentTenantId(), savingsId, amount, externalReference,
+                externalReference != null
+                        ? externalReference
+                        : idempotencyFor("hold", savingsId + "-" + amount + "-" + UUID.randomUUID()));
+    }
+
+    @Override
+    public void releaseHold(Long savingsId, Long holdTransactionId, String externalReference) {
+        client.releaseHold(currentTenantId(), savingsId, holdTransactionId,
+                externalReference != null
+                        ? externalReference
+                        : idempotencyFor("release-hold", savingsId + "-" + holdTransactionId + "-" + UUID.randomUUID()));
+    }
+
+    @Override
     public Long transferBetweenSavings(Long fromClientId, Long fromSavingsId,
                                        Long toClientId, Long toSavingsId,
                                        BigDecimal amount, String description) {

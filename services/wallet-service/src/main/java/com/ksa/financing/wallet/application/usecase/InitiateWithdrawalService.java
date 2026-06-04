@@ -66,6 +66,7 @@ public class InitiateWithdrawalService implements InitiateWithdrawalUseCase {
     private final PaymentScreeningPort screeningPort;
     private final EventPublisherPort eventPublisher;
     private final ObjectMapper objectMapper;
+    private final com.ksa.financing.wallet.application.support.TransactionLimitEnforcer limitEnforcer;
 
     @Override
     @Transactional
@@ -400,6 +401,8 @@ public class InitiateWithdrawalService implements InitiateWithdrawalUseCase {
             throw new BusinessException("WALLET.WITHDRAWAL.SINGLE_LIMIT_EXCEEDED",
                     "Withdrawal exceeds single-transaction limit");
         }
+        // Daily / monthly transaction-limit enforcement (cumulative spend vs wallet limits)
+        limitEnforcer.enforce(wallet, amount);
     }
 
     private BigDecimal computeFee(BigDecimal amount, WithdrawalChannel channel) {

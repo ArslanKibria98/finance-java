@@ -53,6 +53,10 @@ public class ProviderApiJpaEntity {
     @Column(name = "endpoint_path", nullable = false, columnDefinition = "TEXT")
     private String endpointPath;
 
+    @Column(name = "request_template", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String requestTemplate;
+
     @Column(name = "status", nullable = false, columnDefinition = "api_status")
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Enumerated(EnumType.STRING)

@@ -252,6 +252,7 @@ public class WalletController {
         return new WalletResponse(
                 wallet.getId(),
                 wallet.getWalletNumber(),
+                wallet.getAccountNumber(),
                 wallet.getCustomerId(),
                 wallet.getAvailableBalance(),
                 wallet.getReservedBalance(),

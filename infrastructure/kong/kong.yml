@@ -83,6 +83,10 @@ services:
   # Onboarding Workflow Service - Temporal orchestration
   - name: onboarding-workflow-service
     url: http://onboarding-workflow-service:8089
+    # KYC document/selfie upload proxies a slow live Sullis OCR call — allow 2 min.
+    connect_timeout: 120000
+    read_timeout: 120000
+    write_timeout: 120000
     routes:
       - name: onboarding-routes
         paths:

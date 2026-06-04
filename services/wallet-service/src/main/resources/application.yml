@@ -144,6 +144,32 @@ ksa:
     bank-rails:
       mock: ${BANK_RAILS_MOCK:true}
       reject-above: ${BANK_RAILS_REJECT_ABOVE:50000}
+    # Virtual account number + Scotia RTP external fund transfers
+    scotia:
+      fi-number: ${SCOTIA_FI_NUMBER:002}
+      transit: ${SCOTIA_TRANSIT:80150}
+      corporate-account: ${SCOTIA_CORPORATE_ACCOUNT:002-80150-0000000}
+      corporate-name: ${SCOTIA_CORPORATE_NAME:KSA Islamic Financing Corp}
+      default-currency: ${SCOTIA_DEFAULT_CURRENCY:CAD}
+      rtp:
+        middleware-url: ${MIDDLEWARE_THIRD_PARTY_URL:http://middleware-third-party:8093}
+        options-api-code: ${SCOTIA_RTP_OPTIONS_API_CODE:SCOTIABANK_PAYMENT_OPTIONS_INQUIRY}
+        commit-api-code: ${SCOTIA_RTP_COMMIT_API_CODE:SCOTIABANK_PAYMENT_COMMIT}
+        options-inquiry-enabled: ${SCOTIA_RTP_OPTIONS_INQUIRY_ENABLED:true}
+    # GL account codes for external-transfer journal postings (ledger-service)
+    gl:
+      accounts:
+        consumer-wallet: ${WALLET_GL_CONSUMER_WALLET:110401}
+        rtp-clearing: ${WALLET_GL_RTP_CLEARING:120601}
+        ibft-clearing: ${WALLET_GL_IBFT_CLEARING:120602}
+    # IBFT (Scotia EFT) — HOLD-based inter-bank transfers + cron reconciliation
+    ibft:
+      middleware-url: ${MIDDLEWARE_THIRD_PARTY_URL:http://middleware-third-party:8093}
+      payment-secret: ${SCOTIA_PAYMENT_SECRET:payment-service-dev-secret-2026}
+      validate-beneficiary-on-add: ${IBFT_VALIDATE_BENEFICIARY:true}
+      recon:
+        cron: ${IBFT_RECON_CRON:0 */2 * * * *}
+        batch-size: ${IBFT_RECON_BATCH:100}
   blacklist:
     enabled: ${BLACKLIST_GUARD_ENABLED:true}
     cache-key-prefix: blacklist

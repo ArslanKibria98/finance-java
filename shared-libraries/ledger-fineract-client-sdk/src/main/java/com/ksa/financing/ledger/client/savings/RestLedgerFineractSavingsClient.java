@@ -170,6 +170,29 @@ public class RestLedgerFineractSavingsClient implements LedgerFineractSavingsCli
     }
 
     @Override
+    public Long holdAmount(UUID tenantId, Long savingsId, BigDecimal amount,
+                           String externalReference, String idempotencyKey) {
+        BigDecimal normalizedAmount = amount != null ? amount.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        // Fineract holdAmount supports only: locale, dateFormat, transactionDate, transactionAmount
+        // (+ optional reasonForBlock). 'note' is rejected ("parameter note is not supported").
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("locale", LOCALE);
+        body.put("dateFormat", DATE_FORMAT);
+        body.put("transactionDate", LocalDate.now().format(FINERACT_DATE));
+        body.put("transactionAmount", normalizedAmount);
+        Map<String, Object> resp = exchange(HttpMethod.POST, tenantId, idempotencyKey,
+                "/accounts/" + savingsId + "/hold-amount", body);
+        return extractLong(resp, "resourceId", "subResourceId");
+    }
+
+    @Override
+    public void releaseHold(UUID tenantId, Long savingsId, Long holdTransactionId, String idempotencyKey) {
+        exchange(HttpMethod.POST, tenantId, idempotencyKey,
+                "/accounts/" + savingsId + "/transactions/" + holdTransactionId + "/release-amount",
+                new LinkedHashMap<>());
+    }
+
+    @Override
     public Long transferBetweenSavings(UUID tenantId,
                                        Long fromOfficeId, Long fromClientId, Long fromSavingsId,
                                        Long toOfficeId, Long toClientId, Long toSavingsId,

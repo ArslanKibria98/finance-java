@@ -81,6 +81,7 @@ public class MiddlewarePersistenceMapper {
         domain.setDescriptionAr(entity.getDescriptionAr());
         domain.setHttpMethod(toHttpMethod(entity.getHttpMethod()));
         domain.setEndpointPath(entity.getEndpointPath());
+        domain.setRequestTemplate(entity.getRequestTemplate());
         domain.setStatus(toApiStatus(entity.getStatus()));
         domain.setAsync(entity.isAsync());
         domain.setTimeoutMs(entity.getTimeoutMs());
@@ -107,6 +108,7 @@ public class MiddlewarePersistenceMapper {
         entity.setDescriptionAr(domain.getDescriptionAr());
         entity.setHttpMethod(toApiHttpMethodEnum(domain.getHttpMethod()));
         entity.setEndpointPath(domain.getEndpointPath());
+        entity.setRequestTemplate(domain.getRequestTemplate());
         entity.setStatus(toApiStatusEnum(domain.getStatus()));
         entity.setAsync(domain.isAsync());
         entity.setTimeoutMs(domain.getTimeoutMs());

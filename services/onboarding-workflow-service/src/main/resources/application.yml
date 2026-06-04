@@ -3,6 +3,11 @@ spring:
     name: onboarding-workflow-service
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  servlet:
+    multipart:
+      # KYC document / selfie images uploaded by the mobile app (multipart file).
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:15MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:20MB}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -126,6 +131,26 @@ facia:
 middleware:
   base-url: ${MIDDLEWARE_THIRD_PARTY_URL:http://middleware-third-party:8093}
   client-secret: ${MIDDLEWARE_CLIENT_SECRET:ob-svc-mw-secret-2026-x9k4p}
+
+sullis:
+  # Foreign-national KYC. Sullis calls route through middleware-third-party
+  # (Sullis-Api-Key owned by the middleware panel: provider SULLIS env config).
+  # mock=true bypasses the middleware + Sullis sandbox with canned responses —
+  # keep true until the Sullis sandbox (192.168.6.51:8084) is reachable from this
+  # environment, then set SULLIS_MOCK=false to route live through the middleware.
+  mock: ${SULLIS_MOCK:true}
+  webhook-url: ${SULLIS_WEBHOOK_URL:https://onboarding.kfs.com/webhooks/kyc}
+
+twilio:
+  # SMS routes through middleware-third-party — Account SID + Auth Token live in the
+  # Third Party Management panel (provider TWILIO), NOT here. Onboarding only holds the
+  # non-secret From (sender) number + the middleware API code.
+  enabled: ${TWILIO_ENABLED:false}
+  from-number: ${TWILIO_FROM_NUMBER:}
+  api-code: ${TWILIO_API_CODE:TWILIO_SEND_SMS}
+  # Test mode: /sms/send-otp returns the OTP in the response (no real SMS, no Twilio
+  # number needed). DEV/testing only — never true in prod.
+  test-mode: ${TWILIO_TEST_MODE:false}
 
 otp:
   email:

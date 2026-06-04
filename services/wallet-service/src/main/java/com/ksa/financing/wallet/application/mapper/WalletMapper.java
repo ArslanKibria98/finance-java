@@ -15,6 +15,7 @@ public class WalletMapper {
         return new WalletResponse(
             w.getId(),
             w.getWalletNumber(),
+            w.getAccountNumber(),
             w.getCustomerId(),
             w.getAvailableBalance(),
             w.getReservedBalance(),

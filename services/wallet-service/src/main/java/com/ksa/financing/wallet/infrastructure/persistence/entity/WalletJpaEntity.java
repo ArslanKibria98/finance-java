@@ -23,6 +23,9 @@ public class WalletJpaEntity {
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
 
+    @Column(name = "account_number", length = 34)
+    private String accountNumber;
+
     @Column(name = "available_balance", nullable = false, precision = 20, scale = 6)
     private BigDecimal availableBalance = BigDecimal.ZERO;
 
@@ -54,6 +57,15 @@ public class WalletJpaEntity {
 
     @Column(name = "month_top_up_amount", nullable = false, precision = 20, scale = 6)
     private BigDecimal monthTopUpAmount = BigDecimal.ZERO;
+
+    @Column(name = "daily_transaction_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal dailyTransactionLimit;
+
+    @Column(name = "monthly_transaction_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal monthlyTransactionLimit;
+
+    @Column(name = "yearly_transaction_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal yearlyTransactionLimit;
 
     @Column(name = "fineract_savings_account_id")
     private Long fineractSavingsAccountId;
@@ -121,6 +133,9 @@ public class WalletJpaEntity {
     public UUID getCustomerId() { return customerId; }
     public void setCustomerId(UUID customerId) { this.customerId = customerId; }
 
+    public String getAccountNumber() { return accountNumber; }
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
+
     public BigDecimal getAvailableBalance() { return availableBalance; }
     public void setAvailableBalance(BigDecimal availableBalance) { this.availableBalance = availableBalance; }
 
@@ -149,6 +164,15 @@ public class WalletJpaEntity {
 
     public BigDecimal getMonthTopUpAmount() { return monthTopUpAmount; }
     public void setMonthTopUpAmount(BigDecimal monthTopUpAmount) { this.monthTopUpAmount = monthTopUpAmount; }
+
+    public BigDecimal getDailyTransactionLimit() { return dailyTransactionLimit; }
+    public void setDailyTransactionLimit(BigDecimal dailyTransactionLimit) { this.dailyTransactionLimit = dailyTransactionLimit; }
+
+    public BigDecimal getMonthlyTransactionLimit() { return monthlyTransactionLimit; }
+    public void setMonthlyTransactionLimit(BigDecimal monthlyTransactionLimit) { this.monthlyTransactionLimit = monthlyTransactionLimit; }
+
+    public BigDecimal getYearlyTransactionLimit() { return yearlyTransactionLimit; }
+    public void setYearlyTransactionLimit(BigDecimal yearlyTransactionLimit) { this.yearlyTransactionLimit = yearlyTransactionLimit; }
 
     public Long getFineractSavingsAccountId() { return fineractSavingsAccountId; }
     public void setFineractSavingsAccountId(Long fineractSavingsAccountId) { this.fineractSavingsAccountId = fineractSavingsAccountId; }

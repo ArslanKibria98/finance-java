@@ -250,10 +250,15 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
             case FEE_DEDUCTION, TRANSFER_FEE -> "FEE";
             case REFUND -> "REFUND";
             case REVERSAL -> "REVERSAL";
-            case WITHDRAWAL -> "WITHDRAWAL";
+            case WITHDRAWAL, WITHDRAWAL_OUT -> "WITHDRAWAL";
+            case WITHDRAWAL_FEE -> "FEE";
+            case WITHDRAWAL_REFUND -> "REFUND";
             case ADJUSTMENT -> "ADJUSTMENT";
             case TRANSFER_OUT -> "TRANSFER_OUT";
             case TRANSFER_IN -> "TRANSFER_IN";
+            case IBFT_HOLD -> "IBFT_HOLD";
+            case IBFT_DEBIT -> "IBFT";
+            case IBFT_RELEASE -> "IBFT_RELEASE";
         };
     }
 
@@ -294,11 +299,13 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
             case LOAN_PROCEEDS -> "Islamic Financing";
             case INSTALLMENT_PAYMENT, EARLY_SETTLEMENT -> "Loan Repayment";
             case TOP_UP -> "Wallet Top-Up";
-            case WITHDRAWAL -> "Bank Withdrawal";
-            case FEE_DEDUCTION, TRANSFER_FEE -> "Service Fee";
-            case REFUND -> "Refund";
+            case WITHDRAWAL, WITHDRAWAL_OUT -> "Bank Withdrawal";
+            case WITHDRAWAL_FEE, FEE_DEDUCTION, TRANSFER_FEE -> "Service Fee";
+            case WITHDRAWAL_REFUND, REFUND -> "Refund";
             case REVERSAL -> "Reversal";
             case ADJUSTMENT -> "Adjustment";
+            case IBFT_HOLD, IBFT_DEBIT -> "Inter-Bank Transfer";
+            case IBFT_RELEASE -> "IBFT Refund";
             case TRANSFER_OUT, TRANSFER_IN -> null;
         };
     }

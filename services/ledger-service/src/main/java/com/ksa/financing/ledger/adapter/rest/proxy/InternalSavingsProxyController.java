@@ -28,6 +28,10 @@ public class InternalSavingsProxyController {
 
     private final FineractProxyDispatcher dispatcher;
 
+    /** Fineract code-value id (code SavingsTransactionFreezeReasons) required by holdAmount. */
+    @org.springframework.beans.factory.annotation.Value("${ksa.ledger.fineract.hold-reason-id:23}")
+    private int holdReasonId;
+
     @GetMapping("/clients/by-external/{externalId}")
     @Operation(summary = "Lookup Fineract client by externalId (internal)")
     public ResponseEntity<Map<String, Object>> lookupClient(
@@ -194,6 +198,42 @@ public class InternalSavingsProxyController {
         return dispatcher.dispatchInternal(tenantId, callerService, correlationId, idempotencyKey,
                 "savings.account.release", HttpMethod.POST,
                 "/savingsaccounts/" + savingsId + "?command=unblock", body);
+    }
+
+    @PostMapping("/accounts/{savingsId}/hold-amount")
+    @Operation(summary = "Place an AMOUNT hold on savings (Fineract holdAmount) — internal")
+    public ResponseEntity<Map<String, Object>> holdAmount(
+            @PathVariable Long savingsId,
+            @RequestBody Map<String, Object> body,
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Caller-Service", required = false) String callerService,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
+
+        // Fineract holdAmount requires a reasonForBlock code-value id — inject the configured one.
+        if (body != null && !body.containsKey("reasonForBlock")) {
+            body.put("reasonForBlock", holdReasonId);
+        }
+        return dispatcher.dispatchInternal(tenantId, callerService, correlationId, idempotencyKey,
+                "savings.account.holdAmount", HttpMethod.POST,
+                "/savingsaccounts/" + savingsId + "/transactions?command=holdAmount", body);
+    }
+
+    @PostMapping("/accounts/{savingsId}/transactions/{holdTxnId}/release-amount")
+    @Operation(summary = "Release a previously held AMOUNT (Fineract releaseAmount) — internal")
+    public ResponseEntity<Map<String, Object>> releaseAmount(
+            @PathVariable Long savingsId,
+            @PathVariable Long holdTxnId,
+            @RequestBody(required = false) Map<String, Object> body,
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Caller-Service", required = false) String callerService,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
+
+        return dispatcher.dispatchInternal(tenantId, callerService, correlationId, idempotencyKey,
+                "savings.account.releaseAmount", HttpMethod.POST,
+                "/savingsaccounts/" + savingsId + "/transactions/" + holdTxnId + "?command=releaseAmount",
+                body == null ? Map.of() : body);
     }
 
     @PostMapping("/transactions/{txnId}/undo")

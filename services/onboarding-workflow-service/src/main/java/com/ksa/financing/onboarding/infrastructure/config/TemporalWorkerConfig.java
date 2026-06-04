@@ -5,11 +5,13 @@ import com.ksa.financing.onboarding.foreign.workflow.ForeignOnboardingWorkflowIm
 import com.ksa.financing.onboarding.guest.workflow.GuestOnboardingWorkflowImpl;
 import com.ksa.financing.onboarding.shared.activity.impl.DualOtpActivityImpl;
 import com.ksa.financing.onboarding.shared.activity.impl.FaciaActivityImpl;
+import com.ksa.financing.onboarding.shared.activity.impl.SullisActivityImpl;
 import com.ksa.financing.onboarding.shared.document.DocumentStorageClient;
 import com.ksa.financing.onboarding.shared.activity.impl.OnboardingProfileActivityImpl;
 import com.ksa.financing.onboarding.shared.audit.OnboardingSessionRecorder;
 import com.ksa.financing.onboarding.shared.downstream.OnboardingDownstreamClient;
 import com.ksa.financing.onboarding.shared.facia.FaciaClient;
+import com.ksa.financing.onboarding.shared.sullis.SullisClient;
 import com.ksa.financing.onboarding.shared.keycloak.OnboardingKeycloakClient;
 import com.ksa.financing.onboarding.workflow.activity.impl.AmlRiskScoringActivityImpl;
 import com.ksa.financing.onboarding.workflow.activity.impl.GeneralScoringActivityImpl;
@@ -47,6 +49,7 @@ public class TemporalWorkerConfig {
     private final String globalProfileUrl;
     private final String riskServiceUrl;
     private final FaciaClient faciaClient;
+    private final SullisClient sullisClient;
     private final OnboardingKeycloakClient onboardingKeycloakClient;
     private final OnboardingSessionRecorder recorder;
     private final OnboardingDownstreamClient downstream;
@@ -64,6 +67,7 @@ public class TemporalWorkerConfig {
                                 WorkerOptions defaultWorkerOptions,
                                 RestTemplate restTemplate,
                                 FaciaClient faciaClient,
+                                SullisClient sullisClient,
                                 OnboardingKeycloakClient onboardingKeycloakClient,
                                 OnboardingSessionRecorder recorder,
                                 OnboardingDownstreamClient downstream,
@@ -87,6 +91,7 @@ public class TemporalWorkerConfig {
         this.defaultWorkerOptions = defaultWorkerOptions;
         this.restTemplate = restTemplate;
         this.faciaClient = faciaClient;
+        this.sullisClient = sullisClient;
         this.onboardingKeycloakClient = onboardingKeycloakClient;
         this.recorder = recorder;
         this.downstream = downstream;
@@ -134,11 +139,11 @@ public class TemporalWorkerConfig {
         Worker canadaWorker = workerFactory.newWorker(canadaTaskQueue, defaultWorkerOptions);
         canadaWorker.registerWorkflowImplementationTypes(CanadaOnboardingWorkflowImpl.class);
         canadaWorker.registerActivitiesImplementations(
-                new FaciaActivityImpl(faciaClient, recorder, documentStorageClient, defaultTenantId),
+                new SullisActivityImpl(sullisClient, recorder, documentStorageClient, defaultTenantId),
                 new DualOtpActivityImpl(recorder, mailSender, redisTemplate, emailOtpConfig),
                 new OnboardingProfileActivityImpl(onboardingKeycloakClient, recorder, downstream, canadaCustomerRole)
         );
-        log.info("Registered Canada onboarding workflow on queue: {}", canadaTaskQueue);
+        log.info("Registered Canada onboarding workflow on queue: {} (Sullis KYC)", canadaTaskQueue);
 
         // Country-agnostic guest worker — minimal Keycloak-only flow, onboardingComplete=false.
         // Reuses the OTP + Profile activity implementations (Facia not needed for guest).
@@ -150,15 +155,16 @@ public class TemporalWorkerConfig {
         );
         log.info("Registered guest onboarding workflow on queue: {}", guestTaskQueue);
 
-        // Foreign national worker — passport-only KYC, same Facia + OTP + Profile stack.
+        // Foreign national worker — passport-only KYC via Sullis (session flow), plus
+        // the shared OTP + Profile stack. (Canada still uses Facia above.)
         Worker foreignWorker = workerFactory.newWorker(foreignTaskQueue, defaultWorkerOptions);
         foreignWorker.registerWorkflowImplementationTypes(ForeignOnboardingWorkflowImpl.class);
         foreignWorker.registerActivitiesImplementations(
-                new FaciaActivityImpl(faciaClient, recorder, documentStorageClient, defaultTenantId),
+                new SullisActivityImpl(sullisClient, recorder, documentStorageClient, defaultTenantId),
                 new DualOtpActivityImpl(recorder, mailSender, redisTemplate, emailOtpConfig),
                 new OnboardingProfileActivityImpl(onboardingKeycloakClient, recorder, downstream, canadaCustomerRole)
         );
-        log.info("Registered foreign onboarding workflow on queue: {}", foreignTaskQueue);
+        log.info("Registered foreign onboarding workflow on queue: {} (Sullis KYC)", foreignTaskQueue);
 
         workerFactory.start();
         log.info("Temporal workers started: {} (KSA), {} (RiskDecision), {} (Canada), {} (Guest), {} (Foreign)",

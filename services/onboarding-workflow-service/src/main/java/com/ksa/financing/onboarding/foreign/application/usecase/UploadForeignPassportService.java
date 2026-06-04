@@ -28,7 +28,7 @@ public class UploadForeignPassportService implements UploadForeignPassportUseCas
 
         client.stub(workflowId).passportSubmitted(new ForeignPassportSubmittedSignal(passportImageBase64, deviceInfo));
 
-        ForeignOnboardingState state = client.awaitPassportAttempt(workflowId, beforeAttempts, 60, 1000);
+        ForeignOnboardingState state = client.awaitPassportAttempt(workflowId, beforeAttempts, 120, 1000);
         if (state.getCurrentStep() == ForeignOnboardingStep.FAILED) {
             return new UploadPassportResult(workflowId, ForeignOnboardingStep.FAILED,
                     state.getFaciaPassportReferenceId(), Map.of(),

@@ -26,7 +26,8 @@ public record Customer360Response(
         List<LoanApplicationEntry> loanApplications,
         List<BankAccountEntry> bankAccounts,
         List<EmploymentEntry> employments,
-        String walletIban
+        String walletIban,
+        String walletAccountNumber
 ) {
 
     // ==================== Country Configuration ====================

@@ -1,5 +1,6 @@
 package com.ksa.financing.customer.infrastructure.persistence.mapper;
 
+import com.ksa.financing.customer.domain.model.CanadianBankOption;
 import com.ksa.financing.customer.domain.model.NetWorthRangeOption;
 import com.ksa.financing.customer.domain.model.OccupationOption;
 import com.ksa.financing.customer.domain.model.PurposeOfFinanceOption;
@@ -7,6 +8,7 @@ import com.ksa.financing.customer.domain.model.RelationshipOption;
 import com.ksa.financing.customer.domain.model.SourceOfFundsOption;
 import com.ksa.financing.customer.domain.model.SourceOfIncomeOption;
 import com.ksa.financing.customer.domain.model.SourceOfWealthOption;
+import com.ksa.financing.customer.infrastructure.persistence.entity.CanadianBankOptionJpaEntity;
 import com.ksa.financing.customer.infrastructure.persistence.entity.NetWorthRangeOptionJpaEntity;
 import com.ksa.financing.customer.infrastructure.persistence.entity.OccupationOptionJpaEntity;
 import com.ksa.financing.customer.infrastructure.persistence.entity.PurposeOfFinanceOptionJpaEntity;
@@ -305,6 +307,28 @@ public class ReferenceDataPersistenceMapper {
         if (entity == null) return null;
 
         RelationshipOption domain = new RelationshipOption();
+        domain.setId(entity.getId());
+        domain.setTenantId(entity.getTenantId());
+        domain.setCode(entity.getCode());
+        domain.setNameEn(entity.getNameEn());
+        domain.setNameAr(entity.getNameAr());
+        domain.setDescriptionEn(entity.getDescriptionEn());
+        domain.setDescriptionAr(entity.getDescriptionAr());
+        domain.setActive(entity.isActive());
+        domain.setDeleted(entity.isDeleted());
+        domain.setDisplayOrder(entity.getDisplayOrder());
+        domain.setCreatedAt(toInstant(entity.getCreatedAt()));
+        domain.setUpdatedAt(toInstant(entity.getUpdatedAt()));
+        domain.setVersion(entity.getVersion());
+        return domain;
+    }
+
+    // ---- Canadian bank mapping (read-only) ----
+
+    public static CanadianBankOption toDomain(CanadianBankOptionJpaEntity entity) {
+        if (entity == null) return null;
+
+        CanadianBankOption domain = new CanadianBankOption();
         domain.setId(entity.getId());
         domain.setTenantId(entity.getTenantId());
         domain.setCode(entity.getCode());

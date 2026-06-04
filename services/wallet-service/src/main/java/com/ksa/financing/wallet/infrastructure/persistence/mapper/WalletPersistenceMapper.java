@@ -23,6 +23,7 @@ public class WalletPersistenceMapper {
         entity.setTenantId(domain.getTenantId());
         entity.setWalletNumber(domain.getWalletNumber());
         entity.setCustomerId(domain.getCustomerId());
+        entity.setAccountNumber(domain.getAccountNumber());
         entity.setAvailableBalance(domain.getAvailableBalance());
         entity.setReservedBalance(domain.getReservedBalance());
         entity.setCurrency(domain.getCurrency());
@@ -32,6 +33,9 @@ public class WalletPersistenceMapper {
         entity.setSingleTopUpLimit(domain.getSingleTopUpLimit());
         entity.setTodayTopUpAmount(domain.getTodayTopUpAmount());
         entity.setMonthTopUpAmount(domain.getMonthTopUpAmount());
+        entity.setDailyTransactionLimit(domain.getDailyTransactionLimit());
+        entity.setMonthlyTransactionLimit(domain.getMonthlyTransactionLimit());
+        entity.setYearlyTransactionLimit(domain.getYearlyTransactionLimit());
         entity.setFineractSavingsAccountId(domain.getFineractSavingsAccountId());
         entity.setLedgerSynced(domain.isLedgerSynced());
         entity.setLastLedgerSyncAt(toOffsetDateTime(domain.getLastLedgerSyncAt()));
@@ -54,6 +58,7 @@ public class WalletPersistenceMapper {
         domain.setTenantId(entity.getTenantId());
         domain.setWalletNumber(entity.getWalletNumber());
         domain.setCustomerId(entity.getCustomerId());
+        domain.setAccountNumber(entity.getAccountNumber());
         domain.setAvailableBalance(entity.getAvailableBalance());
         domain.setReservedBalance(entity.getReservedBalance());
         domain.setTotalBalance(entity.getTotalBalance());
@@ -64,6 +69,9 @@ public class WalletPersistenceMapper {
         domain.setSingleTopUpLimit(entity.getSingleTopUpLimit());
         domain.setTodayTopUpAmount(entity.getTodayTopUpAmount());
         domain.setMonthTopUpAmount(entity.getMonthTopUpAmount());
+        domain.setDailyTransactionLimit(entity.getDailyTransactionLimit());
+        domain.setMonthlyTransactionLimit(entity.getMonthlyTransactionLimit());
+        domain.setYearlyTransactionLimit(entity.getYearlyTransactionLimit());
         domain.setFineractSavingsAccountId(entity.getFineractSavingsAccountId());
         domain.setLedgerSynced(entity.isLedgerSynced());
         domain.setLastLedgerSyncAt(toInstant(entity.getLastLedgerSyncAt()));

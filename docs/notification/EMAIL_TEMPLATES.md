@@ -1,153 +1,130 @@
 # Novu Email Step — Copy + Setup (all 10 workflows)
 
-> Gmail SMTP is already the **primary email** provider in Novu (integration `nodemailer`, id `6a1d2a4ff457cb565fe70473`).
-> Each workflow below still needs an **Email step** added in the Novu dashboard (the 10 workflows are
-> `novu-cloud-v1` origin → can't be edited reliably via API). Variables come from the real Kafka payloads
-> notification-service sends. Amounts are SAR strings.
+> Gmail SMTP is the **primary email** provider in Novu (integration `nodemailer`, id recreated on
+> 2026-06-01). Variables come from the real Kafka payloads notification-service sends. Amounts are SAR strings.
 
-## How to add the Email step (per workflow) — do this once per workflow
+## ⚠️ Two rules that MUST be followed (learned the hard way — 2026-06-01)
+
+1. **Variables are FLAT — no `payload.` prefix.** This Novu Cloud engine renders the trigger payload
+   flat: use `{{amount}}`, `{{currency}}`, `{{transferNumber}}`. **`{{payload.amount}}` renders BLANK.**
+   (Push steps already used `{{amount}}` and worked; the email steps wrongly used `{{payload.amount}}`
+   and came out empty.) Only `{{subscriber.firstName}}` keeps the `subscriber.` prefix (built-in field).
+2. **Email body must be HTML.** Email steps are `customHtml` — plain-text newlines (`\n`) collapse into
+   one run-on line. Use `<p>…</p>` paragraphs and `<br/>` for line breaks. SMS/push bodies stay plain text.
+
+> The 10 workflows ARE editable via the v1 API (`PUT /v1/notification-templates/{id}`) — earlier "can't edit
+> via API" note was wrong; the email just had the wrong variable prefix. You can also edit in the dashboard.
+
+## How to add / edit the Email step (per workflow)
 1. Novu dashboard → **Workflows** → open the workflow.
-2. Click **+** under the existing Push/SMS step → **Email**.
-3. Drag the Email step so it runs in parallel/after the push step (order doesn't matter for delivery).
-4. **Subject** → paste the subject below.
-5. **Body** → switch the editor to **HTML/Custom code** (or use the visual editor) → paste the body.
-6. For Arabic, either add a second Email step gated on `{{subscriber.locale}} == 'ar'` (advanced) OR keep one
-   bilingual body (English first, Arabic below). Simplest: use the **bilingual** body provided.
-7. **Save** → **Publish** the workflow.
+2. Click **+** under the existing Push/SMS step → **Email** (or open the existing Email step).
+3. **Subject** → paste the subject below (flat vars).
+4. **Body** → switch editor to **HTML/Custom code** → paste the HTML body.
+5. For Arabic, keep one bilingual body (English block, then Arabic block) as shown.
+6. **Save** → **Publish** the workflow.
 
-> Greeting uses `{{subscriber.firstName}}` (set automatically by notification-service from `customer-created`/`customer-updated`).
-> If a subscriber has no name yet, set a Novu default: `{{subscriber.firstName | default: 'Customer'}}`.
+> Greeting uses `{{subscriber.firstName}}` (set automatically by notification-service from
+> `customer-created`/`customer-updated`). No-name fallback: `{{subscriber.firstName | default: 'Customer'}}`.
 
 ---
 
 ## 1. funds-sent-push-template  (FUNDS_SENT)
-**Subject (en):** You sent {{payload.amount}} {{payload.currency}}
-**Subject (ar):** لقد أرسلت {{payload.amount}} {{payload.currency}}
+**Subject (en):** You sent {{amount}} {{currency}}
+**Subject (ar):** لقد أرسلت {{amount}} {{currency}}
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-You have successfully sent {{payload.amount}} {{payload.currency}} to {{payload.recipientMaskedName}}.
-Reference: {{payload.transferNumber}}
-Fee: {{payload.feeAmount}} {{payload.currency}}
-
-If you did not authorise this transfer, contact support immediately.
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-لقد قمت بإرسال {{payload.amount}} {{payload.currency}} إلى {{payload.recipientMaskedName}} بنجاح.
-الرقم المرجعي: {{payload.transferNumber}}
-الرسوم: {{payload.feeAmount}} {{payload.currency}}
-
-إذا لم تقم بهذه العملية، يرجى التواصل مع الدعم فوراً.
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>You have successfully sent <strong>{{amount}} {{currency}}</strong> to {{recipientMaskedName}}.<br/>
+Reference: {{transferNumber}}<br/>
+Fee: {{feeAmount}} {{currency}}</p>
+<p>If you did not authorise this transfer, contact support immediately.</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">لقد قمت بإرسال <strong>{{amount}} {{currency}}</strong> إلى {{recipientMaskedName}} بنجاح.<br/>
+الرقم المرجعي: {{transferNumber}}<br/>
+الرسوم: {{feeAmount}} {{currency}}</p>
+<p dir="rtl">إذا لم تقم بهذه العملية، يرجى التواصل مع الدعم فوراً.</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 2. funds-received-push-template  (FUNDS_RECEIVED)
-**Subject (en):** You received {{payload.amount}} {{payload.currency}}
-**Subject (ar):** لقد استلمت {{payload.amount}} {{payload.currency}}
+**Subject (en):** You received {{amount}} {{currency}}
+**Subject (ar):** لقد استلمت {{amount}} {{currency}}
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-You have received {{payload.amount}} {{payload.currency}} from {{payload.senderMaskedName}}.
-Reference: {{payload.transferNumber}}
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-لقد استلمت {{payload.amount}} {{payload.currency}} من {{payload.senderMaskedName}}.
-الرقم المرجعي: {{payload.transferNumber}}
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>You have received <strong>{{amount}} {{currency}}</strong> from {{senderMaskedName}}.<br/>
+Reference: {{transferNumber}}</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">لقد استلمت <strong>{{amount}} {{currency}}</strong> من {{senderMaskedName}}.<br/>
+الرقم المرجعي: {{transferNumber}}</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 3. customer-payment-overdue  (PAYMENT_OVERDUE)
-**Subject (en):** Payment overdue — {{payload.overdueAmount}} SAR
-**Subject (ar):** دفعة متأخرة — {{payload.overdueAmount}} ريال
+**Subject (en):** Payment overdue — {{overdueAmount}} SAR
+**Subject (ar):** دفعة متأخرة — {{overdueAmount}} ريال
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-A payment on your financing is overdue.
-Overdue amount: {{payload.overdueAmount}} SAR
-Overdue installments: {{payload.overdueInstallments}}
-Days past due: {{payload.maxDpd}}
-Since: {{payload.overdueDate}}
-
-Please settle the outstanding amount to avoid additional charges.
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-لديك دفعة متأخرة على تمويلك.
-المبلغ المتأخر: {{payload.overdueAmount}} ريال
-عدد الأقساط المتأخرة: {{payload.overdueInstallments}}
-عدد أيام التأخير: {{payload.maxDpd}}
-منذ: {{payload.overdueDate}}
-
-يرجى سداد المبلغ المستحق لتجنب أي رسوم إضافية.
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>A payment on your financing is overdue.<br/>
+Overdue amount: {{overdueAmount}} SAR<br/>
+Overdue installments: {{overdueInstallments}}<br/>
+Days past due: {{maxDpd}}<br/>
+Since: {{overdueDate}}</p>
+<p>Please settle the outstanding amount to avoid additional charges.</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">لديك دفعة متأخرة على تمويلك.<br/>
+المبلغ المتأخر: {{overdueAmount}} ريال<br/>
+عدد الأقساط المتأخرة: {{overdueInstallments}}<br/>
+عدد أيام التأخير: {{maxDpd}}<br/>
+منذ: {{overdueDate}}</p>
+<p dir="rtl">يرجى سداد المبلغ المستحق لتجنب أي رسوم إضافية.</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 4. customer-payment-due  (PAYMENT_DUE)
-**Subject (en):** Upcoming payment — {{payload.amount}} SAR due {{payload.dueDate}}
-**Subject (ar):** قسط قادم — {{payload.amount}} ريال في {{payload.dueDate}}
+**Subject (en):** Upcoming payment — {{amount}} SAR due {{dueDate}}
+**Subject (ar):** قسط قادم — {{amount}} ريال في {{dueDate}}
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-This is a reminder that installment #{{payload.installmentNumber}} of {{payload.amount}} SAR
-is due on {{payload.dueDate}} ({{payload.daysUntilDue}} day(s) remaining).
-
-Please ensure sufficient balance for the payment.
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-تذكير بأن القسط رقم {{payload.installmentNumber}} بقيمة {{payload.amount}} ريال
-مستحق في {{payload.dueDate}} (متبقٍ {{payload.daysUntilDue}} يوم/أيام).
-
-يرجى التأكد من توفر الرصيد الكافي للسداد.
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>This is a reminder that installment #{{installmentNumber}} of <strong>{{amount}} SAR</strong>
+is due on {{dueDate}} ({{daysUntilDue}} day(s) remaining).</p>
+<p>Please ensure sufficient balance for the payment.</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">تذكير بأن القسط رقم {{installmentNumber}} بقيمة <strong>{{amount}} ريال</strong>
+مستحق في {{dueDate}} (متبقٍ {{daysUntilDue}} يوم/أيام).</p>
+<p dir="rtl">يرجى التأكد من توفر الرصيد الكافي للسداد.</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 5. customer-payment-completed  (PAYMENT_COMPLETED)
-**Subject (en):** Payment received — {{payload.amount}} SAR
-**Subject (ar):** تم استلام دفعتك — {{payload.amount}} ريال
+**Subject (en):** Payment received — {{amount}} SAR
+**Subject (ar):** تم استلام دفعتك — {{amount}} ريال
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-We have received your payment of {{payload.amount}} SAR. Thank you.
-Transaction reference: {{payload.providerTransactionId}}
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-لقد استلمنا دفعتك بقيمة {{payload.amount}} ريال. شكراً لك.
-الرقم المرجعي للعملية: {{payload.providerTransactionId}}
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>We have received your payment of <strong>{{amount}} SAR</strong>. Thank you.<br/>
+Transaction reference: {{providerTransactionId}}</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">لقد استلمنا دفعتك بقيمة <strong>{{amount}} ريال</strong>. شكراً لك.<br/>
+الرقم المرجعي للعملية: {{providerTransactionId}}</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 6. payment-completed-sms-template  (PAYMENT_COMPLETED — SMS variant)
@@ -155,90 +132,75 @@ ______________________________________
 > emails. Recommend: add email ONLY to #5, leave this SMS-only. If you still want it, reuse #5's copy.
 
 ## 7. customer-loan-disbursed  (LOAN_DISBURSED)
-**Subject (en):** Your financing has been disbursed — {{payload.amount}} SAR
-**Subject (ar):** تم صرف تمويلك — {{payload.amount}} ريال
+**Subject (en):** Your financing has been disbursed — {{amount}} SAR
+**Subject (ar):** تم صرف تمويلك — {{amount}} ريال
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-Good news — your financing of {{payload.amount}} SAR has been disbursed on {{payload.disbursementDate}}.
-The funds are now available.
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-خبر سار — تم صرف تمويلك بقيمة {{payload.amount}} ريال بتاريخ {{payload.disbursementDate}}.
-المبلغ متاح الآن.
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>Good news — your financing of <strong>{{amount}} SAR</strong> has been disbursed on {{disbursementDate}}.
+The funds are now available.</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">خبر سار — تم صرف تمويلك بقيمة <strong>{{amount}} ريال</strong> بتاريخ {{disbursementDate}}.
+المبلغ متاح الآن.</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 8. loan-disbursed-sms-template  (LOAN_DISBURSED — SMS variant)
 > ⚠️ SMS duplicate of #7. Same double-send caveat — recommend email only on #7. If needed, reuse #7's copy.
 
 ## 9. loan-approval-push-template  (LOAN_APPROVED)
-**Subject (en):** Your financing is approved — {{payload.approvedAmount}} SAR
-**Subject (ar):** تمت الموافقة على تمويلك — {{payload.approvedAmount}} ريال
+**Subject (en):** Your financing is approved — {{approvedAmount}} SAR
+**Subject (ar):** تمت الموافقة على تمويلك — {{approvedAmount}} ريال
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-Congratulations — your financing application has been approved for {{payload.approvedAmount}} SAR.
-You will be notified once the funds are disbursed.
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-تهانينا — تمت الموافقة على طلب تمويلك بقيمة {{payload.approvedAmount}} ريال.
-سيتم إشعارك عند صرف المبلغ.
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>Congratulations — your financing application has been approved for <strong>{{approvedAmount}} SAR</strong>.
+You will be notified once the funds are disbursed.</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">تهانينا — تمت الموافقة على طلب تمويلك بقيمة <strong>{{approvedAmount}} ريال</strong>.
+سيتم إشعارك عند صرف المبلغ.</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ## 10. user-login-push-template  (USER_LOGIN)
-> Variables here are NOT under `payload.` nesting — notification-service unwraps the login payload, so use
-> `{{payload.name}}`, `{{payload.loginAt}}`, `{{payload.loginMethod}}` directly.
+> notification-service unwraps the login payload to flat keys, so use `{{name}}`, `{{loginAt}}`,
+> `{{loginMethod}}` (flat — no `payload.` prefix, same rule as everything else).
 > ⚠️ This fires on EVERY login — an email each time can feel spammy. Consider keeping login as push-only,
 > or send email only for new-device logins later.
 
 **Subject (en):** New sign-in to your account
 **Subject (ar):** تسجيل دخول جديد إلى حسابك
 
-**Body (bilingual):**
-```
-Dear {{subscriber.firstName}},
-
-A sign-in to your account was detected.
-Time: {{payload.loginAt}}
-Method: {{payload.loginMethod}}
-
-If this wasn't you, secure your account and contact support immediately.
-
-— Sullis
-______________________________________
-
-عزيزي {{subscriber.firstName}}،
-
-تم تسجيل دخول إلى حسابك.
-الوقت: {{payload.loginAt}}
-الطريقة: {{payload.loginMethod}}
-
-إذا لم تكن أنت، يرجى تأمين حسابك والتواصل مع الدعم فوراً.
-
-— سُلِّس
+**Body (HTML, bilingual):**
+```html
+<p>Dear {{subscriber.firstName}},</p>
+<p>A sign-in to your account was detected.<br/>
+Time: {{loginAt}}<br/>
+Method: {{loginMethod}}</p>
+<p>If this wasn't you, secure your account and contact support immediately.</p>
+<p>&mdash; Sullis</p>
+<hr/>
+<p dir="rtl">عزيزي {{subscriber.firstName}}،</p>
+<p dir="rtl">تم تسجيل دخول إلى حسابك.<br/>
+الوقت: {{loginAt}}<br/>
+الطريقة: {{loginMethod}}</p>
+<p dir="rtl">إذا لم تكن أنت، يرجى تأمين حسابك والتواصل مع الدعم فوراً.</p>
+<p dir="rtl">&mdash; سُلِّس</p>
 ```
 
 ---
 
-## Pre-flight checklist before emails actually deliver
+## Status
 - [x] Gmail SMTP integration = primary email in Novu
-- [ ] Email step added + published on each workflow above
+- [x] **#1 funds-sent** — email step set with flat vars + HTML (done 2026-06-01)
+- [ ] #2–#10 — apply flat vars + HTML body per the copy above
 - [ ] Subscribers have `email` (auto from customer-created/updated; **backfill** existing customers separately)
-- [ ] Test: trigger one event (e.g. loan disbursed) and confirm email arrives from `momin.baig@xintsolutions.com`
+- [ ] Test each: trigger one event and confirm email arrives from `momin.baig@xintsolutions.com` with values + spacing
 - [ ] Gmail sending limit (~500/day) is enough for DEV/QA volume
+```

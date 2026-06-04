@@ -8,6 +8,8 @@ import com.ksa.financing.middleware.application.audit.ClientRequestAuditEmitter;
 import com.ksa.financing.middleware.domain.model.*;
 import com.ksa.financing.middleware.domain.port.in.ExecuteApiUseCase;
 import com.ksa.financing.middleware.domain.port.out.*;
+import com.ksa.financing.middleware.infrastructure.crypto.JwsSignatureUtil;
+import com.ksa.financing.middleware.infrastructure.template.JsonTemplateRenderer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -48,9 +50,9 @@ public class ExecuteApiService implements ExecuteApiUseCase {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final ClientRequestAuditEmitter auditEmitter;
+    private final com.ksa.financing.middleware.infrastructure.settlement.WalletSettlementClient walletSettlementClient;
 
     @Override
-    @Transactional
     public ExecutionResult execute(String secretKey, String apiCode, String requestBody,
                                    Map<String, String> pathParams, Map<String, String> queryParams,
                                    Map<String, String> headers, String idempotencyKey,
@@ -59,8 +61,11 @@ public class ExecuteApiService implements ExecuteApiUseCase {
                 idempotencyKey, nationalId, mobileNumber, callerService, BusinessContext.empty());
     }
 
+    // NOT @Transactional: this method makes a long-running external HTTP call (multipart
+    // uploads can take 60s+ over the tunnel). Holding a DB tx open across the call trips
+    // Postgres idle-in-transaction-timeout and kills the connection. Each clientRequest
+    // save() commits in its own short tx instead — connection is never held during I/O.
     @Override
-    @Transactional
     public ExecutionResult execute(String secretKey, String apiCode, String requestBody,
                                    Map<String, String> pathParams, Map<String, String> queryParams,
                                    Map<String, String> headers, String idempotencyKey,
@@ -69,6 +74,81 @@ public class ExecuteApiService implements ExecuteApiUseCase {
 
         if (context == null) context = BusinessContext.empty();
 
+        var rc = resolve(secretKey, apiCode);
+        var tenantId = rc.tenantId();
+        var environment = rc.environment();
+        log.info("Executing API call: apiCode={}, env={}, tenant={}, client={}, caller={}",
+                apiCode, environment, tenantId, rc.client().getCode(), callerService);
+
+        // Keep the caller's ORIGINAL flat body (before template expansion) so a post-execution
+        // wallet settlement can read debtorAccount / creditorAccount / amount.
+        String callerBody = requestBody;
+
+        // PRE-RAIL: for wallet-settlement APIs, validate the debit (debtor present + funded) BEFORE
+        // calling the rail. If invalid (missing debtor / insufficient funds) this throws and the
+        // caller gets the error — Scotia is never called and no money moves.
+        walletSettlementClient.validateBeforeRail(apiCode, callerBody, tenantId);
+
+        // If the API declares a request_template, the caller sends a SIMPLE flat body and the
+        // middleware expands it into the exact provider body here (env-independent). Done before
+        // idempotency/dispatch so the persisted + signed body is the full provider payload.
+        requestBody = applyRequestTemplate(rc.providerApi(), requestBody);
+
+        // Env-scoped idempotency: a TEST replay must not return a DEV/PROD result.
+        var cachedResult = idempotentReplay(tenantId, environment, idempotencyKey);
+        if (cachedResult != null) return cachedResult;
+
+        ExecutionResult result = (environment == EnvironmentType.TEST)
+                ? executeMock(tenantId, environment, rc.client(), rc.provider(), rc.providerApi(), apiCode,
+                    requestBody, idempotencyKey, nationalId, mobileNumber, callerService, context)
+                : executeLive(tenantId, environment, rc.client(), rc.provider(), rc.providerApi(), apiCode,
+                    requestBody, pathParams, queryParams, headers, idempotencyKey,
+                    nationalId, mobileNumber, callerService, context);
+
+        // Post-execution: if this is a wallet-settlement API (e.g. Scotia payment commit) and it
+        // succeeded, mirror the money into our wallets (debit debtor + credit creditor).
+        walletSettlementClient.settleIfApplicable(apiCode, callerBody, tenantId, result);
+
+        return result;
+    }
+
+    @Override
+    public ExecutionResult executeMultipart(String secretKey, String apiCode, MultipartPart file,
+                                            Map<String, String> pathParams, Map<String, String> queryParams,
+                                            Map<String, String> headers, String idempotencyKey,
+                                            String nationalId, String mobileNumber, String callerService,
+                                            BusinessContext context) {
+
+        if (context == null) context = BusinessContext.empty();
+        if (file == null || file.content() == null || file.content().length == 0) {
+            throw new BusinessException(ErrorCodes.BAD_REQUEST, "Multipart file is required for: " + apiCode);
+        }
+
+        var rc = resolve(secretKey, apiCode);
+        var tenantId = rc.tenantId();
+        var environment = rc.environment();
+        log.info("Executing multipart API call: apiCode={}, env={}, file={} ({} bytes), client={}, caller={}",
+                apiCode, environment, file.fileName(), file.content().length, rc.client().getCode(), callerService);
+
+        var cachedResult = idempotentReplay(tenantId, environment, idempotencyKey);
+        if (cachedResult != null) return cachedResult;
+
+        // TEST: file is irrelevant — the mock provider answers from the apiCode alone.
+        if (environment == EnvironmentType.TEST) {
+            return executeMock(tenantId, environment, rc.client(), rc.provider(), rc.providerApi(), apiCode,
+                    multipartAuditBody(file, queryParams), idempotencyKey, nationalId, mobileNumber,
+                    callerService, context);
+        }
+        return executeLiveMultipart(tenantId, environment, rc.client(), rc.provider(), rc.providerApi(), apiCode,
+                file, pathParams, queryParams, headers, idempotencyKey,
+                nationalId, mobileNumber, callerService, context);
+    }
+
+    /**
+     * Resolve and validate the calling client + provider + API for a request.
+     * Pure read-only lookups shared by {@link #execute} and {@link #executeMultipart}.
+     */
+    private ResolvedCall resolve(String secretKey, String apiCode) {
         if (secretKey == null || secretKey.isBlank()) {
             throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS, "Secret key is required");
         }
@@ -84,28 +164,6 @@ public class ExecuteApiService implements ExecuteApiUseCase {
 
         var tenantId = client.getTenantId();
         var environment = toEnvironmentType(client.getEnvironment());
-        log.info("Executing API call: apiCode={}, env={}, tenant={}, client={}, caller={}",
-                apiCode, environment, tenantId, client.getCode(), callerService);
-
-        // Env-scoped idempotency: a TEST replay must not return a DEV/PROD result.
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            var cached = clientRequestRepository.findByIdempotencyKey(tenantId, environment, idempotencyKey);
-            if (cached.isPresent()) {
-                var existing = cached.get();
-                if (existing.getStatus() == RequestStatus.SUCCESS || existing.getStatus() == RequestStatus.FAILED) {
-                    log.info("Idempotent hit: env={}, key={}", environment, idempotencyKey);
-                    return new ExecutionResult(
-                            existing.getRequestId(),
-                            existing.getResponseStatus() != null ? existing.getResponseStatus() : 0,
-                            existing.getResponseBody(),
-                            existing.getResponseHeaders(),
-                            existing.getDurationMs() != null ? existing.getDurationMs() : 0,
-                            existing.getStatus() == RequestStatus.SUCCESS,
-                            existing.getErrorMessage()
-                    );
-                }
-            }
-        }
 
         var providerApi = providerApiRepository.findByCode(tenantId, apiCode)
                 .orElseThrow(() -> new BusinessException(
@@ -131,14 +189,32 @@ public class ExecuteApiService implements ExecuteApiUseCase {
                     "Provider is not active: " + provider.getCode());
         }
 
-        if (environment == EnvironmentType.TEST) {
-            return executeMock(tenantId, environment, client, provider, providerApi, apiCode,
-                    requestBody, idempotencyKey, nationalId, mobileNumber, callerService, context);
-        }
-        return executeLive(tenantId, environment, client, provider, providerApi, apiCode,
-                requestBody, pathParams, queryParams, headers, idempotencyKey,
-                nationalId, mobileNumber, callerService, context);
+        return new ResolvedCall(client, tenantId, environment, providerApi, provider);
     }
+
+    /** Returns a cached result if an idempotent replay is found, otherwise null. */
+    private ExecutionResult idempotentReplay(UUID tenantId, EnvironmentType environment, String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) return null;
+        var cached = clientRequestRepository.findByIdempotencyKey(tenantId, environment, idempotencyKey);
+        if (cached.isEmpty()) return null;
+        var existing = cached.get();
+        if (existing.getStatus() != RequestStatus.SUCCESS && existing.getStatus() != RequestStatus.FAILED) {
+            return null;
+        }
+        log.info("Idempotent hit: env={}, key={}", environment, idempotencyKey);
+        return new ExecutionResult(
+                existing.getRequestId(),
+                existing.getResponseStatus() != null ? existing.getResponseStatus() : 0,
+                existing.getResponseBody(),
+                existing.getResponseHeaders(),
+                existing.getDurationMs() != null ? existing.getDurationMs() : 0,
+                existing.getStatus() == RequestStatus.SUCCESS,
+                existing.getErrorMessage()
+        );
+    }
+
+    private record ResolvedCall(ApiClient client, UUID tenantId, EnvironmentType environment,
+                                ProviderApi providerApi, ThirdPartyProvider provider) {}
 
     private ExecutionResult executeMock(UUID tenantId, EnvironmentType environment, ApiClient client,
                                          ThirdPartyProvider provider, ProviderApi providerApi, String apiCode,
@@ -195,6 +271,17 @@ public class ExecuteApiService implements ExecuteApiUseCase {
                 .findFirst()
                 .orElse(null);
 
+        // Mock-mode: a DEV/PROD env config can opt to be served by the local mock provider
+        // (credentials.mockMode=true) instead of a live HTTP call — useful when a sandbox
+        // is not reachable server-to-server. The response is still persisted into the
+        // env-specific table (e.g. client_request_dev). Flip mockMode off once real
+        // credentials/endpoint are available to switch to live calls.
+        if (isMockMode(envConfig)) {
+            log.info("Mock-mode env config — serving apiCode={} from local mock provider (env={})", apiCode, environment);
+            return executeMock(tenantId, environment, client, provider, providerApi, apiCode,
+                    requestBody, idempotencyKey, nationalId, mobileNumber, callerService, context);
+        }
+
         String baseUrl = resolveBaseUrl(provider, envConfig, environment);
         String endpointPath = envConfig != null && envConfig.getEndpointPath() != null
                 ? envConfig.getEndpointPath()
@@ -224,6 +311,10 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         // credentials inside the middleware — callers don't need to pass them.
         String effectiveBody = injectCredentialsIfEmpty(requestBody, envConfig);
 
+        // Resolve per-request dynamic header tokens ({{TRACE_ID}}, {{SPAN_ID}}, {{JWS}})
+        // before the request is persisted, so the audit row shows the values actually sent.
+        resolveDynamicHeaders(httpHeaders, effectiveBody, envConfig);
+
         String requestId = generateRequestId();
         var clientRequest = ClientRequest.create(
                 tenantId, providerApi.getId(), client.getId(), requestId,
@@ -237,7 +328,11 @@ public class ExecuteApiService implements ExecuteApiUseCase {
 
         long startTime = System.currentTimeMillis();
         try {
-            var httpEntity = new HttpEntity<>(effectiveBody, httpHeaders);
+            // Providers like Twilio require application/x-www-form-urlencoded. When the
+            // env config forces that content type, convert the JSON body to To=..&From=..
+            // form-encoded. JSON providers (Facia, ANB, ...) are unaffected.
+            String outgoingBody = encodeBodyForContentType(effectiveBody, httpHeaders);
+            var httpEntity = new HttpEntity<>(outgoingBody, httpHeaders);
             ResponseEntity<String> response = restTemplate.exchange(finalUrl, httpMethod, httpEntity, String.class);
             long duration = System.currentTimeMillis() - startTime;
 
@@ -287,6 +382,142 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         }
     }
 
+    private ExecutionResult executeLiveMultipart(UUID tenantId, EnvironmentType environment, ApiClient client,
+                                                 ThirdPartyProvider provider, ProviderApi providerApi, String apiCode,
+                                                 MultipartPart file, Map<String, String> pathParams,
+                                                 Map<String, String> queryParams, Map<String, String> headers,
+                                                 String idempotencyKey, String nationalId,
+                                                 String mobileNumber, String callerService,
+                                                 BusinessContext context) {
+
+        var envConfigs = envConfigRepository.findAllByApi(tenantId, providerApi.getId());
+        var envConfig = envConfigs.stream()
+                .filter(c -> c.getEnvironment() == environment && c.isActive())
+                .findFirst()
+                .orElse(null);
+
+        String baseUrl = resolveBaseUrl(provider, envConfig, environment);
+        String endpointPath = envConfig != null && envConfig.getEndpointPath() != null
+                ? envConfig.getEndpointPath()
+                : providerApi.getEndpointPath();
+
+        if (pathParams != null) {
+            for (var entry : pathParams.entrySet()) {
+                endpointPath = endpointPath.replace("{" + entry.getKey() + "}", entry.getValue());
+            }
+        }
+
+        String fullUrl = baseUrl + endpointPath;
+        var uriBuilder = UriComponentsBuilder.fromHttpUrl(fullUrl);
+        if (envConfig != null && envConfig.getQueryParams() != null) {
+            mergeQueryParams(uriBuilder, envConfig.getQueryParams());
+        }
+        if (queryParams != null) {
+            queryParams.forEach(uriBuilder::queryParam);
+        }
+        String finalUrl = uriBuilder.build().toUriString();
+
+        var httpHeaders = buildMultipartHeaders(provider, envConfig, headers);
+
+        // Build the multipart body: the file part keyed by its form field name.
+        var body = new org.springframework.util.LinkedMultiValueMap<String, Object>();
+        var fileResource = new org.springframework.core.io.ByteArrayResource(file.content()) {
+            @Override
+            public String getFilename() {
+                return file.fileName() != null ? file.fileName() : "upload";
+            }
+        };
+        var partHeaders = new HttpHeaders();
+        if (file.contentType() != null && !file.contentType().isBlank()) {
+            try {
+                partHeaders.setContentType(MediaType.parseMediaType(file.contentType()));
+            } catch (Exception ignored) { /* let the converter infer it */ }
+        }
+        var filePart = new HttpEntity<>(fileResource, partHeaders);
+        body.add(file.formField() != null ? file.formField() : "file", filePart);
+
+        String requestId = generateRequestId();
+        var clientRequest = ClientRequest.create(
+                tenantId, providerApi.getId(), client.getId(), requestId,
+                provider.getCode(), apiCode, environment, providerApi.getHttpMethod(),
+                finalUrl, httpHeadersToJson(httpHeaders), multipartAuditBody(file, queryParams),
+                idempotencyKey, nationalId, mobileNumber, callerService,
+                context.customerId(), context.applicationId(), context.contextType(),
+                providerApi.getCostPerCall(), providerApi.getCostCurrency()
+        );
+        clientRequest = clientRequestRepository.save(clientRequest);
+
+        long startTime = System.currentTimeMillis();
+        try {
+            var httpEntity = new HttpEntity<>(body, httpHeaders);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    finalUrl, resolveHttpMethod(providerApi.getHttpMethod()), httpEntity, String.class);
+            long duration = System.currentTimeMillis() - startTime;
+
+            String respHeadersJson = httpHeadersToJson(response.getHeaders());
+            String rawBody = response.getBody();
+            String respBodyJson = unwrapProviderEnvelope(provider.getCode(), rawBody);
+            clientRequest.markSuccess(response.getStatusCode().value(),
+                    respHeadersJson, ensureJsonBody(rawBody), duration);
+            clientRequest = clientRequestRepository.save(clientRequest);
+            auditEmitter.emit(clientRequest);
+
+            log.info("Live multipart call succeeded: apiCode={}, env={}, status={}, duration={}ms",
+                    apiCode, environment, response.getStatusCode().value(), duration);
+
+            return new ExecutionResult(requestId, response.getStatusCode().value(),
+                    respBodyJson, respHeadersJson, duration, true, null);
+
+        } catch (HttpStatusCodeException ex) {
+            long duration = System.currentTimeMillis() - startTime;
+            String rawErrorBody = ex.getResponseBodyAsString();
+            clientRequest.markFailed(ex.getStatusCode().value(),
+                    ensureJsonBody(rawErrorBody), ex.getMessage(), duration);
+            clientRequest = clientRequestRepository.save(clientRequest);
+            auditEmitter.emit(clientRequest);
+
+            log.warn("Live multipart call failed: apiCode={}, env={}, status={}, duration={}ms",
+                    apiCode, environment, ex.getStatusCode().value(), duration);
+
+            String cleanErrorBody = unwrapProviderEnvelope(provider.getCode(), rawErrorBody);
+            return new ExecutionResult(requestId, ex.getStatusCode().value(),
+                    cleanErrorBody, null, duration, false, ex.getMessage());
+
+        } catch (ResourceAccessException ex) {
+            long duration = System.currentTimeMillis() - startTime;
+            clientRequest.markTimeout(ex.getMessage(), duration);
+            clientRequest = clientRequestRepository.save(clientRequest);
+            auditEmitter.emit(clientRequest);
+
+            log.error("Live multipart call timeout: apiCode={}, env={}, duration={}ms",
+                    apiCode, environment, duration);
+
+            return new ExecutionResult(requestId, 0, null, null, duration,
+                    false, "Timeout: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * A JSON descriptor persisted in the audit tables in place of the binary file —
+     * we never store the raw bytes, only metadata + the query params used.
+     */
+    private String multipartAuditBody(MultipartPart file, Map<String, String> queryParams) {
+        var map = new LinkedHashMap<String, Object>();
+        map.put("_multipart", true);
+        map.put("formField", file.formField());
+        map.put("fileName", file.fileName());
+        map.put("sizeBytes", file.content() != null ? file.content().length : 0);
+        map.put("contentType", file.contentType());
+        if (queryParams != null && !queryParams.isEmpty()) {
+            map.put("query", queryParams);
+        }
+        try {
+            return objectMapper.writeValueAsString(map);
+        } catch (Exception e) {
+            return "{\"_multipart\":true}";
+        }
+    }
+
     private EnvironmentType toEnvironmentType(AccessEnvironment access) {
         if (access == null) {
             throw new BusinessException(ErrorCodes.BAD_REQUEST,
@@ -317,6 +548,9 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         headers.forEach((name, values) -> {
             boolean isSensitive = HttpHeaders.AUTHORIZATION.equalsIgnoreCase(name)
                     || "X-API-Key".equalsIgnoreCase(name)
+                    || "Sullis-Api-Key".equalsIgnoreCase(name)
+                    || "x-jws-signature".equalsIgnoreCase(name)
+                    || "client-secret".equalsIgnoreCase(name)
                     || "Cookie".equalsIgnoreCase(name)
                     || "Set-Cookie".equalsIgnoreCase(name);
             if (isSensitive) {
@@ -446,6 +680,13 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         }
         try {
             Map<String, String> creds = objectMapper.readValue(envConfig.getCredentials(), Map.class);
+            // API_KEY providers carry header credentials ({headerName, apiKey}) and JWS
+            // signing keys ({jwsPrivateKey}), NOT a body payload — injecting them would
+            // leak the secret into the request body + audit.
+            if (creds.containsKey("headerName") || creds.containsKey("apiKey")
+                    || creds.containsKey("jwsPrivateKey") || creds.containsKey("mockMode")) {
+                return requestBody;
+            }
             Map<String, String> body = new java.util.LinkedHashMap<>();
             for (var entry : creds.entrySet()) {
                 String key = entry.getKey();
@@ -483,9 +724,101 @@ public class ExecuteApiService implements ExecuteApiUseCase {
         }
 
         if (additionalHeaders != null) {
-            additionalHeaders.forEach(httpHeaders::set);
+            additionalHeaders.forEach((name, value) -> {
+                if (isForwardableHeader(name)) {
+                    httpHeaders.set(name, value);
+                } else {
+                    log.warn("Ignoring caller attempt to override protected header: {}", name);
+                }
+            });
         }
         return httpHeaders;
+    }
+
+    /**
+     * Headers a caller is NEVER allowed to set/override via {@code X-Forward-Headers} — these carry
+     * the middleware's managed credentials and provider identity. Everything else (e.g.
+     * {@code payment-id-source}, {@code x-country-code}) is forwardable so a caller can drive
+     * provider-supported request options per the provider's standard flow.
+     */
+    private static final java.util.Set<String> PROTECTED_HEADERS = java.util.Set.of(
+            "authorization", "x-api-key", "x-jws-signature", "customer-profile-id",
+            "sullis-api-key", "client-secret", "cookie");
+
+    private boolean isForwardableHeader(String name) {
+        return name != null && !PROTECTED_HEADERS.contains(name.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /**
+     * Build headers for a {@code multipart/form-data} call. Identical to
+     * {@link #buildHeaders} for auth + custom headers, but never forces
+     * {@code application/json} — any Content-Type from config/caller is dropped so
+     * the multipart converter can set {@code multipart/form-data} with its boundary.
+     */
+    private HttpHeaders buildMultipartHeaders(ThirdPartyProvider provider, ApiEnvironmentConfig envConfig,
+                                              Map<String, String> additionalHeaders) {
+        var httpHeaders = new HttpHeaders();
+
+        if (envConfig != null && envConfig.getHeaders() != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, String> configHeaders = objectMapper.readValue(envConfig.getHeaders(), Map.class);
+                configHeaders.forEach((k, v) -> {
+                    if (!HttpHeaders.CONTENT_TYPE.equalsIgnoreCase(k)) httpHeaders.set(k, v);
+                });
+            } catch (Exception e) {
+                log.warn("Failed to parse env config headers: {}", e.getMessage());
+            }
+        }
+
+        if (envConfig != null && envConfig.getCredentials() != null) {
+            applyAuth(httpHeaders, envConfig.getAuthType() != null ? envConfig.getAuthType() : provider.getAuthType(),
+                    envConfig.getCredentials());
+        }
+
+        if (additionalHeaders != null) {
+            additionalHeaders.forEach((k, v) -> {
+                if (!HttpHeaders.CONTENT_TYPE.equalsIgnoreCase(k) && isForwardableHeader(k)) {
+                    httpHeaders.set(k, v);
+                }
+            });
+        }
+
+        // Let the FormHttpMessageConverter append the boundary parameter.
+        httpHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
+        return httpHeaders;
+    }
+
+    /**
+     * Converts a JSON object body to {@code key=value&key2=value2} (URL-encoded) when the
+     * resolved Content-Type is {@code application/x-www-form-urlencoded} — required by
+     * providers such as Twilio. For any other content type the body is returned unchanged,
+     * so existing JSON providers are not affected.
+     */
+    private String encodeBodyForContentType(String body, HttpHeaders headers) {
+        MediaType contentType = headers.getContentType();
+        if (contentType == null
+                || !MediaType.APPLICATION_FORM_URLENCODED.includes(contentType)
+                || body == null || body.isBlank()) {
+            return body;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = objectMapper.readValue(body, Map.class);
+            StringBuilder sb = new StringBuilder();
+            for (var entry : map.entrySet()) {
+                if (entry.getValue() == null) continue;
+                if (sb.length() > 0) sb.append('&');
+                sb.append(java.net.URLEncoder.encode(entry.getKey(), java.nio.charset.StandardCharsets.UTF_8))
+                  .append('=')
+                  .append(java.net.URLEncoder.encode(String.valueOf(entry.getValue()),
+                          java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.warn("Failed to form-encode body, sending as-is: {}", e.getMessage());
+            return body;
+        }
     }
 
     private void applyAuth(HttpHeaders headers, AuthType authType, String credentialsJson) {
@@ -533,5 +866,107 @@ public class ExecuteApiService implements ExecuteApiUseCase {
     private String generateRequestId() {
         long numericPart = ThreadLocalRandom.current().nextLong(1_000_000_000L, 9_999_999_999L);
         return "Req-" + numericPart;
+    }
+
+    /**
+     * Resolve per-request dynamic header tokens in-place. A header value containing a token
+     * is rewritten before the call is made / persisted. Provider-agnostic — only headers that
+     * carry a token are touched, so existing providers are unaffected.
+     *
+     * <ul>
+     *   <li>{@code {{TRACE_ID}}} / {@code {{SPAN_ID}}} -> a fresh 16-hex B3 id</li>
+     *   <li>{@code {{JWS}}} -> a detached RS256 JWS over the outgoing body, signed with
+     *       {@code credentials.jwsPrivateKey} (PKCS#8 PEM). Empty if no key is configured.</li>
+     * </ul>
+     */
+    private void resolveDynamicHeaders(HttpHeaders headers, String body, ApiEnvironmentConfig envConfig) {
+        if (headers.isEmpty()) return;
+        var updates = new LinkedHashMap<String, String>();
+        headers.forEach((name, values) -> {
+            if (values == null || values.isEmpty()) return;
+            String value = values.get(0);
+            if (value == null || !value.contains("{{")) return;
+            String resolved = value
+                    .replace("{{TRACE_ID}}", randomHex16())
+                    .replace("{{SPAN_ID}}", randomHex16())
+                    .replace("{{UUID}}", UUID.randomUUID().toString())
+                    .replace("{{RANDOM_KEY}}", randomKey(32));
+            if (resolved.contains("{{JWS}}")) {
+                String signature = signJws(body, envConfig);
+                resolved = resolved.replace("{{JWS}}", signature != null ? signature : "");
+            }
+            updates.put(name, resolved);
+        });
+        updates.forEach(headers::set);
+    }
+
+    private String signJws(String body, ApiEnvironmentConfig envConfig) {
+        String pem = credentialValue(envConfig, "jwsPrivateKey");
+        if (pem == null || pem.isBlank() || "TBD".equalsIgnoreCase(pem)) {
+            log.warn("x-jws-signature requested but no jwsPrivateKey configured — sending empty signature");
+            return null;
+        }
+        try {
+            return JwsSignatureUtil.detachedRs256(body == null ? "" : body, pem);
+        } catch (Exception e) {
+            log.error("Failed to generate JWS signature: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String credentialValue(ApiEnvironmentConfig envConfig, String key) {
+        if (envConfig == null || envConfig.getCredentials() == null || envConfig.getCredentials().isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, String> creds = objectMapper.readValue(envConfig.getCredentials(), Map.class);
+            return creds.get(key);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String randomHex16() {
+        return String.format("%016x", ThreadLocalRandom.current().nextLong());
+    }
+
+    /** Random alphanumeric key of the given length (e.g. for an {@code x-api-key} placeholder). */
+    private String randomKey(int length) {
+        final String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        var sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(alphabet.charAt(ThreadLocalRandom.current().nextInt(alphabet.length())));
+        }
+        return sb.toString();
+    }
+
+    /** True when the env config opts into local mock serving via credentials.mockMode=true. */
+    private boolean isMockMode(ApiEnvironmentConfig envConfig) {
+        return "true".equalsIgnoreCase(credentialValue(envConfig, "mockMode"));
+    }
+
+    /**
+     * Expand the caller's simple flat body into the exact provider body using the API's
+     * {@code request_template} (if any). Returns the caller body unchanged when no template is
+     * configured. On a render error the caller body is sent as-is (fail-open) and a warning logged.
+     */
+    private String applyRequestTemplate(ProviderApi providerApi, String callerBody) {
+        String template = providerApi.getRequestTemplate();
+        if (template == null || template.isBlank()) return callerBody;
+        try {
+            var templateNode = objectMapper.readTree(template);
+            var dataNode = (callerBody == null || callerBody.isBlank())
+                    ? objectMapper.createObjectNode()
+                    : objectMapper.readTree(callerBody);
+            var rendered = JsonTemplateRenderer.render(templateNode, dataNode, objectMapper);
+            String full = objectMapper.writeValueAsString(rendered);
+            log.debug("Expanded simple request via template for apiCode={}", providerApi.getCode());
+            return full;
+        } catch (Exception e) {
+            log.warn("Request template render failed for {} — sending caller body as-is: {}",
+                    providerApi.getCode(), e.getMessage());
+            return callerBody;
+        }
     }
 }

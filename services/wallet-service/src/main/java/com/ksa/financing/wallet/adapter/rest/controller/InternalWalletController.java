@@ -2,9 +2,13 @@ package com.ksa.financing.wallet.adapter.rest.controller;
 
 import com.ksa.financing.wallet.domain.model.TransactionPurpose;
 import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.model.ExternalFundTransfer;
 import com.ksa.financing.wallet.domain.port.in.CreateWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.CreditWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.DebitWalletUseCase;
+import com.ksa.financing.wallet.application.service.IbftReconciliationCronService;
+import com.ksa.financing.wallet.domain.port.in.RecordInboundTransferUseCase;
+import com.ksa.financing.wallet.domain.port.in.SettleExternalPaymentUseCase;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -41,6 +45,9 @@ public class InternalWalletController {
     private final CreditWalletUseCase creditWalletUseCase;
     private final DebitWalletUseCase debitWalletUseCase;
     private final CreateWalletUseCase createWalletUseCase;
+    private final RecordInboundTransferUseCase recordInboundTransferUseCase;
+    private final SettleExternalPaymentUseCase settleExternalPaymentUseCase;
+    private final IbftReconciliationCronService ibftReconciliationCronService;
 
     /**
      * Create a wallet for a freshly-onboarded customer.
@@ -64,6 +71,7 @@ public class InternalWalletController {
                 wallet.getId(),
                 wallet.getCustomerId(),
                 wallet.getWalletNumber(),
+                wallet.getAccountNumber(),
                 wallet.getIban(),
                 wallet.getCurrency()
         ));
@@ -83,6 +91,7 @@ public class InternalWalletController {
                         wallet.getId(),
                         wallet.getCustomerId(),
                         wallet.getWalletNumber(),
+                        wallet.getAccountNumber(),
                         wallet.getIban()
                 )))
                 .orElse(ResponseEntity.notFound().build());
@@ -143,6 +152,85 @@ public class InternalWalletController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Record an INBOUND external transfer (money received from an external bank account into
+     * the platform's Scotia corporate account, destined for this user's virtual account number)
+     * and credit the user's wallet. Future trigger: Scotia inbound webhook / notification.
+     */
+    @PostMapping("/external-credit")
+    public ResponseEntity<ExternalFundTransfer> externalCredit(
+            @Valid @RequestBody ExternalCreditRequest request,
+            @RequestHeader(value = "X-Tenant-Id") String tenantId) {
+
+        UUID tenantUuid = parseTenant(tenantId);
+        log.info("Internal: Inbound external credit account={} customer={} amount={} idempotency={}",
+                request.accountNumber(), request.customerId(), request.amount(), request.idempotencyKey());
+
+        var transfer = recordInboundTransferUseCase.record(
+                new RecordInboundTransferUseCase.RecordInboundTransferCommand(
+                        tenantUuid,
+                        request.accountNumber(),
+                        request.customerId(),
+                        request.amount(),
+                        request.currency(),
+                        request.senderName(),
+                        request.senderAccount(),
+                        request.reference(),
+                        request.idempotencyKey()
+                ));
+        return ResponseEntity.ok(transfer);
+    }
+
+    /**
+     * Settle a Scotia-rail payment into our wallets: debit the debtor account number and
+     * credit the creditor account number (whichever are our own wallets). Called by
+     * middleware-third-party after a successful SCOTIABANK_PAYMENT_COMMIT.
+     */
+    @PostMapping("/settle")
+    public ResponseEntity<SettleExternalPaymentUseCase.SettleResult> settle(
+            @Valid @RequestBody SettleRequest request,
+            @RequestHeader(value = "X-Tenant-Id") String tenantId) {
+
+        UUID tenantUuid = parseTenant(tenantId);
+        log.info("Internal: settle scotia payment debtor={} creditor={} amount={} key={}",
+                request.debtorAccount(), request.creditorAccount(), request.amount(), request.idempotencyKey());
+
+        var result = settleExternalPaymentUseCase.settle(
+                new SettleExternalPaymentUseCase.SettleCommand(
+                        tenantUuid,
+                        request.debtorAccount(),
+                        request.debtorMobile(),
+                        request.creditorAccount(),
+                        request.amount(),
+                        request.currency(),
+                        request.reference(),
+                        request.idempotencyKey()
+                ));
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Pre-flight validation for a settlement (no money moves): debtorAccount present + internal +
+     * active + Fineract-linked + sufficient balance. Returns 422 with the specific error otherwise.
+     * Called by middleware BEFORE the Scotia rail so insufficient/invalid is surfaced to the caller.
+     */
+    @PostMapping("/settle/validate")
+    public ResponseEntity<Void> validateSettle(
+            @Valid @RequestBody SettleRequest request,
+            @RequestHeader(value = "X-Tenant-Id") String tenantId) {
+        settleExternalPaymentUseCase.validate(
+                new SettleExternalPaymentUseCase.SettleCommand(
+                        parseTenant(tenantId), request.debtorAccount(), request.debtorMobile(), request.creditorAccount(),
+                        request.amount(), request.currency(), request.reference(), request.idempotencyKey()));
+        return ResponseEntity.ok().build();
+    }
+
+    /** Trigger IBFT reconciliation on demand (cron also runs on a schedule). DEV/ops. */
+    @PostMapping("/ibft/reconcile")
+    public ResponseEntity<IbftReconciliationCronService.ReconResult> reconcileIbft() {
+        return ResponseEntity.ok(ibftReconciliationCronService.reconcileNow());
+    }
+
     private UUID parseTenant(String tenantId) {
         try {
             return UUID.fromString(tenantId);
@@ -155,6 +243,7 @@ public class InternalWalletController {
             UUID walletId,
             UUID customerId,
             String walletNumber,
+            String accountNumber,
             String iban
     ) {}
 
@@ -178,6 +267,27 @@ public class InternalWalletController {
             @NotNull String idempotencyKey
     ) {}
 
+    public record SettleRequest(
+            String debtorAccount,
+            String debtorMobile,
+            String creditorAccount,
+            @NotNull @Positive BigDecimal amount,
+            String currency,
+            String reference,
+            @NotNull String idempotencyKey
+    ) {}
+
+    public record ExternalCreditRequest(
+            String accountNumber,
+            UUID customerId,
+            @NotNull @Positive BigDecimal amount,
+            String currency,
+            String senderName,
+            String senderAccount,
+            String reference,
+            @NotNull String idempotencyKey
+    ) {}
+
     public record CreateWalletInternalRequest(
             @NotNull UUID tenantId,
             @NotNull UUID customerId,
@@ -190,6 +300,7 @@ public class InternalWalletController {
             UUID walletId,
             UUID customerId,
             String walletNumber,
+            String accountNumber,
             String iban,
             String currency
     ) {}

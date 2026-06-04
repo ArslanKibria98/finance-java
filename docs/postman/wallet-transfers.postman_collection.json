@@ -5,28 +5,128 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://46.62.226.94:8000/wallet-service", "description": "via Kong (recommended)" },
-    { "key": "identityUrl", "value": "http://46.62.226.94:8000/identity-service" },
-    { "key": "directUrl", "value": "http://localhost:8088", "description": "wallet-service direct (bypass Kong)" },
-    { "key": "ledgerUrl", "value": "http://46.62.226.94:8000/ledger-service", "description": "ledger-service via Kong — works for both /api/v1/** (JWT) and /internal/** (no JWT) paths" },
-    { "key": "ledgerInternalUrl", "value": "http://46.62.226.94:8000/ledger-service", "description": "Same as ledgerUrl when going via Kong. For local-only direct access, change to http://localhost:8095" },
-    { "key": "jwt", "value": "", "description": "auto-set by login request" },
-    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
-    { "key": "walletA", "value": "22a7defd-c377-4239-bd68-a40dfb632ae8" },
-    { "key": "walletB", "value": "43564271-7ea5-4047-b36f-79afeb5d07fe" },
-    { "key": "walletC", "value": "9155a581-cccd-4e95-83ca-a17186521168" },
-    { "key": "savingsA", "value": "146", "description": "Fineract savings ID for Wallet A" },
-    { "key": "savingsB", "value": "150", "description": "Fineract savings ID for Wallet B" },
-    { "key": "nidA", "value": "1010219431" },
-    { "key": "nidB", "value": "1211111111" },
-    { "key": "mobileA", "value": "+966561343161" },
-    { "key": "mobileB", "value": "+966591591591" },
-    { "key": "mobileC", "value": "+966555687010" },
-    { "key": "lastTransferId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://46.62.226.94:8000/wallet-service",
+      "description": "via Kong (recommended)"
+    },
+    {
+      "key": "identityUrl",
+      "value": "http://46.62.226.94:8000/identity-service"
+    },
+    {
+      "key": "directUrl",
+      "value": "http://localhost:8088",
+      "description": "wallet-service direct (bypass Kong)"
+    },
+    {
+      "key": "ledgerUrl",
+      "value": "http://46.62.226.94:8000/ledger-service",
+      "description": "ledger-service via Kong — works for both /api/v1/** (JWT) and /internal/** (no JWT) paths"
+    },
+    {
+      "key": "ledgerInternalUrl",
+      "value": "http://46.62.226.94:8000/ledger-service",
+      "description": "Same as ledgerUrl when going via Kong. For local-only direct access, change to http://localhost:8095"
+    },
+    {
+      "key": "jwt",
+      "value": "",
+      "description": "auto-set by login request"
+    },
+    {
+      "key": "tenantId",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "walletA",
+      "value": "22a7defd-c377-4239-bd68-a40dfb632ae8"
+    },
+    {
+      "key": "walletB",
+      "value": "43564271-7ea5-4047-b36f-79afeb5d07fe"
+    },
+    {
+      "key": "walletC",
+      "value": "9155a581-cccd-4e95-83ca-a17186521168"
+    },
+    {
+      "key": "savingsA",
+      "value": "146",
+      "description": "Fineract savings ID for Wallet A"
+    },
+    {
+      "key": "savingsB",
+      "value": "150",
+      "description": "Fineract savings ID for Wallet B"
+    },
+    {
+      "key": "nidA",
+      "value": "1010219431"
+    },
+    {
+      "key": "nidB",
+      "value": "1211111111"
+    },
+    {
+      "key": "mobileA",
+      "value": "+966561343161"
+    },
+    {
+      "key": "mobileB",
+      "value": "+966591591591"
+    },
+    {
+      "key": "mobileC",
+      "value": "+966555687010"
+    },
+    {
+      "key": "lastTransferId",
+      "value": ""
+    },
+    {
+      "key": "extWallet",
+      "value": "18574962-61d7-4917-be1a-a20a96d271f1"
+    },
+    {
+      "key": "extAccountNumber",
+      "value": "002-80150-0000081"
+    },
+    {
+      "key": "counterpartyAccount",
+      "value": "003-12345-6789012"
+    },
+    {
+      "key": "lastExtTransferId",
+      "value": ""
+    },
+    {
+      "key": "extCustomerId",
+      "value": "2fd3038e-5abc-4e32-bbe9-1f4733967aec"
+    },
+    {
+      "key": "customerUrl",
+      "value": "http://46.62.226.94:8000/customer-service"
+    },
+    {
+      "key": "adminJwt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lastLimitRequestId",
+      "value": "",
+      "type": "string"
+    }
   ],
   "auth": {
     "type": "bearer",
-    "bearer": [{ "key": "token", "value": "{{jwt}}" }]
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt}}"
+      }
+    ]
   },
   "item": [
     {
@@ -50,11 +150,19 @@
         }
       ],
       "request": {
-        "auth": { "type": "noauth" },
+        "auth": {
+          "type": "noauth"
+        },
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Device-Id", "value": "postman-demo-A" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Device-Id",
+            "value": "postman-demo-A"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -140,9 +248,22 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/api/v1/wallets/transfers/recipient?mobile={{mobileB}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "wallets", "transfers", "recipient"],
-          "query": [{ "key": "mobile", "value": "{{mobileB}}" }]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "transfers",
+            "recipient"
+          ],
+          "query": [
+            {
+              "key": "mobile",
+              "value": "{{mobileB}}"
+            }
+          ]
         },
         "description": "Verify recipient name + wallet status BEFORE confirming the transfer in UI.\nReturns: {found, walletId, walletNumber, maskedName, maskedMobile, currency, walletStatus, canReceive}"
       }
@@ -208,8 +329,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -239,8 +366,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -289,11 +422,25 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/api/v1/wallets/{{walletA}}/transactions?page=0&size=20",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "wallets", "{{walletA}}", "transactions"],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "{{walletA}}",
+            "transactions"
+          ],
           "query": [
-            { "key": "page", "value": "0" },
-            { "key": "size", "value": "20" }
+            {
+              "key": "page",
+              "value": "0"
+            },
+            {
+              "key": "size",
+              "value": "20"
+            }
           ]
         },
         "description": "Returns unified bank-statement style transaction list:\n- TOP_UP / TRANSFER_OUT / TRANSFER_IN / WITHDRAWAL / FEE / OTHER\n- Each TRANSFER_* entry includes counterparty walletNumber, customerId, purposeNote, transferNumber\n- Source = Fineract savings transactions (via proxy) + wallet_transfers metadata, joined by amount+direction\n- Newest first, paginated"
@@ -324,8 +471,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -352,8 +505,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -380,8 +539,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -412,9 +577,22 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/api/v1/wallets/transfers/recipient?mobile=%2B966500000000",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "wallets", "transfers", "recipient"],
-          "query": [{ "key": "mobile", "value": "+966500000000" }]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "wallets",
+            "transfers",
+            "recipient"
+          ],
+          "query": [
+            {
+              "key": "mobile",
+              "value": "+966500000000"
+            }
+          ]
         }
       }
     },
@@ -436,8 +614,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "demo-replay-key-001" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "demo-replay-key-001"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -466,8 +650,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Idempotency-Key", "value": "demo-replay-key-001" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "demo-replay-key-001"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -537,12 +727,23 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
-              { "key": "X-Caller-Service", "value": "postman-verification" },
-              { "key": "X-Correlation-ID", "value": "postman-{{$timestamp}}" }
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "postman-verification"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "postman-{{$timestamp}}"
+              }
             ],
             "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsA}}",
             "description": "Direct call to the ledger proxy. Audit row written to fineract_audit_log with caller_service='postman-verification'."
@@ -551,11 +752,19 @@
         {
           "name": "P2. Get Fineract savings B directly via ledger proxy",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
-              { "key": "X-Caller-Service", "value": "postman-verification" }
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "postman-verification"
+              }
             ],
             "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsB}}"
           }
@@ -577,11 +786,19 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
-              { "key": "X-Caller-Service", "value": "postman-verification" }
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "postman-verification"
+              }
             ],
             "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/clients/by-external/62d36093-c494-4133-8a11-79fecad3b465"
           }
@@ -589,11 +806,19 @@
         {
           "name": "P4. Get Fineract savings transactions via ledger proxy",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
-              { "key": "X-Caller-Service", "value": "postman-verification" }
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "postman-verification"
+              }
             ],
             "url": "{{ledgerInternalUrl}}/internal/fineract-proxy/savings/accounts/{{savingsA}}/transactions"
           }
@@ -628,13 +853,27 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
-              { "key": "X-Caller-Service", "value": "postman-verification" },
-              { "key": "X-Idempotency-Key", "value": "postman-deposit-{{$guid}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "postman-verification"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "postman-deposit-{{$guid}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -679,13 +918,27 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
-              { "key": "X-Caller-Service", "value": "postman-verification" },
-              { "key": "X-Idempotency-Key", "value": "{{replayKey}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Caller-Service",
+                "value": "postman-verification"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{replayKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -706,6 +959,683 @@
       "name": "🔧 Verification SQL (informational)",
       "description": "Reference SQL queries for verifying the audit trail and idempotency cache. These are not Postman requests — copy and run against the ledger_db PostgreSQL instance.\n\n```sql\n-- 1. Recent Fineract proxy calls\nSELECT operation, fineract_endpoint, response_status, caller_service, duration_ms, occurred_at\nFROM fineract_audit_log\nORDER BY occurred_at DESC\nLIMIT 20;\n\n-- 2. Calls that originated from wallet-service (proves the migration works)\nSELECT operation, fineract_endpoint, response_status, COUNT(*) AS calls,\n       AVG(duration_ms)::int AS avg_ms\nFROM fineract_audit_log\nWHERE caller_service = 'wallet-service'\nGROUP BY operation, fineract_endpoint, response_status\nORDER BY calls DESC;\n\n-- 3. Idempotency cache contents\nSELECT idempotency_key, operation, cached_status, expires_at\nFROM fineract_proxy_idempotency\nORDER BY created_at DESC\nLIMIT 10;\n\n-- 4. Failed Fineract calls in the last hour\nSELECT operation, fineract_endpoint, response_status, error_message, occurred_at\nFROM fineract_audit_log\nWHERE response_status >= 400\n  AND occurred_at > NOW() - INTERVAL '1 hour'\nORDER BY occurred_at DESC;\n```\n\n**Run via:** `docker exec ksa-postgres psql -U postgres -d ledger_db -c \"<sql>\"`",
       "item": []
+    },
+    {
+      "name": "🌐 External Fund Transfer (Scotia RTP) — full flow",
+      "description": "End-to-end: customer profile shows wallet accountNumber → balance → outbound (wallet→bank, Scotia RTP mock) → idempotency → inbound (bank→wallet) → listing → double-entry ledger. Run #0 first to set {{jwt}}. DEV = mock SUCCESS.",
+      "item": [
+        {
+          "name": "0. Login as superadmin (sets {{jwt}})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/auth/login",
+            "description": "super_admin = wildcard access, tenant 00000000-...-0001.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"Admin@1234\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d=(pm.response.json().data)||pm.response.json();",
+                  "if(d.accessToken){pm.collectionVariables.set('jwt',d.accessToken);}",
+                  "pm.test('login ok',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1. Customer profile — shows wallet accountNumber",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{customerUrl}}/api/v1/customers/{{extCustomerId}}/profile",
+            "description": "Profile detail now returns the wallet's virtual `accountNumber` alongside `iban`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const x=(pm.response.json().data)||pm.response.json();",
+                  "console.log('accountNumber = '+x.accountNumber);",
+                  "pm.test('accountNumber present',()=>pm.expect(x.accountNumber).to.not.be.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Wallet balance — BEFORE",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/{{extWallet}}/balance",
+            "description": "Capture available balance before transfers."
+          }
+        },
+        {
+          "name": "3. Outbound — wallet → external bank (Scotia RTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "ext-out-{{$timestamp}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/external",
+            "description": "Debits wallet (Fineract withdraw) → Scotia RTP commit (mock SUCCESS) → TRANSFER_OUT + GL posting.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{extWallet}}\",\n  \"counterpartyName\": \"Jane External\",\n  \"counterpartyAccount\": \"{{counterpartyAccount}}\",\n  \"counterpartyEmail\": \"jane@example.ca\",\n  \"counterpartyBankCode\": \"003\",\n  \"amount\": 30,\n  \"currency\": \"CAD\",\n  \"purposeNote\": \"Rent payment\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const x=(pm.response.json().data)||pm.response.json();",
+                  "if(x.id){pm.collectionVariables.set('lastExtTransferId',x.id);}",
+                  "pm.test('completed',()=>pm.expect(x.status).to.eql('COMPLETED'));",
+                  "pm.test('scotia paymentId',()=>pm.expect(x.scotiaPaymentId).to.not.be.empty);",
+                  "pm.test('ledger posted',()=>pm.expect(x.ledgerEntryId).to.not.be.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Wallet balance — AFTER outbound (debited)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/{{extWallet}}/balance",
+            "description": "Balance reduced by 30 CAD."
+          }
+        },
+        {
+          "name": "5. Idempotency — outbound (fixed key, first call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "ext-out-idem-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/external",
+            "description": "First call with a fixed key.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{extWallet}}\",\n  \"counterpartyAccount\": \"{{counterpartyAccount}}\",\n  \"amount\": 15,\n  \"currency\": \"CAD\"\n}"
+            }
+          }
+        },
+        {
+          "name": "6. Idempotency — outbound REPLAY (same key, no double-debit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "ext-out-idem-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/external",
+            "description": "Same key → returns the SAME transfer; balance unchanged vs #5.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{extWallet}}\",\n  \"counterpartyAccount\": \"{{counterpartyAccount}}\",\n  \"amount\": 15,\n  \"currency\": \"CAD\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const x=(pm.response.json().data)||pm.response.json();",
+                  "pm.test('same transfer, completed',()=>pm.expect(x.status).to.eql('COMPLETED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Inbound — external bank → wallet (internal, no JWT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": "{{directUrl}}/internal/wallets/external-credit",
+            "description": "Credits wallet by its virtual account number → Fineract deposit + TRANSFER_IN + GL posting. Future trigger: Scotia inbound webhook.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountNumber\": \"{{extAccountNumber}}\",\n  \"amount\": 50,\n  \"currency\": \"CAD\",\n  \"senderName\": \"Acme Corp\",\n  \"senderAccount\": \"{{counterpartyAccount}}\",\n  \"reference\": \"PO-9\",\n  \"idempotencyKey\": \"ext-in-{{$timestamp}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const x=(pm.response.json().data)||pm.response.json();",
+                  "pm.test('completed',()=>pm.expect(x.status).to.eql('COMPLETED'));",
+                  "pm.test('inbound direction',()=>pm.expect(x.direction).to.eql('INBOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Wallet balance — AFTER inbound (credited)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/{{extWallet}}/balance",
+            "description": "Balance increased by 50 CAD."
+          }
+        },
+        {
+          "name": "9. Get external transfer by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/external/{{lastExtTransferId}}",
+            "description": "Reads the outbound transfer captured in #3."
+          }
+        },
+        {
+          "name": "10. List external transfers for wallet",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/transfers/external/by-wallet/{{extWallet}}?page=0&size=20",
+            "description": "OUTBOUND + INBOUND external transfers (paginated, searchable)."
+          }
+        },
+        {
+          "name": "11. Unified transaction history (external legs included)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/wallets/{{extWallet}}/transactions?page=0&size=20",
+            "description": "External legs surface as TRANSFER_OUT / TRANSFER_IN movements."
+          }
+        },
+        {
+          "name": "12. Ledger journal entries for this transfer (double-entry)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{ledgerUrl}}/api/v1/journal-entries/by-reference?referenceType=EXTERNAL_TRANSFER&referenceId={{lastExtTransferId}}",
+            "description": "Dr Consumer Wallet 110401 / Cr Scotia RTP Clearing 120601 (outbound). Balanced & POSTED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔐 Wallet Transaction Limits (daily / monthly / yearly + approval)",
+      "description": "Admin sets platform MIN/MAX bounds for daily, monthly AND yearly spend limits. A customer requests a change (within bounds); an admin approves → the new limits apply to the wallet. Transfers + withdrawals exceeding daily/monthly/yearly cumulative spend are blocked (WALLET.BALANCE.LIMIT_EXCEEDED).\n\nRun **L0** first (admin token), and the wallet-transfers **0. Login** for the customer {{jwt}}.",
+      "item": [
+        {
+          "name": "L0. Login as Admin (auto-sets {{adminJwt}})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var j = pm.response.json();",
+                  "  var t = j.data && (j.data.accessToken || j.data.access_token);",
+                  "  if (t) { pm.collectionVariables.set('adminJwt', t); console.log('adminJwt set'); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"Admin@1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{identityUrl}}/api/v1/auth/login",
+              "host": [
+                "{{identityUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L1. Admin — Get Limit Bounds (min/max daily+monthly+yearly)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminJwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-bounds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "wallets",
+                "limit-bounds"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L2. Admin — Set Limit Bounds",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminJwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-bounds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "wallets",
+                "limit-bounds"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L3. Customer — Get Wallet Limits + Usage (A)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/{{walletA}}/limits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "wallets",
+                "{{walletA}}",
+                "limits"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L4. Customer — Request Limit Change (A) → sets {{lastLimitRequestId}}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  var j = pm.response.json();",
+                  "  if (j.data && j.data.id) { pm.collectionVariables.set('lastLimitRequestId', j.data.id); console.log('lastLimitRequestId=' + j.data.id); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedDailyLimit\": 40000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/{{walletA}}/limit-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "wallets",
+                "{{walletA}}",
+                "limit-requests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L5. Customer — List My Limit Requests (A)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/{{walletA}}/limit-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "wallets",
+                "{{walletA}}",
+                "limit-requests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L6. Admin — List Limit Requests (PENDING)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminJwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-requests?status=PENDING",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "wallets",
+                "limit-requests"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L7. Admin — Approve Limit Request (applies new limits)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminJwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Approved \\u2014 KYC verified\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-requests/{{lastLimitRequestId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "wallets",
+                "limit-requests",
+                "{{lastLimitRequestId}}",
+                "approve"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "L8. Admin — Reject Limit Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminJwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectionReason\": \"Insufficient income proof\",\n  \"notes\": \"Re-apply with payslip\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/wallets/limit-requests/{{lastLimitRequestId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "wallets",
+                "limit-requests",
+                "{{lastLimitRequestId}}",
+                "reject"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

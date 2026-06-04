@@ -182,15 +182,16 @@ public class ForeignOnboardingController {
     // ==================== Step 3: Upload passport → Facia OCR ====================
 
     @SecuredEndpoint(obj = "onboarding", act = "update")
-    @PostMapping("/upload-passport")
-    @Operation(summary = "Upload passport image to Facia for OCR + authenticity",
+    @PostMapping(value = "/upload-passport", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload passport image (multipart file) to Sullis for OCR + authenticity",
             tags = "3. Foreign — Passport",
             security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<ForeignPassportDataResponse> uploadPassport(
-            @Valid @RequestBody ForeignUploadPassportRequest request,
+            @RequestParam("email") String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             HttpServletRequest httpRequest) {
-        String workflowId = workflowClient.workflowIdFor(request.email());
-        var result = uploadPassportUseCase.submit(workflowId, request.passportImageBase64(), device(httpRequest));
+        String workflowId = workflowClient.workflowIdFor(email);
+        var result = uploadPassportUseCase.submit(workflowId, toBase64(file), device(httpRequest));
         // Document-verification retries keep workflow at OTP_VERIFIED; only failureReason==null
         // means Facia accepted the passport and workflow advanced to PASSPORT_UPLOADED.
         HttpStatus status = result.failureReason() != null
@@ -205,7 +206,7 @@ public class ForeignOnboardingController {
                 result.message(),
                 result.failureReason(),
                 Instant.now().toString(),
-                resolveMobile(request.email())));
+                resolveMobile(email)));
     }
 
     // ==================== Step 4: Confirm extracted data ====================
@@ -241,15 +242,16 @@ public class ForeignOnboardingController {
     // ==================== Step 5: Upload selfie → face match → customer + wallet ====================
 
     @SecuredEndpoint(obj = "onboarding", act = "update")
-    @PostMapping("/upload-selfie")
-    @Operation(summary = "Upload selfie for Facia face-match against passport",
+    @PostMapping(value = "/upload-selfie", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload selfie (multipart file) for Sullis face-match + verification",
             tags = "5. Foreign — Selfie",
             security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<ForeignUploadSelfieResponse> uploadSelfie(
-            @Valid @RequestBody ForeignUploadSelfieRequest request,
+            @RequestParam("email") String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             HttpServletRequest httpRequest) {
-        String workflowId = workflowClient.workflowIdFor(request.email());
-        var result = uploadSelfieUseCase.submit(workflowId, request.selfieImageBase64(), device(httpRequest));
+        String workflowId = workflowClient.workflowIdFor(email);
+        var result = uploadSelfieUseCase.submit(workflowId, toBase64(file), device(httpRequest));
         // Face match retries keep workflow at DATA_CONFIRMED; only failureReason==null
         // means the selfie was actually accepted and workflow advanced to SELFIE_VERIFIED.
         HttpStatus status = result.failureReason() != null
@@ -266,7 +268,7 @@ public class ForeignOnboardingController {
                 result.message(),
                 result.failureReason(),
                 Instant.now().toString(),
-                resolveMobile(request.email())));
+                resolveMobile(email)));
     }
 
     // ==================== Step 6: Set PIN ====================
@@ -361,6 +363,26 @@ public class ForeignOnboardingController {
                 req.getHeader("X-Longitude"),
                 req.getHeader("X-Client-Ip"),
                 req.getHeader("X-User-Agent"));
+    }
+
+    /**
+     * Read the uploaded image part and Base64-encode it. The internal flow (Temporal
+     * signals, workflow, Sullis activity, document archive) keeps using base64 strings,
+     * so only the REST contract changes from JSON-base64 to a multipart file.
+     */
+    private static String toBase64(org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new com.ksa.financing.infra.exception.BusinessException(
+                    com.ksa.financing.infra.exception.ErrorCodes.BAD_REQUEST,
+                    "Multipart 'file' part is required");
+        }
+        try {
+            return java.util.Base64.getEncoder().encodeToString(file.getBytes());
+        } catch (java.io.IOException e) {
+            throw new com.ksa.financing.infra.exception.BusinessException(
+                    com.ksa.financing.infra.exception.ErrorCodes.BAD_REQUEST,
+                    "Failed to read uploaded file: " + e.getMessage());
+        }
     }
 
     /**

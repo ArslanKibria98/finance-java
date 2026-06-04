@@ -58,6 +58,18 @@ public class WalletRepositoryImpl implements WalletRepository {
     }
 
     @Override
+    public Optional<Wallet> findByAccountNumber(UUID tenantId, String accountNumber) {
+        log.debug("Finding wallet by accountNumber tenantId: {}", tenantId);
+        return jpaWalletRepository.findByAccountNumberAndTenantId(accountNumber, tenantId)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public long nextAccountNumberSequence() {
+        return jpaWalletRepository.nextAccountNumberSequence();
+    }
+
+    @Override
     public boolean existsByCustomerId(UUID tenantId, UUID customerId) {
         log.debug("Checking wallet existence for customerId: {} tenantId: {}", customerId, tenantId);
         return jpaWalletRepository.existsByCustomerIdAndTenantId(customerId, tenantId);

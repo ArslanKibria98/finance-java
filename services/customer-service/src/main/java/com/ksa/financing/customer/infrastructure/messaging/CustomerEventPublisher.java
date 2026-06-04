@@ -40,6 +40,9 @@ public class CustomerEventPublisher implements EventPublisherPort {
         payload.put("tenantId", customer.getTenantId().toString());
         payload.put("cifNumber", customer.getCifNumber());
         payload.put("fullName", customer.getFullName());
+        // firstName = customer's own name only (last_name holds the father's name and must NOT
+        // leak into the Novu subscriber display name).
+        payload.put("firstName", customer.getFirstName());
         payload.put("email", customer.getEmail());
         payload.put("customerType", customer.getCustomerType() != null ? customer.getCustomerType().name() : null);
         payload.put("globalUid", customer.getGlobalUid() != null ? customer.getGlobalUid().toString() : null);
@@ -71,6 +74,8 @@ public class CustomerEventPublisher implements EventPublisherPort {
         payload.put("tenantId", customer.getTenantId().toString());
         payload.put("cifNumber", customer.getCifNumber());
         payload.put("fullName", customer.getFullName());
+        // firstName = customer's own name only (father's name lives in last_name).
+        payload.put("firstName", customer.getFirstName());
         payload.put("email", customer.getEmail());
 
         Map<String, Object> event = new HashMap<>();

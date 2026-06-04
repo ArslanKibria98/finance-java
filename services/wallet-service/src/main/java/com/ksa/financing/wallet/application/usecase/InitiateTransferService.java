@@ -43,6 +43,7 @@ public class InitiateTransferService implements InitiateTransferUseCase {
     private final WalletMovementRepository movementRepository;
     private final FineractSavingsPort fineractPort;
     private final EventPublisherPort eventPublisher;
+    private final com.ksa.financing.wallet.application.support.TransactionLimitEnforcer limitEnforcer;
 
     @Override
     @Transactional
@@ -139,6 +140,9 @@ public class InitiateTransferService implements InitiateTransferUseCase {
                     "Insufficient available balance: have=" + srcInfo.availableBalance()
                             + " need=" + totalDebit);
         }
+
+        // 7b. Daily / monthly transaction-limit enforcement (cumulative spend vs wallet limits)
+        limitEnforcer.enforce(source, totalDebit);
 
         // 8. Persist transfer record (audit + idempotency) status PROCESSING
         UUID transferId = UUID.randomUUID();

@@ -82,8 +82,10 @@ public class GetCustomer360Service {
         // 8. Employment info
         List<EmploymentInfo> employments = fetchEmployments(customerId);
 
-        // 9. Wallet IBAN
-        String walletIban = fetchWalletIban(effectiveTenantId, customerId);
+        // 9. Wallet identifiers (iban + virtual account number)
+        WalletPort.WalletInfo walletInfo = fetchWalletInfo(effectiveTenantId, customerId);
+        String walletIban = walletInfo.iban();
+        String walletAccountNumber = walletInfo.accountNumber();
 
         // Resolve authoritative risk level from latest assessment (overrides stale customer DB)
         String latestRiskLevel = null;
@@ -123,7 +125,8 @@ public class GetCustomer360Service {
                 buildLoanApplications(loanApps),
                 buildBankAccounts(bankAccounts),
                 buildEmployments(employments),
-                walletIban
+                walletIban,
+                walletAccountNumber
         );
     }
 
@@ -225,12 +228,13 @@ public class GetCustomer360Service {
         }
     }
 
-    private String fetchWalletIban(UUID tenantId, UUID customerId) {
+    private WalletPort.WalletInfo fetchWalletInfo(UUID tenantId, UUID customerId) {
         try {
-            return walletPort.getIbanByCustomerId(tenantId, customerId).orElse(null);
+            return walletPort.getWalletInfoByCustomerId(tenantId, customerId)
+                    .orElseGet(() -> new WalletPort.WalletInfo(null, null, null));
         } catch (Exception e) {
-            log.warn("Wallet IBAN fetch failed: {}", e.getMessage());
-            return null;
+            log.warn("Wallet info fetch failed: {}", e.getMessage());
+            return new WalletPort.WalletInfo(null, null, null);
         }
     }
 

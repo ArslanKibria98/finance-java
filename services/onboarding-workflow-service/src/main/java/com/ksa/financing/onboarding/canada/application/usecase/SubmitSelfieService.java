@@ -22,7 +22,7 @@ public class SubmitSelfieService implements SubmitSelfieUseCase {
         int beforeAttempts = before.getSelfieAttempts();
 
         client.stub(workflowId).selfieSubmitted(new SelfieSubmittedSignal(selfieImageBase64, deviceInfo));
-        CanadaOnboardingState state = client.awaitSelfieAttempt(workflowId, beforeAttempts, 60, 1000);
+        CanadaOnboardingState state = client.awaitSelfieAttempt(workflowId, beforeAttempts, 120, 1000);
         if (state.getCurrentStep() == CanadaOnboardingStep.FAILED) {
             return new SubmitSelfieResult(workflowId, CanadaOnboardingStep.FAILED,
                     state.getFaciaFaceMatchReferenceId(), state.getFaceMatchScore(),
@@ -36,6 +36,12 @@ public class SubmitSelfieService implements SubmitSelfieUseCase {
                     null, null,
                     "Selfie verification declined", state.getFailureReason());
         }
+        // Face match passed. selfieAttempts bumps BEFORE the workflow runs the
+        // create-customer + create-wallet activities and advances to SELFIE_VERIFIED,
+        // so the attempt-await above returns while step is still DOC_CONFIRMED and
+        // customerId/walletId are null. Await the step transition so the response
+        // carries the real advanced state.
+        state = client.awaitStep(workflowId, CanadaOnboardingStep.SELFIE_VERIFIED, 120, 1000);
         return new SubmitSelfieResult(workflowId,
                 state.getCurrentStep() != null ? state.getCurrentStep() : CanadaOnboardingStep.SELFIE_VERIFIED,
                 state.getFaciaFaceMatchReferenceId(),

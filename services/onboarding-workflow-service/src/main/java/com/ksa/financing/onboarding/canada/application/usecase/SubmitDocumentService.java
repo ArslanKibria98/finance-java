@@ -25,7 +25,7 @@ public class SubmitDocumentService implements SubmitDocumentUseCase {
         int beforeAttempts = before.getDocumentAttempts();
 
         client.stub(workflowId).documentSubmitted(new DocSubmittedSignal(documentImageBase64, deviceInfo));
-        CanadaOnboardingState state = client.awaitDocumentAttempt(workflowId, beforeAttempts, 60, 1000);
+        CanadaOnboardingState state = client.awaitDocumentAttempt(workflowId, beforeAttempts, 120, 1000);
         if (state.getCurrentStep() == CanadaOnboardingStep.FAILED) {
             return new SubmitDocumentResult(workflowId, CanadaOnboardingStep.FAILED,
                     state.getFaciaDocumentReferenceId(), Map.of(),
