@@ -69,7 +69,8 @@ public class ProfileCreationActivityImpl implements ProfileCreationActivity {
                             keycloakUserUuid,
                             input.lifecycleStage() != null ? input.lifecycleStage() : "ONBOARDING",
                             preAssignedGlobalUid,
-                            "ONB-" + input.nationalId() + "-" + (preAssignedGlobalUid != null ? preAssignedGlobalUid.toString().substring(0, 8) : "NEW")
+                            "ONB-" + input.nationalId() + "-" + (preAssignedGlobalUid != null ? preAssignedGlobalUid.toString().substring(0, 8) : "NEW"),
+                            "KSA"
                     )
             );
 

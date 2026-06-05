@@ -79,13 +79,13 @@ body#keycloak-bg,
     align-items: center !important;
 }
 
-/* FINOVA Logo */
+/* Sullis Digital Logo (2191x633, ~3.46:1) */
 .pf-v5-c-login__main-header::before {
     content: '';
     display: block;
-    width: 180px;
-    height: 40px;
-    background: url('../img/finova-logo.svg') no-repeat center / contain;
+    width: 220px;
+    height: 64px;
+    background: url('../img/sullis-logo.png') no-repeat center / contain;
     margin-bottom: 28px;
 }
 

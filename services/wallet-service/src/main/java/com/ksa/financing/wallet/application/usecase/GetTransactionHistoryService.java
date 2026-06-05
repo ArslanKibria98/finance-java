@@ -10,7 +10,9 @@ import com.ksa.financing.wallet.domain.model.Wallet;
 import com.ksa.financing.wallet.domain.model.WalletMovement;
 import com.ksa.financing.wallet.domain.model.WalletTransfer;
 import com.ksa.financing.wallet.domain.port.in.GetTransactionHistoryUseCase;
+import com.ksa.financing.wallet.domain.port.out.ExternalFundTransferRepository;
 import com.ksa.financing.wallet.domain.port.out.FineractSavingsPort;
+import com.ksa.financing.wallet.domain.port.out.IbftTransactionRepository;
 import com.ksa.financing.wallet.domain.port.out.RecipientLookupPort;
 import com.ksa.financing.wallet.domain.port.out.WalletMovementRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
@@ -47,6 +49,8 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
     private final WalletMovementRepository movementRepository;
     private final FineractSavingsPort fineractPort;
     private final RecipientLookupPort recipientLookupPort;
+    private final ExternalFundTransferRepository externalFundTransferRepository;
+    private final IbftTransactionRepository ibftTransactionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -270,7 +274,11 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
      * back to the wallet that the movement landed on. maskedName carries the source label.
      */
     private Counterparty buildExternalCounterparty(Wallet wallet, WalletMovement movement, String maskedMobile) {
-        String label = externalCounterpartyLabel(movement);
+        // Prefer the real beneficiary name captured on the source transfer
+        // (external_fund_transfers.counterparty_name / ibft_transactions.creditor_name).
+        // wallet_movements has no name column, so resolve it via referenceType+referenceId.
+        String beneficiaryName = resolveBeneficiaryName(movement);
+        String label = beneficiaryName != null ? beneficiaryName : externalCounterpartyLabel(movement);
         if (label == null) return null;
         return new Counterparty(
                 wallet.getId(),
@@ -278,6 +286,40 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
                 wallet.getCustomerId(),
                 label,
                 maskedMobile);
+    }
+
+    /**
+     * Resolves the actual beneficiary/recipient name for movements that originate from
+     * a dedicated transfer table. The name lives on the source row, not on wallet_movements,
+     * so we join back via the movement's referenceType + referenceId (the source row PK).
+     * Returns null when no name is available (caller falls back to a generic type label).
+     */
+    private String resolveBeneficiaryName(WalletMovement movement) {
+        String refType = movement.getReferenceType();
+        UUID refId = movement.getReferenceId();
+        if (refType == null) return null;
+        try {
+            return switch (refType) {
+                // Initiated external transfer: movement.referenceId is the external_fund_transfers row id.
+                case "EXTERNAL_TRANSFER" -> refId == null ? null
+                        : externalFundTransferRepository.findById(refId)
+                        .map(t -> t.getCounterpartyName())
+                        .orElse(null);
+                // Scotia-rail settlement: movement.referenceId is null, but the
+                // external_fund_transfers row carries movement_id back to this movement.
+                case "EXTERNAL_SETTLEMENT" -> externalFundTransferRepository.findByMovementId(movement.getId())
+                        .map(t -> t.getCounterpartyName())
+                        .orElse(null);
+                case "IBFT" -> refId == null ? null
+                        : ibftTransactionRepository.findById(refId)
+                        .map(t -> t.getCreditorName())
+                        .orElse(null);
+                default -> null;
+            };
+        } catch (Exception ex) {
+            log.warn("Beneficiary name lookup failed refType={} refId={}: {}", refType, refId, ex.getMessage());
+            return null;
+        }
     }
 
     private String lookupMaskedMobile(UUID customerId) {
@@ -306,7 +348,10 @@ public class GetTransactionHistoryService implements GetTransactionHistoryUseCas
             case ADJUSTMENT -> "Adjustment";
             case IBFT_HOLD, IBFT_DEBIT -> "Inter-Bank Transfer";
             case IBFT_RELEASE -> "IBFT Refund";
-            case TRANSFER_OUT, TRANSFER_IN -> null;
+            // External-rail transfers (Scotia settlement) with no captured beneficiary name —
+            // show a generic label rather than a blank counterparty.
+            case TRANSFER_OUT -> "External Transfer";
+            case TRANSFER_IN -> "External Deposit";
         };
     }
 

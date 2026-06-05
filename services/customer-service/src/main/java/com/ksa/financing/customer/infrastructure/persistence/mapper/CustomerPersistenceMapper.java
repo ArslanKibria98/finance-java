@@ -69,6 +69,7 @@ public class CustomerPersistenceMapper {
         entity.setLifecycleStage(domain.getLifecycleStage() != null ? domain.getLifecycleStage().name() : null);
         entity.setLifecycleStageChangedAt(toOffsetDateTime(domain.getLifecycleStageChangedAt()));
         entity.setCustomerSegment(domain.getCustomerSegment());
+        entity.setOnboardingFlow(domain.getOnboardingFlow());
         entity.setAcquisitionChannel(domain.getAcquisitionChannel());
         entity.setAcquisitionPartnerId(domain.getAcquisitionPartnerId());
         entity.setActive(domain.isActive());
@@ -126,6 +127,7 @@ public class CustomerPersistenceMapper {
         domain.setLifecycleStage(parseEnum(LifecycleStage.class, entity.getLifecycleStage()));
         domain.setLifecycleStageChangedAt(toInstant(entity.getLifecycleStageChangedAt()));
         domain.setCustomerSegment(entity.getCustomerSegment());
+        domain.setOnboardingFlow(entity.getOnboardingFlow());
         domain.setAcquisitionChannel(entity.getAcquisitionChannel());
         domain.setAcquisitionPartnerId(entity.getAcquisitionPartnerId());
         domain.setActive(entity.isActive());

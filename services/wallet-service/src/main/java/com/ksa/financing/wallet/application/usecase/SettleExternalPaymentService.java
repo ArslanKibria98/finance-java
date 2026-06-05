@@ -12,6 +12,7 @@ import com.ksa.financing.wallet.domain.port.in.CreditWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.DebitWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.GetBalanceUseCase;
 import com.ksa.financing.wallet.domain.port.in.SettleExternalPaymentUseCase;
+import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
 import com.ksa.financing.wallet.domain.port.out.ExternalFundTransferRepository;
 import com.ksa.financing.wallet.domain.port.out.FineractSavingsPort;
 import com.ksa.financing.wallet.domain.port.out.LedgerPostingPort;
@@ -42,6 +43,7 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
     private final LedgerPostingPort ledgerPostingPort;
     private final FineractSavingsPort fineractPort;
     private final GetBalanceUseCase getBalanceUseCase;
+    private final EventPublisherPort eventPublisher;
     private final String defaultCurrency;
 
     public SettleExternalPaymentService(
@@ -52,6 +54,7 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
             LedgerPostingPort ledgerPostingPort,
             FineractSavingsPort fineractPort,
             GetBalanceUseCase getBalanceUseCase,
+            EventPublisherPort eventPublisher,
             @Value("${ksa.wallet.scotia.default-currency:CAD}") String defaultCurrency) {
         this.walletRepository = walletRepository;
         this.debitWalletUseCase = debitWalletUseCase;
@@ -60,6 +63,7 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
         this.ledgerPostingPort = ledgerPostingPort;
         this.fineractPort = fineractPort;
         this.getBalanceUseCase = getBalanceUseCase;
+        this.eventPublisher = eventPublisher;
         this.defaultCurrency = defaultCurrency;
     }
 
@@ -149,12 +153,26 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
                                 + (command.reference() != null ? " (" + command.reference() + ")" : ""),
                         key));
                 var row = recordRow(tenantId, ExternalTransferDirection.OUTBOUND, w, command.creditorAccount(),
-                        command.amount(), currency, command.reference(), debit.movementId(), key);
+                        command.creditorName(), command.amount(), currency, command.reference(), debit.movementId(), key);
                 String ledgerId = ledgerPostingPort.postExternalTransfer(tenantId, row.getId(),
                         row.getTransferNumber(), LedgerPostingPort.Direction.OUTBOUND, command.amount(), key, null);
                 if (ledgerId != null) row.setLedgerEntryId(parseUuid(ledgerId));
                 transferRepository.save(row);
                 debtorDebited = true; debtorWalletId = w.getId(); debtorMovementId = debit.movementId();
+
+                // Sender-side FUNDS_SENT notification — only on a fresh debit (not idempotent replay).
+                // Best-effort: a publish failure must not roll back the settled money.
+                try {
+                    String recipientLabel = command.creditorName() != null && !command.creditorName().isBlank()
+                            ? command.creditorName() : command.creditorAccount();
+                    eventPublisher.publishExternalSettlementSent(
+                            tenantId, w.getCustomerId(), w.getId(), row.getId(), row.getTransferNumber(),
+                            command.amount(), currency,
+                            w.getMaskedName(), recipientLabel, command.reference());
+                } catch (Exception ex) {
+                    log.warn("Failed to publish external-settlement sent event for wallet {}: {}",
+                            w.getId(), ex.getMessage());
+                }
             }
         }
 
@@ -177,12 +195,24 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
                                 + (command.reference() != null ? " (" + command.reference() + ")" : ""),
                         key));
                 var row = recordRow(tenantId, ExternalTransferDirection.INBOUND, w, command.debtorAccount(),
-                        command.amount(), currency, command.reference(), credit.movementId(), key);
+                        null, command.amount(), currency, command.reference(), credit.movementId(), key);
                 String ledgerId = ledgerPostingPort.postExternalTransfer(tenantId, row.getId(),
                         row.getTransferNumber(), LedgerPostingPort.Direction.INBOUND, command.amount(), key, null);
                 if (ledgerId != null) row.setLedgerEntryId(parseUuid(ledgerId));
                 transferRepository.save(row);
                 creditorCredited = true; creditorWalletId = w.getId(); creditorMovementId = credit.movementId();
+
+                // Receiver-side FUNDS_RECEIVED notification — only on a fresh credit (not idempotent replay).
+                // Best-effort: a publish failure must not roll back the settled money.
+                try {
+                    eventPublisher.publishExternalSettlementReceived(
+                            tenantId, w.getCustomerId(), w.getId(), row.getId(), row.getTransferNumber(),
+                            command.amount(), currency,
+                            debtorWallet.getMaskedName(), w.getMaskedName(), command.reference());
+                } catch (Exception ex) {
+                    log.warn("Failed to publish external-settlement received event for wallet {}: {}",
+                            w.getId(), ex.getMessage());
+                }
             }
         } else {
             log.info("Creditor account {} is external — skipping credit", command.creditorAccount());
@@ -195,8 +225,8 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
     }
 
     private ExternalFundTransfer recordRow(UUID tenantId, ExternalTransferDirection direction, Wallet wallet,
-                                           String counterpartyAccount, BigDecimal amount, String currency,
-                                           String reference, UUID movementId, String idempotencyKey) {
+                                           String counterpartyAccount, String counterpartyName, BigDecimal amount,
+                                           String currency, String reference, UUID movementId, String idempotencyKey) {
         UUID id = UUID.randomUUID();
         ExternalFundTransfer t = new ExternalFundTransfer();
         t.setId(id);
@@ -207,6 +237,7 @@ public class SettleExternalPaymentService implements SettleExternalPaymentUseCas
         t.setCustomerId(wallet.getCustomerId());
         t.setAccountNumber(wallet.getAccountNumber());
         t.setCounterpartyAccount(counterpartyAccount);
+        t.setCounterpartyName(counterpartyName);
         t.setAmount(amount);
         t.setFeeAmount(BigDecimal.ZERO);
         t.setCurrency(currency);

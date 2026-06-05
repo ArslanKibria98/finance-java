@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "KSA — Wallet Transaction Limits (Admin)",
-    "description": "Wallet **transaction (spend) limits** — daily / monthly / yearly — with the **customer requests → admin approves** workflow.\n\n## Two tokens\n- **`{{customerToken}}`** (role `customer`) — used for the USER-side endpoints: view my limits, request a limit increase, list my requests. Set by **`0b. Login (Customer)`**.\n- **`{{adminToken}}`** (role `super_admin`) — collection default; used for the ADMIN-side endpoints: platform bounds, list pending, approve, reject. Set by **`0a. Login (Admin)`**.\n\nThe customer raises the request; the admin decides it. Each side carries its own token, exactly like production.\n\n## Flow (run top→bottom)\n1. `0a` admin login, `0b` customer login\n2. Admin sets MIN/MAX bounds (daily+monthly+yearly)\n3. Customer views limits + usage (BEFORE)\n4. **Customer requests a limit increase** → captures `{{lastLimitRequestId}}`\n5. Customer lists their requests / Admin lists PENDING\n6. **Admin approves** → new limits applied to the wallet (or rejects)\n7. Customer views limits again (AFTER → reflects approved limits)\n\nEnforcement: transfers + withdrawals exceeding the cumulative daily / monthly / yearly limit are blocked with `WALLET.BALANCE.LIMIT_EXCEEDED`.\n\n`{{walletId}}` is owned by the customer `{{customerEmail}}` so the request is for their own wallet. Swap all three (`walletId`, `customerEmail`, `customerPin`) to target a different customer.",
+    "description": "Wallet **transaction (spend) limits** — daily / weekly / monthly / yearly — with the **customer requests → admin approves** workflow.\n\n## Two tokens\n- **`{{customerToken}}`** (role `customer`) — used for the USER-side endpoints: view my limits, request a limit increase, list my requests. Set by **`0b. Login (Customer)`**.\n- **`{{adminToken}}`** (role `super_admin`) — collection default; used for the ADMIN-side endpoints: platform bounds, list pending, approve, reject. Set by **`0a. Login (Admin)`**.\n\nThe customer raises the request; the admin decides it. Each side carries its own token, exactly like production.\n\n## Flow (run top→bottom)\n1. `0a` admin login, `0b` customer login\n2. Admin sets MIN/MAX bounds (daily+weekly+monthly+yearly)\n3. Customer views limits + usage (BEFORE)\n4. **Customer requests a limit increase** → captures `{{lastLimitRequestId}}`\n5. Customer lists their requests / Admin lists PENDING\n6. **Admin approves** → new limits applied to the wallet (or rejects)\n7. Customer views limits again (AFTER → reflects approved limits)\n\nEnforcement: transfers + withdrawals exceeding the cumulative daily / weekly / monthly / yearly limit are blocked with `WALLET.TXN_LIMIT.{DAILY|WEEKLY|MONTHLY|YEARLY}_EXCEEDED` (weekly = ISO Mon-Sun in KSA tz).\n\n`{{walletId}}` is owned by the customer `{{customerEmail}}` so the request is for their own wallet. Swap all three (`walletId`, `customerEmail`, `customerPin`) to target a different customer.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -174,7 +174,7 @@
       "response": []
     },
     {
-      "name": "1. Admin — Get Limit Bounds (min/max daily+monthly+yearly)",
+      "name": "1. Admin — Get Limit Bounds (min/max daily+weekly+monthly+yearly)",
       "request": {
         "method": "GET",
         "header": [],
@@ -205,7 +205,7 @@
       "response": []
     },
     {
-      "name": "2. Admin — Set Limit Bounds (daily + monthly + yearly)",
+      "name": "2. Admin — Set Limit Bounds (daily + weekly + monthly + yearly)",
       "request": {
         "method": "PUT",
         "header": [
@@ -226,7 +226,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"minSingleLimit\": 0,\n  \"maxSingleLimit\": 50000,\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultSingleLimit\": 10000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
+          "raw": "{\n  \"minSingleLimit\": 0,\n  \"maxSingleLimit\": 50000,\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minWeeklyLimit\": 0,\n  \"maxWeeklyLimit\": 200000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultSingleLimit\": 10000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultWeeklyLimit\": 50000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -316,7 +316,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"requestedSingleLimit\": 15000,\n  \"requestedDailyLimit\": 40000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
+          "raw": "{\n  \"requestedSingleLimit\": 15000,\n  \"requestedDailyLimit\": 40000,\n  \"requestedWeeklyLimit\": 150000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
           "options": {
             "raw": {
               "language": "json"

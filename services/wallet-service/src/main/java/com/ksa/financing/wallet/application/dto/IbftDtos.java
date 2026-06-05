@@ -1,5 +1,6 @@
 package com.ksa.financing.wallet.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ksa.financing.wallet.domain.model.IbftTransaction;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -14,12 +15,14 @@ public final class IbftDtos {
 
     /**
      * Either {@code beneficiaryId} (saved payee) OR the one-time inline payee fields
-     * (institutionNumber + transit + accountNumber + beneficiaryName).
+     * (institutionNumber + accountNumber + beneficiaryName). transit is NOT supplied —
+     * it is derived from the first 5 digits of {@code accountNumber}.
+     * A stray {@code transit} sent by older clients is ignored (not rejected).
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record InitiateIbftRequest(
             UUID beneficiaryId,
             String institutionNumber,
-            String transit,
             String accountNumber,
             String beneficiaryName,
             String bankName,

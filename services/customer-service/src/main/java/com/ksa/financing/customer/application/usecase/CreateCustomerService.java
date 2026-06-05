@@ -110,6 +110,7 @@ public class CreateCustomerService implements CreateCustomerUseCase {
         customer.setKeycloakUserId(command.keycloakUserId());
         customer.setActive(true);
         customer.setCountry("SA");
+        customer.setOnboardingFlow(command.onboardingFlow());
         if (command.idempotencyKey() != null && !command.idempotencyKey().isBlank()) {
             customer.setIdempotencyKey(command.idempotencyKey());
         }

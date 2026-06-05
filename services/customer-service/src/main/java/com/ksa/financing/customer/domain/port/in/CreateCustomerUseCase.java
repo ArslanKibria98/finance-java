@@ -25,6 +25,7 @@ public interface CreateCustomerUseCase {
         UUID keycloakUserId,
         String lifecycleStage,
         UUID globalUid,
-        String idempotencyKey
+        String idempotencyKey,
+        String onboardingFlow
     ) {}
 }

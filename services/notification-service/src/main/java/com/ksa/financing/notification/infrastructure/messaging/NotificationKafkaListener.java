@@ -1,6 +1,7 @@
 package com.ksa.financing.notification.infrastructure.messaging;
 
 import com.ksa.financing.notification.application.service.NotificationOrchestrator;
+import com.ksa.financing.notification.application.service.NotificationPreferenceService;
 import com.ksa.financing.notification.infrastructure.external.NovuClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ public class NotificationKafkaListener {
 
     private final NotificationOrchestrator orchestrator;
     private final NovuClient novuClient;
+    private final NotificationPreferenceService preferenceService;
 
     @Value("${notification.thresholds.large-payment-sar:50000}")
     private BigDecimal largePaymentThreshold;
@@ -136,6 +138,21 @@ public class NotificationKafkaListener {
             if (customerId == null) {
                 log.debug("customer profile event on {} missing customerId — skipping", topic);
                 return;
+            }
+
+            // Sync display currency (CAD for Canada/Foreign flows) so amount-bearing notifications
+            // render the correct currency for this customer.
+            String tenantId = asString(payload.get("tenantId"));
+            String currency = asString(payload.get("notificationCurrency"));
+            if (tenantId != null && currency != null) {
+                try {
+                    preferenceService.setCustomerCurrency(
+                            java.util.UUID.fromString(tenantId),
+                            java.util.UUID.fromString(customerId),
+                            currency);
+                } catch (Exception e) {
+                    log.warn("Failed to sync notification currency for customer {}: {}", customerId, e.getMessage());
+                }
             }
 
             String firstName = null, lastName = null;

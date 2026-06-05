@@ -181,18 +181,21 @@ public class InitiateIbftService implements InitiateIbftUseCase {
             return new Creditor(ben.getId(), ben.getInstitutionNumber(), ben.getTransit(),
                     ben.getAccountNumber(), ben.getBeneficiaryName(), ben.getBankName(), false);
         }
-        // One-time (ad-hoc) payee path — inline details required + format-checked + Scotia-validated
-        String inst = c.institutionNumber(), tr = c.transit(), acc = c.accountNumber(), name = c.beneficiaryName();
-        if (badDigits(inst, 3, 4) || badDigits(tr, 5, 5) || badDigits(acc, 5, 20) || name == null || name.isBlank())
+        // One-time (ad-hoc) payee path — inline details required + format-checked + Scotia-validated.
+        // transit is NOT supplied by the caller — it is derived from the first 5 digits of the account number.
+        String inst = c.institutionNumber(), acc = c.accountNumber(), name = c.beneficiaryName();
+        String acctDigits = acc == null ? "" : acc.replaceAll("\\D", "");
+        if (badDigits(inst, 3, 4) || acctDigits.length() < 5 || acctDigits.length() > 20 || name == null || name.isBlank())
             throw new BusinessException("IBFT.PAYEE.INVALID",
-                    "Provide beneficiaryId, or one-time payee: beneficiaryName + institutionNumber(3-4) + transit(5) + accountNumber(5-20) digits");
+                    "Provide beneficiaryId, or one-time payee: beneficiaryName + institutionNumber(3-4 digits) + accountNumber(>=5 digits)");
+        String tr = acctDigits.substring(0, 5);
         if (validateOneTime) {
             var v = scotiaEftPort.validateAccount(inst, tr, acc, name);
             if (!v.valid())
                 throw new BusinessException("IBFT.PAYEE.VALIDATION_FAILED",
                         "Scotia could not validate the payee account (" + v.status() + ")");
         }
-        return new Creditor(null, inst, tr, acc, name.trim(), c.bankName(), true);
+        return new Creditor(null, inst, tr, acctDigits, name.trim(), c.bankName(), true);
     }
 
     private static boolean badDigits(String s, int min, int max) {

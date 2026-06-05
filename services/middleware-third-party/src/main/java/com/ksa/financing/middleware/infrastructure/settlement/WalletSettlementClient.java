@@ -131,6 +131,7 @@ public class WalletSettlementClient {
             payload.put("debtorAccount", debtorAccount);
             payload.put("debtorMobile", debtorMobile);
             payload.put("creditorAccount", creditorAccount);
+            payload.put("creditorName", text(body, "creditorName"));
             payload.put("amount", amount);
             payload.put("currency", currency != null ? currency : defaultCurrency);
             payload.put("reference", apiCode + ":" + result.requestId());

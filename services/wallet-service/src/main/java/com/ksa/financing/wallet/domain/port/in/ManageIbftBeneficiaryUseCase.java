@@ -22,8 +22,7 @@ public interface ManageIbftBeneficiaryUseCase {
             String nickname,
             String beneficiaryName,
             String institutionNumber,
-            String transit,
-            String accountNumber,
+            String accountNumber,        // transit derived from its first 5 digits
             String bankName,
             String currency
     ) {}

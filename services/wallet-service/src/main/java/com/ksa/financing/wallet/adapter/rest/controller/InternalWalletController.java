@@ -201,6 +201,7 @@ public class InternalWalletController {
                         request.debtorAccount(),
                         request.debtorMobile(),
                         request.creditorAccount(),
+                        request.creditorName(),
                         request.amount(),
                         request.currency(),
                         request.reference(),
@@ -221,7 +222,7 @@ public class InternalWalletController {
         settleExternalPaymentUseCase.validate(
                 new SettleExternalPaymentUseCase.SettleCommand(
                         parseTenant(tenantId), request.debtorAccount(), request.debtorMobile(), request.creditorAccount(),
-                        request.amount(), request.currency(), request.reference(), request.idempotencyKey()));
+                        request.creditorName(), request.amount(), request.currency(), request.reference(), request.idempotencyKey()));
         return ResponseEntity.ok().build();
     }
 
@@ -271,6 +272,7 @@ public class InternalWalletController {
             String debtorAccount,
             String debtorMobile,
             String creditorAccount,
+            String creditorName,
             @NotNull @Positive BigDecimal amount,
             String currency,
             String reference,

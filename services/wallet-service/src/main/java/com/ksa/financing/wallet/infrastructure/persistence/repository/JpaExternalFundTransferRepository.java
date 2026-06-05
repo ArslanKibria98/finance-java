@@ -15,5 +15,7 @@ public interface JpaExternalFundTransferRepository
 
     Optional<ExternalFundTransferJpaEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 
+    Optional<ExternalFundTransferJpaEntity> findByMovementId(UUID movementId);
+
     Optional<ExternalFundTransferJpaEntity> findByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
 }

@@ -144,6 +144,84 @@ public class WalletEventPublisher implements EventPublisherPort {
         publishWithdrawalEvent(TOPIC_WITHDRAWAL_COMPENSATED, "WITHDRAWAL_COMPENSATED", w);
     }
 
+    @Override
+    public void publishExternalSettlementReceived(java.util.UUID tenantId, java.util.UUID customerId,
+                                                  java.util.UUID walletId, java.util.UUID transferId,
+                                                  String transferNumber, BigDecimal amount,
+                                                  String currency, String senderMaskedName,
+                                                  String recipientMaskedName, String purposeNote) {
+        // Mirror the internal-transfer FUNDS_RECEIVED payload so notification-service routes it
+        // through the same Novu FUNDS_RECEIVED flow. customerId = the credited (receiving) customer.
+        Map<String, Object> event = new HashMap<>();
+        event.put("eventType", "TRANSFER_RECEIVED");
+        event.put("transferId", transferId != null ? transferId.toString() : null);
+        event.put("transferNumber", transferNumber);
+        event.put("tenantId", tenantId != null ? tenantId.toString() : null);
+        event.put("customerId", customerId != null ? customerId.toString() : null);
+        event.put("destinationCustomerId", customerId != null ? customerId.toString() : null);
+        event.put("destinationWalletId", walletId != null ? walletId.toString() : null);
+        event.put("senderMaskedName", senderMaskedName);
+        event.put("recipientMaskedName", recipientMaskedName);
+        event.put("purposeNote", purposeNote);
+        event.put("amount", amount != null ? amount.toString() : null);
+        event.put("feeAmount", "0");
+        event.put("currency", currency);
+        event.put("status", "COMPLETED");
+        event.put("timestamp", Instant.now().toString());
+
+        String key = transferId != null ? transferId.toString() : (customerId != null ? customerId.toString() : "settlement");
+        log.info("Publishing TRANSFER_RECEIVED (external settlement) event topic={} customerId={} amount={}",
+                TOPIC_TRANSFER_RECEIVED, customerId, amount);
+        kafkaTemplate.send(TOPIC_TRANSFER_RECEIVED, key, event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish external-settlement TRANSFER_RECEIVED event customerId={}", customerId, ex);
+                    } else {
+                        log.debug("Published external-settlement TRANSFER_RECEIVED event customerId={} offset={}",
+                                customerId, result.getRecordMetadata().offset());
+                    }
+                });
+    }
+
+    @Override
+    public void publishExternalSettlementSent(java.util.UUID tenantId, java.util.UUID customerId,
+                                              java.util.UUID walletId, java.util.UUID transferId,
+                                              String transferNumber, BigDecimal amount,
+                                              String currency, String senderMaskedName,
+                                              String recipientMaskedName, String purposeNote) {
+        // Sender-side FUNDS_SENT payload — notification-service maps transfer.completed → FUNDS_SENT.
+        // customerId = the debited (sending) customer.
+        Map<String, Object> event = new HashMap<>();
+        event.put("eventType", "TRANSFER_COMPLETED");
+        event.put("transferId", transferId != null ? transferId.toString() : null);
+        event.put("transferNumber", transferNumber);
+        event.put("tenantId", tenantId != null ? tenantId.toString() : null);
+        event.put("customerId", customerId != null ? customerId.toString() : null);
+        event.put("sourceCustomerId", customerId != null ? customerId.toString() : null);
+        event.put("sourceWalletId", walletId != null ? walletId.toString() : null);
+        event.put("senderMaskedName", senderMaskedName);
+        event.put("recipientMaskedName", recipientMaskedName);
+        event.put("purposeNote", purposeNote);
+        event.put("amount", amount != null ? amount.toString() : null);
+        event.put("feeAmount", "0");
+        event.put("currency", currency);
+        event.put("status", "COMPLETED");
+        event.put("timestamp", Instant.now().toString());
+
+        String key = transferId != null ? transferId.toString() : (customerId != null ? customerId.toString() : "settlement");
+        log.info("Publishing TRANSFER_COMPLETED (external settlement) event topic={} customerId={} amount={}",
+                TOPIC_TRANSFER_COMPLETED, customerId, amount);
+        kafkaTemplate.send(TOPIC_TRANSFER_COMPLETED, key, event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish external-settlement TRANSFER_COMPLETED event customerId={}", customerId, ex);
+                    } else {
+                        log.debug("Published external-settlement TRANSFER_COMPLETED event customerId={} offset={}",
+                                customerId, result.getRecordMetadata().offset());
+                    }
+                });
+    }
+
     private void publishWithdrawalEvent(String topic, String eventType, WalletWithdrawal w) {
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", eventType);

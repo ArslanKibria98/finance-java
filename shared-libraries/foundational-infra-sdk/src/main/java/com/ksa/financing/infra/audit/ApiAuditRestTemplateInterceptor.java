@@ -115,6 +115,10 @@ public class ApiAuditRestTemplateInterceptor implements ClientHttpRequestInterce
 
         java.util.Map<String, String> business = businessExtractor.extract(
                 uri.getPath(), flatten(request.getHeaders()), rawReqBody, rawRespBody);
+        // Inherit the originating customer's identifiers (mobile, customerId, ...) so this
+        // third-party / inter-service hop appears under the same Kibana business filter even
+        // when the provider payload itself carries none of them. Payload-extracted values win.
+        business = BusinessContextMdc.mergeInto(business);
 
         ApiAuditEvent event = ApiAuditEvent.builder()
                 .timestamp(Instant.now())

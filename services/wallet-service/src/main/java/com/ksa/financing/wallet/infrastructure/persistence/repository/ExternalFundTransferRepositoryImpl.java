@@ -43,6 +43,11 @@ public class ExternalFundTransferRepositoryImpl implements ExternalFundTransferR
     }
 
     @Override
+    public Optional<ExternalFundTransfer> findByMovementId(UUID movementId) {
+        return jpaRepo.findByMovementId(movementId).map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<ExternalFundTransfer> findByIdAndTenantId(UUID id, UUID tenantId) {
         return jpaRepo.findByIdAndTenantId(id, tenantId).map(mapper::toDomain);
     }

@@ -68,7 +68,8 @@ public class InternalCustomerOnboardingController {
                 req.keycloakUserId(),
                 "LEAD",
                 req.globalUid(),
-                req.idempotencyKey()
+                req.idempotencyKey(),
+                req.flowType()
         ));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new CreateLeadCustomerResponse(

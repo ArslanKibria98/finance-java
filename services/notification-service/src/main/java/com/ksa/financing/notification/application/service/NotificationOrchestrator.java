@@ -67,6 +67,12 @@ public class NotificationOrchestrator {
             prefs = preferenceService.getOrCreateDefault(tenantId, customerId);
         }
 
+        // Stamp the customer's display currency (e.g. CAD for Canada/Foreign flows) onto any
+        // amount-bearing payload, so the rendered notification shows the correct currency.
+        if (prefs != null && prefs.getCurrencyCode() != null && payloadHasAmount(payload)) {
+            payload.put("currency", prefs.getCurrencyCode());
+        }
+
         // Dispatch to Novu — each rule decides its own target by rule_code prefix
         for (TemplateRoutingRule rule : rules) {
             boolean isAdminRule = rule.getRuleCode() != null && rule.getRuleCode().startsWith("ADMIN_");
@@ -102,6 +108,21 @@ public class NotificationOrchestrator {
                     prefs != null ? prefs.getPreferredLanguage() : NotificationPreferenceService.DEFAULT_LANGUAGE
             );
         }
+    }
+
+    /** Monetary fields whose presence means the notification displays an amount. */
+    private static final Set<String> AMOUNT_KEYS = Set.of(
+            "amount", "feeAmount", "totalDebit", "totalAmount", "balance",
+            "installmentAmount", "outstandingAmount", "paidAmount", "currency");
+
+    private boolean payloadHasAmount(Map<String, Object> payload) {
+        for (String key : AMOUNT_KEYS) {
+            Object val = payload.get(key);
+            if (val != null && !val.toString().isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Integer extractInt(Map<String, Object> payload, String key) {

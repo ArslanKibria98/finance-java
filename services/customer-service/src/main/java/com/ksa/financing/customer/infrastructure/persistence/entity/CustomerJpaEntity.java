@@ -145,6 +145,9 @@ public class CustomerJpaEntity {
     @Column(name = "customer_segment", length = 50)
     private String customerSegment;
 
+    @Column(name = "onboarding_flow", length = 20)
+    private String onboardingFlow;
+
     @Column(name = "acquisition_channel", length = 50)
     private String acquisitionChannel;
 

@@ -29,6 +29,27 @@ public class CustomerEventPublisher implements EventPublisherPort {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+    /** Onboarding flows that transact in Canadian Dollars for notification display. */
+    @org.springframework.beans.factory.annotation.Value("${notification.currency.cad-flows:CANADA,FOREIGN}")
+    private java.util.Set<String> cadFlows;
+
+    @org.springframework.beans.factory.annotation.Value("${notification.currency.cad:CAD}")
+    private String cadCurrency;
+
+    @org.springframework.beans.factory.annotation.Value("${notification.currency.default:SAR}")
+    private String defaultCurrency;
+
+    /**
+     * Resolves the display currency a customer's notifications should use, based on the onboarding
+     * flow. Canada/Foreign flows are CAD-denominated; everything else falls back to the base currency.
+     */
+    private String notificationCurrency(String onboardingFlow) {
+        if (onboardingFlow != null && cadFlows.contains(onboardingFlow.trim().toUpperCase())) {
+            return cadCurrency;
+        }
+        return defaultCurrency;
+    }
+
     @Override
     public void publishCustomerCreated(Customer customer) {
         log.info("Publishing customer-created event for customerId: {}, CIF: {}",
@@ -47,6 +68,8 @@ public class CustomerEventPublisher implements EventPublisherPort {
         payload.put("customerType", customer.getCustomerType() != null ? customer.getCustomerType().name() : null);
         payload.put("globalUid", customer.getGlobalUid() != null ? customer.getGlobalUid().toString() : null);
         payload.put("lifecycleStage", customer.getLifecycleStage() != null ? customer.getLifecycleStage().name() : null);
+        payload.put("onboardingFlow", customer.getOnboardingFlow());
+        payload.put("notificationCurrency", notificationCurrency(customer.getOnboardingFlow()));
 
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", "CUSTOMER_CREATED");
@@ -77,6 +100,8 @@ public class CustomerEventPublisher implements EventPublisherPort {
         // firstName = customer's own name only (father's name lives in last_name).
         payload.put("firstName", customer.getFirstName());
         payload.put("email", customer.getEmail());
+        payload.put("onboardingFlow", customer.getOnboardingFlow());
+        payload.put("notificationCurrency", notificationCurrency(customer.getOnboardingFlow()));
 
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", "CUSTOMER_UPDATED");

@@ -83,6 +83,11 @@ public class ApiAuditFilter extends OncePerRequestFilter implements Ordered {
         HttpServletRequest wrappedReq = wrapRequest(request);
         ContentCachingResponseWrapper wrappedResp = new ContentCachingResponseWrapper(response);
 
+        // Seed request-scoped business identifiers (mobile, customerId, nationalId, ...)
+        // into MDC BEFORE the chain runs, so every outbound third-party call made while
+        // handling this request inherits them and shows up under the same Kibana filter.
+        Map<String, String> seededBiz = seedBusinessContext(wrappedReq);
+
         Throwable failure = null;
         try {
             filterChain.doFilter(wrappedReq, wrappedResp);
@@ -96,6 +101,7 @@ public class ApiAuditFilter extends OncePerRequestFilter implements Ordered {
             } catch (Exception logEx) {
                 log.warn("Failed to emit api audit event: {}", logEx.getMessage());
             }
+            BusinessContextMdc.clear(seededBiz);
             // CRITICAL: copy buffered body to actual response stream
             wrappedResp.copyBodyToResponse();
         }
@@ -203,6 +209,33 @@ public class ApiAuditFilter extends OncePerRequestFilter implements Ordered {
                 .build();
 
         auditLogger.log(event);
+    }
+
+    /**
+     * Extract business identifiers available BEFORE controller execution (URL path,
+     * headers, and — when eagerly cached — the request body) and stash them in MDC so
+     * outbound calls during this request inherit them. Response-derived ids are not
+     * available yet and are not needed for propagation (they are still recorded on the
+     * inbound document by {@link #emit}).
+     */
+    private Map<String, String> seedBusinessContext(HttpServletRequest req) {
+        try {
+            byte[] reqBytes = extractRequestBytes(req);
+            String rawReqBody = reqBytes.length > 0
+                    ? new String(reqBytes, charsetOrDefault(req.getCharacterEncoding())) : null;
+            Map<String, String> headers = new LinkedHashMap<>();
+            Enumeration<String> names = req.getHeaderNames();
+            while (names != null && names.hasMoreElements()) {
+                String n = names.nextElement();
+                headers.put(n, req.getHeader(n));
+            }
+            Map<String, String> business = businessExtractor.extract(
+                    req.getRequestURI(), headers, rawReqBody, null);
+            return BusinessContextMdc.seed(business);
+        } catch (Exception e) {
+            log.debug("Could not seed business context: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
     }
 
     private byte[] extractRequestBytes(HttpServletRequest req) {

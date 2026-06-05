@@ -26,6 +26,7 @@ public interface SettleExternalPaymentUseCase {
             String debtorAccount,
             String debtorMobile,      // when debtorAccount is absent, resolve debtor wallet by this mobile (from JWT)
             String creditorAccount,
+            String creditorName,      // beneficiary display name (for transaction history); optional
             BigDecimal amount,
             String currency,
             String reference,

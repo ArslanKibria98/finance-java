@@ -73,6 +73,7 @@ public class ApiAuditWebClientFilter implements ExchangeFilterFunction {
                     .spanId(MDC.get("spanId"))
                     .tenantId(MDC.get("tenantId"))
                     .thirdPartyName(resolveThirdParty(uri.getHost()))
+                    .business(businessOrNull())
                     .build();
             auditLogger.log(event);
         } catch (Exception e) {
@@ -105,11 +106,18 @@ public class ApiAuditWebClientFilter implements ExchangeFilterFunction {
                     .tenantId(MDC.get("tenantId"))
                     .thirdPartyName(resolveThirdParty(uri.getHost()))
                     .errorMessage(err.getMessage())
+                    .business(businessOrNull())
                     .build();
             auditLogger.log(event);
         } catch (Exception e) {
             log.warn("WebClient audit emit failed (error path): {}", e.getMessage());
         }
+    }
+
+    /** Request-scoped business identifiers inherited via MDC (null when none). */
+    private Map<String, String> businessOrNull() {
+        Map<String, String> biz = BusinessContextMdc.current();
+        return biz.isEmpty() ? null : biz;
     }
 
     private String resolveThirdParty(String host) {

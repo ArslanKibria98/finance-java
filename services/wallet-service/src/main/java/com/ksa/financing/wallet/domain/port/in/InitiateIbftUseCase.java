@@ -16,8 +16,7 @@ public interface InitiateIbftUseCase {
             UUID walletId,
             UUID beneficiaryId,          // saved beneficiary ... OR the one-time fields below
             String institutionNumber,
-            String transit,
-            String accountNumber,
+            String accountNumber,        // transit derived from its first 5 digits
             String beneficiaryName,
             String bankName,
             BigDecimal amount,

@@ -45,6 +45,7 @@ public class Customer {
     private LifecycleStage lifecycleStage;
     private Instant lifecycleStageChangedAt;
     private String customerSegment;
+    private String onboardingFlow;
     private String acquisitionChannel;
     private UUID acquisitionPartnerId;
     private boolean active;
@@ -142,6 +143,8 @@ public class Customer {
     public void setLifecycleStageChangedAt(Instant lifecycleStageChangedAt) { this.lifecycleStageChangedAt = lifecycleStageChangedAt; }
     public String getCustomerSegment() { return customerSegment; }
     public void setCustomerSegment(String customerSegment) { this.customerSegment = customerSegment; }
+    public String getOnboardingFlow() { return onboardingFlow; }
+    public void setOnboardingFlow(String onboardingFlow) { this.onboardingFlow = onboardingFlow; }
     public String getAcquisitionChannel() { return acquisitionChannel; }
     public void setAcquisitionChannel(String acquisitionChannel) { this.acquisitionChannel = acquisitionChannel; }
     public UUID getAcquisitionPartnerId() { return acquisitionPartnerId; }

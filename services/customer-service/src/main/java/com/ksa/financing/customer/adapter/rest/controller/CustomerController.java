@@ -137,7 +137,8 @@ public class CustomerController {
                 keycloakUserId,
                 request.lifecycleStage(),
                 null,  // globalUid — will be created via GPS call
-                request.idempotencyKey()
+                request.idempotencyKey(),
+                null   // onboardingFlow — admin-created customers default to base currency
         );
 
         Customer customer = createCustomerUseCase.create(command);
@@ -251,8 +252,18 @@ public class CustomerController {
         UUID tenantId = extractTenantId(jwt);
         log.info("Getting customer profile for ID: {} tenant: {}", id, tenantId);
 
-        Customer customer = getCustomerUseCase.getById(id);
-        WalletPort.WalletInfo walletInfo = fetchWalletInfo(customer.getTenantId(), id);
+        // The path id may be the customer PK OR the Keycloak user id. Sullis-flow
+        // (Foreign/Canada) onboarding returns a null customerId until the selfie
+        // step finishes, so the app sometimes calls this with the Keycloak sub.
+        // Resolve by PK first, then fall back to keycloak_user_id.
+        Customer customer;
+        try {
+            customer = getCustomerUseCase.getById(id);
+        } catch (Exception notFoundByPk) {
+            customer = getCustomerUseCase.getByKeycloakUserId(id);
+            log.info("Resolved customer profile via keycloakUserId={} -> customerId={}", id, customer.getId());
+        }
+        WalletPort.WalletInfo walletInfo = fetchWalletInfo(customer.getTenantId(), customer.getId());
 
         String profilePictureUrl = buildProfilePictureUrl(customer.getId(), customer.getProfilePicture());
         return ResponseEntity.ok(new CustomerProfileResponse(

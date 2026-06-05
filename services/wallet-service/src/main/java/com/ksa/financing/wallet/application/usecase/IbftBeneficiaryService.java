@@ -32,14 +32,18 @@ public class IbftBeneficiaryService implements ManageIbftBeneficiaryUseCase {
     public IbftBeneficiary add(AddBeneficiaryCommand c) {
         if (c.beneficiaryName() == null || c.beneficiaryName().isBlank())
             throw new BusinessException("IBFT.BENEFICIARY.INVALID", "beneficiaryName is required");
-        if (notDigits(c.institutionNumber(), 3, 4) || notDigits(c.transit(), 5, 5) || notDigits(c.accountNumber(), 5, 20))
+        String acctDigits = c.accountNumber() == null ? "" : c.accountNumber().replaceAll("\\D", "");
+        if (notDigits(c.institutionNumber(), 3, 4) || acctDigits.length() < 5 || acctDigits.length() > 20)
             throw new BusinessException("IBFT.BENEFICIARY.INVALID",
-                    "Invalid Canadian account: institution(3-4) + transit(5) + account(5-20) digits required");
+                    "Invalid Canadian account: institution(3-4 digits) + account(>=5 digits) required");
+
+        // transit is NOT supplied by the caller — derived from the first 5 digits of the account number
+        String transit = acctDigits.substring(0, 5);
 
         // Duplicate guard
-        repository.findExisting(c.tenantId(), c.customerId(), c.institutionNumber(), c.transit(), c.accountNumber())
+        repository.findExisting(c.tenantId(), c.customerId(), c.institutionNumber(), transit, acctDigits)
                 .ifPresent(b -> { throw new BusinessException("IBFT.BENEFICIARY.DUPLICATE",
-                        "Beneficiary already exists: " + c.institutionNumber() + "-" + c.transit() + "-" + c.accountNumber()); });
+                        "Beneficiary already exists: " + c.institutionNumber() + "-" + transit + "-" + acctDigits); });
 
         IbftBeneficiary b = new IbftBeneficiary();
         b.setId(UUID.randomUUID());
@@ -49,8 +53,8 @@ public class IbftBeneficiaryService implements ManageIbftBeneficiaryUseCase {
         b.setNickname(c.nickname());
         b.setBeneficiaryName(c.beneficiaryName().trim());
         b.setInstitutionNumber(c.institutionNumber());
-        b.setTransit(c.transit());
-        b.setAccountNumber(c.accountNumber());
+        b.setTransit(transit);
+        b.setAccountNumber(acctDigits);
         b.setBankName(c.bankName());
         b.setCurrency(c.currency() != null ? c.currency() : "CAD");
         b.setActive(true);
@@ -58,8 +62,8 @@ public class IbftBeneficiaryService implements ManageIbftBeneficiaryUseCase {
 
         // Optional Scotia account validation before saving
         if (validateOnAdd) {
-            var v = scotiaEftPort.validateAccount(c.institutionNumber(), c.transit(),
-                    c.accountNumber(), c.beneficiaryName());
+            var v = scotiaEftPort.validateAccount(c.institutionNumber(), transit,
+                    acctDigits, c.beneficiaryName());
             b.setValidated(v.valid());
             b.setValidationRef(v.ref());
             b.setValidationResult(v.raw());
