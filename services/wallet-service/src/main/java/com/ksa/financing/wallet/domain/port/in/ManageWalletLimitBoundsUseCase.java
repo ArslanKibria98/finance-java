@@ -13,12 +13,15 @@ public interface ManageWalletLimitBoundsUseCase {
 
     record UpdateBoundsCommand(
             UUID tenantId,
+            BigDecimal minSingleLimit,
+            BigDecimal maxSingleLimit,
             BigDecimal minDailyLimit,
             BigDecimal maxDailyLimit,
             BigDecimal minMonthlyLimit,
             BigDecimal maxMonthlyLimit,
             BigDecimal minYearlyLimit,
             BigDecimal maxYearlyLimit,
+            BigDecimal defaultSingleLimit,
             BigDecimal defaultDailyLimit,
             BigDecimal defaultMonthlyLimit,
             BigDecimal defaultYearlyLimit,

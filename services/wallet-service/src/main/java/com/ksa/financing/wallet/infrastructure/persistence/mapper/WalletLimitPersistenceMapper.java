@@ -21,6 +21,9 @@ public class WalletLimitPersistenceMapper {
         WalletLimitBoundsJpaEntity e = new WalletLimitBoundsJpaEntity();
         e.setId(domain.getId());
         e.setTenantId(domain.getTenantId());
+        e.setMinSingleLimit(domain.getMinSingleLimit());
+        e.setMaxSingleLimit(domain.getMaxSingleLimit());
+        e.setDefaultSingleLimit(domain.getDefaultSingleLimit());
         e.setMinDailyLimit(domain.getMinDailyLimit());
         e.setMaxDailyLimit(domain.getMaxDailyLimit());
         e.setMinMonthlyLimit(domain.getMinMonthlyLimit());
@@ -42,6 +45,9 @@ public class WalletLimitPersistenceMapper {
         WalletLimitBounds d = new WalletLimitBounds();
         d.setId(e.getId());
         d.setTenantId(e.getTenantId());
+        d.setMinSingleLimit(e.getMinSingleLimit());
+        d.setMaxSingleLimit(e.getMaxSingleLimit());
+        d.setDefaultSingleLimit(e.getDefaultSingleLimit());
         d.setMinDailyLimit(e.getMinDailyLimit());
         d.setMaxDailyLimit(e.getMaxDailyLimit());
         d.setMinMonthlyLimit(e.getMinMonthlyLimit());
@@ -67,9 +73,11 @@ public class WalletLimitPersistenceMapper {
         e.setTenantId(domain.getTenantId());
         e.setWalletId(domain.getWalletId());
         e.setCustomerId(domain.getCustomerId());
+        e.setRequestedSingleLimit(domain.getRequestedSingleLimit());
         e.setRequestedDailyLimit(domain.getRequestedDailyLimit());
         e.setRequestedMonthlyLimit(domain.getRequestedMonthlyLimit());
         e.setRequestedYearlyLimit(domain.getRequestedYearlyLimit());
+        e.setCurrentSingleLimit(domain.getCurrentSingleLimit());
         e.setCurrentDailyLimit(domain.getCurrentDailyLimit());
         e.setCurrentMonthlyLimit(domain.getCurrentMonthlyLimit());
         e.setCurrentYearlyLimit(domain.getCurrentYearlyLimit());
@@ -94,9 +102,11 @@ public class WalletLimitPersistenceMapper {
         d.setTenantId(e.getTenantId());
         d.setWalletId(e.getWalletId());
         d.setCustomerId(e.getCustomerId());
+        d.setRequestedSingleLimit(e.getRequestedSingleLimit());
         d.setRequestedDailyLimit(e.getRequestedDailyLimit());
         d.setRequestedMonthlyLimit(e.getRequestedMonthlyLimit());
         d.setRequestedYearlyLimit(e.getRequestedYearlyLimit());
+        d.setCurrentSingleLimit(e.getCurrentSingleLimit());
         d.setCurrentDailyLimit(e.getCurrentDailyLimit());
         d.setCurrentMonthlyLimit(e.getCurrentMonthlyLimit());
         d.setCurrentYearlyLimit(e.getCurrentYearlyLimit());

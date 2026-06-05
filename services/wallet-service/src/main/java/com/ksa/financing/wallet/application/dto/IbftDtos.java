@@ -12,8 +12,17 @@ public final class IbftDtos {
 
     private IbftDtos() {}
 
+    /**
+     * Either {@code beneficiaryId} (saved payee) OR the one-time inline payee fields
+     * (institutionNumber + transit + accountNumber + beneficiaryName).
+     */
     public record InitiateIbftRequest(
-            @NotNull UUID beneficiaryId,
+            UUID beneficiaryId,
+            String institutionNumber,
+            String transit,
+            String accountNumber,
+            String beneficiaryName,
+            String bankName,
             @NotNull @Positive BigDecimal amount,
             String currency,
             String purposeNote

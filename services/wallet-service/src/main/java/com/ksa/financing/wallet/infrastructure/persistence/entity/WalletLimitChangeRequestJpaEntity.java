@@ -22,6 +22,9 @@ public class WalletLimitChangeRequestJpaEntity {
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
 
+    @Column(name = "requested_single_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal requestedSingleLimit;
+
     @Column(name = "requested_daily_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal requestedDailyLimit;
 
@@ -30,6 +33,9 @@ public class WalletLimitChangeRequestJpaEntity {
 
     @Column(name = "requested_yearly_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal requestedYearlyLimit;
+
+    @Column(name = "current_single_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal currentSingleLimit;
 
     @Column(name = "current_daily_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal currentDailyLimit;
@@ -94,6 +100,10 @@ public class WalletLimitChangeRequestJpaEntity {
     public void setWalletId(UUID walletId) { this.walletId = walletId; }
     public UUID getCustomerId() { return customerId; }
     public void setCustomerId(UUID customerId) { this.customerId = customerId; }
+    public BigDecimal getRequestedSingleLimit() { return requestedSingleLimit; }
+    public void setRequestedSingleLimit(BigDecimal requestedSingleLimit) { this.requestedSingleLimit = requestedSingleLimit; }
+    public BigDecimal getCurrentSingleLimit() { return currentSingleLimit; }
+    public void setCurrentSingleLimit(BigDecimal currentSingleLimit) { this.currentSingleLimit = currentSingleLimit; }
     public BigDecimal getRequestedDailyLimit() { return requestedDailyLimit; }
     public void setRequestedDailyLimit(BigDecimal requestedDailyLimit) { this.requestedDailyLimit = requestedDailyLimit; }
     public BigDecimal getRequestedMonthlyLimit() { return requestedMonthlyLimit; }

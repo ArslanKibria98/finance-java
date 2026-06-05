@@ -7,21 +7,30 @@ import java.util.UUID;
 
 public record WalletLimitResponse(
         UUID walletId,
+        BigDecimal singleLimit,
         BigDecimal dailyLimit,
         BigDecimal monthlyLimit,
         BigDecimal yearlyLimit,
         BigDecimal todaySpent,
         BigDecimal monthSpent,
         BigDecimal yearSpent,
-        BigDecimal dailyRemaining,
-        BigDecimal monthlyRemaining,
-        BigDecimal yearlyRemaining,
+        BigDecimal minSingleLimit,
+        BigDecimal maxSingleLimit,
+        BigDecimal minDailyLimit,
+        BigDecimal maxDailyLimit,
+        BigDecimal minMonthlyLimit,
+        BigDecimal maxMonthlyLimit,
+        BigDecimal minYearlyLimit,
+        BigDecimal maxYearlyLimit,
         String currency) {
 
     public static WalletLimitResponse from(WalletLimitView v) {
         return new WalletLimitResponse(
-                v.walletId(), v.dailyLimit(), v.monthlyLimit(), v.yearlyLimit(),
+                v.walletId(), v.singleLimit(), v.dailyLimit(), v.monthlyLimit(), v.yearlyLimit(),
                 v.todaySpent(), v.monthSpent(), v.yearSpent(),
-                v.dailyRemaining(), v.monthlyRemaining(), v.yearlyRemaining(), v.currency());
+                v.minSingleLimit(), v.maxSingleLimit(),
+                v.minDailyLimit(), v.maxDailyLimit(),
+                v.minMonthlyLimit(), v.maxMonthlyLimit(),
+                v.minYearlyLimit(), v.maxYearlyLimit(), v.currency());
     }
 }

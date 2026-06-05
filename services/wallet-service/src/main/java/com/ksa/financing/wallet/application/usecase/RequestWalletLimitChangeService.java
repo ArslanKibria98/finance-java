@@ -42,6 +42,11 @@ public class RequestWalletLimitChangeService implements RequestWalletLimitChange
         Wallet wallet = loadWallet(cmd.tenantId(), cmd.walletId());
 
         WalletLimitBounds bounds = boundsUseCase.getBounds(cmd.tenantId());
+        if (!bounds.isSingleWithinBounds(cmd.requestedSingleLimit())) {
+            throw new BusinessException("WALLET.LIMIT_REQUEST.SINGLE_OUT_OF_BOUNDS",
+                    "Requested single (per-transaction) limit must be within [" + bounds.getMinSingleLimit()
+                            + ", " + bounds.getMaxSingleLimit() + "]");
+        }
         if (!bounds.isDailyWithinBounds(cmd.requestedDailyLimit())) {
             throw new BusinessException("WALLET.LIMIT_REQUEST.DAILY_OUT_OF_BOUNDS",
                     "Requested daily limit must be within [" + bounds.getMinDailyLimit()
@@ -56,6 +61,10 @@ public class RequestWalletLimitChangeService implements RequestWalletLimitChange
             throw new BusinessException("WALLET.LIMIT_REQUEST.YEARLY_OUT_OF_BOUNDS",
                     "Requested yearly limit must be within [" + bounds.getMinYearlyLimit()
                             + ", " + bounds.getMaxYearlyLimit() + "]");
+        }
+        if (cmd.requestedDailyLimit().compareTo(cmd.requestedSingleLimit()) < 0) {
+            throw new BusinessException("WALLET.LIMIT_REQUEST.DAILY_BELOW_SINGLE",
+                    "Daily limit cannot be lower than the single (per-transaction) limit");
         }
         if (cmd.requestedMonthlyLimit().compareTo(cmd.requestedDailyLimit()) < 0) {
             throw new BusinessException("WALLET.LIMIT_REQUEST.MONTHLY_BELOW_DAILY",
@@ -75,9 +84,11 @@ public class RequestWalletLimitChangeService implements RequestWalletLimitChange
         req.setTenantId(cmd.tenantId());
         req.setWalletId(wallet.getId());
         req.setCustomerId(wallet.getCustomerId());
+        req.setRequestedSingleLimit(cmd.requestedSingleLimit());
         req.setRequestedDailyLimit(cmd.requestedDailyLimit());
         req.setRequestedMonthlyLimit(cmd.requestedMonthlyLimit());
         req.setRequestedYearlyLimit(cmd.requestedYearlyLimit());
+        req.setCurrentSingleLimit(wallet.getSingleTransactionLimit());
         req.setCurrentDailyLimit(wallet.getDailyTransactionLimit());
         req.setCurrentMonthlyLimit(wallet.getMonthlyTransactionLimit());
         req.setCurrentYearlyLimit(wallet.getYearlyTransactionLimit());

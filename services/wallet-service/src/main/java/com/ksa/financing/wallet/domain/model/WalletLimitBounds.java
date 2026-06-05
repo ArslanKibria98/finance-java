@@ -12,6 +12,9 @@ public class WalletLimitBounds {
 
     private UUID id;
     private UUID tenantId;
+    private BigDecimal minSingleLimit;
+    private BigDecimal maxSingleLimit;
+    private BigDecimal defaultSingleLimit;
     private BigDecimal minDailyLimit;
     private BigDecimal maxDailyLimit;
     private BigDecimal minMonthlyLimit;
@@ -25,6 +28,13 @@ public class WalletLimitBounds {
     private Instant updatedAt;
     private UUID updatedBy;
     private int version;
+
+    /** Whether the given single (per-transaction) limit falls within [min, max]. */
+    public boolean isSingleWithinBounds(BigDecimal value) {
+        return value != null
+                && value.compareTo(minSingleLimit) >= 0
+                && value.compareTo(maxSingleLimit) <= 0;
+    }
 
     /** Whether the given daily limit falls within [min, max]. */
     public boolean isDailyWithinBounds(BigDecimal value) {
@@ -51,6 +61,12 @@ public class WalletLimitBounds {
     public void setId(UUID id) { this.id = id; }
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
+    public BigDecimal getMinSingleLimit() { return minSingleLimit; }
+    public void setMinSingleLimit(BigDecimal minSingleLimit) { this.minSingleLimit = minSingleLimit; }
+    public BigDecimal getMaxSingleLimit() { return maxSingleLimit; }
+    public void setMaxSingleLimit(BigDecimal maxSingleLimit) { this.maxSingleLimit = maxSingleLimit; }
+    public BigDecimal getDefaultSingleLimit() { return defaultSingleLimit; }
+    public void setDefaultSingleLimit(BigDecimal defaultSingleLimit) { this.defaultSingleLimit = defaultSingleLimit; }
     public BigDecimal getMinDailyLimit() { return minDailyLimit; }
     public void setMinDailyLimit(BigDecimal minDailyLimit) { this.minDailyLimit = minDailyLimit; }
     public BigDecimal getMaxDailyLimit() { return maxDailyLimit; }

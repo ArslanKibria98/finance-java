@@ -42,6 +42,9 @@ public class InitiateIbftService implements InitiateIbftUseCase {
     private final String corporateAccount;
     private final String defaultCurrency;
 
+    @org.springframework.beans.factory.annotation.Value("${ksa.wallet.ibft.validate-one-time:true}")
+    private boolean validateOneTime;
+
     public InitiateIbftService(WalletRepository walletRepository,
                                IbftTransactionRepository ibftRepository,
                                IbftBeneficiaryRepository beneficiaryRepository,
@@ -83,14 +86,8 @@ public class InitiateIbftService implements InitiateIbftUseCase {
         if (wallet.getFineractSavingsAccountId() == null)
             throw new BusinessException("IBFT.NOT_FINERACT_LINKED", "Wallet not linked to Fineract");
 
-        // 4. Beneficiary
-        IbftBeneficiary ben = beneficiaryRepository.findByIdAndTenantId(c.beneficiaryId(), c.tenantId())
-                .orElseThrow(() -> new BusinessException("IBFT.BENEFICIARY.NOT_FOUND",
-                        "Beneficiary not found: " + c.beneficiaryId()));
-        if (!ben.isActive())
-            throw new BusinessException("IBFT.BENEFICIARY.INACTIVE", "Beneficiary is not active");
-        if (!ben.getCustomerId().equals(wallet.getCustomerId()))
-            throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS, "Beneficiary does not belong to you");
+        // 4. Resolve creditor — a saved beneficiary OR a one-time (ad-hoc) payee
+        Creditor creditor = resolveCreditor(c, wallet);
 
         String currency = c.currency() != null ? c.currency() : defaultCurrency;
 
@@ -109,7 +106,7 @@ public class InitiateIbftService implements InitiateIbftUseCase {
         limitEnforcer.enforce(wallet, c.amount());
 
         // 7. Persist INITIATED
-        IbftTransaction tx = newTransaction(c, wallet, ben, currency);
+        IbftTransaction tx = newTransaction(c, wallet, creditor, currency);
         IbftTransaction saved = ibftRepository.save(tx);
 
         // 8. HOLD funds (Fineract block + reserve + movement + GL)
@@ -130,7 +127,7 @@ public class InitiateIbftService implements InitiateIbftUseCase {
         // 9. Scotia EFT create
         var create = scotiaEftPort.createPayment(new ScotiaEftPort.EftPaymentRequest(
                 c.amount(), currency, null, corporateAccount,
-                ben.getBeneficiaryName(), saved.getCreditorAccount(), saved.getEndToEndId(), saved.getIbftNumber()));
+                creditor.name(), saved.getCreditorAccount(), saved.getEndToEndId(), saved.getIbftNumber()));
         if (!create.success()) {
             return failAndRelease(wallet, saved, create.errorCode(), create.errorMessage());
         }
@@ -167,7 +164,42 @@ public class InitiateIbftService implements InitiateIbftUseCase {
         return ibftRepository.save(tx);
     }
 
-    private IbftTransaction newTransaction(InitiateIbftCommand c, Wallet wallet, IbftBeneficiary ben, String currency) {
+    /** A creditor (payee) — resolved from a saved beneficiary or one-time inline details. */
+    private record Creditor(UUID beneficiaryId, String institution, String transit, String account,
+                            String name, String bankName, boolean oneTime) {}
+
+    private Creditor resolveCreditor(InitiateIbftCommand c, Wallet wallet) {
+        // Saved beneficiary path
+        if (c.beneficiaryId() != null) {
+            IbftBeneficiary ben = beneficiaryRepository.findByIdAndTenantId(c.beneficiaryId(), c.tenantId())
+                    .orElseThrow(() -> new BusinessException("IBFT.BENEFICIARY.NOT_FOUND",
+                            "Beneficiary not found: " + c.beneficiaryId()));
+            if (!ben.isActive())
+                throw new BusinessException("IBFT.BENEFICIARY.INACTIVE", "Beneficiary is not active");
+            if (!ben.getCustomerId().equals(wallet.getCustomerId()))
+                throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS, "Beneficiary does not belong to you");
+            return new Creditor(ben.getId(), ben.getInstitutionNumber(), ben.getTransit(),
+                    ben.getAccountNumber(), ben.getBeneficiaryName(), ben.getBankName(), false);
+        }
+        // One-time (ad-hoc) payee path — inline details required + format-checked + Scotia-validated
+        String inst = c.institutionNumber(), tr = c.transit(), acc = c.accountNumber(), name = c.beneficiaryName();
+        if (badDigits(inst, 3, 4) || badDigits(tr, 5, 5) || badDigits(acc, 5, 20) || name == null || name.isBlank())
+            throw new BusinessException("IBFT.PAYEE.INVALID",
+                    "Provide beneficiaryId, or one-time payee: beneficiaryName + institutionNumber(3-4) + transit(5) + accountNumber(5-20) digits");
+        if (validateOneTime) {
+            var v = scotiaEftPort.validateAccount(inst, tr, acc, name);
+            if (!v.valid())
+                throw new BusinessException("IBFT.PAYEE.VALIDATION_FAILED",
+                        "Scotia could not validate the payee account (" + v.status() + ")");
+        }
+        return new Creditor(null, inst, tr, acc, name.trim(), c.bankName(), true);
+    }
+
+    private static boolean badDigits(String s, int min, int max) {
+        return s == null || !s.matches("^[0-9]{" + min + "," + max + "}$");
+    }
+
+    private IbftTransaction newTransaction(InitiateIbftCommand c, Wallet wallet, Creditor creditor, String currency) {
         UUID id = UUID.randomUUID();
         IbftTransaction t = new IbftTransaction();
         t.setId(id);
@@ -175,10 +207,14 @@ public class InitiateIbftService implements InitiateIbftUseCase {
         t.setIbftNumber("IBFT-" + System.currentTimeMillis() + "-" + id.toString().substring(0, 8));
         t.setCustomerId(wallet.getCustomerId());
         t.setWalletId(wallet.getId());
-        t.setBeneficiaryId(ben.getId());
+        t.setBeneficiaryId(creditor.beneficiaryId());
+        t.setOneTime(creditor.oneTime());
         t.setDebtorCorporateAccount(corporateAccount);
-        t.setCreditorAccount(ben.getInstitutionNumber() + "-" + ben.getTransit() + "-" + ben.getAccountNumber());
-        t.setCreditorName(ben.getBeneficiaryName());
+        t.setCreditorAccount(creditor.institution() + "-" + creditor.transit() + "-" + creditor.account());
+        t.setCreditorInstitution(creditor.institution());
+        t.setCreditorTransit(creditor.transit());
+        t.setCreditorAccountNo(creditor.account());
+        t.setCreditorName(creditor.name());
         t.setAmount(c.amount());
         t.setFeeAmount(BigDecimal.ZERO);
         t.setCurrency(currency);

@@ -85,6 +85,7 @@ public class CreateWalletService implements CreateWalletUseCase {
         wallet.setMonthTopUpAmount(BigDecimal.ZERO);
         // Transaction (spend) limits — seed from the tenant's admin-configured defaults.
         WalletLimitBounds bounds = limitBoundsUseCase.getBounds(command.tenantId());
+        wallet.setSingleTransactionLimit(bounds.getDefaultSingleLimit());
         wallet.setDailyTransactionLimit(bounds.getDefaultDailyLimit());
         wallet.setMonthlyTransactionLimit(bounds.getDefaultMonthlyLimit());
         wallet.setYearlyTransactionLimit(bounds.getDefaultYearlyLimit());

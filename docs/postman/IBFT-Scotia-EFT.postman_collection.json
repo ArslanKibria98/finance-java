@@ -1,0 +1,644 @@
+{
+  "info": {
+    "name": "IBFT (Scotia EFT)",
+    "description": "Bank-grade Inter-Bank Funds Transfer via Scotiabank EFT (HOLD-based, cron-reconciled).\n\nFlow: Login → add beneficiary → initiate (HOLD + Scotia submit) → reconcile (settle → final debit).\n\nDebtor (sender) = authenticated user (JWT mobile_number). DEV = Scotia mock (always SETTLED).\n\nURLs: {{walletUrl}} via Kong; {{directUrl}} = wallet-service direct (for the internal reconcile endpoint).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "walletUrl",
+      "value": "http://46.62.226.94:8000/wallet-service",
+      "description": "Kong → wallet-service. Local: http://localhost:8000/wallet-service"
+    },
+    {
+      "key": "directUrl",
+      "value": "http://localhost:8088",
+      "description": "wallet-service direct (internal reconcile endpoint)"
+    },
+    {
+      "key": "keycloakUrl",
+      "value": "http://46.62.226.94:8080",
+      "description": "Keycloak base"
+    },
+    {
+      "key": "realm",
+      "value": "CompanyRealm"
+    },
+    {
+      "key": "customerUser",
+      "value": "1234565785",
+      "description": "customer national_id (login username)"
+    },
+    {
+      "key": "customerPass",
+      "value": "Test@1234",
+      "description": "DEV password set for token minting"
+    },
+    {
+      "key": "jwt",
+      "value": ""
+    },
+    {
+      "key": "ibftWallet",
+      "value": ""
+    },
+    {
+      "key": "beneficiaryId",
+      "value": ""
+    },
+    {
+      "key": "ibftId",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Login (customer) — sets {{jwt}}",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "url": "{{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+        "description": "Keycloak direct-grant for the customer (mobile_number claim required by IBFT). Set {{customerUser}}/{{customerPass}}.",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "password"
+            },
+            {
+              "key": "client_id",
+              "value": "customer-mobile-app"
+            },
+            {
+              "key": "username",
+              "value": "{{customerUser}}"
+            },
+            {
+              "key": "password",
+              "value": "{{customerPass}}"
+            },
+            {
+              "key": "scope",
+              "value": "openid profile email"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const d=pm.response.json();",
+              "if(d.access_token){pm.collectionVariables.set('jwt',d.access_token);}",
+              "pm.test('login ok',()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. My wallet (capture {{ibftWallet}})",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/wallets/me/balance",
+        "description": "Authenticated user's wallet — captures walletId + shows available/reserved balance.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const x=(pm.response.json().data)||pm.response.json();",
+              "if(x.id){pm.collectionVariables.set('ibftWallet',x.id);}",
+              "console.log('wallet',x.id,'available',x.availableBalance,'reserved',x.reservedBalance);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Add beneficiary (Scotia validation) — sets {{beneficiaryId}}",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/beneficiaries",
+        "description": "Validates the Canadian account via Scotia ACCOUNT_VALIDATION, dedupes, saves.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nickname\": \"Jane RBC\",\n  \"beneficiaryName\": \"Jane Smith\",\n  \"institutionNumber\": \"003\",\n  \"transit\": \"12345\",\n  \"accountNumber\": \"6789012\",\n  \"bankName\": \"Royal Bank of Canada\",\n  \"currency\": \"CAD\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const x=(pm.response.json().data)||pm.response.json();",
+              "if(x.id){pm.collectionVariables.set('beneficiaryId',x.id);}",
+              "pm.test('created',()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. List beneficiaries",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/beneficiaries",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "4. Balance BEFORE",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/wallets/{{ibftWallet}}/balance",
+        "description": "available/reserved before initiating.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. Initiate IBFT (HOLD + Scotia EFT submit) — sets {{ibftId}}",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "ibft-{{$timestamp}}"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers",
+        "description": "Holds funds (Fineract holdAmount → available -amount, reserved +amount) then Scotia EFT create+submit. Debtor = authenticated user (no source param). Idempotent via X-Idempotency-Key.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"beneficiaryId\": \"{{beneficiaryId}}\",\n  \"amount\": 40,\n  \"currency\": \"CAD\",\n  \"purposeNote\": \"rent\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const x=(pm.response.json().data)||pm.response.json();",
+              "if(x.id){pm.collectionVariables.set('ibftId',x.id);}",
+              "pm.test('submitted',()=>pm.expect(x.status).to.eql('SUBMITTED'));",
+              "pm.test('held',()=>pm.expect(x.holdMovementId).to.not.be.empty);",
+              "pm.test('scotia submission',()=>pm.expect(x.scotiaSubmissionId).to.not.be.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5b. Initiate IBFT (ONE-TIME payee, no saved beneficiary)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "ibft-ot-{{$timestamp}}"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers",
+        "description": "Ad-hoc payee path (V22): omit beneficiaryId, send inline payee. Format-checked (institution 3-4 / transit 5 / account 5-20 digits) + Scotia ACCOUNT_VALIDATION before HOLD. Toggle ksa.wallet.ibft.validate-one-time.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"beneficiaryName\": \"Ad Hoc Payee\",\n  \"institutionNumber\": \"003\",\n  \"transit\": \"12345\",\n  \"accountNumber\": \"6789012\",\n  \"bankName\": \"RBC\",\n  \"amount\": 25,\n  \"currency\": \"CAD\",\n  \"purposeNote\": \"one-time\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const x=(pm.response.json().data)||pm.response.json();",
+              "pm.test('submitted',()=>pm.expect(x.status).to.eql('SUBMITTED'));",
+              "pm.test('held',()=>pm.expect(x.holdMovementId).to.not.be.empty);",
+              "pm.test('scotia submission',()=>pm.expect(x.scotiaSubmissionId).to.not.be.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5c. ❌ One-time payee bad digits (→ 422 IBFT.PAYEE.INVALID)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "ibft-bad-{{$timestamp}}"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers",
+        "description": "transit must be 5 digits; here it's too short → 422 IBFT.PAYEE.INVALID (no hold placed).",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"beneficiaryName\": \"Bad Payee\",\n  \"institutionNumber\": \"003\",\n  \"transit\": \"12\",\n  \"accountNumber\": \"6789012\",\n  \"amount\": 10,\n  \"currency\": \"CAD\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422',()=>pm.expect(pm.response.code).to.eql(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Balance AFTER HOLD (available -40, reserved +40)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/wallets/{{ibftWallet}}/balance",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "7. Get IBFT by id",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers/{{ibftId}}",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "8. Reconcile (cron trigger) — INQUIRE → settle/release",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{directUrl}}/internal/wallets/ibft/reconcile",
+        "description": "Internal (no JWT) — polls Scotia INQUIRE for SUBMITTED/PROCESSING transfers, finalizes (settled) or releases (rejected). The @Scheduled cron also runs every 2 min.",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const x=(pm.response.json().data)||pm.response.json();",
+              "console.log('recon',JSON.stringify(x));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Balance AFTER SETTLE (reserved 0, net -40)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/wallets/{{ibftWallet}}/balance",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "10. Get IBFT (now COMPLETED)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers/{{ibftId}}",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "11. List IBFT by wallet",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers/by-wallet/{{ibftWallet}}?page=0&size=20",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "12. ❌ Insufficient (amount 999,999,999 → 422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Idempotency-Key",
+            "value": "ibft-insuf-{{$timestamp}}"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/transfers",
+        "description": "Sender balance checked before any hold → 422 WALLET.BALANCE.INSUFFICIENT.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"beneficiaryId\": \"{{beneficiaryId}}\",\n  \"amount\": 999999999,\n  \"currency\": \"CAD\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('insufficient',()=>pm.expect(pm.response.code).to.eql(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. ❌ Duplicate beneficiary (→ 422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{walletUrl}}/api/v1/ibft/beneficiaries",
+        "description": "Same institution+transit+account → 422 IBFT.BENEFICIARY.DUPLICATE.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"beneficiaryName\": \"Jane Smith\",\n  \"institutionNumber\": \"003\",\n  \"transit\": \"12345\",\n  \"accountNumber\": \"6789012\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('duplicate',()=>pm.expect(pm.response.code).to.eql(422));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

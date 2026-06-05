@@ -22,6 +22,10 @@ public class IbftTransactionJpaEntity {
     @Column(name = "debtor_corporate_account", length = 34) private String debtorCorporateAccount;
     @Column(name = "creditor_account", length = 40) private String creditorAccount;
     @Column(name = "creditor_name", length = 200) private String creditorName;
+    @Column(name = "creditor_institution", length = 4) private String creditorInstitution;
+    @Column(name = "creditor_transit", length = 5) private String creditorTransit;
+    @Column(name = "creditor_account_no", length = 20) private String creditorAccountNo;
+    @Column(name = "one_time", nullable = false) private boolean oneTime = false;
     @Column(name = "amount", nullable = false, precision = 20, scale = 6) private BigDecimal amount;
     @Column(name = "fee_amount", nullable = false, precision = 20, scale = 6) private BigDecimal feeAmount = BigDecimal.ZERO;
     @Column(name = "currency", nullable = false, length = 3) private String currency = "CAD";
@@ -70,6 +74,10 @@ public class IbftTransactionJpaEntity {
     public String getDebtorCorporateAccount() { return debtorCorporateAccount; } public void setDebtorCorporateAccount(String v) { this.debtorCorporateAccount = v; }
     public String getCreditorAccount() { return creditorAccount; } public void setCreditorAccount(String v) { this.creditorAccount = v; }
     public String getCreditorName() { return creditorName; } public void setCreditorName(String v) { this.creditorName = v; }
+    public String getCreditorInstitution() { return creditorInstitution; } public void setCreditorInstitution(String v) { this.creditorInstitution = v; }
+    public String getCreditorTransit() { return creditorTransit; } public void setCreditorTransit(String v) { this.creditorTransit = v; }
+    public String getCreditorAccountNo() { return creditorAccountNo; } public void setCreditorAccountNo(String v) { this.creditorAccountNo = v; }
+    public boolean isOneTime() { return oneTime; } public void setOneTime(boolean v) { this.oneTime = v; }
     public BigDecimal getAmount() { return amount; } public void setAmount(BigDecimal v) { this.amount = v; }
     public BigDecimal getFeeAmount() { return feeAmount; } public void setFeeAmount(BigDecimal v) { this.feeAmount = v; }
     public String getCurrency() { return currency; } public void setCurrency(String v) { this.currency = v; }

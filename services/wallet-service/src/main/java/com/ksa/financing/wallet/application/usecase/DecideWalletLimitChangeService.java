@@ -35,6 +35,7 @@ public class DecideWalletLimitChangeService implements DecideWalletLimitChangeUs
         // Apply the approved limits to the wallet — this is when the new limit takes effect.
         Wallet wallet = walletRepository.findById(req.getWalletId())
                 .orElseThrow(() -> NotFoundException.forEntity("Wallet", req.getWalletId().toString()));
+        wallet.setSingleTransactionLimit(req.getRequestedSingleLimit());
         wallet.setDailyTransactionLimit(req.getRequestedDailyLimit());
         wallet.setMonthlyTransactionLimit(req.getRequestedMonthlyLimit());
         wallet.setYearlyTransactionLimit(req.getRequestedYearlyLimit());

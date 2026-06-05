@@ -58,6 +58,9 @@ public class WalletJpaEntity {
     @Column(name = "month_top_up_amount", nullable = false, precision = 20, scale = 6)
     private BigDecimal monthTopUpAmount = BigDecimal.ZERO;
 
+    @Column(name = "single_transaction_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal singleTransactionLimit;
+
     @Column(name = "daily_transaction_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal dailyTransactionLimit;
 
@@ -164,6 +167,9 @@ public class WalletJpaEntity {
 
     public BigDecimal getMonthTopUpAmount() { return monthTopUpAmount; }
     public void setMonthTopUpAmount(BigDecimal monthTopUpAmount) { this.monthTopUpAmount = monthTopUpAmount; }
+
+    public BigDecimal getSingleTransactionLimit() { return singleTransactionLimit; }
+    public void setSingleTransactionLimit(BigDecimal singleTransactionLimit) { this.singleTransactionLimit = singleTransactionLimit; }
 
     public BigDecimal getDailyTransactionLimit() { return dailyTransactionLimit; }
     public void setDailyTransactionLimit(BigDecimal dailyTransactionLimit) { this.dailyTransactionLimit = dailyTransactionLimit; }

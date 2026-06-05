@@ -1360,7 +1360,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
+              "raw": "{\n  \"minSingleLimit\": 0,\n  \"maxSingleLimit\": 50000,\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultSingleLimit\": 10000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1450,7 +1450,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requestedDailyLimit\": 40000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
+              "raw": "{\n  \"requestedSingleLimit\": 15000,\n  \"requestedDailyLimit\": 40000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

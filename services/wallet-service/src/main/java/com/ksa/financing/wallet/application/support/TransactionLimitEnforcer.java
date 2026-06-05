@@ -52,6 +52,17 @@ public class TransactionLimitEnforcer {
         if (amount == null || amount.signum() <= 0) {
             return;
         }
+        // Single (per-transaction) limit — compares THIS amount, not cumulative.
+        BigDecimal singleLimit = wallet.getSingleTransactionLimit();
+        if (singleLimit != null && amount.compareTo(singleLimit) > 0) {
+            log.info("Single-transaction limit breach wallet={} limit={} attempted={}",
+                    wallet.getId(), singleLimit, amount);
+            throw new BusinessException(
+                    ErrorCodes.Wallet.SINGLE_TXN_LIMIT_EXCEEDED,
+                    "Single-transaction limit exceeded: limit=" + singleLimit + " attempted=" + amount,
+                    singleLimit, amount);
+        }
+
         LocalDate today = LocalDate.now(zone);
         Instant startOfDay = today.atStartOfDay(zone).toInstant();
         Instant startOfMonth = today.withDayOfMonth(1).atStartOfDay(zone).toInstant();
@@ -64,10 +75,10 @@ public class TransactionLimitEnforcer {
                 log.info("Daily limit breach wallet={} limit={} used={} attempted={}",
                         wallet.getId(), dailyLimit, todaySpent, amount);
                 throw new BusinessException(
-                        ErrorCodes.Wallet.LIMIT_EXCEEDED,
+                        ErrorCodes.Wallet.DAILY_TXN_LIMIT_EXCEEDED,
                         "Daily transaction limit exceeded: limit=" + dailyLimit
                                 + " alreadyUsed=" + todaySpent + " attempted=" + amount,
-                        dailyLimit.toString());
+                        dailyLimit, todaySpent, amount);
             }
         }
 
@@ -78,10 +89,10 @@ public class TransactionLimitEnforcer {
                 log.info("Monthly limit breach wallet={} limit={} used={} attempted={}",
                         wallet.getId(), monthlyLimit, monthSpent, amount);
                 throw new BusinessException(
-                        ErrorCodes.Wallet.LIMIT_EXCEEDED,
+                        ErrorCodes.Wallet.MONTHLY_TXN_LIMIT_EXCEEDED,
                         "Monthly transaction limit exceeded: limit=" + monthlyLimit
                                 + " alreadyUsed=" + monthSpent + " attempted=" + amount,
-                        monthlyLimit.toString());
+                        monthlyLimit, monthSpent, amount);
             }
         }
 
@@ -92,10 +103,10 @@ public class TransactionLimitEnforcer {
                 log.info("Yearly limit breach wallet={} limit={} used={} attempted={}",
                         wallet.getId(), yearlyLimit, yearSpent, amount);
                 throw new BusinessException(
-                        ErrorCodes.Wallet.LIMIT_EXCEEDED,
+                        ErrorCodes.Wallet.YEARLY_TXN_LIMIT_EXCEEDED,
                         "Yearly transaction limit exceeded: limit=" + yearlyLimit
                                 + " alreadyUsed=" + yearSpent + " attempted=" + amount,
-                        yearlyLimit.toString());
+                        yearlyLimit, yearSpent, amount);
             }
         }
     }

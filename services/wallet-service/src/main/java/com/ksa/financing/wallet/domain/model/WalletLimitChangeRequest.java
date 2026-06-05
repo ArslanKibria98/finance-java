@@ -14,9 +14,11 @@ public class WalletLimitChangeRequest {
     private UUID tenantId;
     private UUID walletId;
     private UUID customerId;
+    private BigDecimal requestedSingleLimit;
     private BigDecimal requestedDailyLimit;
     private BigDecimal requestedMonthlyLimit;
     private BigDecimal requestedYearlyLimit;
+    private BigDecimal currentSingleLimit;
     private BigDecimal currentDailyLimit;
     private BigDecimal currentMonthlyLimit;
     private BigDecimal currentYearlyLimit;
@@ -71,6 +73,10 @@ public class WalletLimitChangeRequest {
     public void setWalletId(UUID walletId) { this.walletId = walletId; }
     public UUID getCustomerId() { return customerId; }
     public void setCustomerId(UUID customerId) { this.customerId = customerId; }
+    public BigDecimal getRequestedSingleLimit() { return requestedSingleLimit; }
+    public void setRequestedSingleLimit(BigDecimal requestedSingleLimit) { this.requestedSingleLimit = requestedSingleLimit; }
+    public BigDecimal getCurrentSingleLimit() { return currentSingleLimit; }
+    public void setCurrentSingleLimit(BigDecimal currentSingleLimit) { this.currentSingleLimit = currentSingleLimit; }
     public BigDecimal getRequestedDailyLimit() { return requestedDailyLimit; }
     public void setRequestedDailyLimit(BigDecimal requestedDailyLimit) { this.requestedDailyLimit = requestedDailyLimit; }
     public BigDecimal getRequestedMonthlyLimit() { return requestedMonthlyLimit; }

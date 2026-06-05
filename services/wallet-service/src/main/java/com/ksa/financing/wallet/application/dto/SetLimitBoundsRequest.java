@@ -7,12 +7,15 @@ import java.math.BigDecimal;
 
 /** Admin request to set the platform transaction-limit bounds for the tenant. */
 public record SetLimitBoundsRequest(
+        @NotNull @DecimalMin("0") BigDecimal minSingleLimit,
+        @NotNull @DecimalMin("0") BigDecimal maxSingleLimit,
         @NotNull @DecimalMin("0") BigDecimal minDailyLimit,
         @NotNull @DecimalMin("0") BigDecimal maxDailyLimit,
         @NotNull @DecimalMin("0") BigDecimal minMonthlyLimit,
         @NotNull @DecimalMin("0") BigDecimal maxMonthlyLimit,
         @NotNull @DecimalMin("0") BigDecimal minYearlyLimit,
         @NotNull @DecimalMin("0") BigDecimal maxYearlyLimit,
+        @NotNull @DecimalMin("0") BigDecimal defaultSingleLimit,
         @NotNull @DecimalMin("0") BigDecimal defaultDailyLimit,
         @NotNull @DecimalMin("0") BigDecimal defaultMonthlyLimit,
         @NotNull @DecimalMin("0") BigDecimal defaultYearlyLimit) {

@@ -55,10 +55,12 @@ public class AdminWalletLimitController {
         UUID updatedBy = extractUserId(jwt);
         var updated = boundsUseCase.updateBounds(new ManageWalletLimitBoundsUseCase.UpdateBoundsCommand(
                 tenantId,
+                request.minSingleLimit(), request.maxSingleLimit(),
                 request.minDailyLimit(), request.maxDailyLimit(),
                 request.minMonthlyLimit(), request.maxMonthlyLimit(),
                 request.minYearlyLimit(), request.maxYearlyLimit(),
-                request.defaultDailyLimit(), request.defaultMonthlyLimit(), request.defaultYearlyLimit(),
+                request.defaultSingleLimit(), request.defaultDailyLimit(),
+                request.defaultMonthlyLimit(), request.defaultYearlyLimit(),
                 updatedBy));
         return ResponseEntity.ok(LimitBoundsResponse.from(updated));
     }

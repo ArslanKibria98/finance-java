@@ -57,6 +57,11 @@ public final class ErrorCodes {
         public static final String NOT_ACTIVE          = "WALLET.STATUS.NOT_ACTIVE";
         public static final String LIMIT_EXCEEDED      = "WALLET.TOPUP.LIMIT_EXCEEDED";
         public static final String INSUFFICIENT_FUNDS  = "WALLET.BALANCE.INSUFFICIENT";
+        // Transaction (spend) limits — per-transaction + cumulative day/month/year
+        public static final String SINGLE_TXN_LIMIT_EXCEEDED  = "WALLET.TXN_LIMIT.SINGLE_EXCEEDED";
+        public static final String DAILY_TXN_LIMIT_EXCEEDED   = "WALLET.TXN_LIMIT.DAILY_EXCEEDED";
+        public static final String MONTHLY_TXN_LIMIT_EXCEEDED = "WALLET.TXN_LIMIT.MONTHLY_EXCEEDED";
+        public static final String YEARLY_TXN_LIMIT_EXCEEDED  = "WALLET.TXN_LIMIT.YEARLY_EXCEEDED";
     }
 
     // ── Risk ────────────────────────────────────────────────────────

@@ -24,6 +24,10 @@ public class IbftTransactionPersistenceMapper {
         e.setDebtorCorporateAccount(d.getDebtorCorporateAccount());
         e.setCreditorAccount(d.getCreditorAccount());
         e.setCreditorName(d.getCreditorName());
+        e.setCreditorInstitution(d.getCreditorInstitution());
+        e.setCreditorTransit(d.getCreditorTransit());
+        e.setCreditorAccountNo(d.getCreditorAccountNo());
+        e.setOneTime(d.isOneTime());
         e.setAmount(d.getAmount());
         e.setFeeAmount(d.getFeeAmount());
         e.setCurrency(d.getCurrency());
@@ -68,6 +72,10 @@ public class IbftTransactionPersistenceMapper {
         d.setDebtorCorporateAccount(e.getDebtorCorporateAccount());
         d.setCreditorAccount(e.getCreditorAccount());
         d.setCreditorName(e.getCreditorName());
+        d.setCreditorInstitution(e.getCreditorInstitution());
+        d.setCreditorTransit(e.getCreditorTransit());
+        d.setCreditorAccountNo(e.getCreditorAccountNo());
+        d.setOneTime(e.isOneTime());
         d.setAmount(e.getAmount());
         d.setFeeAmount(e.getFeeAmount());
         d.setCurrency(e.getCurrency());

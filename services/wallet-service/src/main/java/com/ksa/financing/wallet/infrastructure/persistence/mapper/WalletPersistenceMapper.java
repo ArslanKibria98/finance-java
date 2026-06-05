@@ -33,6 +33,7 @@ public class WalletPersistenceMapper {
         entity.setSingleTopUpLimit(domain.getSingleTopUpLimit());
         entity.setTodayTopUpAmount(domain.getTodayTopUpAmount());
         entity.setMonthTopUpAmount(domain.getMonthTopUpAmount());
+        entity.setSingleTransactionLimit(domain.getSingleTransactionLimit());
         entity.setDailyTransactionLimit(domain.getDailyTransactionLimit());
         entity.setMonthlyTransactionLimit(domain.getMonthlyTransactionLimit());
         entity.setYearlyTransactionLimit(domain.getYearlyTransactionLimit());
@@ -69,6 +70,7 @@ public class WalletPersistenceMapper {
         domain.setSingleTopUpLimit(entity.getSingleTopUpLimit());
         domain.setTodayTopUpAmount(entity.getTodayTopUpAmount());
         domain.setMonthTopUpAmount(entity.getMonthTopUpAmount());
+        domain.setSingleTransactionLimit(entity.getSingleTransactionLimit());
         domain.setDailyTransactionLimit(entity.getDailyTransactionLimit());
         domain.setMonthlyTransactionLimit(entity.getMonthlyTransactionLimit());
         domain.setYearlyTransactionLimit(entity.getYearlyTransactionLimit());

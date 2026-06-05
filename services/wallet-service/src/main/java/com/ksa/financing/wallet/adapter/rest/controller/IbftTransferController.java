@@ -51,7 +51,10 @@ public class IbftTransferController {
 
         IbftTransaction tx = initiateIbftUseCase.initiate(new InitiateIbftUseCase.InitiateIbftCommand(
                 wallet.getTenantId(), wallet.getCustomerId(), wallet.getId(),
-                request.beneficiaryId(), request.amount(), request.currency(), request.purposeNote(),
+                request.beneficiaryId(),
+                request.institutionNumber(), request.transit(), request.accountNumber(),
+                request.beneficiaryName(), request.bankName(),
+                request.amount(), request.currency(), request.purposeNote(),
                 idempotencyKey, auth.userId(jwt), httpRequest.getRemoteAddr(), httpRequest.getHeader("X-Device-Id")));
 
         HttpStatus status = "FAILED".equals(tx.getStatus().name()) ? HttpStatus.UNPROCESSABLE_ENTITY

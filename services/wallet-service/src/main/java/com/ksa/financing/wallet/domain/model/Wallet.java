@@ -20,6 +20,7 @@ public class Wallet {
     private BigDecimal singleTopUpLimit;
     private BigDecimal todayTopUpAmount;
     private BigDecimal monthTopUpAmount;
+    private BigDecimal singleTransactionLimit;
     private BigDecimal dailyTransactionLimit;
     private BigDecimal monthlyTransactionLimit;
     private BigDecimal yearlyTransactionLimit;
@@ -65,6 +66,8 @@ public class Wallet {
     public void setTodayTopUpAmount(BigDecimal todayTopUpAmount) { this.todayTopUpAmount = todayTopUpAmount; }
     public BigDecimal getMonthTopUpAmount() { return monthTopUpAmount; }
     public void setMonthTopUpAmount(BigDecimal monthTopUpAmount) { this.monthTopUpAmount = monthTopUpAmount; }
+    public BigDecimal getSingleTransactionLimit() { return singleTransactionLimit; }
+    public void setSingleTransactionLimit(BigDecimal singleTransactionLimit) { this.singleTransactionLimit = singleTransactionLimit; }
     public BigDecimal getDailyTransactionLimit() { return dailyTransactionLimit; }
     public void setDailyTransactionLimit(BigDecimal dailyTransactionLimit) { this.dailyTransactionLimit = dailyTransactionLimit; }
     public BigDecimal getMonthlyTransactionLimit() { return monthlyTransactionLimit; }

@@ -15,6 +15,7 @@ public interface RequestWalletLimitChangeUseCase {
     record RequestCommand(
             UUID tenantId,
             UUID walletId,
+            BigDecimal requestedSingleLimit,
             BigDecimal requestedDailyLimit,
             BigDecimal requestedMonthlyLimit,
             BigDecimal requestedYearlyLimit,

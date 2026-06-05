@@ -15,6 +15,10 @@ public class IbftTransaction {
     private String debtorCorporateAccount;
     private String creditorAccount;
     private String creditorName;
+    private String creditorInstitution;
+    private String creditorTransit;
+    private String creditorAccountNo;
+    private boolean oneTime;
     private BigDecimal amount;
     private BigDecimal feeAmount;
     private String currency;
@@ -63,6 +67,14 @@ public class IbftTransaction {
     public void setCreditorAccount(String creditorAccount) { this.creditorAccount = creditorAccount; }
     public String getCreditorName() { return creditorName; }
     public void setCreditorName(String creditorName) { this.creditorName = creditorName; }
+    public String getCreditorInstitution() { return creditorInstitution; }
+    public void setCreditorInstitution(String v) { this.creditorInstitution = v; }
+    public String getCreditorTransit() { return creditorTransit; }
+    public void setCreditorTransit(String v) { this.creditorTransit = v; }
+    public String getCreditorAccountNo() { return creditorAccountNo; }
+    public void setCreditorAccountNo(String v) { this.creditorAccountNo = v; }
+    public boolean isOneTime() { return oneTime; }
+    public void setOneTime(boolean oneTime) { this.oneTime = oneTime; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public BigDecimal getFeeAmount() { return feeAmount; }

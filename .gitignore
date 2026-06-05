@@ -35,7 +35,7 @@ buildNumber.properties
 *.iml
 *.ipr
 *.iws
-out/
+/out/
 
 # =========================
 # IDE - Eclipse

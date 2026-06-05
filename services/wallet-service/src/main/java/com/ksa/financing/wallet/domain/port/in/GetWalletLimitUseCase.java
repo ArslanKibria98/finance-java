@@ -10,14 +10,20 @@ public interface GetWalletLimitUseCase {
 
     record WalletLimitView(
             UUID walletId,
+            BigDecimal singleLimit,
             BigDecimal dailyLimit,
             BigDecimal monthlyLimit,
             BigDecimal yearlyLimit,
             BigDecimal todaySpent,
             BigDecimal monthSpent,
             BigDecimal yearSpent,
-            BigDecimal dailyRemaining,
-            BigDecimal monthlyRemaining,
-            BigDecimal yearlyRemaining,
+            BigDecimal minSingleLimit,
+            BigDecimal maxSingleLimit,
+            BigDecimal minDailyLimit,
+            BigDecimal maxDailyLimit,
+            BigDecimal minMonthlyLimit,
+            BigDecimal maxMonthlyLimit,
+            BigDecimal minYearlyLimit,
+            BigDecimal maxYearlyLimit,
             String currency) {}
 }

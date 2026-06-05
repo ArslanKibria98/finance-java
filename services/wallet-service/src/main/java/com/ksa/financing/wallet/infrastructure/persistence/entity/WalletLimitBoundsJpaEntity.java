@@ -16,6 +16,15 @@ public class WalletLimitBoundsJpaEntity {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @Column(name = "min_single_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal minSingleLimit;
+
+    @Column(name = "max_single_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal maxSingleLimit;
+
+    @Column(name = "default_single_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal defaultSingleLimit;
+
     @Column(name = "min_daily_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal minDailyLimit;
 
@@ -71,6 +80,12 @@ public class WalletLimitBoundsJpaEntity {
     public void setId(UUID id) { this.id = id; }
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
+    public BigDecimal getMinSingleLimit() { return minSingleLimit; }
+    public void setMinSingleLimit(BigDecimal minSingleLimit) { this.minSingleLimit = minSingleLimit; }
+    public BigDecimal getMaxSingleLimit() { return maxSingleLimit; }
+    public void setMaxSingleLimit(BigDecimal maxSingleLimit) { this.maxSingleLimit = maxSingleLimit; }
+    public BigDecimal getDefaultSingleLimit() { return defaultSingleLimit; }
+    public void setDefaultSingleLimit(BigDecimal defaultSingleLimit) { this.defaultSingleLimit = defaultSingleLimit; }
     public BigDecimal getMinDailyLimit() { return minDailyLimit; }
     public void setMinDailyLimit(BigDecimal minDailyLimit) { this.minDailyLimit = minDailyLimit; }
     public BigDecimal getMaxDailyLimit() { return maxDailyLimit; }
