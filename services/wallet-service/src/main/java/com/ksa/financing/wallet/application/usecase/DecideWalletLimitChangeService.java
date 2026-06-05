@@ -37,6 +37,7 @@ public class DecideWalletLimitChangeService implements DecideWalletLimitChangeUs
                 .orElseThrow(() -> NotFoundException.forEntity("Wallet", req.getWalletId().toString()));
         wallet.setSingleTransactionLimit(req.getRequestedSingleLimit());
         wallet.setDailyTransactionLimit(req.getRequestedDailyLimit());
+        wallet.setWeeklyTransactionLimit(req.getRequestedWeeklyLimit());
         wallet.setMonthlyTransactionLimit(req.getRequestedMonthlyLimit());
         wallet.setYearlyTransactionLimit(req.getRequestedYearlyLimit());
         wallet.setUpdatedAt(Instant.now());

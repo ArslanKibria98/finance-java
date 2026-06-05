@@ -22,6 +22,7 @@ public class Wallet {
     private BigDecimal monthTopUpAmount;
     private BigDecimal singleTransactionLimit;
     private BigDecimal dailyTransactionLimit;
+    private BigDecimal weeklyTransactionLimit;
     private BigDecimal monthlyTransactionLimit;
     private BigDecimal yearlyTransactionLimit;
     private Long fineractSavingsAccountId;
@@ -70,6 +71,8 @@ public class Wallet {
     public void setSingleTransactionLimit(BigDecimal singleTransactionLimit) { this.singleTransactionLimit = singleTransactionLimit; }
     public BigDecimal getDailyTransactionLimit() { return dailyTransactionLimit; }
     public void setDailyTransactionLimit(BigDecimal dailyTransactionLimit) { this.dailyTransactionLimit = dailyTransactionLimit; }
+    public BigDecimal getWeeklyTransactionLimit() { return weeklyTransactionLimit; }
+    public void setWeeklyTransactionLimit(BigDecimal weeklyTransactionLimit) { this.weeklyTransactionLimit = weeklyTransactionLimit; }
     public BigDecimal getMonthlyTransactionLimit() { return monthlyTransactionLimit; }
     public void setMonthlyTransactionLimit(BigDecimal monthlyTransactionLimit) { this.monthlyTransactionLimit = monthlyTransactionLimit; }
     public BigDecimal getYearlyTransactionLimit() { return yearlyTransactionLimit; }

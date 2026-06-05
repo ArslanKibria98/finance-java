@@ -60,6 +60,7 @@ public final class ErrorCodes {
         // Transaction (spend) limits — per-transaction + cumulative day/month/year
         public static final String SINGLE_TXN_LIMIT_EXCEEDED  = "WALLET.TXN_LIMIT.SINGLE_EXCEEDED";
         public static final String DAILY_TXN_LIMIT_EXCEEDED   = "WALLET.TXN_LIMIT.DAILY_EXCEEDED";
+        public static final String WEEKLY_TXN_LIMIT_EXCEEDED  = "WALLET.TXN_LIMIT.WEEKLY_EXCEEDED";
         public static final String MONTHLY_TXN_LIMIT_EXCEEDED = "WALLET.TXN_LIMIT.MONTHLY_EXCEEDED";
         public static final String YEARLY_TXN_LIMIT_EXCEEDED  = "WALLET.TXN_LIMIT.YEARLY_EXCEEDED";
     }

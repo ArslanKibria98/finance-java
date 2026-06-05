@@ -1252,8 +1252,8 @@
       ]
     },
     {
-      "name": "🔐 Wallet Transaction Limits (daily / monthly / yearly + approval)",
-      "description": "Admin sets platform MIN/MAX bounds for daily, monthly AND yearly spend limits. A customer requests a change (within bounds); an admin approves → the new limits apply to the wallet. Transfers + withdrawals exceeding daily/monthly/yearly cumulative spend are blocked (WALLET.BALANCE.LIMIT_EXCEEDED).\n\nRun **L0** first (admin token), and the wallet-transfers **0. Login** for the customer {{jwt}}.",
+      "name": "🔐 Wallet Transaction Limits (daily / weekly / monthly / yearly + approval)",
+      "description": "Admin sets platform MIN/MAX bounds for daily, weekly, monthly AND yearly spend limits. A customer requests a change (within bounds); an admin approves → the new limits apply to the wallet. Transfers + withdrawals exceeding daily/weekly/monthly/yearly cumulative spend are blocked (WALLET.TXN_LIMIT.{DAILY|WEEKLY|MONTHLY|YEARLY}_EXCEEDED). Weekly = ISO Mon-Sun in KSA tz.\n\nRun **L0** first (admin token), and the wallet-transfers **0. Login** for the customer {{jwt}}.",
       "item": [
         {
           "name": "L0. Login as Admin (auto-sets {{adminJwt}})",
@@ -1360,7 +1360,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"minSingleLimit\": 0,\n  \"maxSingleLimit\": 50000,\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultSingleLimit\": 10000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
+              "raw": "{\n  \"minSingleLimit\": 0,\n  \"maxSingleLimit\": 50000,\n  \"minDailyLimit\": 0,\n  \"maxDailyLimit\": 50000,\n  \"minWeeklyLimit\": 0,\n  \"maxWeeklyLimit\": 200000,\n  \"minMonthlyLimit\": 0,\n  \"maxMonthlyLimit\": 500000,\n  \"minYearlyLimit\": 0,\n  \"maxYearlyLimit\": 5000000,\n  \"defaultSingleLimit\": 10000,\n  \"defaultDailyLimit\": 20000,\n  \"defaultWeeklyLimit\": 50000,\n  \"defaultMonthlyLimit\": 100000,\n  \"defaultYearlyLimit\": 1000000\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1450,7 +1450,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requestedSingleLimit\": 15000,\n  \"requestedDailyLimit\": 40000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
+              "raw": "{\n  \"requestedSingleLimit\": 15000,\n  \"requestedDailyLimit\": 40000,\n  \"requestedWeeklyLimit\": 150000,\n  \"requestedMonthlyLimit\": 400000,\n  \"requestedYearlyLimit\": 4000000,\n  \"reason\": \"Higher spend needed for business\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

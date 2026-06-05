@@ -64,6 +64,9 @@ public class WalletJpaEntity {
     @Column(name = "daily_transaction_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal dailyTransactionLimit;
 
+    @Column(name = "weekly_transaction_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal weeklyTransactionLimit;
+
     @Column(name = "monthly_transaction_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal monthlyTransactionLimit;
 
@@ -173,6 +176,9 @@ public class WalletJpaEntity {
 
     public BigDecimal getDailyTransactionLimit() { return dailyTransactionLimit; }
     public void setDailyTransactionLimit(BigDecimal dailyTransactionLimit) { this.dailyTransactionLimit = dailyTransactionLimit; }
+
+    public BigDecimal getWeeklyTransactionLimit() { return weeklyTransactionLimit; }
+    public void setWeeklyTransactionLimit(BigDecimal weeklyTransactionLimit) { this.weeklyTransactionLimit = weeklyTransactionLimit; }
 
     public BigDecimal getMonthlyTransactionLimit() { return monthlyTransactionLimit; }
     public void setMonthlyTransactionLimit(BigDecimal monthlyTransactionLimit) { this.monthlyTransactionLimit = monthlyTransactionLimit; }

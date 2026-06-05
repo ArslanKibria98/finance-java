@@ -20,10 +20,12 @@ public class ManageWalletLimitBoundsService implements ManageWalletLimitBoundsUs
     private final WalletLimitBoundsRepository boundsRepository;
     private final BigDecimal defaultSingle;
     private final BigDecimal defaultDaily;
+    private final BigDecimal defaultWeekly;
     private final BigDecimal defaultMonthly;
     private final BigDecimal defaultYearly;
     private final BigDecimal defaultMaxSingle;
     private final BigDecimal defaultMaxDaily;
+    private final BigDecimal defaultMaxWeekly;
     private final BigDecimal defaultMaxMonthly;
     private final BigDecimal defaultMaxYearly;
 
@@ -31,19 +33,23 @@ public class ManageWalletLimitBoundsService implements ManageWalletLimitBoundsUs
             WalletLimitBoundsRepository boundsRepository,
             @Value("${wallet.limits.default-single:10000}") BigDecimal defaultSingle,
             @Value("${wallet.limits.default-daily:20000}") BigDecimal defaultDaily,
+            @Value("${wallet.limits.default-weekly:50000}") BigDecimal defaultWeekly,
             @Value("${wallet.limits.default-monthly:100000}") BigDecimal defaultMonthly,
             @Value("${wallet.limits.default-yearly:1000000}") BigDecimal defaultYearly,
             @Value("${wallet.limits.max-single:50000}") BigDecimal defaultMaxSingle,
             @Value("${wallet.limits.max-daily:50000}") BigDecimal defaultMaxDaily,
+            @Value("${wallet.limits.max-weekly:200000}") BigDecimal defaultMaxWeekly,
             @Value("${wallet.limits.max-monthly:500000}") BigDecimal defaultMaxMonthly,
             @Value("${wallet.limits.max-yearly:5000000}") BigDecimal defaultMaxYearly) {
         this.boundsRepository = boundsRepository;
         this.defaultSingle = defaultSingle;
         this.defaultDaily = defaultDaily;
+        this.defaultWeekly = defaultWeekly;
         this.defaultMonthly = defaultMonthly;
         this.defaultYearly = defaultYearly;
         this.defaultMaxSingle = defaultMaxSingle;
         this.defaultMaxDaily = defaultMaxDaily;
+        this.defaultMaxWeekly = defaultMaxWeekly;
         this.defaultMaxMonthly = defaultMaxMonthly;
         this.defaultMaxYearly = defaultMaxYearly;
     }
@@ -60,6 +66,7 @@ public class ManageWalletLimitBoundsService implements ManageWalletLimitBoundsUs
     public WalletLimitBounds updateBounds(UpdateBoundsCommand cmd) {
         if (cmd.maxSingleLimit().compareTo(cmd.minSingleLimit()) < 0
                 || cmd.maxDailyLimit().compareTo(cmd.minDailyLimit()) < 0
+                || cmd.maxWeeklyLimit().compareTo(cmd.minWeeklyLimit()) < 0
                 || cmd.maxMonthlyLimit().compareTo(cmd.minMonthlyLimit()) < 0
                 || cmd.maxYearlyLimit().compareTo(cmd.minYearlyLimit()) < 0) {
             throw new BusinessException("WALLET.LIMIT_BOUNDS.INVALID_RANGE",
@@ -67,6 +74,7 @@ public class ManageWalletLimitBoundsService implements ManageWalletLimitBoundsUs
         }
         if (!isWithin(cmd.defaultSingleLimit(), cmd.minSingleLimit(), cmd.maxSingleLimit())
                 || !isWithin(cmd.defaultDailyLimit(), cmd.minDailyLimit(), cmd.maxDailyLimit())
+                || !isWithin(cmd.defaultWeeklyLimit(), cmd.minWeeklyLimit(), cmd.maxWeeklyLimit())
                 || !isWithin(cmd.defaultMonthlyLimit(), cmd.minMonthlyLimit(), cmd.maxMonthlyLimit())
                 || !isWithin(cmd.defaultYearlyLimit(), cmd.minYearlyLimit(), cmd.maxYearlyLimit())) {
             throw new BusinessException("WALLET.LIMIT_BOUNDS.INVALID_DEFAULT",
@@ -80,11 +88,14 @@ public class ManageWalletLimitBoundsService implements ManageWalletLimitBoundsUs
         bounds.setDefaultSingleLimit(cmd.defaultSingleLimit());
         bounds.setMinDailyLimit(cmd.minDailyLimit());
         bounds.setMaxDailyLimit(cmd.maxDailyLimit());
+        bounds.setMinWeeklyLimit(cmd.minWeeklyLimit());
+        bounds.setMaxWeeklyLimit(cmd.maxWeeklyLimit());
         bounds.setMinMonthlyLimit(cmd.minMonthlyLimit());
         bounds.setMaxMonthlyLimit(cmd.maxMonthlyLimit());
         bounds.setMinYearlyLimit(cmd.minYearlyLimit());
         bounds.setMaxYearlyLimit(cmd.maxYearlyLimit());
         bounds.setDefaultDailyLimit(cmd.defaultDailyLimit());
+        bounds.setDefaultWeeklyLimit(cmd.defaultWeeklyLimit());
         bounds.setDefaultMonthlyLimit(cmd.defaultMonthlyLimit());
         bounds.setDefaultYearlyLimit(cmd.defaultYearlyLimit());
         bounds.setUpdatedBy(cmd.updatedBy());
@@ -107,11 +118,14 @@ public class ManageWalletLimitBoundsService implements ManageWalletLimitBoundsUs
         b.setDefaultSingleLimit(defaultSingle);
         b.setMinDailyLimit(BigDecimal.ZERO);
         b.setMaxDailyLimit(defaultMaxDaily);
+        b.setMinWeeklyLimit(BigDecimal.ZERO);
+        b.setMaxWeeklyLimit(defaultMaxWeekly);
         b.setMinMonthlyLimit(BigDecimal.ZERO);
         b.setMaxMonthlyLimit(defaultMaxMonthly);
         b.setMinYearlyLimit(BigDecimal.ZERO);
         b.setMaxYearlyLimit(defaultMaxYearly);
         b.setDefaultDailyLimit(defaultDaily);
+        b.setDefaultWeeklyLimit(defaultWeekly);
         b.setDefaultMonthlyLimit(defaultMonthly);
         b.setDefaultYearlyLimit(defaultYearly);
         b.setCreatedAt(Instant.now());

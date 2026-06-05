@@ -52,14 +52,18 @@ public class GetWalletLimitService implements GetWalletLimitUseCase {
 
         LocalDate today = LocalDate.now(zone);
         Instant startOfDay = today.atStartOfDay(zone).toInstant();
+        Instant startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1L)
+                .atStartOfDay(zone).toInstant();
         Instant startOfMonth = today.withDayOfMonth(1).atStartOfDay(zone).toInstant();
         Instant startOfYear = today.withDayOfYear(1).atStartOfDay(zone).toInstant();
 
         BigDecimal todaySpent = limitEnforcer.spentSince(wallet, startOfDay);
+        BigDecimal weekSpent = limitEnforcer.spentSince(wallet, startOfWeek);
         BigDecimal monthSpent = limitEnforcer.spentSince(wallet, startOfMonth);
         BigDecimal yearSpent = limitEnforcer.spentSince(wallet, startOfYear);
 
         BigDecimal dailyLimit = wallet.getDailyTransactionLimit();
+        BigDecimal weeklyLimit = wallet.getWeeklyTransactionLimit();
         BigDecimal monthlyLimit = wallet.getMonthlyTransactionLimit();
         BigDecimal yearlyLimit = wallet.getYearlyTransactionLimit();
 
@@ -69,15 +73,19 @@ public class GetWalletLimitService implements GetWalletLimitUseCase {
                 walletId,
                 wallet.getSingleTransactionLimit(),
                 dailyLimit,
+                weeklyLimit,
                 monthlyLimit,
                 yearlyLimit,
                 todaySpent,
+                weekSpent,
                 monthSpent,
                 yearSpent,
                 bounds == null ? null : bounds.getMinSingleLimit(),
                 bounds == null ? null : bounds.getMaxSingleLimit(),
                 bounds == null ? null : bounds.getMinDailyLimit(),
                 bounds == null ? null : bounds.getMaxDailyLimit(),
+                bounds == null ? null : bounds.getMinWeeklyLimit(),
+                bounds == null ? null : bounds.getMaxWeeklyLimit(),
                 bounds == null ? null : bounds.getMinMonthlyLimit(),
                 bounds == null ? null : bounds.getMaxMonthlyLimit(),
                 bounds == null ? null : bounds.getMinYearlyLimit(),

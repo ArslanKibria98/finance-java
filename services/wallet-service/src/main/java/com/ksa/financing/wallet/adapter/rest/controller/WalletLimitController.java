@@ -56,13 +56,15 @@ public class WalletLimitController {
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = extractTenantId(jwt);
         UUID requestedBy = extractUserId(jwt);
-        log.info("Limit-change request wallet={} single={} daily={} monthly={} yearly={} by={}",
+        log.info("Limit-change request wallet={} single={} daily={} weekly={} monthly={} yearly={} by={}",
                 walletId, request.requestedSingleLimit(), request.requestedDailyLimit(),
-                request.requestedMonthlyLimit(), request.requestedYearlyLimit(), requestedBy);
+                request.requestedWeeklyLimit(), request.requestedMonthlyLimit(),
+                request.requestedYearlyLimit(), requestedBy);
 
         var created = requestUseCase.request(new RequestWalletLimitChangeUseCase.RequestCommand(
                 tenantId, walletId,
                 request.requestedSingleLimit(), request.requestedDailyLimit(),
+                request.requestedWeeklyLimit(),
                 request.requestedMonthlyLimit(), request.requestedYearlyLimit(),
                 request.reason(), requestedBy));
 

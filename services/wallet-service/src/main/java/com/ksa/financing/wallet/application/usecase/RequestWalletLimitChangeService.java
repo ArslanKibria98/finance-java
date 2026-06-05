@@ -52,6 +52,11 @@ public class RequestWalletLimitChangeService implements RequestWalletLimitChange
                     "Requested daily limit must be within [" + bounds.getMinDailyLimit()
                             + ", " + bounds.getMaxDailyLimit() + "]");
         }
+        if (!bounds.isWeeklyWithinBounds(cmd.requestedWeeklyLimit())) {
+            throw new BusinessException("WALLET.LIMIT_REQUEST.WEEKLY_OUT_OF_BOUNDS",
+                    "Requested weekly limit must be within [" + bounds.getMinWeeklyLimit()
+                            + ", " + bounds.getMaxWeeklyLimit() + "]");
+        }
         if (!bounds.isMonthlyWithinBounds(cmd.requestedMonthlyLimit())) {
             throw new BusinessException("WALLET.LIMIT_REQUEST.MONTHLY_OUT_OF_BOUNDS",
                     "Requested monthly limit must be within [" + bounds.getMinMonthlyLimit()
@@ -66,9 +71,13 @@ public class RequestWalletLimitChangeService implements RequestWalletLimitChange
             throw new BusinessException("WALLET.LIMIT_REQUEST.DAILY_BELOW_SINGLE",
                     "Daily limit cannot be lower than the single (per-transaction) limit");
         }
-        if (cmd.requestedMonthlyLimit().compareTo(cmd.requestedDailyLimit()) < 0) {
-            throw new BusinessException("WALLET.LIMIT_REQUEST.MONTHLY_BELOW_DAILY",
-                    "Monthly limit cannot be lower than daily limit");
+        if (cmd.requestedWeeklyLimit().compareTo(cmd.requestedDailyLimit()) < 0) {
+            throw new BusinessException("WALLET.LIMIT_REQUEST.WEEKLY_BELOW_DAILY",
+                    "Weekly limit cannot be lower than daily limit");
+        }
+        if (cmd.requestedMonthlyLimit().compareTo(cmd.requestedWeeklyLimit()) < 0) {
+            throw new BusinessException("WALLET.LIMIT_REQUEST.MONTHLY_BELOW_WEEKLY",
+                    "Monthly limit cannot be lower than weekly limit");
         }
         if (cmd.requestedYearlyLimit().compareTo(cmd.requestedMonthlyLimit()) < 0) {
             throw new BusinessException("WALLET.LIMIT_REQUEST.YEARLY_BELOW_MONTHLY",
@@ -86,10 +95,12 @@ public class RequestWalletLimitChangeService implements RequestWalletLimitChange
         req.setCustomerId(wallet.getCustomerId());
         req.setRequestedSingleLimit(cmd.requestedSingleLimit());
         req.setRequestedDailyLimit(cmd.requestedDailyLimit());
+        req.setRequestedWeeklyLimit(cmd.requestedWeeklyLimit());
         req.setRequestedMonthlyLimit(cmd.requestedMonthlyLimit());
         req.setRequestedYearlyLimit(cmd.requestedYearlyLimit());
         req.setCurrentSingleLimit(wallet.getSingleTransactionLimit());
         req.setCurrentDailyLimit(wallet.getDailyTransactionLimit());
+        req.setCurrentWeeklyLimit(wallet.getWeeklyTransactionLimit());
         req.setCurrentMonthlyLimit(wallet.getMonthlyTransactionLimit());
         req.setCurrentYearlyLimit(wallet.getYearlyTransactionLimit());
         req.setReason(cmd.reason());

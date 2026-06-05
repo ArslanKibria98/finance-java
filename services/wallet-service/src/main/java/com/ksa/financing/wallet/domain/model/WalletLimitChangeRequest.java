@@ -16,10 +16,12 @@ public class WalletLimitChangeRequest {
     private UUID customerId;
     private BigDecimal requestedSingleLimit;
     private BigDecimal requestedDailyLimit;
+    private BigDecimal requestedWeeklyLimit;
     private BigDecimal requestedMonthlyLimit;
     private BigDecimal requestedYearlyLimit;
     private BigDecimal currentSingleLimit;
     private BigDecimal currentDailyLimit;
+    private BigDecimal currentWeeklyLimit;
     private BigDecimal currentMonthlyLimit;
     private BigDecimal currentYearlyLimit;
     private String reason;
@@ -79,12 +81,16 @@ public class WalletLimitChangeRequest {
     public void setCurrentSingleLimit(BigDecimal currentSingleLimit) { this.currentSingleLimit = currentSingleLimit; }
     public BigDecimal getRequestedDailyLimit() { return requestedDailyLimit; }
     public void setRequestedDailyLimit(BigDecimal requestedDailyLimit) { this.requestedDailyLimit = requestedDailyLimit; }
+    public BigDecimal getRequestedWeeklyLimit() { return requestedWeeklyLimit; }
+    public void setRequestedWeeklyLimit(BigDecimal requestedWeeklyLimit) { this.requestedWeeklyLimit = requestedWeeklyLimit; }
     public BigDecimal getRequestedMonthlyLimit() { return requestedMonthlyLimit; }
     public void setRequestedMonthlyLimit(BigDecimal requestedMonthlyLimit) { this.requestedMonthlyLimit = requestedMonthlyLimit; }
     public BigDecimal getRequestedYearlyLimit() { return requestedYearlyLimit; }
     public void setRequestedYearlyLimit(BigDecimal requestedYearlyLimit) { this.requestedYearlyLimit = requestedYearlyLimit; }
     public BigDecimal getCurrentDailyLimit() { return currentDailyLimit; }
     public void setCurrentDailyLimit(BigDecimal currentDailyLimit) { this.currentDailyLimit = currentDailyLimit; }
+    public BigDecimal getCurrentWeeklyLimit() { return currentWeeklyLimit; }
+    public void setCurrentWeeklyLimit(BigDecimal currentWeeklyLimit) { this.currentWeeklyLimit = currentWeeklyLimit; }
     public BigDecimal getCurrentMonthlyLimit() { return currentMonthlyLimit; }
     public void setCurrentMonthlyLimit(BigDecimal currentMonthlyLimit) { this.currentMonthlyLimit = currentMonthlyLimit; }
     public BigDecimal getCurrentYearlyLimit() { return currentYearlyLimit; }

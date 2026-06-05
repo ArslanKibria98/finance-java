@@ -17,6 +17,7 @@ public interface RequestWalletLimitChangeUseCase {
             UUID walletId,
             BigDecimal requestedSingleLimit,
             BigDecimal requestedDailyLimit,
+            BigDecimal requestedWeeklyLimit,
             BigDecimal requestedMonthlyLimit,
             BigDecimal requestedYearlyLimit,
             String reason,

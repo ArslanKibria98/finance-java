@@ -17,11 +17,14 @@ public class WalletLimitBounds {
     private BigDecimal defaultSingleLimit;
     private BigDecimal minDailyLimit;
     private BigDecimal maxDailyLimit;
+    private BigDecimal minWeeklyLimit;
+    private BigDecimal maxWeeklyLimit;
     private BigDecimal minMonthlyLimit;
     private BigDecimal maxMonthlyLimit;
     private BigDecimal minYearlyLimit;
     private BigDecimal maxYearlyLimit;
     private BigDecimal defaultDailyLimit;
+    private BigDecimal defaultWeeklyLimit;
     private BigDecimal defaultMonthlyLimit;
     private BigDecimal defaultYearlyLimit;
     private Instant createdAt;
@@ -41,6 +44,13 @@ public class WalletLimitBounds {
         return value != null
                 && value.compareTo(minDailyLimit) >= 0
                 && value.compareTo(maxDailyLimit) <= 0;
+    }
+
+    /** Whether the given weekly limit falls within [min, max]. */
+    public boolean isWeeklyWithinBounds(BigDecimal value) {
+        return value != null
+                && value.compareTo(minWeeklyLimit) >= 0
+                && value.compareTo(maxWeeklyLimit) <= 0;
     }
 
     /** Whether the given monthly limit falls within [min, max]. */
@@ -71,6 +81,10 @@ public class WalletLimitBounds {
     public void setMinDailyLimit(BigDecimal minDailyLimit) { this.minDailyLimit = minDailyLimit; }
     public BigDecimal getMaxDailyLimit() { return maxDailyLimit; }
     public void setMaxDailyLimit(BigDecimal maxDailyLimit) { this.maxDailyLimit = maxDailyLimit; }
+    public BigDecimal getMinWeeklyLimit() { return minWeeklyLimit; }
+    public void setMinWeeklyLimit(BigDecimal minWeeklyLimit) { this.minWeeklyLimit = minWeeklyLimit; }
+    public BigDecimal getMaxWeeklyLimit() { return maxWeeklyLimit; }
+    public void setMaxWeeklyLimit(BigDecimal maxWeeklyLimit) { this.maxWeeklyLimit = maxWeeklyLimit; }
     public BigDecimal getMinMonthlyLimit() { return minMonthlyLimit; }
     public void setMinMonthlyLimit(BigDecimal minMonthlyLimit) { this.minMonthlyLimit = minMonthlyLimit; }
     public BigDecimal getMaxMonthlyLimit() { return maxMonthlyLimit; }
@@ -81,6 +95,8 @@ public class WalletLimitBounds {
     public void setMaxYearlyLimit(BigDecimal maxYearlyLimit) { this.maxYearlyLimit = maxYearlyLimit; }
     public BigDecimal getDefaultDailyLimit() { return defaultDailyLimit; }
     public void setDefaultDailyLimit(BigDecimal defaultDailyLimit) { this.defaultDailyLimit = defaultDailyLimit; }
+    public BigDecimal getDefaultWeeklyLimit() { return defaultWeeklyLimit; }
+    public void setDefaultWeeklyLimit(BigDecimal defaultWeeklyLimit) { this.defaultWeeklyLimit = defaultWeeklyLimit; }
     public BigDecimal getDefaultMonthlyLimit() { return defaultMonthlyLimit; }
     public void setDefaultMonthlyLimit(BigDecimal defaultMonthlyLimit) { this.defaultMonthlyLimit = defaultMonthlyLimit; }
     public BigDecimal getDefaultYearlyLimit() { return defaultYearlyLimit; }

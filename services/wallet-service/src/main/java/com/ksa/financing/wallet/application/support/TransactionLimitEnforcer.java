@@ -65,6 +65,9 @@ public class TransactionLimitEnforcer {
 
         LocalDate today = LocalDate.now(zone);
         Instant startOfDay = today.atStartOfDay(zone).toInstant();
+        // Week starts Monday (ISO-8601) in the configured timezone.
+        Instant startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1L)
+                .atStartOfDay(zone).toInstant();
         Instant startOfMonth = today.withDayOfMonth(1).atStartOfDay(zone).toInstant();
         Instant startOfYear = today.withDayOfYear(1).atStartOfDay(zone).toInstant();
 
@@ -79,6 +82,20 @@ public class TransactionLimitEnforcer {
                         "Daily transaction limit exceeded: limit=" + dailyLimit
                                 + " alreadyUsed=" + todaySpent + " attempted=" + amount,
                         dailyLimit, todaySpent, amount);
+            }
+        }
+
+        BigDecimal weeklyLimit = wallet.getWeeklyTransactionLimit();
+        if (weeklyLimit != null) {
+            BigDecimal weekSpent = spentSince(wallet, startOfWeek);
+            if (weekSpent.add(amount).compareTo(weeklyLimit) > 0) {
+                log.info("Weekly limit breach wallet={} limit={} used={} attempted={}",
+                        wallet.getId(), weeklyLimit, weekSpent, amount);
+                throw new BusinessException(
+                        ErrorCodes.Wallet.WEEKLY_TXN_LIMIT_EXCEEDED,
+                        "Weekly transaction limit exceeded: limit=" + weeklyLimit
+                                + " alreadyUsed=" + weekSpent + " attempted=" + amount,
+                        weeklyLimit, weekSpent, amount);
             }
         }
 

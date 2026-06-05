@@ -57,10 +57,11 @@ public class AdminWalletLimitController {
                 tenantId,
                 request.minSingleLimit(), request.maxSingleLimit(),
                 request.minDailyLimit(), request.maxDailyLimit(),
+                request.minWeeklyLimit(), request.maxWeeklyLimit(),
                 request.minMonthlyLimit(), request.maxMonthlyLimit(),
                 request.minYearlyLimit(), request.maxYearlyLimit(),
                 request.defaultSingleLimit(), request.defaultDailyLimit(),
-                request.defaultMonthlyLimit(), request.defaultYearlyLimit(),
+                request.defaultWeeklyLimit(), request.defaultMonthlyLimit(), request.defaultYearlyLimit(),
                 updatedBy));
         return ResponseEntity.ok(LimitBoundsResponse.from(updated));
     }

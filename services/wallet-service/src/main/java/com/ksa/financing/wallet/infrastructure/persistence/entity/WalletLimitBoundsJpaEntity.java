@@ -31,6 +31,12 @@ public class WalletLimitBoundsJpaEntity {
     @Column(name = "max_daily_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal maxDailyLimit;
 
+    @Column(name = "min_weekly_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal minWeeklyLimit;
+
+    @Column(name = "max_weekly_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal maxWeeklyLimit;
+
     @Column(name = "min_monthly_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal minMonthlyLimit;
 
@@ -45,6 +51,9 @@ public class WalletLimitBoundsJpaEntity {
 
     @Column(name = "default_daily_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal defaultDailyLimit;
+
+    @Column(name = "default_weekly_limit", nullable = false, precision = 20, scale = 6)
+    private BigDecimal defaultWeeklyLimit;
 
     @Column(name = "default_monthly_limit", nullable = false, precision = 20, scale = 6)
     private BigDecimal defaultMonthlyLimit;
@@ -90,6 +99,10 @@ public class WalletLimitBoundsJpaEntity {
     public void setMinDailyLimit(BigDecimal minDailyLimit) { this.minDailyLimit = minDailyLimit; }
     public BigDecimal getMaxDailyLimit() { return maxDailyLimit; }
     public void setMaxDailyLimit(BigDecimal maxDailyLimit) { this.maxDailyLimit = maxDailyLimit; }
+    public BigDecimal getMinWeeklyLimit() { return minWeeklyLimit; }
+    public void setMinWeeklyLimit(BigDecimal minWeeklyLimit) { this.minWeeklyLimit = minWeeklyLimit; }
+    public BigDecimal getMaxWeeklyLimit() { return maxWeeklyLimit; }
+    public void setMaxWeeklyLimit(BigDecimal maxWeeklyLimit) { this.maxWeeklyLimit = maxWeeklyLimit; }
     public BigDecimal getMinMonthlyLimit() { return minMonthlyLimit; }
     public void setMinMonthlyLimit(BigDecimal minMonthlyLimit) { this.minMonthlyLimit = minMonthlyLimit; }
     public BigDecimal getMaxMonthlyLimit() { return maxMonthlyLimit; }
@@ -100,6 +113,8 @@ public class WalletLimitBoundsJpaEntity {
     public void setMaxYearlyLimit(BigDecimal maxYearlyLimit) { this.maxYearlyLimit = maxYearlyLimit; }
     public BigDecimal getDefaultDailyLimit() { return defaultDailyLimit; }
     public void setDefaultDailyLimit(BigDecimal defaultDailyLimit) { this.defaultDailyLimit = defaultDailyLimit; }
+    public BigDecimal getDefaultWeeklyLimit() { return defaultWeeklyLimit; }
+    public void setDefaultWeeklyLimit(BigDecimal defaultWeeklyLimit) { this.defaultWeeklyLimit = defaultWeeklyLimit; }
     public BigDecimal getDefaultMonthlyLimit() { return defaultMonthlyLimit; }
     public void setDefaultMonthlyLimit(BigDecimal defaultMonthlyLimit) { this.defaultMonthlyLimit = defaultMonthlyLimit; }
     public BigDecimal getDefaultYearlyLimit() { return defaultYearlyLimit; }

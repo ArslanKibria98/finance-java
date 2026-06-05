@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public record RequestLimitChangeRequest(
         @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal requestedSingleLimit,
         @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal requestedDailyLimit,
+        @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal requestedWeeklyLimit,
         @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal requestedMonthlyLimit,
         @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal requestedYearlyLimit,
         @Size(max = 500) String reason) {

@@ -87,6 +87,7 @@ public class CreateWalletService implements CreateWalletUseCase {
         WalletLimitBounds bounds = limitBoundsUseCase.getBounds(command.tenantId());
         wallet.setSingleTransactionLimit(bounds.getDefaultSingleLimit());
         wallet.setDailyTransactionLimit(bounds.getDefaultDailyLimit());
+        wallet.setWeeklyTransactionLimit(bounds.getDefaultWeeklyLimit());
         wallet.setMonthlyTransactionLimit(bounds.getDefaultMonthlyLimit());
         wallet.setYearlyTransactionLimit(bounds.getDefaultYearlyLimit());
         // IBAN: prefer caller-supplied. Otherwise, when Fineract sync is enabled we leave

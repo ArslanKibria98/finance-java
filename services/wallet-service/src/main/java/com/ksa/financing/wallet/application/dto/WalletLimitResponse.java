@@ -9,15 +9,19 @@ public record WalletLimitResponse(
         UUID walletId,
         BigDecimal singleLimit,
         BigDecimal dailyLimit,
+        BigDecimal weeklyLimit,
         BigDecimal monthlyLimit,
         BigDecimal yearlyLimit,
         BigDecimal todaySpent,
+        BigDecimal weekSpent,
         BigDecimal monthSpent,
         BigDecimal yearSpent,
         BigDecimal minSingleLimit,
         BigDecimal maxSingleLimit,
         BigDecimal minDailyLimit,
         BigDecimal maxDailyLimit,
+        BigDecimal minWeeklyLimit,
+        BigDecimal maxWeeklyLimit,
         BigDecimal minMonthlyLimit,
         BigDecimal maxMonthlyLimit,
         BigDecimal minYearlyLimit,
@@ -26,10 +30,11 @@ public record WalletLimitResponse(
 
     public static WalletLimitResponse from(WalletLimitView v) {
         return new WalletLimitResponse(
-                v.walletId(), v.singleLimit(), v.dailyLimit(), v.monthlyLimit(), v.yearlyLimit(),
-                v.todaySpent(), v.monthSpent(), v.yearSpent(),
+                v.walletId(), v.singleLimit(), v.dailyLimit(), v.weeklyLimit(), v.monthlyLimit(), v.yearlyLimit(),
+                v.todaySpent(), v.weekSpent(), v.monthSpent(), v.yearSpent(),
                 v.minSingleLimit(), v.maxSingleLimit(),
                 v.minDailyLimit(), v.maxDailyLimit(),
+                v.minWeeklyLimit(), v.maxWeeklyLimit(),
                 v.minMonthlyLimit(), v.maxMonthlyLimit(),
                 v.minYearlyLimit(), v.maxYearlyLimit(), v.currency());
     }
