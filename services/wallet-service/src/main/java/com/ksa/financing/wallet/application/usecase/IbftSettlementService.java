@@ -3,6 +3,7 @@ package com.ksa.financing.wallet.application.usecase;
 import com.ksa.financing.wallet.domain.model.IbftStatus;
 import com.ksa.financing.wallet.domain.model.IbftTransaction;
 import com.ksa.financing.wallet.domain.model.Wallet;
+import com.ksa.financing.wallet.domain.port.out.EventPublisherPort;
 import com.ksa.financing.wallet.domain.port.out.IbftTransactionRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class IbftSettlementService {
     private final IbftTransactionRepository ibftRepository;
     private final WalletRepository walletRepository;
     private final WalletHoldService holdService;
+    private final EventPublisherPort eventPublisher;
 
     /** Settlement success → release hold + withdraw (final debit) → COMPLETED. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -43,6 +45,17 @@ public class IbftSettlementService {
         tx.setSettledAt(Instant.now());
         ibftRepository.save(tx);
         log.info("IBFT COMPLETED (settled) id={} amount={}", tx.getId(), tx.getAmount());
+
+        // Notify sender (FUNDS_SENT). Best-effort: a publish failure must NOT roll back settled money.
+        try {
+            eventPublisher.publishExternalSettlementSent(
+                    tx.getTenantId(), tx.getCustomerId(), tx.getWalletId(), tx.getId(),
+                    tx.getIbftNumber(), tx.getAmount(), tx.getCurrency(),
+                    wallet.getMaskedName(), tx.getCreditorName(), tx.getPurposeNote());
+        } catch (Exception ex) {
+            log.error("Failed to publish IBFT FUNDS_SENT notification id={} (settlement already COMPLETED)",
+                    tx.getId(), ex);
+        }
     }
 
     /** Settlement rejected → release hold → FAILED. */

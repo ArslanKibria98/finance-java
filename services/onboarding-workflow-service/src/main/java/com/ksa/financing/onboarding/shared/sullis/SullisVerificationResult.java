@@ -17,7 +17,10 @@ import java.io.Serializable;
  * @param faceSamePerson Sullis same-person flag
  * @param reason         decline reason when not approved
  * @param sessionId      Sullis session id (for reference / audit)
- * @param attemptId      Sullis attempt id (for reference / audit)
+ * @param attemptId      Sullis attempt id — on a DECLINE this is the NEW attempt started
+ *                       against the session so the workflow re-uploads the next selfie to it
+ * @param maxAttemptsReached {@code true} when a declined selfie tried to start a new attempt
+ *                       but the session's shared 3-attempt budget (document + selfie) is used up
  */
 public record SullisVerificationResult(
         boolean approved,
@@ -27,6 +30,7 @@ public record SullisVerificationResult(
         Boolean faceSamePerson,
         String reason,
         String sessionId,
-        String attemptId
+        String attemptId,
+        boolean maxAttemptsReached
 ) implements Serializable {
 }

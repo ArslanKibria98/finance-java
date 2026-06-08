@@ -106,7 +106,7 @@ const sharedEnv = {
   // CORS — QA browser portals served from 65.108.31.172:7380 (alongside existing 7374).
   // Without this override, services fall back to their application.yml defaults which
   // include 7374 but not 7380 → preflight returns "Invalid CORS request".
-  CORS_ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:3001,http://localhost:4200,http://46.62.226.94:3000,http://46.62.226.94:4200,http://65.108.31.172:7374,http://65.108.31.172:7380',
+  CORS_ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:3001,http://localhost:4200,http://46.62.226.94:3000,http://46.62.226.94:4200,http://65.108.31.172:7374,http://65.108.31.172:7380,https://admin-sullis.mytmdev.com,http://admin-sullis.mytmdev.com',
 };
 
 function service(name, port, dbName, extraEnv = {}) {

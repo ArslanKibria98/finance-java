@@ -26,15 +26,22 @@ public final class IbftBeneficiaryDtos {
     ) {}
 
     /**
-     * Account-validation request. transit is NOT supplied — it is derived from the
-     * first 5 digits of accountNumber. fullName is optional. The account must first
-     * exist in our wallets (exact account_number match) before Scotia is called.
+     * Account-validation request — shared by both flows:
+     *   - {@code type = "phone"} (FT): {@code accountNumber} carries the recipient's MOBILE number.
+     *     The customer is verified by mobile and their wallet account number is sent to Scotia.
+     *   - {@code type = "account"} (IBFT): {@code accountNumber} is a real bank account number and
+     *     is sent straight to Scotia as-is (no customer lookup).
+     *   - {@code type} omitted → auto-detected from the value format.
+     * transit is NOT supplied — it is derived from the first 5 digits of the resolved account
+     * number. fullName is optional.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record ValidateAccountRequest(
             @NotBlank String accountNumber,
             @NotBlank String institutionNumber,
             String fullName,
-            String currency
+            String currency,
+            String type
     ) {}
 
     public record ValidateAccountResponse(

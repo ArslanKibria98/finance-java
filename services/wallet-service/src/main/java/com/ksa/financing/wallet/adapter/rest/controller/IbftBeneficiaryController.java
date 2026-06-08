@@ -53,16 +53,18 @@ public class IbftBeneficiaryController {
 
     @SecuredEndpoint(obj = "ibft.beneficiaries", act = "create")
     @PostMapping("/validate-account")
-    @Operation(summary = "Validate a destination account — must exist in our wallets, then Scotia account-validation",
-            description = "transit is derived from the first 5 digits of accountNumber (non-digits ignored). " +
-                    "fullName is optional. If the account number is not present in our wallets, returns " +
-                    "valid=false / status=NO_MATCH_FOUND without calling Scotia.")
+    @Operation(summary = "Validate a destination account via Scotia (shared by FT and IBFT)",
+            description = "type=phone (FT): accountNumber carries the recipient's mobile number — the customer " +
+                    "is verified by mobile and their wallet account number is sent to Scotia. " +
+                    "type=account (IBFT): accountNumber is a real bank account number sent straight to Scotia. " +
+                    "type omitted → auto-detected from the value format. transit is derived from the first 5 " +
+                    "digits of the resolved account number. fullName is optional.")
     public ResponseEntity<ValidateAccountResponse> validateAccount(
             @Valid @RequestBody ValidateAccountRequest request,
             @AuthenticationPrincipal Jwt jwt) {
         UUID tenantId = auth.tenantId(jwt);
         var r = validateAccountUseCase.validate(tenantId, request.accountNumber(),
-                request.institutionNumber(), request.fullName(), request.currency());
+                request.institutionNumber(), request.fullName(), request.currency(), request.type());
         return ResponseEntity.ok(new ValidateAccountResponse(
                 r.valid(), r.status(), r.accountNumber(), r.transit(), r.institutionNumber(),
                 r.message(), r.scotiaRef(), parseJson(r.scotiaRaw())));

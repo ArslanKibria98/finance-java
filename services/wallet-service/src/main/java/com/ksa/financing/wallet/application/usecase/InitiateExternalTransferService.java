@@ -3,21 +3,16 @@ package com.ksa.financing.wallet.application.usecase;
 import com.ksa.financing.infra.exception.BusinessException;
 import com.ksa.financing.infra.exception.ErrorCodes;
 import com.ksa.financing.infra.exception.NotFoundException;
+import com.ksa.financing.wallet.application.support.RecipientAccountResolver;
 import com.ksa.financing.wallet.domain.model.ExternalFundTransfer;
 import com.ksa.financing.wallet.domain.model.ExternalTransferDirection;
 import com.ksa.financing.wallet.domain.model.ExternalTransferStatus;
-import com.ksa.financing.wallet.domain.model.MovementType;
-import com.ksa.financing.wallet.domain.model.TransactionPurpose;
 import com.ksa.financing.wallet.domain.model.Wallet;
-import com.ksa.financing.wallet.domain.model.WalletMovement;
 import com.ksa.financing.wallet.domain.model.WalletStatus;
-import com.ksa.financing.wallet.domain.port.in.CreditWalletUseCase;
 import com.ksa.financing.wallet.domain.port.in.InitiateExternalTransferUseCase;
 import com.ksa.financing.wallet.domain.port.out.ExternalFundTransferRepository;
 import com.ksa.financing.wallet.domain.port.out.FineractSavingsPort;
-import com.ksa.financing.wallet.domain.port.out.LedgerPostingPort;
 import com.ksa.financing.wallet.domain.port.out.ScotiaRtpPort;
-import com.ksa.financing.wallet.domain.port.out.WalletMovementRepository;
 import com.ksa.financing.wallet.domain.port.out.WalletRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,16 +24,16 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Outbound external fund transfer (user wallet → external Canadian bank account) via Scotia RTP.
+ * Outbound external fund transfer (user wallet → Canadian bank account / another platform wallet)
+ * via Scotia RTP.
  *
- * Money mechanics:
- *   1. Scotia RTP commit (through middleware) moves money out of the platform's shared
- *      corporate Scotia account to the external counterparty.
- *   2. The user's wallet is then debited in Fineract (withdraw) and a TRANSFER_OUT movement
- *      is recorded so balance reads + transaction history stay consistent.
- *   3. A double-entry GL posting (Dr Consumer Wallet / Cr Scotia RTP Clearing) is made to ledger-service.
- *
- * Fineract is the source of truth for balance; the local availableBalance is a projection.
+ * Money mechanics — "settle owns it":
+ *   The Scotia RTP commit goes through the middleware with the SENDER's wallet account as the
+ *   debtor. The middleware's wallet-settlement callback ({@code /internal/wallets/settle}) then
+ *   performs the actual money movement: debit the sender wallet (Fineract) + credit the creditor
+ *   wallet when it is one of ours, post the double-entry GL legs, and emit FUNDS_SENT / FUNDS_RECEIVED
+ *   notifications. This service therefore does NOT debit/credit or post GL itself — it only
+ *   validates, enforces transaction limits, triggers the rail, and keeps a findable tracking row.
  */
 @Slf4j
 @Service
@@ -46,37 +41,28 @@ public class InitiateExternalTransferService implements InitiateExternalTransfer
 
     private final WalletRepository walletRepository;
     private final ExternalFundTransferRepository transferRepository;
-    private final WalletMovementRepository movementRepository;
     private final FineractSavingsPort fineractPort;
     private final ScotiaRtpPort scotiaRtpPort;
-    private final LedgerPostingPort ledgerPostingPort;
-    private final CreditWalletUseCase creditWalletUseCase;
     private final com.ksa.financing.wallet.application.support.TransactionLimitEnforcer limitEnforcer;
-    private final String corporateAccount;
+    private final RecipientAccountResolver recipientAccountResolver;
     private final String corporateName;
     private final String defaultCurrency;
 
     public InitiateExternalTransferService(
             WalletRepository walletRepository,
             ExternalFundTransferRepository transferRepository,
-            WalletMovementRepository movementRepository,
             FineractSavingsPort fineractPort,
             ScotiaRtpPort scotiaRtpPort,
-            LedgerPostingPort ledgerPostingPort,
-            CreditWalletUseCase creditWalletUseCase,
             com.ksa.financing.wallet.application.support.TransactionLimitEnforcer limitEnforcer,
-            @Value("${ksa.wallet.scotia.corporate-account:002-80150-0000000}") String corporateAccount,
+            RecipientAccountResolver recipientAccountResolver,
             @Value("${ksa.wallet.scotia.corporate-name:KSA Islamic Financing Corp}") String corporateName,
             @Value("${ksa.wallet.scotia.default-currency:CAD}") String defaultCurrency) {
         this.walletRepository = walletRepository;
         this.transferRepository = transferRepository;
-        this.movementRepository = movementRepository;
         this.fineractPort = fineractPort;
         this.scotiaRtpPort = scotiaRtpPort;
-        this.ledgerPostingPort = ledgerPostingPort;
-        this.creditWalletUseCase = creditWalletUseCase;
         this.limitEnforcer = limitEnforcer;
-        this.corporateAccount = corporateAccount;
+        this.recipientAccountResolver = recipientAccountResolver;
         this.corporateName = corporateName;
         this.defaultCurrency = defaultCurrency;
     }
@@ -101,7 +87,30 @@ public class InitiateExternalTransferService implements InitiateExternalTransfer
                     "counterpartyAccount is required");
         }
 
-        // 3. Resolve + validate wallet
+        // 2b. counterpartyAccount carries the recipient's MOBILE number — resolve it to the
+        //     recipient's virtual wallet account number before it flows into Scotia RTP and the
+        //     settlement callback. Rejects if no matching customer/wallet. An account number, if
+        //     sent, passes through unchanged.
+        var resolvedRecipient = recipientAccountResolver.resolve(
+                command.tenantId(), command.counterpartyAccount());
+        command = new InitiateExternalTransferUseCase.InitiateExternalTransferCommand(
+                command.tenantId(),
+                command.sourceWalletId(),
+                command.customerId(),
+                (command.counterpartyName() == null || command.counterpartyName().isBlank())
+                        ? resolvedRecipient.name() : command.counterpartyName(),
+                resolvedRecipient.accountNumber(),
+                command.counterpartyEmail(),
+                command.counterpartyBankCode(),
+                command.amount(),
+                command.currency(),
+                command.purposeNote(),
+                command.idempotencyKey(),
+                command.initiatorUserId(),
+                command.initiatorIp(),
+                command.initiatorDeviceId());
+
+        // 3. Resolve + validate sender wallet
         Wallet wallet = resolveWallet(command);
         if (!wallet.getTenantId().equals(command.tenantId())) {
             throw new BusinessException(ErrorCodes.INVALID_CREDENTIALS,
@@ -115,10 +124,14 @@ public class InitiateExternalTransferService implements InitiateExternalTransfer
             throw new BusinessException("WALLET.EXT_TRANSFER.NOT_FINERACT_LINKED",
                     "Wallet not linked to Fineract savings account");
         }
+        if (wallet.getAccountNumber() == null || wallet.getAccountNumber().isBlank()) {
+            throw new BusinessException("WALLET.EXT_TRANSFER.NO_ACCOUNT_NUMBER",
+                    "Sender wallet has no account number");
+        }
 
         String currency = command.currency() != null ? command.currency() : defaultCurrency;
 
-        // 4. Insufficient funds check (Fineract = source of truth)
+        // 4. Insufficient funds check (Fineract = source of truth) — fast fail before the rail.
         FineractSavingsPort.SavingsAccountInfo info;
         try {
             info = fineractPort.getAccountInfo(wallet.getFineractSavingsAccountId());
@@ -133,19 +146,22 @@ public class InitiateExternalTransferService implements InitiateExternalTransfer
                             + " need=" + command.amount());
         }
 
-        // 4b. Daily / monthly transaction-limit enforcement (cumulative spend vs wallet limits)
+        // 4b. Daily / monthly transaction-limit enforcement (cumulative spend vs wallet limits).
+        //     The settlement callback does NOT enforce limits — this is the only gate for them.
         limitEnforcer.enforce(wallet, command.amount());
 
-        // 5. Persist transfer (audit + idempotency), status INITIATED
+        // 5. Persist tracking row (audit + idempotency + GET-by-id), status INITIATED.
         ExternalFundTransfer transfer = newTransfer(command, wallet, currency);
         ExternalFundTransfer saved = transferRepository.save(transfer);
 
-        // 6. Scotia RTP (options-inquiry + commit) — moves money via the corporate account
+        // 6. Scotia RTP (options-inquiry + commit). The debtor is the SENDER's wallet account, so the
+        //    middleware settlement callback debits the sender and credits the recipient. messageId is
+        //    stable so a retry is idempotent on the rail.
         var rtp = scotiaRtpPort.sendPayment(new ScotiaRtpPort.RtpPaymentRequest(
                 command.amount(),
                 currency,
-                corporateName,
-                corporateAccount,
+                wallet.getMaskedName() != null ? wallet.getMaskedName() : corporateName,
+                wallet.getAccountNumber(),
                 command.counterpartyName(),
                 command.counterpartyAccount(),
                 command.counterpartyEmail(),
@@ -165,43 +181,16 @@ public class InitiateExternalTransferService implements InitiateExternalTransfer
                     rtp.errorCode() != null ? rtp.errorCode() : "SCOTIA.RTP.REJECTED",
                     rtp.errorMessage() != null ? rtp.errorMessage() : "Scotia RTP rejected the payment");
         }
-        // Mark SUBMITTED in memory only — persisted once at COMPLETED. Saving here would
-        // bump the row @Version, and the later credit's flush then makes the final save
-        // hit a stale version (ObjectOptimisticLockingFailureException).
-        saved.setStatus(ExternalTransferStatus.SUBMITTED);
 
-        // 7. Debit the user wallet in Fineract + record local projection movement
-        WalletMovement movement;
-        try {
-            fineractPort.withdraw(wallet.getFineractSavingsAccountId(), command.amount(),
-                    "EXT:" + saved.getTransferNumber());
-            movement = applyDebit(wallet, command.amount(), saved);
-        } catch (Exception ex) {
-            // RTP already moved money but local debit failed — leave SUBMITTED for reconciliation.
-            log.error("Wallet debit failed after Scotia commit for transfer={}: {}",
-                    saved.getTransferNumber(), ex.getMessage(), ex);
-            saved.setStatus(ExternalTransferStatus.SUBMITTED);
-            saved.setErrorCode("WALLET.EXT_TRANSFER.DEBIT_FAILED");
-            saved.setErrorMessage("Scotia committed but wallet debit failed: " + ex.getMessage());
-            return transferRepository.save(saved);
-        }
-        saved.setMovementId(movement.getId());
-
-        // 8. GL posting (best-effort)
-        String ledgerEntryId = ledgerPostingPort.postExternalTransfer(
-                command.tenantId(), saved.getId(), saved.getTransferNumber(),
-                LedgerPostingPort.Direction.OUTBOUND, command.amount(),
-                command.idempotencyKey(), command.initiatorUserId());
-        if (ledgerEntryId != null) {
-            saved.setLedgerEntryId(parseUuidOrNull(ledgerEntryId));
-        }
-
-        // 8b. If the counterparty account number belongs to one of OUR wallets, mirror the
-        //     credit here — Scotia is only the money rail; our system does both the
-        //     subtraction (sender) and the addition (recipient) in the same operation.
-        creditInternalRecipientIfAny(command, wallet, saved, currency);
-
-        // 9. Complete
+        // 7. The settlement callback (triggered by the commit) has moved the money + posted GL +
+        //    emitted notifications. Mark our tracking row COMPLETED and reflect whether the
+        //    counterparty is one of our wallets (for the response).
+        walletRepository.findByAccountNumber(command.tenantId(), command.counterpartyAccount())
+                .filter(r -> !r.getId().equals(wallet.getId()))
+                .ifPresent(r -> {
+                    saved.setCounterpartyInternal(true);
+                    saved.setCounterpartyWalletId(r.getId());
+                });
         saved.setStatus(ExternalTransferStatus.COMPLETED);
         saved.setCompletedAt(Instant.now());
         ExternalFundTransfer completed = transferRepository.save(saved);
@@ -250,87 +239,10 @@ public class InitiateExternalTransferService implements InitiateExternalTransfer
         return t;
     }
 
-    private WalletMovement applyDebit(Wallet wallet, BigDecimal amount, ExternalFundTransfer transfer) {
-        BigDecimal before = wallet.getAvailableBalance() != null ? wallet.getAvailableBalance() : BigDecimal.ZERO;
-        BigDecimal after = before.subtract(amount);
-        wallet.setAvailableBalance(after);
-        wallet.setUpdatedAt(Instant.now());
-        walletRepository.save(wallet);
-
-        WalletMovement m = new WalletMovement();
-        m.setTenantId(transfer.getTenantId());
-        m.setWalletId(wallet.getId());
-        m.setMovementNumber("MOV" + System.currentTimeMillis() + "-XD");
-        m.setMovementType(MovementType.DEBIT);
-        m.setPurpose(TransactionPurpose.TRANSFER_OUT);
-        m.setAmount(amount);
-        m.setBalanceBefore(before);
-        m.setBalanceAfter(after);
-        m.setReferenceType("EXTERNAL_TRANSFER");
-        m.setReferenceId(transfer.getId());
-        m.setDescription("External transfer out " + transfer.getTransferNumber()
-                + " to " + transfer.getCounterpartyAccount());
-        m.setIdempotencyKey(transfer.getIdempotencyKey() + ":XDR");
-        m.setCreatedAt(Instant.now());
-        return movementRepository.save(m);
-    }
-
-    /**
-     * When the counterparty account number is one of our own wallets, credit it so the
-     * money "arrives" inside our system too (Scotia is only the transport). Best-effort:
-     * a failure here is logged on the transfer but does not roll back the sender debit.
-     */
-    private void creditInternalRecipientIfAny(InitiateExternalTransferCommand command,
-                                              Wallet sender, ExternalFundTransfer transfer, String currency) {
-        var recipientOpt = walletRepository.findByAccountNumber(command.tenantId(), command.counterpartyAccount());
-        if (recipientOpt.isEmpty() || recipientOpt.get().getId().equals(sender.getId())) {
-            return; // external counterparty (or self) — sender debit only
-        }
-        Wallet recipient = recipientOpt.get();
-        try {
-            var credit = creditWalletUseCase.credit(new CreditWalletUseCase.CreditCommand(
-                    command.tenantId(),
-                    recipient.getCustomerId(),
-                    command.amount(),
-                    TransactionPurpose.TRANSFER_IN,
-                    "EXTERNAL_TRANSFER",
-                    transfer.getId(),
-                    "External transfer in " + transfer.getTransferNumber()
-                            + " from " + sender.getAccountNumber(),
-                    command.idempotencyKey() + ":INCR"));
-            transfer.setCounterpartyInternal(true);
-            transfer.setCounterpartyWalletId(recipient.getId());
-            transfer.setCounterpartyMovementId(credit.movementId());
-            // Mirror GL for the credit leg (Dr Scotia RTP Clearing / Cr Consumer Wallet);
-            // the clearing account nets to zero across the two legs.
-            ledgerPostingPort.postExternalTransfer(
-                    command.tenantId(), transfer.getId(), transfer.getTransferNumber() + "-IN",
-                    LedgerPostingPort.Direction.INBOUND, command.amount(),
-                    command.idempotencyKey() + ":INCR", command.initiatorUserId());
-            log.info("Internal recipient credited transfer={} recipientWallet={} movement={}",
-                    transfer.getTransferNumber(), recipient.getId(), credit.movementId());
-        } catch (Exception ex) {
-            log.error("Internal recipient credit FAILED transfer={} account={}: {}",
-                    transfer.getTransferNumber(), command.counterpartyAccount(), ex.getMessage(), ex);
-            transfer.setCounterpartyInternal(true);
-            transfer.setCounterpartyWalletId(recipient.getId());
-            transfer.setErrorCode("WALLET.EXT_TRANSFER.RECIPIENT_CREDIT_FAILED");
-            transfer.setErrorMessage("Recipient credit failed: " + ex.getMessage());
-        }
-    }
-
     private String deriveMessageIdentification(ExternalFundTransfer transfer) {
         // Scotia expects a numeric-ish unique message id; derive a stable 10-digit value.
         long n = Math.abs((long) transfer.getId().hashCode()) % 10_000_000_000L;
         return String.valueOf(n);
-    }
-
-    private UUID parseUuidOrNull(String s) {
-        try {
-            return UUID.fromString(s);
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private void validateAmount(BigDecimal amount) {

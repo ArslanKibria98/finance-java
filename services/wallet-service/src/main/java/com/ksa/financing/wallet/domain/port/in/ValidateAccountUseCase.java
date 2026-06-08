@@ -3,19 +3,20 @@ package com.ksa.financing.wallet.domain.port.in;
 import java.util.UUID;
 
 /**
- * Validate a destination account number.
- *
- * Rules:
- *  - The account number MUST exist in our own wallets (exact {@code account_number} match)
- *    for the tenant. If not found → result is {@code NO_MATCH_FOUND} (Scotia is NOT called).
- *  - When found, the transit is derived from the first 5 digits of the account number
- *    (non-digits ignored) and a Scotia account-validation is performed.
- *  - {@code fullName} is optional.
+ * Validate a destination account number. Shared by two flows, selected by {@code type}:
+ *  - {@code type = "phone"} (FT): {@code accountNumber} carries the recipient's MOBILE number.
+ *    The customer is verified by mobile; their wallet account number is sent to Scotia.
+ *    Rejected (BusinessException) if no matching customer / wallet.
+ *  - {@code type = "account"} (IBFT): {@code accountNumber} is a real bank account number and is
+ *    sent straight to Scotia as-is (no customer lookup, no own-wallet gate).
+ *  - {@code type} null/blank → auto-detected from the value format.
+ * The transit is derived from the first 5 digits of the resolved account number (non-digits
+ * ignored). {@code fullName} is optional.
  */
 public interface ValidateAccountUseCase {
 
     ValidationResult validate(UUID tenantId, String accountNumber, String institutionNumber,
-                              String fullName, String currency);
+                              String fullName, String currency, String type);
 
     record ValidationResult(
             boolean valid,

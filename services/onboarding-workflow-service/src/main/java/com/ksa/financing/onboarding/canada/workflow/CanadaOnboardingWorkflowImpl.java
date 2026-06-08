@@ -234,8 +234,16 @@ public class CanadaOnboardingWorkflowImpl implements CanadaOnboardingWorkflow {
                 state.setFailureReason(null);
                 break;
             }
-            state.setFailureReason("Verification declined: outcome=" + faceResult.outcome()
-                    + " score=" + faceResult.faceMatchScore() + " reason=" + faceResult.reason());
+            if (faceResult.maxAttemptsReached()) {
+                // Shared 3-attempt session budget (document + selfie) is used up. Mirror the
+                // document MAX path: surface the restart message but keep the workflow alive.
+                state.setFailureReason("Maximum verification attempts reached. Please restart onboarding.");
+            } else {
+                // Sullis started a fresh attempt for this failed selfie — upload the next retry to it.
+                if (faceResult.attemptId() != null) state.setSullisAttemptId(faceResult.attemptId());
+                state.setFailureReason("Verification declined: outcome=" + faceResult.outcome()
+                        + " score=" + faceResult.faceMatchScore() + " reason=" + faceResult.reason());
+            }
         }
         var profile = profileActivity.createCustomerProfile(request.email(),
                 request.mobileNumber(), state.getKeycloakUserId(),

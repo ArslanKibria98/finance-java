@@ -166,11 +166,11 @@ public class SullisClient {
     public SullisVerificationResult submitVerification(String selfieImageBase64, String sessionId,
                                                        String attemptId, SullisContext context) {
         if (mock) {
-            return mockVerificationResult(sessionId, attemptId);
+            return mockVerificationResult(selfieImageBase64, sessionId, attemptId);
         }
         if (sessionId == null || attemptId == null) {
             return new SullisVerificationResult(false, "DECLINED", null, null, null,
-                    "Missing Sullis session/attempt — upload document first", sessionId, attemptId);
+                    "Missing Sullis session/attempt — upload document first", sessionId, attemptId, false);
         }
         try {
             uploadFile(API_UPLOAD_SELFIE, sessionId, attemptId, selfieImageBase64, "selfie.jpg",
@@ -196,13 +196,52 @@ public class SullisClient {
             // If Sullis approves but didn't surface a numeric faceMatch, assume a pass
             // so the workflow threshold check is satisfied by the overall outcome.
             if (approved && faceMatch == null) faceMatch = APPROVE_FACE_FALLBACK;
-            return new SullisVerificationResult(approved, outcome, faceMatch, riskScore,
-                    faceSamePerson, approved ? null : reason, sessionId, attemptId);
+            if (approved) {
+                return new SullisVerificationResult(true, outcome, faceMatch, riskScore,
+                        faceSamePerson, null, sessionId, attemptId, false);
+            }
+            // DECLINED — start a NEW attempt within the SAME session so this failed selfie
+            // consumes a slot from the shared 3-attempt budget (the same budget the document
+            // phase draws from). Document used 1 → selfie has 2 retries. When the session's
+            // attempts are exhausted Sullis returns {"code":"MAX_ATTEMPTS"} → surface it so the
+            // workflow tells the user to restart onboarding (mirrors the document MAX path).
+            return startRetryAttemptOnDecline(sessionId, attemptId, outcome, faceMatch,
+                    riskScore, faceSamePerson, reason, context);
         } catch (Exception e) {
             log.error("Sullis submit phase failed via middleware: {}", e.getMessage(), e);
             return new SullisVerificationResult(false, "DECLINED", null, null, null,
-                    "Sullis call failed: " + e.getMessage(), sessionId, attemptId);
+                    "Sullis call failed: " + e.getMessage(), sessionId, attemptId, false);
         }
+    }
+
+    /**
+     * On a declined selfie, register a fresh Sullis attempt against the existing session so the
+     * failed try draws from the shared 3-attempt session budget. Returns a result carrying the
+     * NEW attempt id (the next selfie retry uploads against it), or {@code maxAttemptsReached=true}
+     * when the session's attempts are used up.
+     */
+    private SullisVerificationResult startRetryAttemptOnDecline(String sessionId, String attemptId,
+                                                                String outcome, Double faceMatch,
+                                                                Integer riskScore, Boolean faceSamePerson,
+                                                                String reason, SullisContext context) {
+        String newAttemptId = attemptId;
+        try {
+            Map<String, Object> attemptResp = callJson(API_START_ATTEMPT, null,
+                    Map.of("sessionId", sessionId), context);
+            if ("MAX_ATTEMPTS".equalsIgnoreCase(stringValue(attemptResp.get("code")))) {
+                return new SullisVerificationResult(false, outcome, faceMatch, riskScore, faceSamePerson,
+                        "Maximum verification attempts reached. Please restart onboarding.",
+                        sessionId, attemptId, true);
+            }
+            String started = stringValue(attemptResp.get("id"));
+            if (started != null && !started.isBlank()) newAttemptId = started;
+        } catch (Exception e) {
+            // A failure to register the retry attempt must not crash the selfie phase — the
+            // user can still retry against the current attempt; just log it.
+            log.warn("Sullis start-attempt after selfie decline failed (session={}): {}", sessionId, e.getMessage());
+        }
+        return new SullisVerificationResult(false, outcome, faceMatch, riskScore, faceSamePerson,
+                reason, sessionId, newAttemptId, false);
     }
 
     // -------------------------------------------------------------------------
@@ -441,10 +480,27 @@ public class SullisClient {
         return new SullisDocumentResult(true, sessionId, attemptId, uploadId, null, extracted);
     }
 
-    private SullisVerificationResult mockVerificationResult(String sessionId, String attemptId) {
-        log.info("[MOCK] Sullis verification VERIFIED: session={} attempt={}", sessionId, attemptId);
-        return new SullisVerificationResult(true, "VERIFIED", 0.99d, 12, true, null,
-                sessionId != null ? sessionId : UUID.randomUUID().toString(),
-                attemptId != null ? attemptId : UUID.randomUUID().toString());
+    private SullisVerificationResult mockVerificationResult(String selfieImageBase64,
+                                                            String sessionId, String attemptId) {
+        String sid = sessionId != null ? sessionId : UUID.randomUUID().toString();
+        String aid = attemptId != null ? attemptId : UUID.randomUUID().toString();
+        // Test hooks: a selfie image carrying a sentinel exercises the decline / max-attempts
+        // paths in DEV mock (where real Sullis would otherwise always VERIFY).
+        //   ...MAXATTEMPTS... -> declined + shared budget exhausted (workflow surfaces restart)
+        //   ...DECLINE...     -> declined + a fresh attempt id (consumes one shared slot)
+        String marker = selfieImageBase64 != null ? selfieImageBase64.toUpperCase() : "";
+        if (marker.contains("MAXATTEMPTS")) {
+            log.info("[MOCK] Sullis selfie DECLINED — max attempts reached: session={}", sid);
+            return new SullisVerificationResult(false, "DECLINED", 0.40d, 80, false,
+                    "Maximum verification attempts reached. Please restart onboarding.", sid, aid, true);
+        }
+        if (marker.contains("DECLINE")) {
+            String newAttempt = UUID.randomUUID().toString();
+            log.info("[MOCK] Sullis selfie DECLINED — new attempt {} started: session={}", newAttempt, sid);
+            return new SullisVerificationResult(false, "DECLINED", 0.45d, 70, false,
+                    "Face match below threshold — please retake your selfie.", sid, newAttempt, false);
+        }
+        log.info("[MOCK] Sullis verification VERIFIED: session={} attempt={}", sid, aid);
+        return new SullisVerificationResult(true, "VERIFIED", 0.99d, 12, true, null, sid, aid, false);
     }
 }

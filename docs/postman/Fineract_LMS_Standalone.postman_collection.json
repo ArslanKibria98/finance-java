@@ -1,0 +1,573 @@
+{
+  "info": {
+    "_postman_id": "f1ne7ac7-1m5-4a11-9d0c-ksafinancing01",
+    "name": "Fineract LMS (Standalone) — KSA Islamic Financing",
+    "description": "Standalone Postman collection of the **Apache Fineract** core-banking (LMS) REST APIs that the KSA Islamic Financing platform uses.\n\nThis hits Fineract DIRECTLY (no LOS / no platform services). Use it to drive loan origination, disbursement, repayments, savings/wallet accounts, holds, transfers and GL journal entries straight against Fineract from a separate project.\n\n## Setup\n1. Open the collection **Variables** tab and set:\n   - `baseUrl` — e.g. `https://localhost:8443/fineract-provider/api/v1`\n   - `username` / `password` — default `mifos` / `password`\n   - `tenantId` — default `default`\n2. Auth is **Basic Auth** + header `Fineract-Platform-TenantId`, both inherited collection-wide.\n3. Fineract uses a **self-signed cert** — in Postman turn OFF *Settings → SSL certificate verification*.\n4. Date format used throughout: `dd MMMM yyyy` (e.g. `08 June 2026`). The `today` collection variable is a placeholder — set it per request.\n\n## Typical loan flow\nCreate Loan Product → Create Client → Create Loan Application → Approve Loan → Disburse Loan → Make Repayment → (optional) Early Settlement.\n\n## Typical wallet/savings flow\nCreate Client → Create Savings Account → Approve → Activate → Deposit/Withdraw → Hold Amount / Release → Transfer.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      { "key": "username", "value": "{{username}}", "type": "string" },
+      { "key": "password", "value": "{{password}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://localhost:8443/fineract-provider/api/v1", "type": "string" },
+    { "key": "username", "value": "mifos", "type": "string" },
+    { "key": "password", "value": "password", "type": "string" },
+    { "key": "tenantId", "value": "default", "type": "string" },
+    { "key": "today", "value": "08 June 2026", "type": "string" },
+    { "key": "officeId", "value": "1", "type": "string" },
+    { "key": "savingsProductId", "value": "1", "type": "string" },
+    { "key": "clientId", "value": "1", "type": "string" },
+    { "key": "loanProductId", "value": "1", "type": "string" },
+    { "key": "loanId", "value": "1", "type": "string" },
+    { "key": "savingsId", "value": "1", "type": "string" },
+    { "key": "transactionId", "value": "1", "type": "string" },
+    { "key": "rescheduleId", "value": "1", "type": "string" },
+    { "key": "holdTxnId", "value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00 - Auth & Health",
+      "item": [
+        {
+          "name": "Authenticate (verify credentials)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/self/authentication", "host": ["{{baseUrl}}"], "path": ["self", "authentication"] },
+            "description": "Verifies basic auth + tenant header are valid. Used as a Fineract health/auth probe."
+          }
+        },
+        {
+          "name": "List Offices",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/offices", "host": ["{{baseUrl}}"], "path": ["offices"] },
+            "description": "Read-only. Confirms the default office (id 1) used for clients/journal entries."
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Clients",
+      "item": [
+        {
+          "name": "Lookup Client by externalId",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/clients?externalId=EXT-CUST-001",
+              "host": ["{{baseUrl}}"], "path": ["clients"],
+              "query": [ { "key": "externalId", "value": "EXT-CUST-001" } ]
+            },
+            "description": "Resolve a Fineract client id from your external customer/wallet id. Returns pageItems[0].id."
+          }
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"officeId\": {{officeId}},\n  \"firstname\": \"Customer\",\n  \"lastname\": \"1A2B3C4D\",\n  \"externalId\": \"EXT-CUST-001\",\n  \"active\": true,\n  \"activationDate\": \"{{today}}\",\n  \"legalFormId\": 1,\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/clients", "host": ["{{baseUrl}}"], "path": ["clients"] },
+            "description": "Creates an active client (person). legalFormId=1 person, 2 entity. Returns clientId/resourceId."
+          }
+        },
+        {
+          "name": "Get Client",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/clients/{{clientId}}", "host": ["{{baseUrl}}"], "path": ["clients", "{{clientId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Loan Products",
+      "item": [
+        {
+          "name": "Create Loan Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Murabaha Auto Finance\",\n  \"shortName\": \"MURA\",\n  \"description\": \"Murabaha cost-plus-profit auto finance\",\n  \"currencyCode\": \"SAR\",\n  \"digitsAfterDecimal\": 2,\n  \"inMultiplesOf\": 1,\n  \"principal\": 100000,\n  \"minPrincipal\": 10000,\n  \"maxPrincipal\": 500000,\n  \"numberOfRepayments\": 60,\n  \"minNumberOfRepayments\": 12,\n  \"maxNumberOfRepayments\": 84,\n  \"repaymentEvery\": 1,\n  \"repaymentFrequencyType\": 2,\n  \"interestRatePerPeriod\": 5.0,\n  \"interestRateFrequencyType\": 3,\n  \"amortizationType\": 1,\n  \"interestType\": 0,\n  \"interestCalculationPeriodType\": 1,\n  \"transactionProcessingStrategyCode\": \"mifos-standard-strategy\",\n  \"daysInYearType\": 360,\n  \"daysInMonthType\": 30,\n  \"canDefineInstallmentAmount\": false,\n  \"accountingRule\": 1,\n  \"isInterestRecalculationEnabled\": false,\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/loanproducts", "host": ["{{baseUrl}}"], "path": ["loanproducts"] },
+            "description": "Creates a loan product. repaymentFrequencyType=2 (Months), interestRateFrequencyType=3 (Per Year), amortizationType=1 (Equal installments), interestType=0 (Declining balance), accountingRule=1 (None). Returns resourceId = product id."
+          }
+        },
+        {
+          "name": "List Loan Products",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/loanproducts", "host": ["{{baseUrl}}"], "path": ["loanproducts"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Loans",
+      "item": [
+        {
+          "name": "Create Loan Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": {{clientId}},\n  \"productId\": {{loanProductId}},\n  \"principal\": 100000,\n  \"loanTermFrequency\": 60,\n  \"loanTermFrequencyType\": 2,\n  \"numberOfRepayments\": 60,\n  \"repaymentEvery\": 1,\n  \"repaymentFrequencyType\": 2,\n  \"interestRatePerPeriod\": 5.0,\n  \"amortizationType\": 1,\n  \"interestType\": 0,\n  \"interestCalculationPeriodType\": 1,\n  \"expectedDisbursementDate\": \"{{today}}\",\n  \"submittedOnDate\": \"{{today}}\",\n  \"externalId\": \"EXT-LOAN-001\",\n  \"loanType\": \"individual\",\n  \"dateFormat\": \"dd MMMM yyyy\",\n  \"locale\": \"en\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/loans", "host": ["{{baseUrl}}"], "path": ["loans"] },
+            "description": "Submits a loan application (status: Submitted and pending approval). Returns loanId/resourceId.\n\nIslamic-finance datatable (optional) — append if Fineract has the m_loan_islamic_finance datatable registered:\n\n  \"datatables\": [ { \"registeredTableName\": \"m_loan_islamic_finance\", \"data\": { \"sharia_structure\": \"MURABAHA\", \"commodity_cost\": 95000, \"commodity_sale_price\": 100000, \"profit_amount\": 5000 } } ]"
+          }
+        },
+        {
+          "name": "Approve Loan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approvedOnDate\": \"{{today}}\",\n  \"note\": \"Approved per credit decision\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}?command=approve",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}"],
+              "query": [ { "key": "command", "value": "approve" } ]
+            }
+          }
+        },
+        {
+          "name": "Disburse Loan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualDisbursementDate\": \"{{today}}\",\n  \"transactionAmount\": 100000,\n  \"paymentTypeId\": 1,\n  \"note\": \"Disbursement via BANK_TRANSFER\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}?command=disburse",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}"],
+              "query": [ { "key": "command", "value": "disburse" } ]
+            },
+            "description": "Disburses an approved loan. Optional bank fields: accountNumber, checkNumber, routingCode, receiptNumber, bankNumber."
+          }
+        },
+        {
+          "name": "Get Loan (all associations)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}?associations=all",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}"],
+              "query": [ { "key": "associations", "value": "all" } ]
+            }
+          }
+        },
+        {
+          "name": "Get Repayment Schedule",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}?associations=repaymentSchedule",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}"],
+              "query": [ { "key": "associations", "value": "repaymentSchedule" } ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Loan Transactions",
+      "item": [
+        {
+          "name": "Make Repayment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionDate\": \"{{today}}\",\n  \"transactionAmount\": 2500,\n  \"paymentTypeId\": 1,\n  \"note\": \"Payment via WALLET\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}/transactions?command=repayment",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}", "transactions"],
+              "query": [ { "key": "command", "value": "repayment" } ]
+            }
+          }
+        },
+        {
+          "name": "Early Settlement (prepayLoan)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionDate\": \"{{today}}\",\n  \"transactionAmount\": 45000,\n  \"note\": \"Early settlement with Ibra\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}?command=prepayLoan",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}"],
+              "query": [ { "key": "command", "value": "prepayLoan" } ]
+            }
+          }
+        },
+        {
+          "name": "Reverse / Adjust Loan Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionDate\": \"{{today}}\",\n  \"transactionAmount\": 0,\n  \"note\": \"Transaction reversal\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans/{{loanId}}/transactions/{{transactionId}}?command=adjust",
+              "host": ["{{baseUrl}}"], "path": ["loans", "{{loanId}}", "transactions", "{{transactionId}}"],
+              "query": [ { "key": "command", "value": "adjust" } ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Loan Rescheduling",
+      "item": [
+        {
+          "name": "Submit Reschedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loanId\": {{loanId}},\n  \"rescheduleFromDate\": \"{{today}}\",\n  \"rescheduleReasonId\": 1,\n  \"rescheduleReasonComment\": \"Customer requested rescheduling\",\n  \"extraTerms\": 6,\n  \"submittedOnDate\": \"{{today}}\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/rescheduleloans", "host": ["{{baseUrl}}"], "path": ["rescheduleloans"] },
+            "description": "Optional fields: graceOnPrincipalPayment, graceOnInterestPayment, adjustedInstallmentAmount, newInterestRate, adjustedDueDate. Returns resourceId = rescheduleId."
+          }
+        },
+        {
+          "name": "Approve Reschedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approvedOnDate\": \"{{today}}\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rescheduleloans/{{rescheduleId}}?command=approve",
+              "host": ["{{baseUrl}}"], "path": ["rescheduleloans", "{{rescheduleId}}"],
+              "query": [ { "key": "command", "value": "approve" } ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Savings / Wallet Accounts",
+      "item": [
+        {
+          "name": "Create Savings Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": {{clientId}},\n  \"productId\": {{savingsProductId}},\n  \"submittedOnDate\": \"{{today}}\",\n  \"externalId\": \"WALLET-0001\",\n  \"nominalAnnualInterestRate\": 0,\n  \"interestCompoundingPeriodType\": 1,\n  \"interestPostingPeriodType\": 4,\n  \"interestCalculationType\": 1,\n  \"interestCalculationDaysInYearType\": 365,\n  \"withdrawalFeeForTransfers\": false,\n  \"allowOverdraft\": false,\n  \"enforceMinRequiredBalance\": false,\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/savingsaccounts", "host": ["{{baseUrl}}"], "path": ["savingsaccounts"] },
+            "description": "Creates a savings account (used as the closed-loop wallet). Returns savingsId/resourceId. Must be approved then activated before transacting."
+          }
+        },
+        {
+          "name": "Approve Savings Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approvedOnDate\": \"{{today}}\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}?command=approve",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"],
+              "query": [ { "key": "command", "value": "approve" } ]
+            }
+          }
+        },
+        {
+          "name": "Activate Savings Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activatedOnDate\": \"{{today}}\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}?command=activate",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"],
+              "query": [ { "key": "command", "value": "activate" } ]
+            }
+          }
+        },
+        {
+          "name": "Get Savings Account (balance)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}", "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"], "description": "summary.accountBalance / summary.availableBalance / status.value / currency.code" }
+          }
+        },
+        {
+          "name": "Get Savings Transactions",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}?associations=transactions",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"],
+              "query": [ { "key": "associations", "value": "transactions" } ]
+            }
+          }
+        },
+        {
+          "name": "Delete Savings Account (SAGA compensation)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}", "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Savings Transactions",
+      "item": [
+        {
+          "name": "Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionDate\": \"{{today}}\",\n  \"transactionAmount\": 100.00,\n  \"paymentTypeId\": 1,\n  \"note\": \"EXT-REF-001\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}/transactions?command=deposit",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}", "transactions"],
+              "query": [ { "key": "command", "value": "deposit" } ]
+            }
+          }
+        },
+        {
+          "name": "Withdraw",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionDate\": \"{{today}}\",\n  \"transactionAmount\": 50.00,\n  \"paymentTypeId\": 1,\n  \"note\": \"EXT-REF-002\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}/transactions?command=withdrawal",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}", "transactions"],
+              "query": [ { "key": "command", "value": "withdrawal" } ]
+            }
+          }
+        },
+        {
+          "name": "Hold Amount (IBFT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionDate\": \"{{today}}\",\n  \"transactionAmount\": 250.00,\n  \"reasonForBlock\": 23,\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}/transactions?command=holdAmount",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}", "transactions"],
+              "query": [ { "key": "command", "value": "holdAmount" } ]
+            },
+            "description": "Amount-level hold (no double-spend) for IBFT/outbound transfers. reasonForBlock = Fineract code-value id from code SavingsTransactionFreezeReasons (default 23). NOTE: Fineract rejects a 'note' field on this command. Returns the hold transaction id (use as holdTxnId to release)."
+          }
+        },
+        {
+          "name": "Release Held Amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}/transactions/{{holdTxnId}}?command=releaseAmount",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}", "transactions", "{{holdTxnId}}"],
+              "query": [ { "key": "command", "value": "releaseAmount" } ]
+            }
+          }
+        },
+        {
+          "name": "Undo Savings Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}/transactions/{{transactionId}}?command=undo",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}", "transactions", "{{transactionId}}"],
+              "query": [ { "key": "command", "value": "undo" } ]
+            }
+          }
+        },
+        {
+          "name": "Freeze Account (block)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}?command=block",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"],
+              "query": [ { "key": "command", "value": "block" } ]
+            },
+            "description": "Account-level freeze (whole account). Different from amount-level holdAmount above."
+          }
+        },
+        {
+          "name": "Unfreeze Account (unblock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/savingsaccounts/{{savingsId}}?command=unblock",
+              "host": ["{{baseUrl}}"], "path": ["savingsaccounts", "{{savingsId}}"],
+              "query": [ { "key": "command", "value": "unblock" } ]
+            }
+          }
+        },
+        {
+          "name": "Transfer Between Savings (account transfer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromOfficeId\": {{officeId}},\n  \"fromClientId\": 12,\n  \"fromAccountType\": 2,\n  \"fromAccountId\": 100,\n  \"toOfficeId\": {{officeId}},\n  \"toClientId\": 34,\n  \"toAccountType\": 2,\n  \"toAccountId\": 200,\n  \"transferAmount\": 75.00,\n  \"transferDate\": \"{{today}}\",\n  \"transferDescription\": \"P2P transfer\",\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/accounttransfers", "host": ["{{baseUrl}}"], "path": ["accounttransfers"] },
+            "description": "Internal P2P transfer between two savings accounts. accountType=2 (savings)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Journal Entries / GL",
+      "item": [
+        {
+          "name": "Create Journal Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"officeId\": {{officeId}},\n  \"transactionDate\": \"{{today}}\",\n  \"currencyCode\": \"SAR\",\n  \"comments\": \"Manual GL posting\",\n  \"referenceNumber\": \"JE-0001\",\n  \"debits\": [ { \"glAccountId\": 1, \"amount\": 5000 } ],\n  \"credits\": [ { \"glAccountId\": 2, \"amount\": 5000 } ],\n  \"locale\": \"en\",\n  \"dateFormat\": \"dd MMMM yyyy\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/journalentries", "host": ["{{baseUrl}}"], "path": ["journalentries"] },
+            "description": "Double-entry GL posting. Debits and credits must balance. glAccountId can be replaced with glAccountCode if posting by GL code. Returns transactionId."
+          }
+        },
+        {
+          "name": "Get GL Account",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Fineract-Platform-TenantId", "value": "{{tenantId}}" } ],
+            "url": { "raw": "{{baseUrl}}/glaccounts/1", "host": ["{{baseUrl}}"], "path": ["glaccounts", "1"], "description": "Reads organizationRunningBalance for the GL account." }
+          }
+        }
+      ]
+    }
+  ]
+}
